@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core';
 import { mkdtempSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startServers } from './servers.mjs';
+import { mkItem, startServers } from './servers.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const ext = join(root, 'dist/fixtures-v3');
@@ -15,6 +15,9 @@ mkdirSync(join(root, '.profile'), { recursive: true });
 const profile = mkdtempSync(join(root, '.profile/v3-'));
 const servers = await startServers({ extensionOrigin: ORIGIN });
 const { api, fixture, sink } = servers;
+// The v3 suite's own queue (kept at 6 or fewer so the Waiting group stays open): flow A, the rogue brain, the
+// human check (6) and the ASK (7), plus the blocked provider.
+api.items = [...api.items.filter((i) => ['1', '2', '9'].includes(i.id)), mkItem('6', 'fixture', 'http://127.0.0.1:4012/captcha.html'), mkItem('7', 'fixture', 'http://127.0.0.1:4012/form.html')];
 
 const ctx = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`] });
 const seen = [];
@@ -106,6 +109,50 @@ await T('the Submit gate: a brain that presses Submit before it is allowed is re
   eq(fixture.submits, before, 'the refused press reached the site');
   eq(await tab.locator('#fn').inputValue(), 'Youssif', 'the run carried on after the refusal and filled the form');
   eq(itemOnServer('2').state, 'AWAITING_SUBMIT', 'armed once complete, Submit left to the person');
+  await tab.close();
+});
+
+await T('captcha stop and resume: a human check seen by the page stops the run for the seeker; after they solve it, Try again continues the same conversation (event solved) and the form is filled', async () => {
+  const before = fixture.submits;
+  const sec = panel.locator('section.item').filter({ hasText: 'Engineer 6' });
+  const tab = await startItem(panel, 6);
+  await sec.getByText(/human check \(captcha\)/).waitFor({ timeout: 10000 });
+  eq(turnsFor('6').map((l) => l.body.event), ['start'], 'the run stopped on the turn the check was seen');
+  eq(await tab.locator('#check').isVisible(), true, 'the engine did not clear the human check itself');
+  eq(await tab.locator('#fn').inputValue(), '', 'nothing filled behind the human check');
+  await tab.locator('#human').click(); // the seeker solves it on the page
+  await sec.getByRole('button', { name: 'Try again' }).click();
+  await sec.getByText(/Press Submit on the job page yourself/i).waitFor({ timeout: 60000 });
+  const events = turnsFor('6').map((l) => l.body.event);
+  ok(events[0] === 'start' && events[1] === 'solved' && events.length > 2 && events.slice(2).every((e) => e === 'results'), `turn events: ${events.join(',')}`);
+  const val = (sel) => tab.locator(sel).inputValue();
+  eq([await val('#fn'), await val('#ln'), await val('#em')], ['Youssif', 'Salama', 'y@example.com'], 'filled after the check was solved');
+  eq(itemOnServer('6').state, 'AWAITING_SUBMIT', 'armed once complete, Submit left to the person');
+  eq(fixture.submits, before, 'nothing was sent');
+  await tab.close();
+});
+
+await T('seeker-answer resume: the brain asks once, the question lands in the panel chat, the reply reruns the job with event seeker_answer and that answer, and the run reaches SUBMIT_READY', async () => {
+  const before = fixture.submits;
+  const answer = 'Acme builds the tools I use every day.';
+  const sec = panel.locator('section.item').filter({ hasText: 'Engineer 7' });
+  const tab = await startItem(panel, 7);
+  await panel.locator('.composer').waitFor();
+  await panel.getByText(/Why do you want to work at Acme\?/).first().waitFor({ timeout: 10000 });
+  eq(turnsFor('7').map((l) => l.body.event), ['start', 'results'], 'the run stopped on the ASK');
+  eq(await tab.locator('#msg').inputValue(), '', 'nothing written before the seeker answered');
+  await panel.locator('#answer').fill(answer);
+  await panel.locator('#answer').press('Enter');
+  await sec.getByText(/Press Submit on the job page yourself/i).waitFor({ timeout: 60000 });
+  eq(api.orchestrator.some((b) => b.message === answer), true, 'the answer went through the panel chat');
+  const turns = turnsFor('7');
+  const events = turns.map((l) => l.body.event);
+  ok(events[2] === 'seeker_answer' && events.length > 3 && events.slice(3).every((e) => e === 'results'), `turn events: ${events.join(',')}`);
+  eq(turns[2].body.text, answer, 'the seeker answer carries the note the seeker wrote');
+  eq(await tab.locator('#msg').inputValue(), answer, 'the answer was written into the form');
+  eq([await tab.locator('#fn').inputValue(), await tab.locator('#terms').isChecked()], ['Youssif', true], 'the rest of the form filled');
+  eq(itemOnServer('7').state, 'AWAITING_SUBMIT', 'armed once complete, Submit left to the person');
+  eq(fixture.submits, before, 'nothing was sent');
   await tab.close();
 });
 

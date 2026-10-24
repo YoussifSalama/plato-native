@@ -22,16 +22,20 @@ const mkItem = (id, provider, url) => ({ id, batch_id: 'b1', job_id: 'j' + id, p
 // returns (`role "label" … [ref_N]` lines), fills what the synthetic seeker knows with form_input / file_upload,
 // reads again, and answers SUBMIT_READY once every known field holds a value. After Submit is allowed it presses the
 // Submit control once, reads the page text and answers CONFIRMED with the page's words. Item 2 is the rogue script:
-// it tries to press Submit BEFORE it is allowed (the executor must refuse; nothing may be sent).
+// it tries to press Submit BEFORE it is allowed (the executor must refuse; nothing may be sent). Item 7 asks the
+// seeker once (ASK) before filling, and writes the answer it gets back (event seeker_answer) into "Why us?".
+// "solved" (the seeker cleared a human check) and "seeker_answer" both continue with a fresh read of the page.
 const V3_VALUES = { 'First name': 'Youssif', 'Last name': 'Salama', Email: 'y@example.com', Phone: '+201001234567', Country: 'Egypt', City: 'Cairo', 'Why us?': 'I like what Acme builds.', 'I agree to the terms': 'yes' };
 function v3Turn(store, item, body) {
-  const st = (store[item.id] ??= { turn: 0, phase: 'fill', submitAllowed: false, pressed: false, rogue: item.id === '2', rogueTried: false });
+  const st = (store[item.id] ??= { turn: 0, phase: 'fill', submitAllowed: false, pressed: false, rogue: item.id === '2', rogueTried: false, asks: item.id === '7', asked: false, answer: null });
   st.turn++;
   const reply = (calls) => ({ version: 1, turn: st.turn, calls: calls.map((c, i) => ({ call_id: `c${st.turn}_${i}`, ...c })), submit_allowed: st.submitAllowed && !st.pressed });
   const outcome = (o) => ({ version: 1, turn: st.turn, outcome: o });
   const READ = { name: 'read_page', input: { filter: 'interactive' } };
   if (body.event === 'start') { st.phase = 'fill'; return reply([READ]); }
   if (body.event === 'submit') { st.submitAllowed = true; return reply([READ]); }
+  if (body.event === 'solved') return reply([READ]);
+  if (body.event === 'seeker_answer') { st.answer = body.text ?? ''; return reply([READ]); }
   const results = body.results ?? [];
   const text = results.map((r) => r.text ?? '').join('\n');
   if (st.phase === 'pressed') { st.phase = 'reading'; return reply([{ name: 'get_page_text', input: {} }]); }
@@ -42,11 +46,13 @@ function v3Turn(store, item, body) {
   if (!lines.length) return st.turn < 30 ? reply([READ]) : outcome({ kind: 'blocked', reason: 'The page gave no tree.' });
   if (st.submitAllowed && submitBtn) { st.phase = 'pressed'; const r = reply([{ name: 'left_click', input: { target: { type: 'ref', ref: submitBtn.ref } } }, { name: 'wait', input: { duration: 1 } }]); st.pressed = true; return r; } // allowed on this turn; pressed from the next (as the backend records it from the result)
   if (st.rogue && submitBtn && !st.rogueTried) { st.rogueTried = true; return reply([{ name: 'left_click', input: { target: { type: 'ref', ref: submitBtn.ref } } }, { name: 'type', input: { text: 'never typed' } }]); }
+  if (st.asks && !st.asked) { st.asked = true; return outcome({ kind: 'ask', question: 'Why do you want to work at Acme?' }); }
+  const values = st.answer ? { ...V3_VALUES, 'Why us?': st.answer } : V3_VALUES;
   const calls = [];
   for (const l of lines) {
     if (has(l)) continue;
     if (l.role === 'file-input' && /resume/i.test(l.label)) calls.push({ name: 'file_upload', input: { target: { type: 'ref', ref: l.ref }, document_ids: ['resume'] } });
-    else if (V3_VALUES[l.label] !== undefined && ['textbox', 'combobox', 'checkbox'].includes(l.role)) calls.push({ name: 'form_input', input: { target: { type: 'ref', ref: l.ref }, value: V3_VALUES[l.label] } });
+    else if (values[l.label] !== undefined && ['textbox', 'combobox', 'checkbox'].includes(l.role)) calls.push({ name: 'form_input', input: { target: { type: 'ref', ref: l.ref }, value: values[l.label] } });
   }
   if (calls.length) return reply([...calls, READ]);
   if (submitBtn) return outcome({ kind: 'submit_ready', summary: 'Every known field holds a value.' });
@@ -54,11 +60,11 @@ function v3Turn(store, item, body) {
 }
 
 export function startServers({ extensionOrigin }) {
-  const api = { log: [], items: [], revoked: false, force401: false, decisions: [], repairs: [], v3: {}, v3log: [] };
+  const api = { log: [], items: [], revoked: false, force401: false, decisions: [], repairs: [], v3: {}, v3log: [], orchestrator: [] };
   const fixture = { log: [], submits: 0 };
   const sink = { log: [] };
   const reset = () => {
-    api.log.length = 0; api.revoked = false; api.force401 = false; api.decisions.length = 0; api.repairs.length = 0; api.v3 = {}; api.v3log.length = 0;
+    api.log.length = 0; api.revoked = false; api.force401 = false; api.decisions.length = 0; api.repairs.length = 0; api.v3 = {}; api.v3log.length = 0; api.orchestrator.length = 0;
     api.items = [
       mkItem('1', 'fixture', 'http://127.0.0.1:4012/form.html'),
       mkItem('2', 'fixture', 'http://127.0.0.1:4012/form.html'),
@@ -110,6 +116,8 @@ export function startServers({ extensionOrigin }) {
       if (url.pathname === '/extension/v1/settings') return json(200, { autoSubmit: false, coverLetter: true, speed: 'smart', customMessage: '', tabs: 1, resume: null, resumeMode: 'profile' });
       if (url.pathname === '/extension/v1/queue') return json(200, []);
       if (url.pathname === '/extension/v1/consent') return json(200, { ok: true });
+      // the panel chat's orchestrator: a stand-in that answers nothing and acts on nothing (the job's own run continues)
+      if (url.pathname === '/extension/v1/orchestrator') { api.orchestrator.push(body); return json(200, { reply: '', events: [] }); }
       const m = /^\/extension\/v1\/items\/(\w+)\/(claim|heartbeat|transition|candidate|decide|answers|stops|resume|file|v3\/turn)$/.exec(url.pathname);
       const item = m && api.items.find((i) => i.id === m[1]);
       if (!item) return json(404, { message: 'Item not found' });
@@ -161,7 +169,7 @@ export function startServers({ extensionOrigin }) {
   const fixtureServer = createServer((req, res) => {
     fixture.log.push({ method: req.method, url: req.url, origin: req.headers.origin ?? null });
     if (req.method === 'POST' && req.url === '/submit') { fixture.submits++; return res.writeHead(303, { Location: '/confirmed.html' }).end(); }
-    const file = { '/form.html': 'form.html', '/stepper.html': 'stepper.html', '/rejects.html': 'rejects.html', '/confirmed.html': 'confirmed.html' }[req.url.split('?')[0]];
+    const file = { '/form.html': 'form.html', '/stepper.html': 'stepper.html', '/rejects.html': 'rejects.html', '/confirmed.html': 'confirmed.html', '/captcha.html': 'captcha.html' }[req.url.split('?')[0]];
     if (!file) return res.writeHead(404).end('not found');
     res.writeHead(200, { 'Content-Type': 'text/html' }).end(readFileSync(join(pages, file)));
   });
@@ -177,4 +185,4 @@ export function startServers({ extensionOrigin }) {
     sinkServer.listen(4013, '127.0.0.1', done);
   });
 }
-export { TOKEN };
+export { TOKEN, mkItem };

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Fixture job: Engineer (human check)</title></head>
+  <body>
+    <h1>Engineer</h1>
+    <!-- Synthetic page for tests. Not a copy of any real site. A stand-in human check covers the form until the
+         person presses "I am human" (the extension must stop, never press it itself). -->
+    <div id="check" role="dialog">
+      <p>Please verify you are human before you continue.</p>
+      <button type="button" id="human">I am human</button>
+    </div>
+    <form id="f" method="post" action="/submit">
+      <label for="fn">First name *</label><input id="fn" name="fn" required />
+      <label for="ln">Last name *</label><input id="ln" name="ln" required />
+      <label for="em">Email *</label><input id="em" name="em" type="email" required />
+      <button type="submit" id="submit">Submit application</button>
+    </form>
+    <script>
+      document.getElementById('human').addEventListener('click', function () { document.getElementById('check').hidden = true; });
+    </script>
+  </body>
+</html>

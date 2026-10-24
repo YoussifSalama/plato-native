@@ -85,7 +85,7 @@ Dropped: `panel/ai-apply.ts`, `core/form-review.ts` + `form-review-hook.ts`, `do
 
 **Phase 3 — live (1 day). NEXT.** Same three real pages through the real panel (owner reloads `dist/production` in Chrome; production always presses Submit once SUBMIT_READY, owner rule 2026-10-21); then the v2 ten-platform list (Workable, JazzHR, SmartRecruiters, BambooHR, Recruitee, Teamtailor, Personio, Greenhouse, Lever, Ashby). Same metrics as the exit review: form filled, Submit pressed, site response, confirmed.
 
-**Phase 4 — cost and cut-over.** Cache hit rate, tokens per application, `claude-sonnet-5-5` vs `claude-opus-5-5` on the same pages; keep v2 behind a flag until v3 beats it on the live list.
+**Phase 4 — cost and cut-over.** Cache hit rate, tokens per application, `claude-sonnet-5-5` vs `claude-opus-5-5` on the same pages; keep v2 behind a flag until v3 beats it on the live list. Prep done 2026-10-24: `GET /admin/usage/v3?days=30[&model=][&item=]` (header `x-admin-key: $ADMIN_REPORT_KEY`; 404 without it) reads the `extension.v3.turn` usage rows and returns per item and model: runs, turns, input tokens, cache-read tokens, cache hit rate, output tokens, dollars, seconds first to last turn, item state and job; totals per model (average cost and turns per item); and `compare`, the jobs run on more than one model side by side. To compare: run the list with the default (`claude-sonnet-5-5`), set `V3_MODEL=claude-opus-5-5` in `plato-native-be/.env`, restart the backend, run the same jobs again (new picks), then read the report. Price table in `v3-session.service.ts` checked against Anthropic's list 2026-10-24 (Sonnet 5.5 $2/$10, Opus 5.5 $4/$20, cache read $0.20, cache write 1.25× input).
 
 ## 7. Risks and open points
 

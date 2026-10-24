@@ -54,18 +54,23 @@ export type TurnResponse =
   | { version: 1; turn: number; calls: BrowserCall[]; submit_allowed: boolean }
   | { version: 1; turn: number; outcome: Outcome };
 
-/** The model's final text, mapped to an outcome the state machine understands. */
+const KEYWORD = /^(?:(?:SUBMIT_READY|UNCONFIRMED|CONFIRMED|REFUSED|CAPTCHA|CLOSED|BLOCKED)\b|ASK\s*:)/i;
+
+/** The model's final text, mapped to an outcome the state machine understands. The keyword may follow a sentence
+ * of its own ("All fields hold a value.\nSUBMIT_READY …"): the LAST line that starts with one is the answer. */
 export function parseOutcome(text: string): Outcome {
-  const t = text.trim();
+  const lines = text.trim().split('\n');
+  const at = lines.findLastIndex((l) => KEYWORD.test(l.trim()));
+  const t = (at >= 0 ? lines.slice(at).join('\n') : text).trim();
   const m = (re: RegExp) => re.exec(t)?.[1]?.trim() ?? '';
-  if (/^SUBMIT_READY\b/i.test(t)) return { kind: 'submit_ready', summary: m(/^SUBMIT_READY[:\s-]*([\s\S]*)$/i).slice(0, 400) };
-  if (/^CONFIRMED\b/i.test(t)) return { kind: 'confirmed', quote: m(/^CONFIRMED[:\s-]*([\s\S]*)$/i).slice(0, 300) };
-  if (/^REFUSED\b/i.test(t)) return { kind: 'refused', quote: m(/^REFUSED[:\s-]*([\s\S]*)$/i).slice(0, 300) };
+  if (/^SUBMIT_READY\b/i.test(t)) return { kind: 'submit_ready', summary: m(/^SUBMIT_READY[:\s\-—–]*([\s\S]*)$/i).slice(0, 400) };
+  if (/^CONFIRMED\b/i.test(t)) return { kind: 'confirmed', quote: m(/^CONFIRMED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
+  if (/^REFUSED\b/i.test(t)) return { kind: 'refused', quote: m(/^REFUSED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
   if (/^UNCONFIRMED\b/i.test(t)) return { kind: 'unconfirmed', text: t.slice(0, 300) };
   if (/^CAPTCHA\b/i.test(t)) return { kind: 'captcha', text: t.slice(0, 300) };
   if (/^ASK\s*:/i.test(t)) return { kind: 'ask', question: m(/^ASK\s*:\s*([\s\S]*)$/i).slice(0, 400) };
-  if (/^CLOSED\b/i.test(t)) return { kind: 'closed', reason: m(/^CLOSED[:\s-]*([\s\S]*)$/i).slice(0, 300) };
-  if (/^BLOCKED\b/i.test(t)) return { kind: 'blocked', reason: m(/^BLOCKED[:\s-]*([\s\S]*)$/i).slice(0, 300) };
+  if (/^CLOSED\b/i.test(t)) return { kind: 'closed', reason: m(/^CLOSED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
+  if (/^BLOCKED\b/i.test(t)) return { kind: 'blocked', reason: m(/^BLOCKED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
   // no keyword: the model stopped talking; treat as blocked with its words, never as success
   return { kind: 'blocked', reason: (t || 'The model ended without a result.').slice(0, 300) };
 }

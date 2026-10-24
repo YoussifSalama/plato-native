@@ -20,7 +20,7 @@ export class V3Controller {
 
   @Get('items/:id/v3/status')
   @ExtensionScopes('apply:read')
-  status(@Param('id') id: string) {
-    return this.sessions.status(id) ?? { session: null };
+  status(@Req() req: ExtensionRequest, @Param('id') id: string) {
+    return this.sessions.status(req.extension, id) ?? { session: null };
   }
 }

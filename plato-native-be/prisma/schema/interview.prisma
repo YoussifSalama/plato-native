@@ -1,0 +1,28 @@
+// A text mock interview tied to a listed job. Questions are generated once from
+// the posting; a retry copies them into a new session.
+model MockInterview {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  // Snapshot of the job: the posting may later expire or change.
+  job_id          String? @db.ObjectId
+  job_title       String
+  company         String
+  job_description String
+
+  // [{ kind, question, answer?, followUp?, followUpAnswer? }]
+  turns     Json
+  // Set when finished: per-question scores, communication, gaps, next steps.
+  scorecard Json?
+  // Overall 0-100, copied out of the scorecard for history and progress.
+  score     Int?
+  // The session this one repeats (same questions).
+  retry_of_id String? @db.ObjectId
+
+  created_at   DateTime  @default(now())
+  completed_at DateTime?
+
+  @@index([job_seeker_id, created_at])
+  @@map("mock_interviews")
+}

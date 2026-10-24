@@ -1,0 +1,115 @@
+// The candidate profile is the source of truth for everything a resume says.
+// Resumes are generated from these rows and never store facts of their own.
+
+enum AchievementSource {
+  USER
+  EXTRACTED
+}
+
+model JobSeekerProject {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  name         String
+  role         String?
+  description  String
+  technologies String[] @default([])
+  url          String?
+  // What it achieved, in the seeker's words (numbers only if they gave them).
+  result       String?
+
+  created_at DateTime @default(now())
+
+  @@index([job_seeker_id])
+  @@map("job_seeker_projects")
+}
+
+// One verified statement about impact. Linked to an employer or a project by
+// name (not id), so it survives a full profile replace.
+model JobSeekerAchievement {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  company      String?
+  project_name String?
+  text         String
+  // The number or measure exactly as the seeker stated it, e.g. "40%".
+  metric       String?
+  source       AchievementSource @default(USER)
+
+  created_at DateTime @default(now())
+
+  @@index([job_seeker_id])
+  @@map("job_seeker_achievements")
+}
+
+// Proof behind a skill claim. A skill with evidence may appear on a resume
+// even when the CV never listed it.
+model JobSeekerSkillEvidence {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  skill     String
+  // Lowercased skill, for the unique key.
+  skill_key String
+  // WORKING | STRONG
+  level     String
+  proof     String
+  url       String?
+
+  confirmed_at DateTime @default(now())
+
+  @@unique([job_seeker_id, skill_key])
+  @@map("job_seeker_skill_evidence")
+}
+
+model JobSeekerResumeSettings {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @unique @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  // Shown only where the market expects it, and only if the seeker agreed.
+  nationality      String?
+  // Per market choices the seeker made: { EG: { personalBlock: false } }.
+  market_overrides Json?
+
+  updated_at DateTime @updatedAt
+
+  @@map("job_seeker_resume_settings")
+}
+
+// A course or certification the seeker is taking or finished for a skill.
+// Only a COMPLETED one whose link we could check (VERIFIED) is added to the
+// profile; a self-reported one is listed but never used as evidence.
+model SkillCredential {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  skill          String
+  // Catalogue id when it came from the list, null for a custom one.
+  course_id      String?
+  title          String
+  provider       String?
+  // IN_PROGRESS | COMPLETED
+  status         String
+  credential_url String?
+  // An uploaded certificate (a CERTIFICATE document of this seeker).
+  document_id    String?   @db.ObjectId
+
+  // SELF_REPORTED | VERIFIED
+  verification      String    @default("SELF_REPORTED")
+  verification_note String?
+  verified_issuer   String?
+  verified_at       DateTime?
+  completed_at      DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id])
+  @@map("skill_credentials")
+}

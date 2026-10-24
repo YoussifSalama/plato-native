@@ -1,0 +1,255 @@
+model User {
+  id    String  @id @default(auto()) @map("_id") @db.ObjectId
+  full_name String
+  email String  @unique
+  phone String  @unique
+  password_hash String
+  gender Gender @default(OTHER)
+
+  job_seeker JobSeeker?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("users")
+}
+
+model JobSeeker {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  user_id String @unique @db.ObjectId
+  user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  bio          String?
+  avatar_url   String?
+  location     Json?
+  website      String?
+  birth_date   DateTime?
+  skills       String[] @default([])
+
+  current_document_version_id String? @db.ObjectId
+
+  // Answer bank: screening answers the seeker confirmed once, reused on
+  // later applications. Keyed by normalised question text.
+  apply_answers Json?
+  // Intake facts employers ask for that live nowhere else in the profile
+  // (current salary, English level, country, optional sensitive ones...).
+  // Keyed by the intake bank's keys (src/modules/apply/intake.ts).
+  apply_facts   Json?
+
+  social_links     JobSeekerSocialLink[]
+  documents        JobSeekerDocument[]
+  document_versions JobSeekerDocumentVersion[]
+  preferences      JobSeekerPreference?
+  experiences      JobSeekerExperience[]
+  educations       JobSeekerEducation[]
+  job_matches      JobSeekerJobMatch[]
+  job_applications JobApplication[]
+  chat_threads     ChatThread[]
+  career_threads   CareerThread[]
+  career_resumes   CareerResume[]
+  mock_interviews  MockInterview[]
+  projects         JobSeekerProject[]
+  achievements     JobSeekerAchievement[]
+  skill_evidence   JobSeekerSkillEvidence[]
+  skill_credentials SkillCredential[]
+  resume_settings  JobSeekerResumeSettings?
+  discovery_runs   DiscoveryRun[]
+  certifications   JobSeekerCertification[]
+  languages        JobSeekerLanguage[]
+  profile_evaluation JobSeekerProfileEvaluation?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("job_seekers")
+
+  // Browser-extension run settings (extension/settings.ts). Optional: older rows have none.
+  extension_settings Json?
+}
+
+model JobSeekerDocumentVersion {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  version_number     Int
+  analyzed_at        DateTime?
+  replacement_count  Int @default(0)
+
+  documents JobSeekerDocument[]
+
+  created_at DateTime @default(now())
+
+  @@unique([job_seeker_id, version_number])
+  @@map("job_seeker_document_versions")
+}
+
+model JobSeekerSocialLink {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  platform String
+  url      String
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id])
+  @@map("job_seeker_social_links")
+}
+
+model JobSeekerDocument {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  document_version_id String                   @db.ObjectId
+  document_version     JobSeekerDocumentVersion @relation(fields: [document_version_id], references: [id], onDelete: Cascade)
+
+  type             JobSeekerDocumentType   @default(OTHER)
+  url              String
+  name             String?
+  storage_key      String
+  status           JobSeekerDocumentStatus @default(UPLOADED)
+  extracted_text   String?
+  processing_error String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id])
+  @@index([document_version_id])
+  @@map("job_seeker_documents")
+}
+
+model JobSeekerExperience {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  company      String
+  title        String
+  start_date   DateTime?
+  end_date     DateTime?
+  description  String?
+  technologies String[] @default([])
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id])
+  @@map("job_seeker_experiences")
+}
+
+model JobSeekerEducation {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  institution String
+  degree      String
+  field       String?
+  start_date  DateTime?
+  end_date    DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id])
+  @@map("job_seeker_educations")
+}
+
+model JobSeekerCertification {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  name             String
+  issuer           String?
+  issue_date       DateTime?
+  expiration_date  DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id])
+  @@map("job_seeker_certifications")
+}
+
+model JobSeekerLanguage {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  language    String
+  proficiency String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id])
+  @@map("job_seeker_languages")
+}
+
+model JobSeekerProfileEvaluation {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @unique @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  experience     SectionStatus
+  education      SectionStatus
+  skills         SectionStatus
+  certifications SectionStatus
+  languages      SectionStatus
+  location       SectionStatus
+  findings       Json?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("job_seeker_profile_evaluations")
+}
+
+
+model JobSeekerPreference {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @unique @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  email_notifications Boolean @default(true)
+  push_notifications  Boolean @default(true)
+  ai_recommendations  Boolean @default(true)
+
+  roles                String[] @default([])
+  preferred_job_types  String[]
+  preferred_industries String[]
+  preferred_locations  String[]
+  work_setup           String[] @default([])
+  salary_min           Int?
+  salary_max           Int?
+  salary_currency      String?
+  salary_period        String   @default("MONTHLY")
+  things_to_avoid      String?
+  source               String   @default("AI_SUGGESTED")
+
+  seniority                 String?
+  years_experience          String?
+  availability              String?
+  employment_status         String?
+  willing_to_relocate       Boolean @default(false)
+  visa_sponsorship_required Boolean @default(false)
+  linkedin_url              String?
+  // Application snapshot: facts employers' forms ask for, collected once.
+  // Countries the seeker may work in without sponsorship.
+  work_authorization        String[] @default([])
+  // "Plato may submit applications and accept employer privacy notices for me."
+  auto_apply_consent        Boolean  @default(false)
+  github_url                String?
+  portfolio_url             String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("job_seeker_preferences")
+}

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Fixture job: Designer</title></head>
+  <body>
+    <!-- Synthetic page for tests. Not a copy of any real site. A listing with an Apply button that opens a
+         three-step dialog: details, screening (type-ahead, tick list, radio), review, then Submit. -->
+    <h1>Designer</h1>
+    <p>Acme is hiring a designer.</p>
+    <button id="apply" type="button">Apply now</button>
+    <div id="dlg" role="dialog" aria-label="Apply to Acme" hidden>
+      <form id="f" method="post" action="/submit">
+        <section id="s1">
+          <h2>Your details</h2>
+          <label for="fn">First name *</label><input id="fn" name="fn" required />
+          <label for="ln">Last name *</label><input id="ln" name="ln" required />
+          <label for="em">Email *</label><input id="em" name="em" type="email" required />
+          <label for="ph">Phone *</label><input id="ph" name="ph" type="tel" pattern="[0-9]{8,15}" required />
+          <button type="button" class="next">Next</button>
+        </section>
+        <section id="s2" hidden>
+          <h2>Screening</h2>
+          <label for="co">Country *</label><span id="co-box"><span id="co-val"></span><input id="co" name="co" role="combobox" aria-autocomplete="list" required /><div id="menu" role="listbox"></div></span>
+          <fieldset><legend>Skills *</legend>
+            <label><input type="checkbox" name="sk" value="ts" /> TypeScript</label>
+            <label><input type="checkbox" name="sk" value="go" /> Go</label>
+            <label><input type="checkbox" name="sk" value="py" /> Python</label>
+          </fieldset>
+          <fieldset><legend>Are you authorised to work here? *</legend>
+            <label><input type="radio" name="auth" value="yes" required /> Yes</label>
+            <label><input type="radio" name="auth" value="no" /> No</label>
+          </fieldset>
+          <button type="button" class="next">Review</button>
+        </section>
+        <section id="s3" hidden>
+          <h2>Review</h2>
+          <p>Everything looks ready.</p>
+          <button type="submit" id="submit">Submit application</button>
+        </section>
+      </form>
+    </div>
+    <script>
+      var steps = ['s1', 's2', 's3'], at = 0;
+      document.getElementById('apply').addEventListener('click', function () { document.getElementById('dlg').hidden = false; });
+      document.querySelectorAll('.next').forEach(function (b) {
+        b.addEventListener('click', function () {
+          // the page's own validation: a step with an invalid field does not advance
+          var bad = Array.from(document.getElementById(steps[at]).querySelectorAll('input')).some(function (i) { return !i.checkValidity(); });
+          if (bad) return;
+          document.getElementById(steps[at]).hidden = true; at++; document.getElementById(steps[at]).hidden = false;
+        });
+      });
+      // a react-select-like country box: options after typing, the pick moves into its own box and clears the input
+      var co = document.getElementById('co'), menu = document.getElementById('menu');
+      co.addEventListener('input', function () {
+        var q = co.value.toLowerCase();
+        menu.innerHTML = ['Egypt', 'Estonia', 'Peru'].filter(function (c) { return c.toLowerCase().indexOf(q) === 0; }).map(function (c) { return '<div role="option">' + c + '</div>'; }).join('');
+        menu.querySelectorAll('[role=option]').forEach(function (o) { o.addEventListener('click', function () { menu.dataset.value = o.textContent; document.getElementById('co-val').textContent = o.textContent; menu.innerHTML = ''; co.value = ''; co.required = false; }); });
+      });
+    </script>
+  </body>
+</html>

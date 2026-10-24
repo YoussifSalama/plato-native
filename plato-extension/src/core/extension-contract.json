@@ -1,0 +1,51 @@
+{
+  "_note": "Shared contract between plato-native-be and plato-extension. Keep both copies identical; both repos test their code against it (and against each other when checked out side by side).",
+  "states": [
+    "PENDING",
+    "CLAIMED",
+    "PREPARING",
+    "NEEDS_USER",
+    "FILLING",
+    "REVIEW",
+    "AWAITING_SUBMIT",
+    "SUBMITTED_CONFIRMED",
+    "SUBMITTED_ATTESTED",
+    "VERIFY",
+    "FAILED",
+    "SKIPPED",
+    "CANCELLED"
+  ],
+  "transitions": {
+    "PENDING": [],
+    "CLAIMED": ["PREPARING", "FAILED", "SKIPPED", "CANCELLED"],
+    "PREPARING": ["NEEDS_USER", "FILLING", "FAILED", "SKIPPED", "CANCELLED"],
+    "NEEDS_USER": ["PREPARING", "FILLING", "FAILED", "SKIPPED", "CANCELLED"],
+    "FILLING": ["NEEDS_USER", "REVIEW", "FAILED", "CANCELLED"],
+    "REVIEW": ["FILLING", "AWAITING_SUBMIT", "FAILED", "SKIPPED", "CANCELLED"],
+    "AWAITING_SUBMIT": ["SUBMITTED_CONFIRMED", "SUBMITTED_ATTESTED", "VERIFY"],
+    "VERIFY": ["SUBMITTED_CONFIRMED", "SUBMITTED_ATTESTED", "FAILED"],
+    "SUBMITTED_CONFIRMED": [],
+    "SUBMITTED_ATTESTED": [],
+    "FAILED": [],
+    "SKIPPED": [],
+    "CANCELLED": []
+  },
+  "preArmed": ["CLAIMED", "PREPARING", "NEEDS_USER", "FILLING", "REVIEW"],
+  "terminal": ["SUBMITTED_CONFIRMED", "SUBMITTED_ATTESTED", "FAILED", "SKIPPED", "CANCELLED"],
+  "transitionTargets": [
+    "PREPARING",
+    "NEEDS_USER",
+    "FILLING",
+    "REVIEW",
+    "AWAITING_SUBMIT",
+    "SUBMITTED_CONFIRMED",
+    "SUBMITTED_ATTESTED",
+    "VERIFY",
+    "FAILED",
+    "SKIPPED",
+    "CANCELLED"
+  ],
+  "leaseMs": 90000,
+  "heartbeatMs": 20000,
+  "detailKeys": ["failure_kind", "message", "marker", "reason"]
+}

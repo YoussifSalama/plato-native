@@ -1,0 +1,65 @@
+// The Career assistant: its own chat, separate from the job-search threads.
+
+model CareerThread {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  title String?
+  messages CareerMessage[]
+  resumes  CareerResume[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id, updated_at])
+  @@map("career_threads")
+}
+
+model CareerMessage {
+  id        String       @id @default(auto()) @map("_id") @db.ObjectId
+  thread_id String       @db.ObjectId
+  thread    CareerThread @relation(fields: [thread_id], references: [id], onDelete: Cascade)
+
+  role    ChatRole
+  content String
+  // Rich result shown under the message, e.g. { type: "resume", resumeId, title }.
+  ui      Json?
+
+  created_at DateTime @default(now())
+
+  @@index([thread_id, created_at])
+  @@map("career_messages")
+}
+
+// A resume Plato built in the Career chat (PDF in object storage).
+model CareerResume {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  thread_id String?       @db.ObjectId
+  thread    CareerThread? @relation(fields: [thread_id], references: [id], onDelete: SetNull)
+
+  title        String
+  target_role  String?
+  storage_key  String
+  // How the resume was built: market, stage, format, pages, template, checks.
+  strategy     Json?
+
+  // The document the PDF was drawn from, so it can be edited and redrawn.
+  doc             Json?
+  // The posting it was tailored to, kept to regenerate a bullet for the same job.
+  job_description String?
+  // Versions of the resume for one target role: 1, 2, 3... A new edit is a new version.
+  version         Int      @default(1)
+  parent_id       String?  @db.ObjectId
+  // The one version per role the seeker approved for applications.
+  approved        Boolean  @default(false)
+  edited          Boolean  @default(false)
+
+  created_at DateTime @default(now())
+
+  @@index([job_seeker_id, created_at])
+  @@map("career_resumes")
+}

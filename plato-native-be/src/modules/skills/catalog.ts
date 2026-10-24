@@ -1,0 +1,358 @@
+// Curated learning paths for the skills job postings ask for. Hand-picked from
+// well-known providers (not scraped): every `url` was opened on 2026-10-13.
+// Prices and durations change: they are approximate and the seeker is sent to
+// the provider's own page for the real figures.
+// `skills` use the display names of the skill vocabulary in skills-gap.ts.
+
+export type CourseKind =
+  'professional-certificate' | 'course' | 'certification-exam';
+
+export interface Course {
+  id: string;
+  provider: string;
+  title: string;
+  kind: CourseKind;
+  url: string;
+  // Approximate, human text. Never a promise.
+  cost: string;
+  duration: string;
+  skills: string[];
+}
+
+const COURSERA = 'Coursera subscription; free to audit';
+const MONTHS6 = 'About 6 months at 10 hours a week';
+
+export const COURSES: Course[] = [
+  {
+    id: 'google-data-analytics',
+    provider: 'Google',
+    title: 'Google Data Analytics Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/google-data-analytics',
+    cost: COURSERA,
+    duration: MONTHS6,
+    skills: ['Data Analysis', 'SQL', 'Data Visualization', 'Tableau', 'Excel'],
+  },
+  {
+    id: 'google-advanced-data-analytics',
+    provider: 'Google',
+    title: 'Google Advanced Data Analytics Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/google-advanced-data-analytics',
+    cost: COURSERA,
+    duration: 'About 6 months at 10 hours a week',
+    skills: ['Python', 'Machine Learning', 'Data Analysis'],
+  },
+  {
+    id: 'google-ux-design',
+    provider: 'Google',
+    title: 'Google UX Design Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/google-ux-design',
+    cost: COURSERA,
+    duration: MONTHS6,
+    skills: ['UI/UX', 'User Research', 'Wireframing', 'Figma'],
+  },
+  {
+    id: 'google-project-management',
+    provider: 'Google',
+    title: 'Google Project Management Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/google-project-management',
+    cost: COURSERA,
+    duration: MONTHS6,
+    skills: ['Project Management', 'Agile', 'Scrum', 'Stakeholder Management'],
+  },
+  {
+    id: 'google-it-support',
+    provider: 'Google',
+    title: 'Google IT Support Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/google-it-support',
+    cost: COURSERA,
+    duration: MONTHS6,
+    skills: ['Networking', 'Linux'],
+  },
+  {
+    id: 'google-digital-marketing',
+    provider: 'Google',
+    title: 'Google Digital Marketing & E-commerce Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/google-digital-marketing-ecommerce',
+    cost: COURSERA,
+    duration: MONTHS6,
+    skills: [
+      'SEO',
+      'SEM',
+      'Email Marketing',
+      'Content Marketing',
+      'Google Analytics',
+    ],
+  },
+  {
+    id: 'google-cybersecurity',
+    provider: 'Google',
+    title: 'Google Cybersecurity Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/google-cybersecurity',
+    cost: COURSERA,
+    duration: MONTHS6,
+    skills: ['Cybersecurity', 'SIEM', 'Linux', 'Python'],
+  },
+  {
+    id: 'google-cloud-digital-leader',
+    provider: 'Google Cloud',
+    title: 'Cloud Digital Leader (certification exam)',
+    kind: 'certification-exam',
+    url: 'https://cloud.google.com/learn/certification/cloud-digital-leader',
+    cost: 'Exam fee (about USD 99, varies by country)',
+    duration: 'A few weeks of self-study',
+    skills: ['GCP'],
+  },
+  {
+    id: 'ibm-data-science',
+    provider: 'IBM',
+    title: 'IBM Data Science Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/ibm-data-science',
+    cost: COURSERA,
+    duration: 'About 10 months at 4 hours a week',
+    skills: [
+      'Python',
+      'SQL',
+      'Data Analysis',
+      'Machine Learning',
+      'Data Visualization',
+    ],
+  },
+  {
+    id: 'ibm-machine-learning',
+    provider: 'IBM',
+    title: 'IBM Machine Learning Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/ibm-machine-learning',
+    cost: COURSERA,
+    duration: 'A few months, self-paced',
+    skills: ['Machine Learning', 'Deep Learning', 'Python', 'scikit-learn'],
+  },
+  {
+    id: 'ibm-full-stack',
+    provider: 'IBM',
+    title: 'IBM Full Stack Software Developer Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/ibm-full-stack-cloud-developer',
+    cost: COURSERA,
+    duration: 'About 4 to 5 months at 10 hours a week',
+    skills: [
+      'JavaScript',
+      'Node.js',
+      'React',
+      'Docker',
+      'Kubernetes',
+      'Git',
+      'HTML',
+      'CSS',
+    ],
+  },
+  {
+    id: 'meta-front-end',
+    provider: 'Meta',
+    title: 'Meta Front-End Developer Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/meta-front-end-developer',
+    cost: COURSERA,
+    duration: 'About 7 months at 6 hours a week',
+    skills: ['React', 'JavaScript', 'HTML', 'CSS'],
+  },
+  {
+    id: 'meta-back-end',
+    provider: 'Meta',
+    title: 'Meta Back-End Developer Professional Certificate',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/professional-certificates/meta-back-end-developer',
+    cost: COURSERA,
+    duration: 'About 8 months at 6 hours a week',
+    skills: ['Python', 'Django', 'SQL', 'Git', 'Linux'],
+  },
+  {
+    id: 'deeplearning-ai',
+    provider: 'DeepLearning.AI',
+    title: 'Deep Learning Specialization',
+    kind: 'professional-certificate',
+    url: 'https://www.coursera.org/specializations/deep-learning',
+    cost: COURSERA,
+    duration: 'About 3 months at 10 hours a week',
+    skills: ['Deep Learning', 'TensorFlow', 'Machine Learning', 'Python'],
+  },
+  {
+    id: 'stanford-ml',
+    provider: 'Stanford / DeepLearning.AI',
+    title: 'Machine Learning Specialization',
+    kind: 'course',
+    url: 'https://www.coursera.org/learn/machine-learning',
+    cost: COURSERA,
+    duration: 'About 2 months at 10 hours a week',
+    skills: ['Machine Learning', 'Python', 'NumPy'],
+  },
+  {
+    id: 'microsoft-pl-300',
+    provider: 'Microsoft',
+    title: 'Power BI Data Analyst Associate (PL-300)',
+    kind: 'certification-exam',
+    url: 'https://learn.microsoft.com/en-us/credentials/certifications/data-analyst-associate/',
+    cost: 'Exam fee (about USD 165, varies by country); free training on Microsoft Learn',
+    duration: '4 to 8 weeks of study',
+    skills: ['Power BI', 'Data Analysis', 'Data Visualization'],
+  },
+  {
+    id: 'microsoft-az-900',
+    provider: 'Microsoft',
+    title: 'Azure Fundamentals (AZ-900)',
+    kind: 'certification-exam',
+    url: 'https://learn.microsoft.com/en-us/credentials/certifications/azure-fundamentals/',
+    cost: 'Exam fee (about USD 99, varies by country); free training on Microsoft Learn',
+    duration: '2 to 4 weeks of study',
+    skills: ['Azure'],
+  },
+  {
+    id: 'microsoft-az-104',
+    provider: 'Microsoft',
+    title: 'Azure Administrator Associate (AZ-104)',
+    kind: 'certification-exam',
+    url: 'https://learn.microsoft.com/en-us/credentials/certifications/azure-administrator/',
+    cost: 'Exam fee (about USD 165, varies by country); free training on Microsoft Learn',
+    duration: '2 to 3 months of study',
+    skills: ['Azure', 'Networking', 'Linux'],
+  },
+  {
+    id: 'microsoft-ai-900',
+    provider: 'Microsoft',
+    title: 'Azure AI Fundamentals (AI-900)',
+    kind: 'certification-exam',
+    url: 'https://learn.microsoft.com/en-us/credentials/certifications/azure-ai-fundamentals/',
+    cost: 'Exam fee (about USD 99, varies by country); free training on Microsoft Learn',
+    duration: '2 to 4 weeks of study',
+    skills: ['Machine Learning', 'NLP', 'Azure'],
+  },
+  {
+    id: 'aws-cloud-practitioner',
+    provider: 'AWS',
+    title: 'AWS Certified Cloud Practitioner',
+    kind: 'certification-exam',
+    url: 'https://aws.amazon.com/certification/certified-cloud-practitioner/',
+    cost: 'Exam fee (about USD 100, varies by country)',
+    duration: '2 to 4 weeks of study',
+    skills: ['AWS'],
+  },
+  {
+    id: 'linux-foundation-cka',
+    provider: 'The Linux Foundation',
+    title: 'Certified Kubernetes Administrator (CKA)',
+    kind: 'certification-exam',
+    url: 'https://training.linuxfoundation.org/certification/certified-kubernetes-administrator-cka/',
+    cost: 'Exam fee (about USD 445)',
+    duration: '2 to 3 months of hands-on practice',
+    skills: ['Kubernetes', 'Docker', 'Linux'],
+  },
+  {
+    id: 'hashicorp-terraform',
+    provider: 'HashiCorp',
+    title: 'Terraform Associate',
+    kind: 'certification-exam',
+    url: 'https://developer.hashicorp.com/certifications',
+    cost: 'Exam fee (about USD 70)',
+    duration: '3 to 6 weeks of study',
+    skills: ['Terraform'],
+  },
+  {
+    id: 'comptia-security-plus',
+    provider: 'CompTIA',
+    title: 'CompTIA Security+',
+    kind: 'certification-exam',
+    url: 'https://www.comptia.org/en-us/certifications/security/',
+    cost: 'Exam fee (about USD 400)',
+    duration: '2 to 3 months of study',
+    skills: ['Cybersecurity', 'Networking'],
+  },
+  {
+    id: 'isc2-cc',
+    provider: 'ISC2',
+    title: 'Certified in Cybersecurity (CC)',
+    kind: 'certification-exam',
+    url: 'https://www.isc2.org/certifications/cc',
+    cost: 'See ISC2 for the current exam and fee',
+    duration: 'A few weeks of study',
+    skills: ['Cybersecurity'],
+  },
+  {
+    id: 'scrum-psm-1',
+    provider: 'Scrum.org',
+    title: 'Professional Scrum Master I (PSM I)',
+    kind: 'certification-exam',
+    url: 'https://www.scrum.org/assessments/professional-scrum-master-i-certification',
+    cost: 'Exam fee (about USD 200)',
+    duration: '2 to 4 weeks of study',
+    skills: ['Scrum', 'Agile'],
+  },
+  {
+    id: 'pmi-pmp',
+    provider: 'PMI',
+    title: 'Project Management Professional (PMP)',
+    kind: 'certification-exam',
+    url: 'https://www.pmi.org/certifications/project-management-pmp',
+    cost: 'Exam fee (about USD 405 for members, 575 otherwise); needs project experience',
+    duration: '2 to 4 months of study',
+    skills: ['PMP', 'Project Management'],
+  },
+  {
+    id: 'freecodecamp',
+    provider: 'freeCodeCamp',
+    title: 'freeCodeCamp certifications (web, JavaScript, Python, data)',
+    kind: 'course',
+    url: 'https://www.freecodecamp.org/learn',
+    cost: 'Free',
+    duration: 'Self-paced, about 300 hours per certification',
+    skills: ['JavaScript', 'HTML', 'CSS', 'React', 'Python', 'SQL', 'Node.js'],
+  },
+  {
+    id: 'hubspot-content-marketing',
+    provider: 'HubSpot Academy',
+    title: 'Content Marketing Certification',
+    kind: 'course',
+    url: 'https://academy.hubspot.com/courses/content-marketing',
+    cost: 'Free',
+    duration: 'A few hours',
+    skills: ['Content Marketing', 'SEO', 'HubSpot'],
+  },
+  {
+    id: 'google-skillshop',
+    provider: 'Google Skillshop',
+    title: 'Google Ads and Google Analytics certifications',
+    kind: 'certification-exam',
+    url: 'https://skillshop.withgoogle.com/',
+    cost: 'Free',
+    duration: 'A few hours per certification',
+    skills: ['Google Ads', 'Google Analytics', 'SEM'],
+  },
+  {
+    id: 'salesforce-admin',
+    provider: 'Salesforce Trailhead',
+    title: 'Salesforce Platform Administrator',
+    kind: 'certification-exam',
+    url: 'https://trailhead.salesforce.com/credentials/platformadministrator',
+    cost: 'Free training on Trailhead; exam fee applies',
+    duration: '1 to 2 months of study',
+    skills: ['Salesforce', 'CRM'],
+  },
+];
+
+const key = (s: string) => s.trim().toLowerCase();
+export const courseById = (id: string) => COURSES.find((c) => c.id === id);
+
+// Paths that teach a skill, free ones first.
+export function coursesFor(skill: string, max = 3): Course[] {
+  const free = (c: Course) => /^free/i.test(c.cost);
+  return COURSES.filter((c) => c.skills.some((s) => key(s) === key(skill)))
+    .sort((a, b) => Number(free(b)) - Number(free(a)))
+    .slice(0, max);
+}

@@ -1,0 +1,22 @@
+{
+  "adaptor": "workable",
+  "timestamp": "2026-10-08T18:04:36.827Z",
+  "cookies": {
+    "cf_clearance": ".VgrPymZ0CpFJImGSrD8bDlSLN5N1dLC8wHPrg2Ezkc-1791482654-1.2.1.1-dChFSbScSPiLNztfV_3YxG1_AL37kVIObOzwwuDGxv0aXQ40OJL8YOrayks0Dv83W8QBO5gVHTLx7nEn1A.jFBFod.raZmtFsaWyXNe017_BCdS0CDz63ZP6i5VVlOkuAS.jaJaKv6GlYONvSUo9wNw6OqlEqbnYEUZJX6xX95nMnT1DkRW2FjqJ78bxM1qHkTnTauEQzIYU_iVIcixsNO_ab2kv8ecVokOYuToMiVYNstEUEyERNaHi8oZQ.UWlyT7dVPblLMj1NC.AxosCNNI2INL_O6iK4AmmDpbw2HJ5xhlOwDuYdICUfDZvhlSD_Y1H1vs9FET7ETm0oTieT39VKw9kATGZQ84nsuPTDV0",
+    "__cf_bm": "MiEHRPOIPReBYoZpyf1ifB_ZQAvCu9KCfmfmgZy0HC0-1791482654.8311913-1.0.1.1-lFSMM624n31tuQV2WgGtCN8uXuI8NTQXkKCph52zY17Tq9BA70CGoqYlTI.3CRaG7zxp0JpJfbk0ApJDOD_8_5JwUE9OUy8Pcd6A2LhdfJEdFA.G3sCbyyoedCfYB6dI",
+    "koa.sess": "eyJzZWNyZXQiOiJZLXpVSWw0NzNMcUhlWmM3Ukx3YURSNkUiLCJvYXV0aDI6aWQud29ya2FibGUuY29tIjp7InN0YXRlIjoiZXlKdWIyNWpaU0k2SWpSaE0yUTFOVEZtTlRVMk1qSmtObVZpWXpSak1qSXlNemczTm1Jd05EVmlJaXdpWVhWMGFFWnNiM2NpT2lKaGRYUnZYMkYxZEdobGJuUnBZMkYwWlNKOSJ9LCJfZXhwaXJlIjoxNzk0MDc0NjU0OTYyLCJfbWF4QWdlIjoyNTkyMDAwMDAwfQ==",
+    "koa.sess.sig": "HqilqsDprChyg9U4DRObcXGQkn8",
+    "_session": "C2k8iOHvi-ikG6Ly_8Xmy",
+    "_session.sig": "bjGiR5aou30rIGL9K8RBnQMQtbk",
+    "_grant": "_jPILloaaySMcOWavMWdq",
+    "_grant.sig": "SYQiBTLie8FzGFmbPJywNirXDPI"
+  },
+  "captcha": {
+    "enabled": true,
+    "siteKey": "0x4AAAAAAAVY8hH3nz6RxaK0",
+    "action": "view",
+    "cData": null,
+    "script": true
+  },
+  "pageUrl": "https://jobs.workable.com/view/vLpK8X3WcvN22EqHCrfQfc/remote-full-stack-developer-in-south-africa-at-pavago"
+}

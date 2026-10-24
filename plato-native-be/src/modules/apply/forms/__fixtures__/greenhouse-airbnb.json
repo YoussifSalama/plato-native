@@ -1,0 +1,309 @@
+{
+ "questions": [
+  {
+   "description": null,
+   "label": "First Name",
+   "required": true,
+   "fields": [
+    {
+     "name": "first_name",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Last Name",
+   "required": true,
+   "fields": [
+    {
+     "name": "last_name",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Email",
+   "required": true,
+   "fields": [
+    {
+     "name": "email",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Phone",
+   "required": true,
+   "fields": [
+    {
+     "name": "phone",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Resume/CV",
+   "required": true,
+   "fields": [
+    {
+     "name": "resume",
+     "type": "input_file",
+     "values": []
+    },
+    {
+     "name": "resume_text",
+     "type": "textarea",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Cover Letter",
+   "required": true,
+   "fields": [
+    {
+     "name": "cover_letter",
+     "type": "input_file",
+     "values": []
+    },
+    {
+     "name": "cover_letter_text",
+     "type": "textarea",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "LinkedIn Profile",
+   "required": false,
+   "fields": [
+    {
+     "name": "question_69024584",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "How did you hear about this job?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69024585",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": "<ul>\n<li style=\"font-weight: 400;\"><span style=\"font-weight: 400;\">Please click </span><a href=\"https://careers.airbnb.com/candidate-privacy/emea-candidate-privacy/\"><span style=\"font-weight: 400;\">here</span></a><span style=\"font-weight: 400;\"> to read the Airbnb Candidate Data Privacy Notice.</span></li>\n<li style=\"font-weight: 400;\">This Privacy Notice is not a contract, express or implied and it does not set terms or conditions of employment.</li>\n</ul>",
+   "label": "Before submitting your application please review the points below:",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69024586[]",
+     "type": "multi_value_multi_select",
+     "values": [
+      {
+       "label": "I acknowledge receipt of the Airbnb Candidate Data Privacy Notice",
+       "value": 750562692
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "description": "<p>Airbnb is committed to creating a diverse workplace. In order to measure our efforts in this regard, we invite applicants to self-identify as to their gender. Answering to this question is entirely voluntary and declining to provide this information will not subject you to adverse treatment or retaliation. The response that you do provide will be maintained confidential and will not be shared with hiring managers. In turn, Airbnb will anonymize the information related to your gender, so that once it is collected it will not be possible to relate it, directly or indirectly, to you.</p>\n<p>All individuals seeking employment at Airbnb are considered without regard to race, color, religion, national origin, age, sex, marital status, ancestry, physical or mental disability, veteran status, gender identity, sexual orientation, or any other legally protected characteristic. You are being given the opportunity to provide such information in order to help us measure our own diversity and inclusion efforts and to comply with our internal equal employment opportunity standards.</p>\n<p>All of your personal information, including your gender should you choose to provide it, will be collected, stored and processed in accordance with the Airbnb Privacy Notice.</p>",
+   "label": "Gender",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69024587",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "Male",
+       "value": 750562693
+      },
+      {
+       "label": "Female",
+       "value": 750562694
+      },
+      {
+       "label": "Other",
+       "value": 750562695
+      },
+      {
+       "label": "Decline to Self Identify",
+       "value": 750562696
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Are you legally authorized to work in the country where the job is located?\n",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69024588",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "Yes, I am currently legally authorized to work in the country where the job is located.",
+       "value": 750562697
+      },
+      {
+       "label": "No, I am not currently legally authorized to work in the country where the job is located.",
+       "value": 750562698
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Will you now or in the future require company sponsorship to retain or extend your work authorization in the country where the job is located?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69024589",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "Yes, I will require immigration sponsorship now to legally work in the country where the job is located.",
+       "value": 750562699
+      },
+      {
+       "label": "Yes, I will require immigration sponsorship in the future to legally work in the country where the job is located.",
+       "value": 750562700
+      },
+      {
+       "label": "No, I do not and will not require immigration sponsorship to legally work in the country where the job is located.",
+       "value": 750562701
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Are you currently subject to any non-compete or non-solicitation agreement that would impact your ability to work at Airbnb or prevent you from accepting a job offer from Airbnb? ",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69024590",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "Yes",
+       "value": 1
+      },
+      {
+       "label": "No",
+       "value": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Are you currently or have you ever worked for Airbnb in any capacity? This could include, but is not limited to, a full-time employee, intern, apprentice, or contingent worker.",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69024591",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "Yes",
+       "value": 1
+      },
+      {
+       "label": "No",
+       "value": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "description": "<p><em>By submitting this application, I agree and understand that the use of generative artificial intelligence (&ldquo;AI&rdquo;) tools, for example, ChatGPT, Gemini, and GitHub Copilot (&ldquo;AI Tools&rdquo;) is strictly prohibited during the interview process, unless Airbnb explicitly permits their use. I further attest that all materials I submit during the interview process including, but not limited to, responses to written or verbal interview questions, written prompts, take-home assignments, and assessments, represent my own original work and were completed without the use of AI Tools, external individuals, or other unauthorized assistance, unless expressly permitted by Airbnb.&nbsp;</em></p>\n<p><em>I also understand that I am prohibited from entering into AI Tools (including transcription tools) any confidential or non-public information of Airbnb that is obtained during the interview process. I understand that failure to comply with this Candidate AI Usage Attestation may result in disqualification from the hiring process or withdrawal of an offer.</em></p>",
+   "label": "Candidate AI Usage Attestation:",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69024592",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "I agree",
+       "value": 750562702
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "location_questions": [
+  {
+   "description": null,
+   "label": "Longitude",
+   "required": false,
+   "fields": [
+    {
+     "name": "longitude",
+     "type": "input_hidden",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Latitude",
+   "required": false,
+   "fields": [
+    {
+     "name": "latitude",
+     "type": "input_hidden",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Location",
+   "required": false,
+   "fields": [
+    {
+     "name": "location",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  }
+ ],
+ "data_compliance": [
+  {
+   "type": "gdpr",
+   "requires_consent": false,
+   "requires_processing_consent": false,
+   "requires_retention_consent": false,
+   "retention_period": null,
+   "demographic_data_consent_applies": false
+  }
+ ]
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Fixture job: Engineer</title></head>
+  <body>
+    <h1>Engineer</h1>
+    <!-- Synthetic page for tests. Not a copy of any real site. -->
+    <form id="f" method="post" action="/submit">
+      <label for="fn">First name *</label><input id="fn" name="fn" required autocomplete="given-name" />
+      <label for="ln">Last name *</label><input id="ln" name="ln" required />
+      <label for="em">Email *</label><input id="em" name="em" type="email" required />
+      <label for="ph">Phone</label><input id="ph" name="ph" type="tel" />
+      <label for="co">Country</label>
+      <select id="co" name="co"><option value="">Select…</option><option value="EG">Egypt</option><option value="US">United States</option></select>
+      <div id="cw" hidden><label for="ci">City</label><input id="ci" name="ci" /></div>
+      <label for="cv">Resume *</label><input id="cv" name="resume" type="file" required />
+      <label for="msg">Why us? *</label><textarea id="msg" name="msg" required></textarea>
+      <label><input type="checkbox" id="terms" name="terms" required /> I agree to the terms *</label>
+      <label for="pw">Password</label><input id="pw" name="pw" type="password" />
+      <div style="position:absolute;left:-9999px" aria-hidden="true"><input id="trap" name="trap" aria-label="Website" /></div>
+      <button type="submit" id="submit">Submit application</button>
+    </form>
+    <script>
+      // dynamic form: choosing a country reveals the city field
+      document.getElementById('co').addEventListener('change', function () { document.getElementById('cw').hidden = !this.value; });
+    </script>
+  </body>
+</html>

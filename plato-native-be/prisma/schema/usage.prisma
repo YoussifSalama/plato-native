@@ -1,0 +1,20 @@
+// One row per LLM run or Apify actor run. Basis for plan pricing/quotas.
+// user_id is the auth User id (null for background work with no request).
+model UsageEvent {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  user_id       String?  @db.ObjectId
+  feature       String
+  model         String?
+  input_tokens  Int      @default(0)
+  output_tokens Int      @default(0)
+  apify_usd     Float    @default(0)
+  // Estimated dollars for this event (tokens x price table, or Apify's own figure).
+  cost_usd      Float?
+  // Extra detail, e.g. a voice call's audio/text token split and seconds.
+  meta          Json?
+  created_at    DateTime @default(now())
+
+  @@index([user_id, created_at])
+  @@index([feature, created_at])
+  @@map("usage_events")
+}

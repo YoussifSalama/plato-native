@@ -1,0 +1,20 @@
+<!doctype html><html><body>
+<!-- Synthetic page: several legitimate forms. The engine must not pick one for the person. -->
+<form role="search" action="/search"><input type="search" name="q" aria-label="Search jobs" /><button>Go</button></form>
+<h2>Apply for this role</h2>
+<form id="apply" action="/apply" method="post">
+  <label for="a-fn">First name</label><input id="a-fn" type="text" autocomplete="given-name" />
+  <label for="a-ln">Last name</label><input id="a-ln" type="text" />
+  <label for="a-em">Email</label><input id="a-em" type="email" />
+  <label for="a-ph">Phone</label><input id="a-ph" type="tel" />
+</form>
+<h2>Refer a friend</h2>
+<form id="refer" action="/refer" method="post">
+  <label for="r-fn">First name</label><input id="r-fn" type="text" autocomplete="given-name" />
+  <label for="r-ln">Last name</label><input id="r-ln" type="text" />
+  <label for="r-em">Email</label><input id="r-em" type="email" />
+</form>
+<form id="news" action="/news" method="post" aria-label="Newsletter">
+  <label for="n-em">Email</label><input id="n-em" type="email" />
+</form>
+</body></html>

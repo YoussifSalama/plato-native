@@ -1,0 +1,22 @@
+{
+  "adaptor": "workable",
+  "timestamp": "2026-09-29T22:04:37.144Z",
+  "cookies": {
+    "cf_clearance": "vZY4VmDCqhBrrBBlj9JXpxLhLq87Z6223UmYVlzaY6U-1790719463-1.2.1.1-f17ymceLwkUL_BAVxL4RUnM086FuGVoxLUyKrNxpLN1K7c5nzKZy6i2wj._Esg2atdVhrhHZOqUIuMAmbs8Lk_LPRbzyP_l6E0mfrdXbzgn5Ki82RFU8UhEq2UntcRxnTAHmxAkLx5xOIu8gHvK4DgANzBMHqXTfVW0PWMhtc770GuyFwLXIPLfPbc6CoZ_A3zBJLaCrSpr6aFUt65JPWtzotyJskPqoN.dqmeckwN9R3y2RUk5SpMUJM6Cllb.oGFix3Zy96NFWVAs22um2B6apXlNQmB6EXYFzrfHFsiiSCnJ.Q8nRi1VFDYaaRiElO1Hvy_LCJYacu6Dcb4HIf46909QcWPlN4lkkfB8KsNAy0UcjzWFlRLygkEDTgBvF.5ngTIKVSc1lfcVIY.0cpA",
+    "__cf_bm": "VDRUpzjEHQyt_IWc52WMd4g6azVTCXQK4D79PBRiM0A-1790719463.5285416-1.0.1.1-v9Dldr1pMlGxSDY8E7W8xhXktjikuddS403uOQfEj1z.rvYCP2Av.eN2JU40D6F0Mo3cPEYucNmwEE.L9qtK0wmWsq4n0uZr6j6wIVWxkyD8SQV2DSl72pJzn9c.A076",
+    "koa.sess": "eyJzZWNyZXQiOiJMd0ZnZGdYYU0tS3psSVN2VFlaQ29HU2giLCJvYXV0aDI6aWQud29ya2FibGUuY29tIjp7InN0YXRlIjoiZXlKdWIyNWpaU0k2SWpCbFkyUXpOekZrWldVeU9UVmtZbU5sTldFd1pUWXlaV1JpT1RNeE9UZzBJaXdpWVhWMGFFWnNiM2NpT2lKaGRYUnZYMkYxZEdobGJuUnBZMkYwWlNKOSJ9LCJfZXhwaXJlIjoxNzkzMzExNDYzNjk2LCJfbWF4QWdlIjoyNTkyMDAwMDAwfQ==",
+    "koa.sess.sig": "XEcR2-AourPOesEKqVlwMlzi4-w",
+    "_session": "OBen-bdyHCwhilpyS_UtO",
+    "_session.sig": "a_jR6iL1umLXeCKkA6zLKBrAONg",
+    "_grant": "CgXYHop1LAtavtK3cLzg5",
+    "_grant.sig": "r1mIdTIewDU0WAEceACN-3lA0bE"
+  },
+  "captcha": {
+    "enabled": true,
+    "siteKey": "0x4AAAAAAAVY8hH3nz6RxaK0",
+    "action": "view",
+    "cData": null,
+    "script": true
+  },
+  "pageUrl": "https://jobs.workable.com/view/jZqRFWGe1G9djx1PDwgyEX/mid-level-fullstack-developer---octopus-by-rtg-in-cairo-at-robusta"
+}

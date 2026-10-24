@@ -1,0 +1,250 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* This app is light-only (no dark palette defined below). Without this,
+   Tailwind's default `dark:` variant fires off the OS's color-scheme
+   preference, so every `dark:` class in components/ui/* silently kicks in
+   under a dark-mode OS even though we never intended a dark theme — this is
+   what caused the switch thumb, combobox chips, and textarea background bugs.
+   Scoping it to an explicit `.dark` class (never applied anywhere) neutralizes
+   all of them at once instead of stripping `dark:` from every component. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-plus-jakarta-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-plus-jakarta-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-tint: var(--primary-tint);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-lavender: var(--lavender);
+  --color-navy: var(--navy);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-divider: var(--divider);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-rose: var(--rose);
+  --color-rose-soft: var(--rose-soft);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* App is light-only. Without this, browsers paint native form controls
+     (input/textarea/select) with their own dark-mode chrome under OS dark
+     preference, fighting our explicit light backgrounds. */
+  color-scheme: light;
+  /* Palette rooted in #005ca9 */
+  --background: #ffffff;
+  --foreground: #0c1b2a;
+  --card: #ffffff;
+  --card-foreground: #0c1b2a;
+  --popover: #ffffff;
+  --popover-foreground: #0c1b2a;
+  --primary: #005ca9;
+  --primary-foreground: #ffffff;
+  --secondary: #eef3f8;
+  --secondary-foreground: #0c1b2a;
+  --muted: #eef3f8;
+  --muted-foreground: #5b7186;
+  --accent: #e3eef8;
+  --accent-foreground: #00385f;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #dbe4ed;
+  --input: #dbe4ed;
+  --ring: #005ca9;
+  --chart-1: #005ca9;
+  --chart-2: #3d84c4;
+  --chart-3: #7aacd9;
+  --chart-4: #b7d3ec;
+  --chart-5: #00385f;
+  --radius: 0.625rem;
+  --sidebar: #f6f9fc;
+  --sidebar-foreground: #0c1b2a;
+  --sidebar-primary: #005ca9;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e3eef8;
+  --sidebar-accent-foreground: #00385f;
+  --sidebar-border: #dbe4ed;
+  --sidebar-ring: #005ca9;
+  /* Extended tokens (neutral defaults so pre-login pages are unaffected). */
+  --primary-soft: #e3eef8;
+  --primary-tint: #f3f7fb;
+  --success: #1fad6d;
+  --success-soft: #e4f9ec;
+  --info: #2f7df6;
+  --info-soft: #d8e8fe;
+  --lavender: #7aacd9;
+  --navy: #0c1b2a;
+  --text-secondary: #0c1b2a;
+  --text-tertiary: #5b7186;
+  --divider: #eef3f8;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --rose: #db2777;
+  --rose-soft: #fce7f3;
+  --teal: #0d9488;
+  --teal-soft: #ccfbf1;
+}
+
+/* Post-login product palette, sampled from the Jobs mockup. Scoped to the
+   app shell so auth + onboarding keep their own look. */
+.theme-app {
+  /* Values from the "Jobs — Discover" reference (Main.dc.html). */
+  --background: #f7f7fb;
+  --foreground: #1e1d2b;
+  --card: #ffffff;
+  --card-foreground: #1e1d2b;
+  --popover: #ffffff;
+  --popover-foreground: #1e1d2b;
+  --primary: #4f3ff7;
+  --primary-foreground: #ffffff;
+  --primary-soft: #efedfe;
+  --primary-tint: #fbfaff;
+  --secondary: #f1effe;
+  --secondary-foreground: #5b4cf0;
+  --muted: #f2f1f8;
+  --muted-foreground: #8b899e;
+  --accent: #efedfe;
+  --accent-foreground: #4f3ff7;
+  --destructive: #f04438;
+  --border: #e7e6f0;
+  --input: #e4e3ee;
+  --ring: #4f3ff7;
+  --success: #1c9a4b;
+  --success-soft: #e3f9ea;
+  --info: #2d6fe0;
+  --info-soft: #e7f0fe;
+  --lavender: #a9a7bc;
+  --navy: #1e1d2b;
+  --chart-1: #4f3ff7;
+  --chart-2: #5b4cf0;
+  --chart-3: #1c9a4b;
+  --chart-4: #2d6fe0;
+  --chart-5: #1e1d2b;
+  --radius: 1rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1e1d2b;
+  --sidebar-primary: #4f3ff7;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #efedfe;
+  --sidebar-accent-foreground: #4f3ff7;
+  --sidebar-border: #ecebf3;
+  --sidebar-ring: #4f3ff7;
+  /* Reference-only shades with no shadcn counterpart. */
+  --text-secondary: #55536b;
+  --text-tertiary: #9997ac;
+  --divider: #f0eff6;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --rose: #db2777;
+  --rose-soft: #fce7f3;
+  --teal: #0d9488;
+  --teal-soft: #ccfbf1;
+  color: var(--foreground);
+  background: var(--background);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Brand scrollbars, everywhere. The thumb is the primary colour at low
+   alpha so it reads as "Plato" without shouting; it saturates on hover.
+   Track stays transparent so bars sit on any card / canvas colour. Both
+   the standard properties (Firefox) and the WebKit pseudo-elements
+   (Chrome / Safari / Edge) are set so every browser matches. */
+/* Written inline (not via an intermediate --scrollbar-* var) so the mix
+   picks up whichever --primary is in scope: blue pre-login, purple inside
+   .theme-app. A var defined on :root would freeze the root blue. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--primary) 28%, transparent) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--primary) 28%, transparent);
+    border-radius: 9999px;
+    /* Transparent border shrinks the visible thumb inside the gutter. */
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--primary) 55%, transparent);
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* Denser bar for chat / notes / dock panes. */
+@utility scroll-thin {
+  &::-webkit-scrollbar { width: 6px; height: 6px; }
+  &::-webkit-scrollbar-thumb { border-width: 1px; }
+}
+
+/* Moving highlight across a line of text, e.g. what the assistant is doing right now. */
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}

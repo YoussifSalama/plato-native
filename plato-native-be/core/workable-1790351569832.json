@@ -1,0 +1,22 @@
+{
+  "adaptor": "workable",
+  "timestamp": "2026-09-25T15:52:49.833Z",
+  "cookies": {
+    "cf_clearance": "qim.d966BTu_Ae41kmYSHyFahjggbqfPOkcSoVdnsk4-1790351561-1.2.1.1-wN1koR7xhY0xcqJag8fsPir25xl7G5eT8q4XLizcuClE4JlB8DRvcsiwhqKgtcDMgZM94Nl9b7CYXS2bCD8VQMFvUWjaYflwgEKB0khgxZ3CahhqBJU7TVnNwKeExy1G_U4uNZUWxiUYRvrtSb1_uke8XFnO2derNvzk1LAzGsiolA20Kd1E7lLezML9xix8bHOpeia5rLtNAM0j9Yudfdk_cMVKpSeZh0yUr6TBFbO3kap3qGY1SU5Zh6DOAJ5KKY1lVhutpsVZFYZUczmKXMSEGmSkztgEPuabUSJCaSztLzjh0PKEwSt6V.Sz5jKEigI5pqkf.iHGjscUVqf__sBWqkDk8hD8VjEdam.0XaR2kp6n11._IbF5ZyNiMbVqN10El00dBW0k.m.IQdLb6A",
+    "__cf_bm": "g3MlctI3LjROlcINBJ94viYpqqngRdu5tbtp8IHCT8k-1790351561.736135-1.0.1.1-Eib2A8CSdp7txwrgaAxiytVPv5CsWEKJRmzz6IAs7XD55CaqsYLT_9FoU7mUWi3_ztJ0_PKiy56BCt7T3viQGsV9CGyPS7Zred4AVTIiiMdVG.jQG0lOtLw1LrYN1sYL",
+    "koa.sess": "eyJzZWNyZXQiOiJMOC0wZExZei16Q1hxdmlEOUhDa2gxMjciLCJvYXV0aDI6aWQud29ya2FibGUuY29tIjp7InN0YXRlIjoiZXlKdWIyNWpaU0k2SWpNeE1tVXhZV1k0WVRRek9HRTFOVFV4T0dOa05qY3hZamhtWlRjeU5UQmtJaXdpWVhWMGFFWnNiM2NpT2lKaGRYUnZYMkYxZEdobGJuUnBZMkYwWlNKOSJ9LCJfZXhwaXJlIjoxNzkyOTQzNTYxNjYwLCJfbWF4QWdlIjoyNTkyMDAwMDAwfQ==",
+    "koa.sess.sig": "FpWHlfrwBqtIhg4ruTmmUatzxGM",
+    "_session": "_0dkbbSD86fbhsUQ6nOYm",
+    "_session.sig": "ejVq2OBbqp_may1CugL5kRP3FHk",
+    "_grant": "0W2MhLQU7Np4VobhHv71E",
+    "_grant.sig": "Gomg8PrssZrkSmkenbfnmhhmsaA"
+  },
+  "captcha": {
+    "enabled": true,
+    "siteKey": "0x4AAAAAAAVY8hH3nz6RxaK0",
+    "action": "view",
+    "cData": null,
+    "script": true
+  },
+  "pageUrl": "https://jobs.workable.com/view/dDdxrTVS3kbw1fxuWnG5jV/hybrid-senior-backend-engineer-in-new-cairo-city-at-b_labs"
+}

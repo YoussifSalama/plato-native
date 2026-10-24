@@ -1,0 +1,55 @@
+<!doctype html><html><body>
+<form>
+  <div class="field">
+    <label for="em">Email</label>
+    <input id="em" type="email" aria-invalid="true" aria-describedby="em-help em-err" value="nope" />
+    <span id="em-help">We never share it.</span>
+    <span id="em-err">Enter a valid email address.</span>
+  </div>
+  <div class="field">
+    <label for="ph">Phone</label>
+    <input id="ph" type="tel" aria-errormessage="ph-err" value="1" />
+    <div id="ph-err" role="alert">Phone number is too short.</div>
+  </div>
+  <div class="field">
+    <label for="loc">Location</label>
+    <select id="loc"><option value="">Select...</option><option value="a">Bogota</option></select>
+    <div class="error-text">This field is required.</div>
+  </div>
+  <div class="field">
+    <label for="ok">Company</label>
+    <input id="ok" type="text" value="Acme" />
+    <span class="hint">Optional.</span>
+  </div>
+  <div class="field">
+    <label for="hid">City</label>
+    <input id="hid" type="text" />
+    <div class="error-text" style="display:none">Required.</div>
+  </div>
+  <div role="alert" id="global">Please fix the errors below.</div>
+  <div class="row">
+    <label for="fn">First name</label><input id="fn" type="text" aria-invalid="true" />
+    <label for="ln">Last name</label><input id="ln" type="text" value="Seeker" />
+    <div class="error-text">First name is required.</div>
+  </div>
+  <div class="field">
+    <label for="web">Website</label>
+    <input id="web" type="url" aria-describedby="web-help" />
+    <span id="web-help">Please include https://</span>
+  </div>
+  <div class="field">
+    <label for="based" class="_heading_1 _required_9 ashby-question-title">Where are you currently based?</label>
+    <input id="based" type="text" role="combobox" aria-autocomplete="list" placeholder="Start typing..." />
+  </div>
+  <div class="application-field">
+    <div class="application-label">Which location are you applying for? ✱</div>
+    <select name="opportunityLocationId"><option value="">Select...</option><option value="b">Bogota</option><option value="l">Lima</option></select>
+  </div>
+  <div class="_fieldEntry_1">
+    <label class="_heading_1 _required_9" for="_systemfield_location">Where are you currently based?</label>
+    <div class="_inputContainer"><input type="text" role="combobox" aria-autocomplete="list" placeholder="Start typing..." /></div>
+  </div>
+  <button type="submit" id="go">Submit</button>
+</form>
+<div id="cookie-banner" class="consent-banner"><p>This site uses cookies. You must accept to continue.</p><label><input type="checkbox" id="ck" /> Analytics</label><button id="accept">Allow</button></div>
+</body></html>

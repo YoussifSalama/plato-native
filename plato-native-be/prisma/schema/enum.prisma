@@ -1,0 +1,26 @@
+enum Gender {
+    MALE
+    FEMALE
+    OTHER
+}
+
+enum JobSeekerDocumentType {
+    CV_RESUME
+    CERTIFICATE
+    LICENSE
+    DEGREE
+    OTHER
+}
+
+enum JobSeekerDocumentStatus {
+    UPLOADED
+    PROCESSING
+    TEXT_EXTRACTED
+    READY
+    FAILED
+}
+
+enum SectionStatus {
+    LOOKS_GOOD
+    NEEDS_ATTENTION
+}

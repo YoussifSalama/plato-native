@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Fixture job: Engineer (rejects)</title></head>
+  <body>
+    <h1>Engineer</h1>
+    <!-- Synthetic page for tests. Not a copy of any real site. The page validates Submit itself:
+         the location list is required but carries no `required` attribute (the star is in the label). -->
+    <form id="f" method="post" action="/submit" novalidate>
+      <label for="fn">First name *</label><input id="fn" name="fn" />
+      <label for="em">Email *</label><input id="em" name="em" type="email" />
+      <div class="field">
+        <label for="loc">Location *</label>
+        <select id="loc" name="loc"><option value="">Select…</option><option value="bog">Bogota</option><option value="lim">Lima</option></select>
+        <div id="loc-err" class="error-text" hidden></div>
+      </div>
+      <button type="submit" id="submit">Submit application</button>
+    </form>
+    <script>
+      document.getElementById('f').addEventListener('submit', function (e) {
+        var loc = document.getElementById('loc');
+        var err = document.getElementById('loc-err');
+        if (!loc.value) { e.preventDefault(); err.textContent = 'This field is required.'; err.hidden = false; loc.setAttribute('aria-invalid', 'true'); }
+      });
+      document.getElementById('loc').addEventListener('change', function () { document.getElementById('loc-err').hidden = true; this.removeAttribute('aria-invalid'); });
+    </script>
+  </body>
+</html>

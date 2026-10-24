@@ -1,0 +1,40 @@
+enum ChatRole {
+    USER
+    ASSISTANT
+}
+
+// One thread = one job-search conversation. Notifications and results link
+// back to a thread id, so it doubles as the "search session" id.
+model ChatThread {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  title String?
+
+  messages       ChatMessage[]
+  discovery_runs DiscoveryRun[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id, created_at])
+  @@map("chat_threads")
+}
+
+model ChatMessage {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  thread_id String     @db.ObjectId
+  thread    ChatThread @relation(fields: [thread_id], references: [id], onDelete: Cascade)
+
+  role    ChatRole
+  content String
+  // Interactive card the assistant attached (questions to answer in the
+  // chat UI). Answers come back as the next user message.
+  ui      Json?
+
+  created_at DateTime @default(now())
+
+  @@index([thread_id, created_at])
+  @@map("chat_messages")
+}

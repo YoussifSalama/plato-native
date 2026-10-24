@@ -1,0 +1,340 @@
+enum JobSource {
+    // A link the seeker pasted (POST /job-seeker/jobs/by-url); the apply page is wherever the link goes.
+    MANUAL
+    WORKABLE
+    LEVER
+    LINKEDIN
+    GREENHOUSE
+    ASHBY
+    INDEED
+    GOOGLE_JOBS
+    ZIPRECRUITER
+    GLASSDOOR
+    TALENT
+    JOBBANK
+    JOBILLICO
+    DICE
+    HANDSHAKE
+    BUILTIN
+    WUZZUF
+    REMOTIVE
+    JOBICY
+    REMOTEOK
+    HIMALAYAS
+    JOOBLE
+    ADZUNA
+    BAYT
+    NAUKRIGULF
+    GULFTALENT
+    WEWORKREMOTELY
+    WORKINGNOMADS
+    WELLFOUND
+    ARC
+    DYNAMITEJOBS
+    JOBGETHER
+    NODESK
+}
+
+enum JobRemoteType {
+    ONSITE
+    HYBRID
+    REMOTE
+    UNKNOWN
+}
+
+model Job {
+  id     String    @id @default(auto()) @map("_id") @db.ObjectId
+  source JobSource
+
+  // Dedupe key: same posting from the same source should never be stored twice.
+  external_id String
+
+  title       String
+  company     String
+  company_url String?
+  location    String?
+  remote_type JobRemoteType @default(UNKNOWN)
+  job_type    String?
+  easy_apply  Boolean       @default(false)
+
+  url         String
+  apply_url   String?
+  description String?
+
+  salary_min      Int?
+  salary_max      Int?
+  salary_currency String?
+
+  posted_at DateTime?
+  raw       Json?
+
+  // Set at ingest: what kind of job this is, and a key that is the same for
+  // the same posting arriving from different boards (company + title + place).
+  profession  String?
+  employment  String?
+  dedupe_key  String?
+  // The posting was found closed. Hidden from results; checked_at is when we last looked.
+  expired_at  DateTime?
+  checked_at  DateTime?
+
+  matches      JobSeekerJobMatch[]
+  applications JobApplication[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([source, external_id])
+  @@index([dedupe_key])
+  @@index([checked_at])
+  @@map("jobs")
+}
+
+enum DiscoveryRunStatus {
+    RUNNING
+    DONE
+    FAILED
+}
+
+// One background discovery execution. `progress` mirrors RunProgress
+// (stage + per-source counts) so the UI can animate the pipeline live.
+model DiscoveryRun {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  thread_id String?     @db.ObjectId
+  thread    ChatThread? @relation(fields: [thread_id], references: [id], onDelete: SetNull)
+
+  status   DiscoveryRunStatus @default(RUNNING)
+  query    Json
+  progress Json?
+  fetched  Int  @default(0)
+  matched  Int  @default(0)
+  error    String?
+
+  // The seeker starred this search on the web; the extension lists it first.
+  // Optional on purpose: older rows have no value and Mongo rejects a missing required field.
+  featured Boolean?
+
+  matches JobSeekerJobMatch[]
+
+  started_at  DateTime  @default(now())
+  finished_at DateTime?
+
+  @@index([job_seeker_id, started_at])
+  @@index([thread_id])
+  @@map("discovery_runs")
+}
+
+model JobSeekerJobMatch {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  job_id String @db.ObjectId
+  job    Job    @relation(fields: [job_id], references: [id], onDelete: Cascade)
+
+  // Every run that surfaced this job for this seeker (a job can appear in
+  // several searches); `discovery_run_id` is the most recent one.
+  discovery_run_ids String[]      @default([]) @db.ObjectId
+  discovery_run_id  String?       @db.ObjectId
+  discovery_run     DiscoveryRun? @relation(fields: [discovery_run_id], references: [id], onDelete: SetNull)
+
+  discovered_at DateTime @default(now())
+
+  // Layer 2 (BM25 keyword scoring against the seeker's skills/titles/experience).
+  // Null until ranked; shortlisted marks the top slice kept after ranking.
+  match_score Float?
+  shortlisted Boolean @default(false)
+
+  // Seeker actions on this match.
+  saved    Boolean   @default(false)
+  saved_at DateTime?
+  hidden   Boolean   @default(false)
+
+  // Added to the browser-extension queue from the web ("Apply"): the extension pre-ticks these.
+  // Optional on purpose: older rows have no value.
+  extension_queued Boolean?
+
+  @@unique([job_seeker_id, job_id])
+  @@index([job_seeker_id])
+  @@index([job_seeker_id, shortlisted])
+  @@index([job_seeker_id, saved])
+  @@index([discovery_run_id])
+  @@index([discovery_run_ids])
+  @@map("job_seeker_job_matches")
+}
+
+enum JobApplicationStatus {
+    QUEUED
+    IN_PROGRESS
+    // Waiting on the seeker: unanswered questions, drafts to confirm, or a
+    // CAPTCHA only a human can pass.
+    NEEDS_INPUT
+    // The site is asking for a person (CAPTCHA / "verify you are human").
+    // Plato never solves it: a person completes it, then the flow continues.
+    NEEDS_USER_VERIFICATION
+    SUBMITTED
+    FAILED
+    // The posting closed before we could apply.
+    EXPIRED
+    // Plato decided not to apply: not a fit, or the same role was already handled.
+    SKIPPED
+    // Claimed by the Chrome extension apply engine. Holds the duplicate lock
+    // while a person works through the form; the legacy worker never touches it.
+    EXTENSION_ACTIVE
+}
+
+// Who runs an application. Null (rows from before the extension) = LEGACY.
+enum ApplyEngine {
+    LEGACY
+    EXTENSION
+}
+
+// A job the seeker asked Plato to apply to. Plato's apply agent (later)
+// moves it QUEUED → IN_PROGRESS → SUBMITTED / FAILED.
+model JobApplication {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  job_seeker    JobSeeker @relation(fields: [job_seeker_id], references: [id], onDelete: Cascade)
+
+  job_id String @db.ObjectId
+  job    Job    @relation(fields: [job_id], references: [id], onDelete: Cascade)
+
+  thread_id String? @db.ObjectId
+
+  status JobApplicationStatus @default(QUEUED)
+  // Null = LEGACY. EXTENSION rows are never queued, retried or withdrawn by
+  // the legacy worker/endpoints.
+  engine ApplyEngine?
+  // EXTENSION engine: the attempt whose VERIFY the seeker was told about.
+  // Set when an item enters VERIFY (once per attempt: dedupes the
+  // notification across retries and reconciliation), cleared on a new claim.
+  // status EXTENSION_ACTIVE + this set = waiting for the seeker to settle it.
+  verify_attempt String?
+  error  String?
+  // Why it didn't go through, as a stable key for stats and UI:
+  // human_check | unknown_fact | invalid_answer | ineligible | duplicate |
+  // closed | site_error | unsupported | dry_run | no_resume
+  failure_kind String?
+
+  // Retry bookkeeping for the apply worker.
+  attempts        Int       @default(0)
+  next_attempt_at DateTime?
+
+  // Questions for the seeker (with Plato's drafts) while NEEDS_INPUT.
+  needs_input Json?
+  // Answers the seeker confirmed for this application, keyed by field id.
+  answers     Json?
+  // Storage key of the resume Plato tailored for this job (PDF).
+  resume_key  String?
+  // The strategy and quality checks that resume was built with.
+  resume_strategy Json?
+  // What actually happened: payload sent, confirmation text, screenshot.
+  evidence    Json?
+  // Worker steps of the latest attempt, so "why did it fail" survives restarts.
+  events      Json?
+
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  submitted_at DateTime?
+
+  @@unique([job_seeker_id, job_id])
+  @@index([job_seeker_id, status])
+  @@map("job_applications")
+}
+
+// ---- Chrome extension apply engine ----
+
+// A browser the seeker paired with the extension. Only the SHA-256 of the
+// opaque token is stored.
+model ExtensionDevice {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String   @db.ObjectId
+  label         String
+  token_hash    String   @unique
+  scopes        String[]
+  ext_version   String?
+
+  created_at      DateTime  @default(now())
+  last_used_at    DateTime?
+  // 14 days idle (slides on use), 30 days absolute.
+  idle_expires_at DateTime
+  expires_at      DateTime
+  revoked_at      DateTime?
+
+  @@index([job_seeker_id])
+  @@map("extension_devices")
+}
+
+// One-time pairing code typed into the extension. Only its hash is stored.
+model ExtensionPairing {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id   String    @db.ObjectId
+  code_hash       String    @unique
+  expires_at      DateTime
+  used_at         DateTime?
+  failed_attempts Int       @default(0)
+  created_at      DateTime  @default(now())
+
+  @@index([job_seeker_id])
+  @@map("extension_pairings")
+}
+
+enum ApplyItemState {
+    PENDING
+    CLAIMED
+    PREPARING
+    NEEDS_USER
+    FILLING
+    REVIEW
+    // Written BEFORE the page is shown ready to submit. From here on the
+    // outcome can only be settled by evidence or by the person.
+    AWAITING_SUBMIT
+    SUBMITTED_CONFIRMED
+    SUBMITTED_ATTESTED
+    // The outcome cannot be established safely: a person decides. Never resubmit.
+    VERIFY
+    FAILED
+    SKIPPED
+    CANCELLED
+}
+
+model ApplyBatch {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String   @db.ObjectId
+  created_at    DateTime @default(now())
+  // Where the jobs were picked: the search, so the extension can say "2 jobs from your AI Engineer search".
+  search_id     String?  @db.ObjectId
+  label         String?
+
+  @@index([job_seeker_id])
+  @@map("apply_batches")
+}
+
+model ApplyBatchItem {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  batch_id       String         @db.ObjectId
+  job_seeker_id  String         @db.ObjectId
+  job_id         String         @db.ObjectId
+  application_id String?        @db.ObjectId
+  provider       String?
+  state          ApplyItemState @default(PENDING)
+  // Idempotency: a transition is (item, attempt_id, seq); stale attempts get 409.
+  attempt_id     String?
+  seq            Int            @default(0)
+  device_id      String?        @db.ObjectId
+  lease_expires_at DateTime?
+  // Which resume this application uploads ("profile" | "tailored"). Its own column: `detail` is read-modify-written
+  // by every state transition, and a transition in flight used to overwrite the choice saved a moment earlier.
+  resume_choice  String?
+  // Evidence/reason for the latest state (page marker, verify reason, failure_kind).
+  detail         Json?
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+
+  @@unique([batch_id, job_id])
+  @@index([job_seeker_id, state])
+  @@map("apply_batch_items")
+}
+

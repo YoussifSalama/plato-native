@@ -1,0 +1,13 @@
+<!doctype html><html><body>
+<style>.gone{display:none}.inv{visibility:hidden}</style>
+<form>
+  <label for="v">Visible</label><input id="v" type="text" />
+  <div class="gone"><label for="h1">In hidden div</label><input id="h1" type="text" /></div>
+  <input id="h2" type="text" aria-label="Hidden attr" hidden />
+  <fieldset disabled><label for="d">In disabled fieldset</label><input id="d" type="text" /></fieldset>
+  <div aria-hidden="true"><input id="trap" type="text" aria-label="Website" /></div>
+  <input id="ro" type="text" aria-label="Read only" readonly value="fixed" />
+  <input id="inv" class="inv" type="text" aria-label="Invisible" />
+  <input id="off" type="text" aria-label="Disabled" disabled />
+</form>
+</body></html>

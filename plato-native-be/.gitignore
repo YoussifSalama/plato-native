@@ -60,3 +60,6 @@ uploads/
 
 # Apply worker evidence (screenshots hold personal data)
 storage/
+
+# v3 spike run outputs (screenshots, journals)
+scripts/v3-spike/out/

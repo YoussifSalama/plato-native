@@ -1,5 +1,6 @@
 import { AxiosError } from "axios"
 import { apiClient } from "@/lib/api-client"
+import { isOutOfTokens, reportOutOfTokens, reportTokensChanged } from "@/lib/credits/api"
 
 // A resume Plato built in the chat; shown under the message as a PDF link.
 // What Plato looked up on the web for a message, with the pages it used.
@@ -47,7 +48,11 @@ async function streamCareerMessage(id: string, content: string, onDelta: (text: 
     body: JSON.stringify({ content, attachmentIds, reference }),
     signal,
   })
-  if (!res.ok || !res.body) throw new Error((await res.json().catch(() => null))?.message ?? "Request failed")
+  if (!res.ok || !res.body) {
+    const body = await res.json().catch(() => null)
+    if (isOutOfTokens(res.status, body)) reportOutOfTokens(body)
+    throw new Error(body?.message ?? "Request failed")
+  }
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
   let buffer = ""
   let message: CareerMessage | null = null
@@ -66,6 +71,7 @@ async function streamCareerMessage(id: string, content: string, onDelta: (text: 
       else if (event === "error") throw new Error(data.message)
     }
   }
+  reportTokensChanged() // the reply was charged when it finished
   if (!message) throw new Error("The reply was cut off. Please try again.")
   return message
 }

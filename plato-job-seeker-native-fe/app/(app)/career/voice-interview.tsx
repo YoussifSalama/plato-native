@@ -5,6 +5,8 @@ import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, type 
 import { BadgeCheck, Briefcase, ClipboardCheck, Loader2, MessagesSquare, Mic, MicOff, PhoneOff, RotateCcw, Sparkles, Target, X } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
+import { resetLabel, useTokens, useVoiceRate } from "@/components/plato-tokens"
+import { formatTokens } from "@/lib/credits/api"
 import { PlatoMark } from "@/components/plato-orb"
 import { spring } from "@/lib/motion-system"
 import { getProfile } from "@/lib/documents/api"
@@ -282,6 +284,11 @@ function VoiceInterviewPanel({ threadId, firstName, roles, onClose, onFinished, 
   const lastYou = turns.at(-1)?.role === "user" ? turns.at(-1) : undefined
   const roleChoices = [...new Set(roles)].slice(0, 4)
   const canStart = mode !== "skill" || !!chosenSkill
+  // The call is as long as the seeker's Plato tokens allow (the server enforces it).
+  const tokens = useTokens()
+  const rate = useVoiceRate()
+  const affordable = tokens && rate ? Math.min(15, Math.floor(Math.max(0, tokens.balance) / rate)) : 15
+  const callLimit = !tokens || !rate ? "Up to 15 minutes." : affordable < 1 ? `You need about ${formatTokens(rate)} Plato tokens for a call; yours refill on ${resetLabel(tokens.resetsAt)}.` : `Up to ${affordable} minute${affordable === 1 ? "" : "s"} (≈ ${formatTokens(rate)} Plato tokens a minute).`
 
   return (
     <motion.aside initial={{ opacity: 0, x: 32 }} animate={{ opacity: 1, x: 0 }} aria-label="Voice interview" className="relative z-20 flex w-full shrink-0 flex-col overflow-hidden rounded-xl border bg-card shadow-lg shadow-primary/10 max-lg:absolute max-lg:inset-0 lg:w-[46%] lg:max-w-[560px]">
@@ -377,7 +384,7 @@ function VoiceInterviewPanel({ threadId, firstName, roles, onClose, onFinished, 
             )}
 
             {error && <p className="text-xs text-destructive">{error}</p>}
-            <p className="text-xs text-muted-foreground">Up to 15 minutes. Plato will ask for your microphone; headphones help. The transcript is saved to this chat.</p>
+            <p className="text-xs text-muted-foreground">{callLimit} Plato will ask for your microphone; headphones help. The transcript is saved to this chat.</p>
             <Button size="lg" disabled={phase === "connecting" || !canStart} onClick={() => void start()} className="mt-auto h-12 gap-2 text-base">
               {phase === "connecting" ? <Loader2 className="size-5 animate-spin" /> : <Mic className="size-5" />}
               {phase === "connecting" ? "Connecting…" : "Start the call"}

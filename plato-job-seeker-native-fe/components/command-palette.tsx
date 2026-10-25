@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { Bell, Briefcase, FileText, GraduationCap, Home, MessageCircle, MessagesSquare, Mic, Plus, Sparkles, User } from "lucide-react"
+import { Bell, Briefcase, FileText, GraduationCap, Home, MessageCircle, MessagesSquare, Mic, Plus, Sparkles, User, Coins } from "lucide-react"
 import { createThread } from "@/lib/jobs/api"
 import { PAGE_PATH, threadHref } from "@/lib/jobs/links"
 import { hasOwnAssistant } from "@/components/global-assistant"
@@ -61,6 +61,7 @@ function CommandPalette() {
       { id: "messages", label: "Messages", hint: "Go to", icon: MessageCircle, run: go(PAGE_PATH.messages) },
       { id: "notifications", label: "Notifications", hint: "Go to", icon: Bell, run: go(PAGE_PATH.notifications) },
       { id: "profile", label: "Profile", hint: "Go to", icon: User, run: go(PAGE_PATH.profile) },
+      { id: "tokens", label: "Plato tokens", hint: "Go to", icon: Coins, run: go("/tokens") },
       { id: "new-search", label: "New job search", hint: "Action", icon: Plus, run: () => void createThread().then((t) => router.push(threadHref(t.id))) },
       { id: "practice", label: "Practice an interview", hint: "Action", icon: MessagesSquare, run: go("/career?prompt=" + encodeURIComponent("Practice an interview with me")) },
       { id: "mock", label: "Mock interview", hint: "Action", icon: Mic, run: go("/career?prompt=" + encodeURIComponent("Give me a mock interview")) },

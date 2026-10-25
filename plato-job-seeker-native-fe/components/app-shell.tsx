@@ -8,6 +8,7 @@ import { Bell, Briefcase, ChevronRight, FileText, GraduationCap, HelpCircle, Hom
 import { cn } from "cn"
 import { getMe, type AuthUser } from "@/lib/auth/api"
 import { NotificationsProvider, useNotifications } from "@/components/notifications-provider"
+import { TokensChip, TokensNav } from "@/components/plato-tokens"
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
@@ -132,6 +133,7 @@ function Frame({ children }: { children: ReactNode }) {
 
         <div className={cn("flex flex-col gap-3.5", collapsed && "items-center")}>
           <ExtensionProgressNav collapsed={collapsed} itemClass={item(false)} />
+          <TokensNav collapsed={collapsed} itemClass={item(pathname.startsWith("/tokens"))} />
           <a href="#" title={collapsed ? "Help & Support" : undefined} className={cn(item(false), !collapsed && "pl-1.5")}>
             <HelpCircle className="size-[17px] shrink-0" />
             {!collapsed && "Help & Support"}
@@ -176,6 +178,7 @@ function Frame({ children }: { children: ReactNode }) {
               )
             })}
           </nav>
+          <TokensChip />
         </div>
         {children}
       </div>

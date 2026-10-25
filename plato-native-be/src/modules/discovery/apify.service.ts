@@ -18,14 +18,22 @@ export class ApifyService {
     input: Record<string, unknown>,
   ): Promise<T[]> {
     const run = await this.client.actor(actorId).call(input);
-    recordUsage({
-      feature: 'discovery.apify',
-      model: actorId,
-      apify_usd: run.usageTotalUsd ?? 0,
-    });
-    const { items } = await this.client
-      .dataset(run.defaultDatasetId)
-      .listItems();
-    return items as T[];
+    let results: number | null = null;
+    try {
+      const { items } = await this.client
+        .dataset(run.defaultDatasetId)
+        .listItems();
+      results = items.length;
+      return items as T[];
+    } finally {
+      // recorded either way (Apify charged us); the seeker pays per result read,
+      // so a run whose results could not be read costs the seeker nothing
+      recordUsage({
+        feature: 'discovery.apify',
+        model: actorId,
+        apify_usd: run.usageTotalUsd ?? 0,
+        ...(results !== null && { meta: { results } }),
+      });
+    }
   }
 }

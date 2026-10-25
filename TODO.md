@@ -109,11 +109,11 @@ Sources to add: Himalayas, We Work Remotely, Remotive, Jobgether, Jobicy, Remote
 
 - [ ] Plan model: Free / Pro / Max (starter numbers in MEASURED_COSTS.md: standard searches unlimited, deep searches limited, hidden LLM cap)
 - [ ] Payment provider and monthly billing; for Egypt check a local gateway (Paymob/Fawry) and local-currency prices
-- [ ] Credits ledger: balance, grants per plan, automatic monthly reset date
+- [x] Credits ledger ("Plato tokens", 1,000 = $1 of our cost): `credit_accounts` + append-only `credit_ledger`, free plan grant on first use, monthly reset to the grant without a cron (no roll-over), every `recordUsage` event charged by its real cost (AI by model price, Apify boards by a fixed price per result per platform), auto apply exempt. `GET /job-seeker/credits` (balance, reset date, history) and `GET /job-seeker/credits/prices`. Env: `CREDITS_USD_PER_TOKEN` (default 0.001), `CREDITS_FREE_MONTHLY` (default 1000). Run `npm run prisma:push`
 - [ ] Cost table per action, based on measured cost: searches/filters/navigation free; resume generation, voice mock interview, deep search and research cost credits
 - [ ] Show cost before the action and remaining credits and reset date everywhere
 - [ ] Enforce limits server-side (quota check before spending, count a deep search only after Apify actually ran)
-- [ ] Failed or empty runs do not consume credits
+- [~] Failed or empty runs do not consume credits: done for Apify boards (a run with 0 results, or whose results could not be read, is free); AI calls that error before a response are never metered
 - [ ] Admin view: usage and margin per user and per feature from `usage_events`
 - [ ] Re-measure with real traffic for 2 weeks, then fix prices
 

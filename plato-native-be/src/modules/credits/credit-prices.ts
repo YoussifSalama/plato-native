@@ -1,0 +1,132 @@
+// Plato tokens: one unit for everything a seeker spends. A service costs what it
+// really costs us, converted at one rate, so a gpt-4o call costs more tokens than
+// the same text on gpt-4.1-nano, and a Glassdoor result more than a Talent one.
+// The margin lives in the plan prices, not here.
+
+/** One Plato token = this many US dollars of our cost (1,000 tokens = $1). */
+export const USD_PER_TOKEN = Number(process.env.CREDITS_USD_PER_TOKEN ?? 0.001);
+
+export const PLANS: Record<string, { monthly: number }> = {
+  free: { monthly: Number(process.env.CREDITS_FREE_MONTHLY ?? 1000) },
+};
+export const planOf = (plan: string) => PLANS[plan] ?? PLANS.free;
+
+// Auto apply is not charged in tokens (out of scope for this system).
+const EXEMPT = /^(extension|apply)\./;
+
+// Apify boards: a fixed price per platform, so the cost of a search is known
+// before it runs. USD per result + per run start (the actors' own pay-per-result
+// pricing, free tier; DISCOVERY_COST_REPORT.md). A board not listed here is
+// charged what Apify reported for the run.
+export const APIFY_PRICES: Record<
+  string,
+  { label: string; perResult: number; perRun: number }
+> = {
+  'cirkit~talent-com-jobs-scraper': {
+    label: 'Talent.com',
+    perResult: 0.0007,
+    perRun: 0,
+  },
+  'parsebird~jobbank-canada-scraper': {
+    label: 'Job Bank',
+    perResult: 0.00079,
+    perRun: 0,
+  },
+  'parsebird~dice-jobs-scraper': {
+    label: 'Dice',
+    perResult: 0.00099,
+    perRun: 0,
+  },
+  'memo23~handshake-jobs-scraper': {
+    label: 'Handshake',
+    perResult: 0.001,
+    perRun: 0,
+  },
+  'curious_coder~linkedin-jobs-scraper': {
+    label: 'LinkedIn',
+    perResult: 0.001,
+    perRun: 0,
+  },
+  'automation-lab~wuzzuf-jobs-scraper': {
+    label: 'Wuzzuf',
+    perResult: 0.00092,
+    perRun: 0.005,
+  },
+  'scrapesage~google-jobs-scraper': {
+    label: 'Google Jobs',
+    perResult: 0.0022,
+    perRun: 0,
+  },
+  'jobsapi~jobillico-jobs-search-scraper': {
+    label: 'Jobillico',
+    perResult: 0.00299,
+    perRun: 0,
+  },
+  'benthepythondev~builtin-jobs-scraper': {
+    label: 'Built In',
+    perResult: 0.003,
+    perRun: 0,
+  },
+  'automation-lab~indeed-scraper': {
+    label: 'Indeed',
+    perResult: 0.003,
+    perRun: 0.005,
+  },
+  'agentx~ziprecruiter-jobs-scraper': {
+    label: 'ZipRecruiter',
+    perResult: 0.0041,
+    perRun: 0.01,
+  },
+  'automation-lab~glassdoor-jobs-scraper': {
+    label: 'Glassdoor',
+    perResult: 0.005,
+    perRun: 0.01,
+  },
+};
+
+const round = (n: number) => Math.round(n * 1000) / 1000;
+export const toTokens = (usd: number) => round(usd / USD_PER_TOKEN);
+
+export interface MeteredRow {
+  feature: string;
+  model?: string | null;
+  cost_usd?: number | null;
+  apify_usd?: number | null;
+  meta?: unknown;
+}
+
+/** Plato tokens one usage event costs the seeker (0 = free). */
+export function tokensFor(r: MeteredRow): number {
+  if (EXEMPT.test(r.feature)) return 0;
+  if (r.feature === 'discovery.apify') {
+    const results = (r.meta as { results?: unknown } | null)?.results;
+    // a failed run (no results read) or an empty one costs the seeker nothing; we still paid Apify (usage_events)
+    if (typeof results !== 'number' || results <= 0) return 0;
+    const price = r.model ? APIFY_PRICES[r.model] : undefined;
+    return toTokens(
+      price
+        ? price.perRun + price.perResult * results
+        : (r.apify_usd ?? r.cost_usd ?? 0),
+    );
+  }
+  return toTokens(r.cost_usd ?? 0);
+}
+
+// What the seeker sees in their history, per metered feature.
+export const FEATURE_LABELS: Record<string, string> = {
+  'onboarding.extract': 'Reading your CV',
+  'onboarding.preferences': 'Setting your preferences',
+  'chat.onboarding': 'Onboarding chat',
+  'chat.orchestrator': 'Job search chat',
+  'discovery.titles': 'Planning a search',
+  'discovery.country': 'Planning a search',
+  'discovery.apify': 'Searching job boards',
+  'career.chat': 'Career chat',
+  'career.research': 'Career research',
+  'career.voice': 'Voice interview',
+  'resume.write': 'Writing a resume',
+  'resume.analyze': 'Checking a resume against a job',
+  'interview.plan': 'Mock interview',
+  'interview.followup': 'Mock interview',
+  'interview.score': 'Mock interview feedback',
+};

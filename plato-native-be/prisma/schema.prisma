@@ -120,6 +120,45 @@ model ChatMessage {
   @@map("chat_messages")
 }
 
+// ========== credits.prisma ==========
+
+// Plato tokens: the seeker's spending balance. One account per auth User; every
+// metered usage event (usage_events) is converted to tokens by its real cost and
+// written to the ledger. See src/modules/credits/credit-prices.ts for the rates.
+model CreditAccount {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  user_id      String   @unique @db.ObjectId
+  plan         String   @default("free")
+  // Plato tokens left in this period. Fractional (a cheap chat message is
+  // ~1 token); may dip slightly below zero when a call finishes after the
+  // balance ran out. Reset to the plan's grant at period_end.
+  balance      Float    @default(0)
+  period_start DateTime
+  period_end   DateTime
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("credit_accounts")
+}
+
+// Every change to a balance, append-only: grant (plan grant or monthly reset),
+// consume (a metered usage event), refund, adjust (admin).
+model CreditLedger {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  user_id        String   @db.ObjectId
+  kind           String
+  // Signed: negative for consume.
+  amount         Float
+  balance_after  Float
+  feature        String?
+  usage_event_id String?  @db.ObjectId
+  meta           Json?
+  created_at     DateTime @default(now())
+
+  @@index([user_id, created_at])
+  @@map("credit_ledger")
+}
+
 // ========== enum.prisma ==========
 
 enum Gender {

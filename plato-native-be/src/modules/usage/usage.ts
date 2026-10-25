@@ -9,6 +9,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { Observable } from 'rxjs';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { chargeUsage } from '../credits/credits';
 import { llmCost } from './pricing';
 
 // Request-scoped user id, so the 11 LLM call sites and the Apify client
@@ -28,18 +29,21 @@ export function recordUsage(row: {
 }) {
   const db = PrismaService.instance;
   if (!db) return;
+  const data = {
+    ...row,
+    cost_usd:
+      row.cost_usd ??
+      row.apify_usd ??
+      llmCost(row.model, row.input_tokens, row.output_tokens),
+    user_id: als.getStore() ?? null,
+  };
   // Metering must never break the feature it measures.
   db.usageEvent
-    .create({
-      data: {
-        ...row,
-        cost_usd:
-          row.cost_usd ??
-          row.apify_usd ??
-          llmCost(row.model, row.input_tokens, row.output_tokens),
-        user_id: als.getStore() ?? null,
-      },
-    })
+    .create({ data })
+    .then((ev) =>
+      // the seeker pays for what was metered, in Plato tokens (credits module)
+      data.user_id ? chargeUsage(data.user_id, data, ev.id) : undefined,
+    )
     .catch((e: Error) => logger.warn(`usage not recorded: ${e.message}`));
 }
 

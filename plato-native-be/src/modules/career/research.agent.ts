@@ -1,5 +1,6 @@
 import { Agent, run, webSearchTool } from '@openai/agents';
-import { metered } from '../usage/usage';
+import { metered, recordUsage } from '../usage/usage';
+import { WEB_SEARCH_USD_PER_CALL } from '../usage/pricing';
 
 // A specialist the career assistant calls when it meets something it does not
 // know: a tool, company, certification, job posting, or a country's CV rules.
@@ -37,6 +38,18 @@ export async function research(
     model,
     await run(agent, question.slice(0, 1500)),
   );
+  // the search calls are billed apart from the tokens
+  const searches = result.newItems.filter((i) => {
+    const raw = i.rawItem as { type?: string; name?: string };
+    return raw.type === 'hosted_tool_call' && raw.name === 'web_search_call';
+  }).length;
+  if (searches)
+    recordUsage({
+      feature: 'career.research.search',
+      model: 'web_search',
+      cost_usd: searches * WEB_SEARCH_USD_PER_CALL,
+      meta: { searches },
+    });
   const answer =
     typeof result.finalOutput === 'string' ? result.finalOutput.trim() : '';
   const sources = [

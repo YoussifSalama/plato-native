@@ -22,6 +22,7 @@ import { JobSeekerService } from '../user/job-seeker.service';
 import { DiscoveryService } from './discovery.service';
 import { buildMatchesWorkbook } from './match-export';
 import { ApplyService } from '../apply/apply.service';
+import { TokensGuard } from '../credits/tokens.guard';
 
 const startRunSchema = z.object({
   threadId: z.string().optional(),
@@ -119,6 +120,7 @@ export class DiscoveryController {
   }
 
   @Post('discover')
+  @UseGuards(TokensGuard)
   async discover(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
     const parsed = startRunSchema.safeParse(body ?? {});

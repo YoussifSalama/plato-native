@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { planOf, tokensFor, type MeteredRow } from './credit-prices';
@@ -122,4 +122,86 @@ export async function chargeUsage(
       `charge not recorded (${row.feature}, user ${userId}): ${e instanceof Error ? e.message : String(e)}`,
     );
   }
+}
+
+/** 402 with what the client needs to explain it: the balance and when it refills. */
+export class InsufficientTokensException extends HttpException {
+  constructor(balance: number, resetsAt: Date, needed?: number) {
+    super(
+      {
+        statusCode: HttpStatus.PAYMENT_REQUIRED,
+        code: 'insufficient_tokens',
+        message: 'You have run out of Plato tokens for this month.',
+        balance: Math.round(balance * 10) / 10,
+        resetsAt,
+        ...(needed !== undefined && { needed: Math.ceil(needed) }),
+      },
+      HttpStatus.PAYMENT_REQUIRED,
+    );
+  }
+}
+
+/** Refuse a paid action when the balance cannot cover `needed` tokens (default: anything left at all). */
+export async function requireTokens(userId: string, needed = 0) {
+  const acc = await creditAccount(userId);
+  if (acc.balance <= 0 || acc.balance < needed)
+    throw new InsufficientTokensException(
+      acc.balance,
+      acc.period_end,
+      needed || undefined,
+    );
+  return acc;
+}
+
+/** Reserve tokens before a call whose cost is known only after it. Returns the hold's ledger id. */
+export async function holdTokens(
+  userId: string,
+  amount: number,
+  feature: string,
+  meta: Record<string, string | number>,
+) {
+  const acc = await db().creditAccount.update({
+    where: { user_id: userId },
+    data: { balance: { decrement: amount } },
+  });
+  const row = await db().creditLedger.create({
+    data: {
+      user_id: userId,
+      kind: 'hold',
+      amount: -amount,
+      balance_after: acc.balance,
+      feature,
+      settled_at: null,
+      meta,
+    },
+  }); // explicit null: on MongoDB a null filter does not match a missing field
+  return row.id;
+}
+
+/** Give a hold back, once (a second call is a no-op). The real cost is then charged as a normal usage event. */
+export async function releaseHold(userId: string, holdId: string) {
+  const hold = await db().creditLedger.findFirst({
+    where: { id: holdId, user_id: userId, kind: 'hold' },
+  });
+  if (!hold) return false;
+  const won = await db().creditLedger.updateMany({
+    where: { id: holdId, settled_at: null },
+    data: { settled_at: new Date() },
+  });
+  if (won.count !== 1) return false;
+  const acc = await db().creditAccount.update({
+    where: { user_id: userId },
+    data: { balance: { increment: -hold.amount } },
+  });
+  await db().creditLedger.create({
+    data: {
+      user_id: userId,
+      kind: 'release',
+      amount: -hold.amount,
+      balance_after: acc.balance,
+      feature: hold.feature,
+      meta: { hold: holdId },
+    },
+  });
+  return true;
 }

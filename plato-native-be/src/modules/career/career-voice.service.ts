@@ -12,6 +12,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ResumeProfileService } from '../resume/resume-profile.service';
 import { recordUsage } from '../usage/usage';
 import { voiceCost } from '../usage/pricing';
+import { toTokens, VOICE_USD_PER_MINUTE } from '../credits/credit-prices';
+import {
+  creditAccount,
+  holdTokens,
+  InsufficientTokensException,
+  releaseHold,
+} from '../credits/credits';
 import {
   profileBrief,
   VOICE_MAX_MINUTES,
@@ -94,6 +101,19 @@ export class CareerVoiceService {
     req: z.infer<typeof voiceStartSchema>,
   ) {
     const { seeker } = await this.ownedThread(userId, threadId);
+    // The call is as long as the seeker's Plato tokens allow (up to the usual cap).
+    const acc = await creditAccount(userId);
+    const perMinute = toTokens(VOICE_USD_PER_MINUTE);
+    const minutes = Math.min(
+      VOICE_MAX_MINUTES,
+      Math.floor(acc.balance / perMinute),
+    );
+    if (minutes < 1)
+      throw new InsufficientTokensException(
+        acc.balance,
+        acc.period_end,
+        perMinute,
+      );
     const profile = await this.profiles.load(seeker.id);
     const instructions = voiceInstructions(req.mode, {
       firstName: seeker.user.full_name.split(' ')[0],
@@ -134,11 +154,17 @@ export class CareerVoiceService {
       this.logger.warn(`Realtime key failed: ${res.status}`);
       throw new BadGatewayException('Could not start the voice interview.');
     }
+    // reserved now, settled when the transcript arrives; a call that never
+    // reports back keeps its reservation
+    await holdTokens(userId, minutes * perMinute, 'career.voice', {
+      thread: threadId,
+      minutes,
+    });
     return {
       clientSecret: body.value,
       model,
       instructions,
-      maxSeconds: VOICE_MAX_MINUTES * 60,
+      maxSeconds: minutes * 60,
     };
   }
 
@@ -150,6 +176,8 @@ export class CareerVoiceService {
     body: z.infer<typeof voiceTranscriptSchema>,
   ) {
     const { thread } = await this.ownedThread(userId, threadId);
+    // settled first: a call with nothing said still ran
+    await this.settleVoice(userId, threadId, body);
     if (!body.turns.length) return { saved: 0 };
     const minutes = Math.max(1, Math.round(body.seconds / 60));
     // Distinct, increasing timestamps keep the order stable.
@@ -179,22 +207,59 @@ export class CareerVoiceService {
         }),
       },
     });
+    // Usage and cost are stored for us only; the client is never told.
+    return { saved: body.turns.length };
+  }
+
+  // The browser reports the call's length and tokens, so neither is trusted on
+  // its own: the cost is what the browser's tokens say, capped by the per-minute
+  // ceiling over the time the server saw (from the reservation to now), and never
+  // above what was reserved.
+  private async settleVoice(
+    userId: string,
+    threadId: string,
+    body: z.infer<typeof voiceTranscriptSchema>,
+  ) {
+    const holds = await this.prisma.creditLedger.findMany({
+      where: {
+        user_id: userId,
+        kind: 'hold',
+        feature: 'career.voice',
+        settled_at: null,
+      },
+      orderBy: { created_at: 'desc' },
+      take: 10,
+    });
+    const hold = holds.find(
+      (h) => (h.meta as { thread?: string } | null)?.thread === threadId,
+    );
+    const reservedSeconds =
+      ((hold?.meta as { minutes?: number } | null)?.minutes ?? 0) * 60;
+    const seenSeconds = hold
+      ? Math.min(
+          reservedSeconds,
+          body.seconds,
+          (Date.now() - hold.created_at.getTime()) / 1000,
+        )
+      : body.seconds;
+    const ceiling = Math.ceil(seenSeconds / 60) * VOICE_USD_PER_MINUTE;
     const u = body.usage;
-    const cost = u ? voiceCost(this.env.realtimeModel, u) : null;
+    const reported = u ? voiceCost(this.env.realtimeModel, u) : null;
+    if (hold) await releaseHold(userId, hold.id);
     recordUsage({
       feature: 'career.voice',
       model: this.env.realtimeModel,
       input_tokens: u ? u.audioInputTokens + u.textInputTokens : 0,
       output_tokens: u ? u.audioOutputTokens + u.textOutputTokens : 0,
-      cost_usd: cost,
+      cost_usd: reported === null ? ceiling : Math.min(reported, ceiling),
       meta: {
         mode: body.mode,
         seconds: body.seconds,
+        server_seconds: Math.round(seenSeconds),
+        reported_usd: reported,
         turns: body.turns.length,
         ...u,
       },
     });
-    // Usage and cost are stored for us only; the client is never told.
-    return { saved: body.turns.length };
   }
 }

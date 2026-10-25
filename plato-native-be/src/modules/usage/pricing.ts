@@ -13,6 +13,10 @@ const TEXT: Record<string, Price> = {
   'gpt-4.1-nano': { in: 0.1, out: 0.4 },
 };
 
+// OpenAI's hosted web search tool bills per call, on top of tokens.
+// ponytail: the gpt-4o / gpt-4.1 rate as remembered ($25 per 1k calls); check OpenAI's pricing page.
+export const WEB_SEARCH_USD_PER_CALL = 0.025;
+
 export function llmCost(model: string | undefined, inTok = 0, outTok = 0) {
   const p = model && TEXT[model];
   return p ? (inTok * p.in + outTok * p.out) / M : null;

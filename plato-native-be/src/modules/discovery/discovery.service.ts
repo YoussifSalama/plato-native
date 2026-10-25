@@ -51,6 +51,8 @@ import { excludesCountry } from '../apply/eligibility';
 import { companyDomain, normalizeCompany } from './company';
 import { jobEligibility } from './job-eligibility';
 import { recordUsage } from '../usage/usage';
+import { creditAccount } from '../credits/credits';
+import { affordableResults } from '../credits/credit-prices';
 import { employmentOf, isBlueCollar, professionOf } from './classify';
 import { dedupeJobs, dedupeKey } from './dedupe';
 import { mergeTitles, planTitles } from './title-planner';
@@ -303,6 +305,37 @@ export class DiscoveryService implements OnModuleInit {
     });
   }
 
+  // Paid boards only as far as the seeker's Plato tokens go (free sources always run).
+  private async affordableBudget(
+    jobSeekerId: string,
+    wanted: number,
+    threadId?: string,
+  ) {
+    if (wanted === 0) return 0;
+    const acc = await this.prisma.jobSeeker
+      .findUnique({ where: { id: jobSeekerId }, select: { user_id: true } })
+      .then((seeker) => (seeker ? creditAccount(seeker.user_id) : null))
+      .catch((e: unknown) => {
+        // metering must not break the search: on a credits error the run keeps its budget
+        this.logger.warn(`credits unavailable: ${String(e)}`);
+        return null;
+      });
+    if (!acc) return wanted;
+    const budget = affordableResults(acc.balance, wanted);
+    if (budget < wanted) {
+      this.logger.log(
+        `run budget ${wanted} -> ${budget} (balance ${acc.balance} tokens)`,
+      );
+      await this.narrate(
+        threadId,
+        budget === 0
+          ? 'You are out of Plato tokens for this month, so I searched the free sources only. The paid job boards come back when your tokens refill.'
+          : 'Your remaining Plato tokens cover part of a full job-board search, so I searched fewer paid boards this time.',
+      );
+    }
+    return budget;
+  }
+
   private async executeRun(
     runId: string,
     jobSeekerId: string,
@@ -332,7 +365,11 @@ export class DiscoveryService implements OnModuleInit {
       await publish(applyIndexResult(progress, indexResult));
       const indexJobs =
         indexResult.status === 'fulfilled' ? indexResult.value : [];
-      const budget = remainingBudget(indexJobs.length);
+      const budget = await this.affordableBudget(
+        jobSeekerId,
+        remainingBudget(indexJobs.length),
+        threadId,
+      );
       const remoteQuery: DiscoveryQuery = { ...query, budget };
 
       const [ats, linkedin, boards, feeds] = await Promise.allSettled([

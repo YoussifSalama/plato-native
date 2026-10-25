@@ -7,6 +7,7 @@ import {
   PLANS,
   planOf,
   toTokens,
+  VOICE_USD_PER_MINUTE,
 } from './credit-prices';
 import { creditAccount } from './credits';
 
@@ -52,9 +53,26 @@ export class CreditsController {
 
   /** What things cost in tokens, to show before the seeker spends them. */
   @Get('prices')
-  prices() {
+  async prices() {
+    // the average real charge per call over the last 30 days, across seekers
+    const since = new Date(Date.now() - 30 * 86_400_000);
+    const rows = await this.prisma.creditLedger.groupBy({
+      by: ['feature'],
+      where: { kind: 'consume', created_at: { gte: since } },
+      _avg: { amount: true },
+      _count: { _all: true },
+    });
     return {
       plans: PLANS,
+      voicePerMinute: toTokens(VOICE_USD_PER_MINUTE),
+      features: rows
+        .filter((r) => r.feature)
+        .map((r) => ({
+          feature: r.feature,
+          label: FEATURE_LABELS[r.feature!] ?? r.feature,
+          average: shown(-(r._avg.amount ?? 0)),
+          calls: r._count._all,
+        })),
       boards: Object.values(APIFY_PRICES).map((p) => ({
         label: p.label,
         perResult: toTokens(p.perResult),

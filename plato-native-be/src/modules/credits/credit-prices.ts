@@ -11,6 +11,14 @@ export const PLANS: Record<string, { monthly: number }> = {
 };
 export const planOf = (plan: string) => PLANS[plan] ?? PLANS.free;
 
+// A voice interview runs browser <-> OpenAI, so the server never sees its tokens
+// directly. It is reserved per minute at this ceiling when the call starts and
+// settled against the server's own clock (never more than the ceiling).
+// ponytail: a ceiling, not a measurement; set it from real career.voice rows.
+export const VOICE_USD_PER_MINUTE = Number(
+  process.env.CREDITS_VOICE_USD_PER_MINUTE ?? 0.1,
+);
+
 // Auto apply is not charged in tokens (out of scope for this system).
 const EXEMPT = /^(extension|apply)\./;
 
@@ -85,6 +93,20 @@ export const APIFY_PRICES: Record<
 };
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
+
+// A deep search never spends more than the balance: it asks for at most as many
+// board results as the dearest board's price allows, after a reserve for the
+// boards' start fees. A small balance gets a smaller search, not a refusal.
+const DEAREST_RESULT = Math.max(
+  ...Object.values(APIFY_PRICES).map((p) => p.perResult),
+);
+const RUN_FEE_RESERVE = 50; // tokens
+export function affordableResults(balance: number, wanted: number): number {
+  const n = Math.floor(
+    (balance - RUN_FEE_RESERVE) / (DEAREST_RESULT / USD_PER_TOKEN),
+  );
+  return Math.max(0, Math.min(wanted, n));
+}
 export const toTokens = (usd: number) => round(usd / USD_PER_TOKEN);
 
 export interface MeteredRow {
@@ -123,6 +145,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   'discovery.apify': 'Searching job boards',
   'career.chat': 'Career chat',
   'career.research': 'Career research',
+  'career.research.search': 'Career research (web search)',
   'career.voice': 'Voice interview',
   'resume.write': 'Writing a resume',
   'resume.analyze': 'Checking a resume against a job',

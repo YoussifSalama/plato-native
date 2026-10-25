@@ -14,6 +14,7 @@ import {
   InterviewService,
   startSchema,
 } from './interview.service';
+import { TokensGuard } from '../credits/tokens.guard';
 
 @Controller('job-seeker/interviews')
 @UseGuards(JwtAuthGuard)
@@ -21,6 +22,7 @@ export class InterviewController {
   constructor(private readonly interviews: InterviewService) {}
 
   @Post()
+  @UseGuards(TokensGuard)
   start(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
     const p = startSchema.safeParse(body);
     if (!p.success) throw new BadRequestException(p.error.issues);
@@ -38,6 +40,7 @@ export class InterviewController {
   }
 
   @Post(':id/answer')
+  @UseGuards(TokensGuard)
   answer(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,

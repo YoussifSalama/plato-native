@@ -19,6 +19,7 @@ import { ProfileExtractionAgentService } from './profile-extraction-agent.servic
 import { ProfileEvaluationService } from './profile-evaluation.service';
 import { profileEditSchema } from './profile-edit.schema';
 import { Finding } from './profile-extraction.schema';
+import { TokensGuard } from '../credits/tokens.guard';
 
 function parseDate(value: string | null | undefined): Date | undefined {
   if (!value) return undefined;
@@ -45,6 +46,7 @@ export class ProfileExtractionController {
   }
 
   @Post('analyze')
+  @UseGuards(TokensGuard)
   async analyze(@Req() req: AuthenticatedRequest) {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
 

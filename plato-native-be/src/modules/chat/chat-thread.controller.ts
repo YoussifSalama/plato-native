@@ -11,6 +11,7 @@ import {
 import { z } from 'zod';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ChatThreadService } from './chat-thread.service';
+import { TokensGuard } from '../credits/tokens.guard';
 
 const sendSchema = z.object({
   content: z.string().trim().min(1).max(2000),
@@ -96,6 +97,7 @@ export class ChatThreadController {
   }
 
   @Post(':id/messages')
+  @UseGuards(TokensGuard)
   send(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,

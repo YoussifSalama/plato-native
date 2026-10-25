@@ -21,6 +21,7 @@ import {
   voiceTranscriptSchema,
 } from './career-voice.service';
 import { docEditsSchema } from '../resume/resume-edit';
+import { TokensGuard } from '../credits/tokens.guard';
 
 // Long enough for a pasted job description.
 const sendSchema = z.object({
@@ -62,6 +63,7 @@ export class CareerController {
   }
 
   @Post('threads/:id/messages')
+  @UseGuards(TokensGuard)
   send(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
@@ -83,6 +85,7 @@ export class CareerController {
   // Same as POST messages, but the reply streams in as it is written:
   // `delta` events with text pieces, then one `done` with the saved message.
   @Post('threads/:id/messages/stream')
+  @UseGuards(TokensGuard)
   async stream(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
@@ -164,6 +167,7 @@ export class CareerController {
   }
 
   @Post('resumes/:id/suggest')
+  @UseGuards(TokensGuard)
   suggest(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,

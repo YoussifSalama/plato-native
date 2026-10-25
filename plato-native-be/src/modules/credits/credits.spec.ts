@@ -1,7 +1,14 @@
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { tokensFor, toTokens } from './credit-prices';
-import { chargeUsage, creditAccount } from './credits';
+import { affordableResults, tokensFor, toTokens } from './credit-prices';
+import {
+  chargeUsage,
+  creditAccount,
+  holdTokens,
+  InsufficientTokensException,
+  releaseHold,
+  requireTokens,
+} from './credits';
 
 describe('tokensFor (1,000 Plato tokens = $1 of cost)', () => {
   it('an AI call costs its real dollar cost in tokens, so a pricier model costs more', () => {
@@ -119,21 +126,46 @@ function fakeDb() {
           data,
         }: {
           where: { user_id: string };
-          data: { balance: { decrement: number } };
+          data: { balance: { decrement?: number; increment?: number } };
         }) => {
           const a = accounts[where.user_id];
-          a.balance =
-            Math.round((a.balance - data.balance.decrement) * 1000) / 1000;
+          const d =
+            (data.balance.increment ?? 0) - (data.balance.decrement ?? 0);
+          a.balance = Math.round((a.balance + d) * 1000) / 1000;
           return Promise.resolve({ ...a });
         },
       ),
     },
     creditLedger: {
-      create: jest.fn(
-        ({ data }: { data: Record<string, unknown> }) => (
-          ledger.push(data),
-          Promise.resolve(data)
-        ),
+      create: jest.fn(({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: `l${ledger.length + 1}`, ...data };
+        ledger.push(row);
+        return Promise.resolve(row);
+      }),
+      findFirst: jest.fn(
+        ({ where }: { where: { id: string; user_id: string; kind: string } }) =>
+          Promise.resolve(
+            ledger.find(
+              (l) =>
+                l.id === where.id &&
+                l.user_id === where.user_id &&
+                l.kind === where.kind,
+            ) ?? null,
+          ),
+      ),
+      updateMany: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: { settled_at: Date };
+        }) => {
+          const l = ledger.find((x) => x.id === where.id);
+          if (!l || l.settled_at !== null) return Promise.resolve({ count: 0 });
+          l.settled_at = data.settled_at;
+          return Promise.resolve({ count: 1 });
+        },
       ),
     },
   };
@@ -234,5 +266,65 @@ describe('chargeUsage', () => {
     await expect(
       chargeUsage('u1', { feature: 'career.chat', cost_usd: 0.01 }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('requireTokens', () => {
+  it('lets a seeker with tokens through and refuses one with none, with 402 and the refill date', async () => {
+    const { accounts } = fakeDb();
+    await expect(requireTokens('u1')).resolves.toMatchObject({ balance: 1000 });
+    accounts.u1.balance = -0.4;
+    const err = await requireTokens('u1').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InsufficientTokensException);
+    const ex = err as InsufficientTokensException;
+    expect(ex.getStatus()).toBe(402);
+    expect(ex.getResponse()).toMatchObject({
+      code: 'insufficient_tokens',
+      balance: -0.4,
+      resetsAt: accounts.u1.period_end,
+    });
+  });
+
+  it('refuses when the balance cannot cover what the action needs', async () => {
+    fakeDb();
+    await expect(requireTokens('u1', 1500)).rejects.toBeInstanceOf(
+      InsufficientTokensException,
+    );
+  });
+});
+
+describe('holdTokens / releaseHold', () => {
+  it('a hold takes tokens now; releasing gives them back exactly once', async () => {
+    const { accounts, ledger } = fakeDb();
+    await creditAccount('u1');
+    const id = await holdTokens('u1', 300, 'career.voice', {
+      thread: 't1',
+      minutes: 3,
+    });
+    expect(accounts.u1.balance).toBe(700);
+    expect(await releaseHold('u1', id)).toBe(true);
+    expect(await releaseHold('u1', id)).toBe(false);
+    expect(accounts.u1.balance).toBe(1000);
+    expect(ledger.map((l) => l.kind)).toEqual(['grant', 'hold', 'release']);
+  });
+
+  it("another seeker cannot release someone's hold", async () => {
+    const { accounts } = fakeDb();
+    await creditAccount('u1');
+    const id = await holdTokens('u1', 300, 'career.voice', {
+      thread: 't1',
+      minutes: 3,
+    });
+    expect(await releaseHold('u2', id)).toBe(false);
+    expect(accounts.u1.balance).toBe(700);
+  });
+});
+
+describe('affordableResults (deep search never outspends the balance)', () => {
+  it('a full balance keeps the wanted budget; a small one shrinks it; none skips the paid boards', () => {
+    expect(affordableResults(5000, 300)).toBe(300);
+    expect(affordableResults(1000, 300)).toBe(190); // (1000 - 50 reserve) / 5 tokens for the dearest result
+    expect(affordableResults(40, 300)).toBe(0);
+    expect(affordableResults(-3, 300)).toBe(0);
   });
 });

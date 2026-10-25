@@ -18,7 +18,7 @@ model CreditAccount {
 }
 
 // Every change to a balance, append-only: grant (plan grant or monthly reset),
-// consume (a metered usage event), refund, adjust (admin).
+// consume (a metered usage event), hold / release (a reservation), adjust (admin).
 model CreditLedger {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   user_id        String   @db.ObjectId
@@ -28,6 +28,10 @@ model CreditLedger {
   balance_after  Float
   feature        String?
   usage_event_id String?  @db.ObjectId
+  // A hold (tokens reserved before a call whose cost is known only after it,
+  // like a voice interview) is settled once: released back, then the real
+  // cost is charged as a consume.
+  settled_at     DateTime?
   meta           Json?
   created_at     DateTime @default(now())
 

@@ -2,12 +2,14 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { affordableResults, tokensFor, toTokens } from './credit-prices';
 import {
+  adjustTokens,
   chargeUsage,
   creditAccount,
   holdTokens,
   InsufficientTokensException,
   releaseHold,
   requireTokens,
+  setPlan,
 } from './credits';
 
 describe('tokensFor (1,000 Plato tokens = $1 of cost)', () => {
@@ -126,12 +128,21 @@ function fakeDb() {
           data,
         }: {
           where: { user_id: string };
-          data: { balance: { decrement?: number; increment?: number } };
+          data: {
+            balance: number | { decrement?: number; increment?: number };
+            plan?: string;
+            period_start?: Date;
+            period_end?: Date;
+          };
         }) => {
           const a = accounts[where.user_id];
-          const d =
-            (data.balance.increment ?? 0) - (data.balance.decrement ?? 0);
-          a.balance = Math.round((a.balance + d) * 1000) / 1000;
+          const { balance, ...rest } = data;
+          Object.assign(a, rest);
+          if (typeof balance === 'number') a.balance = balance;
+          else {
+            const d = (balance.increment ?? 0) - (balance.decrement ?? 0);
+            a.balance = Math.round((a.balance + d) * 1000) / 1000;
+          }
           return Promise.resolve({ ...a });
         },
       ),
@@ -326,5 +337,46 @@ describe('affordableResults (deep search never outspends the balance)', () => {
     expect(affordableResults(1000, 300)).toBe(190); // (1000 - 50 reserve) / 5 tokens for the dearest result
     expect(affordableResults(40, 300)).toBe(0);
     expect(affordableResults(-3, 300)).toBe(0);
+  });
+});
+
+describe('plans and admin adjustments', () => {
+  it('moving to a plan starts a fresh period with its full grant, at once', async () => {
+    const { accounts, ledger } = fakeDb();
+    await creditAccount('u1', day('2026-10-01'));
+    accounts.u1.balance = 12;
+    await setPlan('u1', 'pro', day('2026-10-20'));
+    expect(accounts.u1).toMatchObject({
+      plan: 'pro',
+      balance: 7000,
+      period_start: day('2026-10-20'),
+      period_end: day('2026-11-20'),
+    });
+    expect(ledger.at(-1)).toMatchObject({
+      kind: 'grant',
+      amount: 7000,
+      meta: { reason: 'plan_change', from_plan: 'free', previous_balance: 12 },
+    });
+    await expect(setPlan('u1', 'platinum')).rejects.toThrow('Unknown plan');
+  });
+
+  it('the monthly reset refills to the plan the seeker is on', async () => {
+    const { accounts } = fakeDb();
+    await creditAccount('u1', day('2026-09-01'));
+    await setPlan('u1', 'max', day('2026-09-01'));
+    accounts.u1.balance = 3;
+    expect((await creditAccount('u1', day('2026-10-02'))).balance).toBe(25000);
+  });
+
+  it('an adjustment moves the balance and is in the ledger with its reason', async () => {
+    const { accounts, ledger } = fakeDb();
+    await adjustTokens('u1', 250, 'refund: board outage');
+    expect(accounts.u1.balance).toBe(1250);
+    expect(ledger.at(-1)).toMatchObject({
+      kind: 'adjust',
+      amount: 250,
+      balance_after: 1250,
+      meta: { reason: 'refund: board outage' },
+    });
   });
 });

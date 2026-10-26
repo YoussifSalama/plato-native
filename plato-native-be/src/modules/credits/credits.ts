@@ -1,7 +1,7 @@
 import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { planOf, tokensFor, type MeteredRow } from './credit-prices';
+import { PLANS, planOf, tokensFor, type MeteredRow } from './credit-prices';
 
 // Plain functions (like recordUsage) so the metering path can charge without
 // threading a service through every call site.
@@ -204,4 +204,61 @@ export async function releaseHold(userId: string, holdId: string) {
     },
   });
   return true;
+}
+
+/** Admin: add (or, negative, take away) tokens with a reason, in the ledger like everything else. */
+export async function adjustTokens(
+  userId: string,
+  amount: number,
+  reason: string,
+) {
+  await creditAccount(userId);
+  const acc = await db().creditAccount.update({
+    where: { user_id: userId },
+    data: { balance: { increment: amount } },
+  });
+  await db().creditLedger.create({
+    data: {
+      user_id: userId,
+      kind: 'adjust',
+      amount,
+      balance_after: acc.balance,
+      meta: { reason },
+    },
+  });
+  return acc;
+}
+
+/**
+ * Admin (and later the payment webhook): move a seeker to a plan. A new period
+ * starts now with the new plan's full grant, so an upgrade is usable at once.
+ */
+export async function setPlan(userId: string, plan: string, now = new Date()) {
+  if (!PLANS[plan]) throw new Error(`Unknown plan: ${plan}`);
+  const before = await creditAccount(userId, now);
+  const grant = PLANS[plan].monthly;
+  const acc = await db().creditAccount.update({
+    where: { user_id: userId },
+    data: {
+      plan,
+      balance: grant,
+      period_start: now,
+      period_end: addMonth(now),
+    },
+  });
+  await db().creditLedger.create({
+    data: {
+      user_id: userId,
+      kind: 'grant',
+      amount: grant,
+      balance_after: grant,
+      meta: {
+        reason: 'plan_change',
+        plan,
+        from_plan: before.plan,
+        previous_balance: before.balance,
+      },
+    },
+  });
+  return acc;
 }

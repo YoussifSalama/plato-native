@@ -6,8 +6,12 @@
 /** One Plato token = this many US dollars of our cost (1,000 tokens = $1). */
 export const USD_PER_TOKEN = Number(process.env.CREDITS_USD_PER_TOKEN ?? 0.001);
 
+// Monthly tokens per plan. Starting points from MEASURED_COSTS.md (Pro $19 with
+// about $7 of cost, Max $59 with about $25): the plan price is where the margin is.
 export const PLANS: Record<string, { monthly: number }> = {
   free: { monthly: Number(process.env.CREDITS_FREE_MONTHLY ?? 1000) },
+  pro: { monthly: Number(process.env.CREDITS_PRO_MONTHLY ?? 7000) },
+  max: { monthly: Number(process.env.CREDITS_MAX_MONTHLY ?? 25000) },
 };
 export const planOf = (plan: string) => PLANS[plan] ?? PLANS.free;
 

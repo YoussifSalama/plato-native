@@ -1,14 +1,7 @@
-import {
-  Controller,
-  Get,
-  Headers,
-  NotFoundException,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Headers, Query } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { timingSafeEqual } from 'crypto';
-import { IEnvParams } from '../../types/config/env.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertAdminKey } from './admin-key';
 import { v3Summary, type V3ItemInfo } from './v3-summary';
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
@@ -159,14 +152,7 @@ export class UsageController {
     return { days: n, ...v3Summary(rows, items) };
   }
 
-  // Internal only: a wrong or missing key looks like no route at all.
   private assertKey(key: string | undefined) {
-    const expected = this.config.get<IEnvParams>('env')!.adminReportKey;
-    const ok =
-      !!expected &&
-      !!key &&
-      key.length === expected.length &&
-      timingSafeEqual(Buffer.from(key), Buffer.from(expected));
-    if (!ok) throw new NotFoundException();
+    assertAdminKey(this.config, key);
   }
 }

@@ -107,14 +107,14 @@ Sources to add: Himalayas, We Work Remotely, Remotive, Jobgether, Jobicy, Remote
 
 **Today:** `usage_events` meters every LLM and Apify run (tokens, `apify_usd`, user). No plans, payments or credits yet.
 
-- [ ] Plan model: Free / Pro / Max (starter numbers in MEASURED_COSTS.md: standard searches unlimited, deep searches limited, hidden LLM cap)
-- [ ] Payment provider and monthly billing; for Egypt check a local gateway (Paymob/Fawry) and local-currency prices
+- [x] Plan model: Free / Pro / Max as monthly Plato-token grants (1,000 / 7,000 / 25,000, env `CREDITS_*_MONTHLY`); `setPlan` starts a fresh period with the new grant. See [plato-native-be/CREDITS.md](plato-native-be/CREDITS.md)
+- [ ] Payment provider and monthly billing; for Egypt check a local gateway (Paymob/Fawry) and local-currency prices. Needs a merchant account; its webhook only has to call `setPlan` (plans) or `adjustTokens` (top-ups)
 - [x] Credits ledger ("Plato tokens", 1,000 = $1 of our cost): `credit_accounts` + append-only `credit_ledger`, free plan grant on first use, monthly reset to the grant without a cron (no roll-over), every `recordUsage` event charged by its real cost (AI by model price, Apify boards by a fixed price per result per platform), auto apply exempt. `GET /job-seeker/credits` (balance, reset date, history) and `GET /job-seeker/credits/prices`. Env: `CREDITS_USD_PER_TOKEN` (default 0.001), `CREDITS_FREE_MONTHLY` (default 1000). Run `npm run prisma:push`
-- [ ] Cost table per action, based on measured cost: searches/filters/navigation free; resume generation, voice mock interview, deep search and research cost credits
+- [x] Cost table per action, based on measured cost: every action costs its real cost in tokens (`credit-prices.ts`); browsing is free, AI replies cost by model, job boards by a fixed price per result per platform, voice per minute
 - [x] Show cost before the action and remaining credits and reset date everywhere: balance + bar in the sidebar (chip on mobile), `/tokens` page (balance, refill date, what things cost from real averages, history), the voice call shows its length and cost per minute before it starts, and any 402 opens one "Not enough Plato tokens" dialog with the refill date
 - [x] Enforce limits server-side: `TokensGuard` answers 402 `insufficient_tokens` (balance + refill date) on every paid route; a deep search asks the paid boards for only as many results as the balance covers (free sources always run, the chat says so); a voice interview is as long as the balance allows, reserved at start and settled on the transcript against the server's clock (the browser's token report is capped, `CREDITS_VOICE_USD_PER_MINUTE`); career research web search calls are now priced
-- [~] Failed or empty runs do not consume credits: done for Apify boards (a run with 0 results, or whose results could not be read, is free); AI calls that error before a response are never metered
-- [ ] Admin view: usage and margin per user and per feature from `usage_events`
+- [x] Failed or empty runs do not consume credits: done for Apify boards (a run with 0 results, or whose results could not be read, is free); AI calls that error before a response are never metered
+- [x] Admin view: `GET /admin/credits/report` (our cost vs tokens charged per feature and top 50 seekers, plus unattributed cost), `GET /admin/credits/:user`, `POST /admin/credits/:user/adjust`, `POST /admin/credits/:user/plan` (user id or email, `x-admin-key`)
 - [ ] Re-measure with real traffic for 2 weeks, then fix prices
 
 ---

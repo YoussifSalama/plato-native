@@ -25,9 +25,10 @@ const mkItem = (id, provider, url) => ({ id, batch_id: 'b1', job_id: 'j' + id, p
 // it tries to press Submit BEFORE it is allowed (the executor must refuse; nothing may be sent). Item 7 asks the
 // seeker once (ASK) before filling, and writes the answer it gets back (event seeker_answer) into "Why us?".
 // "solved" (the seeker cleared a human check) and "seeker_answer" both continue with a fresh read of the page.
+// Item 8, once Submit is allowed, first presses Enter in a text field (a real form submit in Chrome) before Submit.
 const V3_VALUES = { 'First name': 'Youssif', 'Last name': 'Salama', Email: 'y@example.com', Phone: '+201001234567', Country: 'Egypt', City: 'Cairo', 'Why us?': 'I like what Acme builds.', 'I agree to the terms': 'yes' };
 function v3Turn(store, item, body) {
-  const st = (store[item.id] ??= { turn: 0, phase: 'fill', submitAllowed: false, pressed: false, rogue: item.id === '2', rogueTried: false, asks: item.id === '7', asked: false, answer: null });
+  const st = (store[item.id] ??= { turn: 0, phase: 'fill', submitAllowed: false, pressed: false, rogue: item.id === '2', rogueTried: false, asks: item.id === '7', asked: false, answer: null, enterFirst: item.id === '8', enterTried: false });
   st.turn++;
   const reply = (calls) => ({ version: 1, turn: st.turn, calls: calls.map((c, i) => ({ call_id: `c${st.turn}_${i}`, ...c })), submit_allowed: st.submitAllowed && !st.pressed });
   const outcome = (o) => ({ version: 1, turn: st.turn, outcome: o });
@@ -44,6 +45,12 @@ function v3Turn(store, item, body) {
   const has = (l) => /value="/.test(l.rest) || /\bchecked\b/.test(l.rest) || /file="/.test(l.rest);
   const submitBtn = lines.find((l) => l.role === 'button' && /submit application/i.test(l.label));
   if (!lines.length) return st.turn < 30 ? reply([READ]) : outcome({ kind: 'blocked', reason: 'The page gave no tree.' });
+  // item 8: once allowed, it first tries to send the form with Enter in a text field (and Submit right after, in the same turn)
+  if (st.submitAllowed && submitBtn && st.enterFirst && !st.enterTried) {
+    st.enterTried = true;
+    const first = lines.find((l) => l.label === 'First name');
+    return reply([{ name: 'left_click', input: { target: { type: 'ref', ref: first.ref } } }, { name: 'key', input: { text: 'Enter' } }, { name: 'left_click', input: { target: { type: 'ref', ref: submitBtn.ref } } }]);
+  }
   if (st.submitAllowed && submitBtn) { st.phase = 'pressed'; const r = reply([{ name: 'left_click', input: { target: { type: 'ref', ref: submitBtn.ref } } }, { name: 'wait', input: { duration: 1 } }]); st.pressed = true; return r; } // allowed on this turn; pressed from the next (as the backend records it from the result)
   if (st.rogue && submitBtn && !st.rogueTried) { st.rogueTried = true; return reply([{ name: 'left_click', input: { target: { type: 'ref', ref: submitBtn.ref } } }, { name: 'type', input: { text: 'never typed' } }]); }
   if (st.asks && !st.asked) { st.asked = true; return outcome({ kind: 'ask', question: 'Why do you want to work at Acme?' }); }

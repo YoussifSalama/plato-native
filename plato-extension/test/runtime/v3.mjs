@@ -16,8 +16,8 @@ const profile = mkdtempSync(join(root, '.profile/v3-'));
 const servers = await startServers({ extensionOrigin: ORIGIN });
 const { api, fixture, sink } = servers;
 // The v3 suite's own queue (kept at 6 or fewer so the Waiting group stays open): flow A, the rogue brain, the
-// human check (6) and the ASK (7), plus the blocked provider.
-api.items = [...api.items.filter((i) => ['1', '2', '9'].includes(i.id)), mkItem('6', 'fixture', 'http://127.0.0.1:4012/captcha.html'), mkItem('7', 'fixture', 'http://127.0.0.1:4012/form.html')];
+// human check (6), the ASK (7), the Enter-before-Submit brain (8), plus the blocked provider.
+api.items = [...api.items.filter((i) => ['1', '2', '9'].includes(i.id)), mkItem('6', 'fixture', 'http://127.0.0.1:4012/captcha.html'), mkItem('7', 'fixture', 'http://127.0.0.1:4012/form.html'), mkItem('8', 'fixture', 'http://127.0.0.1:4012/form.html')];
 
 const ctx = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`] });
 const seen = [];
@@ -153,6 +153,22 @@ await T('seeker-answer resume: the brain asks once, the question lands in the pa
   eq([await tab.locator('#fn').inputValue(), await tab.locator('#terms').isChecked()], ['Youssif', true], 'the rest of the form filled');
   eq(itemOnServer('7').state, 'AWAITING_SUBMIT', 'armed once complete, Submit left to the person');
   eq(fixture.submits, before, 'nothing was sent');
+  await tab.close();
+});
+
+await T('one Submit only: after Submit is allowed, an Enter in a text field (a real form submit in Chrome) is cancelled, the rest of that turn is not run, and the Submit press then sends the application exactly once', async () => {
+  const before = fixture.submits;
+  const sec = panel.locator('section.item').filter({ hasText: 'Engineer 8' });
+  const tab = await startItem(panel, 8);
+  eq(itemOnServer('8').state, 'AWAITING_SUBMIT', 'armed once complete');
+  await sec.getByRole('button', { name: 'Submit for me' }).click();
+  await tab.waitForURL('**/confirmed.html', { timeout: 30000 });
+  await sec.waitFor({ state: 'detached', timeout: 20000 });
+  const errors = resultsFor('8').filter((r) => !r.ok).map((r) => r.error);
+  ok(errors.some((e) => /Submit only with the Submit control itself/.test(e)), `the Enter was refused: ${JSON.stringify(errors)}`);
+  ok(errors.some((e) => /Not executed: an earlier action/.test(e)), 'the Submit click after the refused Enter was not run in that turn');
+  eq(fixture.submits, before + 1, 'exactly one application reached the site');
+  eq(itemOnServer('8').state, 'SUBMITTED_CONFIRMED');
   await tab.close();
 });
 

@@ -52,6 +52,7 @@ Code (cannot be talked out of):
 - Fact questions: if Claude's text ends with `ASK:` the item goes to `NEEDS_USER` with that text; the seeker's answer is appended as the next user message (same chat path as v2).
 - Captcha/anti-bot: executor detects captcha frames and refusal text (v2 `page-state.ts`, kept) → `NEEDS_USER` with "solve it on the page", loop paused; after the seeker presses "I solved it", one more turn.
 - Duplicate protection: item state machine + `armed` flag + one press per item (v2).
+- One Submit only (2026-10-26): every press and key except the Submit control's single allowed press runs under the page guard, before Submit is allowed and after it. An Enter in a text field, or a second control that submits the form, is cancelled and reported (`REFUSE_OTHER_SUBMIT`), so the one Submit press is the only way the form is ever sent. Proven in `npm run test:runtime:v3` (item 8: Enter before Submit, exactly one POST), with a mutation check against the old behaviour.
 
 ## 4. What is kept from v2 (used as-is)
 

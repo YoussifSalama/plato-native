@@ -5,7 +5,9 @@
 //
 // Code-enforced, whatever the model asks:
 //   - the Submit gate: a press on the Submit control runs only when the backend allowed it, and only once;
-//   - the page guard: while Submit is not allowed, every press and key runs with form submission cancelled;
+//   - the page guard: every other press and key runs with form submission cancelled, before Submit is allowed
+//     and after it too, so the one Submit press is the only way the form is ever sent (an Enter in a field
+//     or a second control that submits the form cannot send it again);
 //   - file_upload takes only the staged resume (document id "resume");
 //   - tabs: one tab, the job's; nothing opens or closes.
 import type { BrowserCall, CallResult } from './contract';
@@ -25,6 +27,7 @@ type Target = { type: 'ref'; ref: string } | { type: 'coordinate'; x: number; y:
 const TAB = 'tab_1';
 export const REFUSE_SUBMIT = 'Refused: Submit is not allowed yet. Answer SUBMIT_READY when every required field holds a correct value.';
 export const REFUSE_AGAIN = 'Refused: Submit was already pressed once. Read the page and report what it says.';
+export const REFUSE_OTHER_SUBMIT = 'Refused: that action would have submitted the form; it was cancelled. Submit only with the Submit control itself, once.';
 const KEYS: Record<string, { key: string; code: string; vk: number; text?: string }> = {
   Enter: { key: 'Enter', code: 'Enter', vk: 13, text: '\r' },
   Return: { key: 'Enter', code: 'Enter', vk: 13, text: '\r' },
@@ -70,14 +73,14 @@ export function createExecutor(d: ExecDeps) {
     await pace(150);
   };
   const describe = (t: Target) => d.send<ElementInfo | null>(t.type === 'ref' ? { op: 'describe', ref: t.ref } : { op: 'describe', x: t.x, y: t.y }).catch(() => null);
-  // Every press and key while Submit is not allowed runs under the page guard: a form submit it triggers is cancelled and reported.
+  // Every press and key except the one Submit press runs under the page guard: a form submit it triggers is
+  // cancelled and reported. Allowed or not: once allowed, only the Submit control may send the form, and only once.
   const guarded = async (allowed: boolean, fn: () => Promise<void>) => {
-    if (allowed) return fn();
     await d.send({ op: 'guard', ms: 1500 });
     await fn();
     await d.sleep(d.quick ? 50 : 250);
     const g = await d.send<{ blocked: number }>({ op: 'guarded' }).catch(() => ({ blocked: 0 }));
-    if (g.blocked) throw new Error(`Refused: that action would have submitted the form; it was cancelled. ${REFUSE_SUBMIT}`);
+    if (g.blocked) throw new Error(allowed && !pressed ? REFUSE_OTHER_SUBMIT : pressed ? `${REFUSE_OTHER_SUBMIT} ${REFUSE_AGAIN}` : `Refused: that action would have submitted the form; it was cancelled. ${REFUSE_SUBMIT}`);
   };
   const chord = async (c: string) => {
     const parts = c.split('+');

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { V3Op } from '../src/content/v3-reader';
-import { createExecutor, REFUSE_AGAIN, REFUSE_SUBMIT, type ExecDeps } from '../src/v3/executor';
+import { createExecutor, REFUSE_AGAIN, REFUSE_OTHER_SUBMIT, REFUSE_SUBMIT, type ExecDeps } from '../src/v3/executor';
 
 // A fake tab: the content script answers refs by a small table; chrome.debugger calls are recorded.
 function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } } } = {}) {
@@ -83,11 +83,35 @@ describe('executor: the Submit gate (code, not prompt)', () => {
     expect(k.ok).toBe(false);
     expect(t.counts().guardArmed).toBe(2);
   });
-  it('once Submit is allowed the guard is off (the press must go through)', async () => {
-    const t = tab();
-    await t.run('left_click', ref('ref_2'), true);
-    await t.run('key', { text: 'Enter' }, true);
+  it('the allowed Submit press itself runs without the guard (it must go through)', async () => {
+    const t = tab({ submitRef: 'ref_s', blockedOnGuard: true });
+    const r = await t.run('left_click', ref('ref_s'), true);
+    expect(r.ok).toBe(true);
     expect(t.counts().guardArmed).toBe(0);
+  });
+  it('once allowed, any other press or key is still guarded: an Enter in a field cannot send the form instead of Submit', async () => {
+    const t = tab({ submitRef: 'ref_s', blockedOnGuard: true });
+    const enter = await t.run('key', { text: 'Enter' }, true);
+    expect(enter).toMatchObject({ ok: false, error: REFUSE_OTHER_SUBMIT });
+    expect(t.counts().guardArmed).toBe(1);
+    expect(t.ex.submitPressed()).toBe(false);
+    // the Submit control itself is still there for its one press
+    expect(await t.run('left_click', ref('ref_s'), true)).toMatchObject({ ok: true, text: 'Clicked "Submit application" (Submit)' });
+  });
+  it('after the one Submit press, a later Enter or another submitting control in the same turn cannot send it again', async () => {
+    const t = tab({ submitRef: 'ref_s', blockedOnGuard: true });
+    await t.run('left_click', ref('ref_s'), true);
+    const enter = await t.run('key', { text: 'Enter' }, true);
+    expect(enter.ok).toBe(false);
+    expect(enter.error).toContain(REFUSE_AGAIN);
+    const other = await t.run('left_click', ref('ref_2'), true);
+    expect(other.ok).toBe(false);
+    expect(t.counts().guardArmed).toBe(2);
+  });
+  it('an ordinary press after Submit is allowed still works when it does not submit (Next, a checkbox)', async () => {
+    const t = tab({ submitRef: 'ref_s' });
+    expect(await t.run('left_click', ref('ref_2'), true)).toMatchObject({ ok: true });
+    expect(await t.run('key', { text: 'Tab' }, true)).toMatchObject({ ok: true });
   });
 });
 

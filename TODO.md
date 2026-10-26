@@ -105,7 +105,7 @@ Sources to add: Himalayas, We Work Remotely, Remotive, Jobgether, Jobicy, Remote
 
 ## 8. Subscription plans, AI credits and usage limits
 
-**Today:** `usage_events` meters every LLM and Apify run (tokens, `apify_usd`, user). No plans, payments or credits yet.
+**Today:** Plato tokens are live in code (2026-10-26): every metered run is charged to its seeker, plans, limits, the web app's balance and the admin report are built. Payments are not. See [plato-native-be/CREDITS.md](plato-native-be/CREDITS.md).
 
 - [x] Plan model: Free / Pro / Max as monthly Plato-token grants (1,000 / 7,000 / 25,000, env `CREDITS_*_MONTHLY`); `setPlan` starts a fresh period with the new grant. See [plato-native-be/CREDITS.md](plato-native-be/CREDITS.md)
 - [ ] Payment provider and monthly billing; for Egypt check a local gateway (Paymob/Fawry) and local-currency prices. Needs a merchant account; its webhook only has to call `setPlan` (plans) or `adjustTokens` (top-ups)

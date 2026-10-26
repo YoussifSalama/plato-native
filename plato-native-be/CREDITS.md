@@ -22,11 +22,13 @@ Every cost already goes through `recordUsage()` (`src/modules/usage/usage.ts`), 
 - `credit_ledger`: append-only. Its kinds are `grant`, `consume`, `hold`, `release` and `adjust`.
 - A new seeker gets the plan's grant on first use. When the period ends, the next read or charge resets the balance to the grant. There is no cron, unused tokens don't roll over, and two concurrent resets never double the grant.
 
-| Plan | Tokens / month | Env |
-|---|---|---|
-| free | 1,000 | `CREDITS_FREE_MONTHLY` |
-| pro | 7,000 | `CREDITS_PRO_MONTHLY` |
-| max | 25,000 | `CREDITS_MAX_MONTHLY` |
+| Plan | Tokens / month | Price | Env |
+|---|---|---|---|
+| free | 1,000 | $0 | `CREDITS_FREE_MONTHLY` |
+| pro | 7,000 | $19 | `CREDITS_PRO_MONTHLY`, `CREDITS_PRO_PRICE_USD` |
+| max | 25,000 | $59 | `CREDITS_MAX_MONTHLY`, `CREDITS_MAX_PRICE_USD` |
+
+The web app's `/tokens` page shows the three plans, with an Upgrade button on each paid one. The button calls `POST /job-seeker/credits/checkout { plan }`.
 
 ## Enforcement
 
@@ -61,7 +63,7 @@ curl -H "x-admin-key: $KEY" -H 'Content-Type: application/json' \
 
 ## Not built yet
 
-- **Payments (Paymob or Fawry for Egypt, or Stripe).** This needs a merchant account and its keys. Once a payment is confirmed, the provider's webhook calls `setPlan(userId, plan)`, which is already in place. Top-ups would call `adjustTokens`.
+- **Payments (Paymob or Fawry for Egypt, or Stripe).** This needs a merchant account and its keys. Until `PAYMENTS_PROVIDER` is set and its checkout is written into `CreditsController.checkout`, that endpoint answers `503 payments_unavailable`, and the page says that online payment isn't open yet. Once a payment is confirmed, the provider's webhook calls `setPlan(userId, plan)`, which is already in place. Top-ups would call `adjustTokens`. Until then, plans are changed by an admin (see below).
 - **Prices based on real data.** Run real traffic for two weeks, then set the plan sizes and `CREDITS_VOICE_USD_PER_MINUTE` from `/admin/credits/report`.
 
 ## Setup

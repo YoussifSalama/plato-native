@@ -8,10 +8,25 @@ export const USD_PER_TOKEN = Number(process.env.CREDITS_USD_PER_TOKEN ?? 0.001);
 
 // Monthly tokens per plan. Starting points from MEASURED_COSTS.md (Pro $19 with
 // about $7 of cost, Max $59 with about $25): the plan price is where the margin is.
-export const PLANS: Record<string, { monthly: number }> = {
-  free: { monthly: Number(process.env.CREDITS_FREE_MONTHLY ?? 1000) },
-  pro: { monthly: Number(process.env.CREDITS_PRO_MONTHLY ?? 7000) },
-  max: { monthly: Number(process.env.CREDITS_MAX_MONTHLY ?? 25000) },
+export const PLANS: Record<
+  string,
+  { label: string; monthly: number; priceUsd: number }
+> = {
+  free: {
+    label: 'Free',
+    monthly: Number(process.env.CREDITS_FREE_MONTHLY ?? 1000),
+    priceUsd: 0,
+  },
+  pro: {
+    label: 'Pro',
+    monthly: Number(process.env.CREDITS_PRO_MONTHLY ?? 7000),
+    priceUsd: Number(process.env.CREDITS_PRO_PRICE_USD ?? 19),
+  },
+  max: {
+    label: 'Max',
+    monthly: Number(process.env.CREDITS_MAX_MONTHLY ?? 25000),
+    priceUsd: Number(process.env.CREDITS_MAX_PRICE_USD ?? 59),
+  },
 };
 export const planOf = (plan: string) => PLANS[plan] ?? PLANS.free;
 

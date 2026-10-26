@@ -1,4 +1,15 @@
-import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Req,
+  ServiceUnavailableException,
+  UseGuards,
+} from '@nestjs/common';
+import { z } from 'zod';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -79,5 +90,36 @@ export class CreditsController {
         perRun: toTokens(p.perRun), // the board's start fee, once per search
       })),
     };
+  }
+
+  /**
+   * Start paying for a plan. No payment provider is connected yet (it needs a
+   * merchant account): until PAYMENTS_PROVIDER is set this answers 503
+   * payments_unavailable. With one, this creates its checkout and returns the
+   * URL; its webhook confirms the payment and calls setPlan().
+   */
+  @Post('checkout')
+  async checkout(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    const p = z.object({ plan: z.enum(['pro', 'max']) }).safeParse(body);
+    if (!p.success)
+      throw new BadRequestException('Choose the Pro or Max plan.');
+    const acc = await creditAccount(req.userId);
+    if (acc.plan === p.data.plan)
+      throw new BadRequestException(
+        `You are already on ${PLANS[p.data.plan].label}.`,
+      );
+    if (!process.env.PAYMENTS_PROVIDER)
+      throw new ServiceUnavailableException({
+        statusCode: 503,
+        code: 'payments_unavailable',
+        message:
+          'Online payment is not open yet. Contact support to upgrade your plan.',
+      });
+    // ponytail: provider checkout goes here (Paymob / Fawry / Stripe), then its webhook -> setPlan()
+    throw new ServiceUnavailableException({
+      statusCode: 503,
+      code: 'payments_unavailable',
+      message: `The ${process.env.PAYMENTS_PROVIDER} checkout is not connected yet.`,
+    });
   }
 }

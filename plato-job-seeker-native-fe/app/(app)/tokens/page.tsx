@@ -1,12 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowDownLeft, ArrowUpRight, Coins, RefreshCw } from "lucide-react"
+import { ArrowDownLeft, ArrowUpRight, Check, Coins, Loader2, RefreshCw } from "lucide-react"
+import { AxiosError } from "axios"
+import { Button } from "@/components/ui/button"
 import { cn } from "cn"
 import { timeAgo } from "@/lib/jobs/links"
 import { Skeleton } from "@/components/ui/skeleton"
 import { resetLabel, useTokens } from "@/components/plato-tokens"
-import { formatTokens, getTokenPrices, getTokens, type TokenMove, type TokenPrices } from "@/lib/credits/api"
+import { formatTokens, getTokenPrices, getTokens, startCheckout, type TokenMove, type TokenPrices } from "@/lib/credits/api"
 
 // Holds and their releases are bookkeeping for a voice call: shown as one line by the call's charge.
 const visible = (m: TokenMove) => m.kind !== "hold" && m.kind !== "release"
@@ -100,6 +102,8 @@ export default function TokensPage() {
         </div>
       </section>
 
+      {prices && <Plans plans={prices.plans} current={acc?.plan ?? null} />}
+
       <section className="rounded-lg border bg-card px-5 py-1">
         <h2 className="pt-4 pb-2 text-sm font-semibold text-foreground">History</h2>
         {history === null && (
@@ -133,5 +137,65 @@ export default function TokensPage() {
         </ul>
       </section>
     </div>
+  )
+}
+
+const ORDER = ["free", "pro", "max"] as const
+const BLURB: Record<string, string> = {
+  free: "Try Plato: a few searches, chats and a short voice interview each month.",
+  pro: "For an active job search: deep searches across paid boards, tailored resumes and regular interview practice.",
+  max: "For a full-time search: the most job-board searches and voice interviews.",
+}
+
+// The plans and an upgrade that goes to the payment provider's checkout.
+function Plans({ plans, current }: { plans: TokenPrices["plans"]; current: string | null }) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const upgrade = async (plan: "pro" | "max") => {
+    setBusy(plan)
+    setNote(null)
+    try {
+      const { url } = await startCheckout(plan)
+      window.location.assign(url)
+    } catch (e) {
+      setNote(e instanceof AxiosError ? (e.response?.data?.message ?? "Could not start the payment.") : "Could not start the payment.")
+    } finally {
+      setBusy(null)
+    }
+  }
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-sm font-semibold text-foreground">Plans</h2>
+      <div className="grid gap-4 md:grid-cols-3">
+        {ORDER.filter((k) => plans[k]).map((k) => {
+          const p = plans[k]
+          const mine = current === k
+          return (
+            <div key={k} data-ai={`tokens.plan.${k}`} className={cn("flex flex-col gap-3 rounded-lg border bg-card p-5", mine && "border-primary ring-1 ring-primary/30")}>
+              <div className="flex items-center justify-between">
+                <span className="text-base font-bold text-foreground">{p.label}</span>
+                {mine && <span className="rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-semibold text-primary">Your plan</span>}
+              </div>
+              <p className="text-2xl font-bold text-foreground">
+                {p.priceUsd ? `$${p.priceUsd}` : "Free"}
+                {p.priceUsd > 0 && <span className="text-sm font-medium text-text-tertiary"> / month</span>}
+              </p>
+              <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <Check className="size-4 text-success" />
+                {formatTokens(p.monthly)} Plato tokens every month
+              </p>
+              <p className="flex-1 text-sm text-text-secondary">{BLURB[k]}</p>
+              {k !== "free" && !mine && (
+                <Button onClick={() => void upgrade(k as "pro" | "max")} disabled={!!busy} className="mt-1">
+                  {busy === k && <Loader2 className="size-4 animate-spin" />}
+                  Upgrade to {p.label}
+                </Button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      {note && <p className="text-sm text-warning">{note}</p>}
+    </section>
   )
 }

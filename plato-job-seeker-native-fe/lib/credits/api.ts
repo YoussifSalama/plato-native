@@ -6,7 +6,7 @@ import { apiClient } from "@/lib/api-client"
 export type TokenMove = { id: string; kind: "grant" | "consume" | "hold" | "release" | "adjust"; amount: number; balanceAfter: number; feature: string | null; label: string; at: string }
 export type TokenAccount = { plan: string; balance: number; monthly: number; periodStart: string; resetsAt: string; history: TokenMove[] }
 export type TokenPrices = {
-  plans: Record<string, { monthly: number }>
+  plans: Record<string, { label: string; monthly: number; priceUsd: number }>
   voicePerMinute: number
   features: { feature: string; label: string; average: number; calls: number }[]
   boards: { label: string; perResult: number; perRun: number }[]
@@ -16,6 +16,8 @@ export type OutOfTokens = { code: "insufficient_tokens"; message: string; balanc
 
 export const getTokens = async (limit = 20) => (await apiClient.get<TokenAccount>("/job-seeker/credits", { params: { limit } })).data
 export const getTokenPrices = async () => (await apiClient.get<TokenPrices>("/job-seeker/credits/prices")).data
+// Start paying for a plan: the provider's checkout URL, or a 503 payments_unavailable until one is connected.
+export const startCheckout = async (plan: "pro" | "max") => (await apiClient.post<{ url: string }>("/job-seeker/credits/checkout", { plan })).data
 
 export const isOutOfTokens = (status: number | undefined, data: unknown): data is OutOfTokens => status === 402 && (data as { code?: string } | null)?.code === "insufficient_tokens"
 

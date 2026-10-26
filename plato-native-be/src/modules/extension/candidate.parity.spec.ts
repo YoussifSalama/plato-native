@@ -34,7 +34,7 @@ const base = () => ({
     { title: 'Dev', company: 'Acme', start_date: d('2022-01-01'), end_date: null, description: 'x' },
     { title: 'Jr', company: 'Old', start_date: d('2019-03-01'), end_date: d('2021-12-01'), description: null },
   ],
-  educations: [{ institution: 'Cairo U', degree: 'BSc', field: 'CS', end_date: d('2019-01-01') }],
+  educations: [{ institution: 'Cairo U', degree: 'BSc', field: 'CS', start_date: d('2015-09-01'), end_date: d('2019-01-01') }],
   languages: [{ language: 'English', proficiency: 'FLUENT' }],
   certifications: [{ name: 'AWS', issuer: 'Amazon' }],
   documents: [{ id: 'd1' }],
@@ -50,6 +50,7 @@ const variants: Record<string, (s: any) => any> = {
   'city only': (s) => ({ ...s, location: { city: 'Giza' } }),
   'no experience, no cv': (s) => ({ ...s, experiences: [], documents: [] }),
   'all experiences ended': (s) => ({ ...s, experiences: s.experiences.map((e: any) => ({ ...e, end_date: d('2023-01-01') })) }),
+  'education without a start date': (s) => ({ ...s, educations: [{ ...s.educations[0], start_date: null }] }),
 };
 
 describe('CandidateService parity with the legacy loader', () => {
@@ -58,7 +59,16 @@ describe('CandidateService parity with the legacy loader', () => {
     const prisma: any = { jobSeeker: { findUniqueOrThrow: jest.fn(async () => seeker) } };
     const legacy = await (ApplyService.prototype as any)['loadCandidate'].call({ prisma }, 's1');
     const copy = await new CandidateService(prisma).load('s1');
-    expect(copy).toEqual(legacy);
+    // The one intended difference: v3 (2026-10-24) added the education start year, which the
+    // frozen v2 loader never had (the model asked for it). Everything else must match.
+    const expected = {
+      ...legacy,
+      educations: legacy.educations.map((e: any, i: number) => ({
+        ...e,
+        start: seeker.educations[i].start_date ? seeker.educations[i].start_date.toISOString().slice(0, 10) : null,
+      })),
+    };
+    expect(copy).toEqual(expected);
     // Same query, too: a field added to one side only would show here.
     expect(prisma.jobSeeker.findUniqueOrThrow.mock.calls[1]).toEqual(
       prisma.jobSeeker.findUniqueOrThrow.mock.calls[0],

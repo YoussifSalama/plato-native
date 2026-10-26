@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { ArrowRight, Award, Briefcase, Building2, Globe2, MapPin, Paperclip, Send, Sparkles, X } from "lucide-react"
 import { cn } from "cn"
@@ -9,6 +9,7 @@ import type { Preferences } from "@/lib/preferences/schema"
 import { formatPreferenceSummary } from "@/lib/preference-format"
 import { clipReveal, lineReveal, nodeContent, reducedVariants, spring } from "@/lib/motion-system"
 import { PlatoMark } from "@/components/plato-orb"
+import { TokenCost } from "@/components/plato-tokens"
 import { TypedText } from "./journey/typed-text"
 import { useTypedArrivals } from "./use-typed-arrivals"
 import { pendingCardId, QuestionCardView } from "./question-card"
@@ -17,7 +18,7 @@ function titleCase(s: string) {
   return s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase())
 }
 
-function Composer({ onSend, busy, autoFocus, placeholder = "Tell Plato what you're after…", allowFile, chip, onRemoveChip }: { onSend: (t: string, file?: File) => void; busy: boolean; autoFocus?: boolean; placeholder?: string; allowFile?: string; chip?: { title: string; sub?: string } | null; onRemoveChip?: () => void }) {
+function Composer({ onSend, busy, autoFocus, placeholder = "Tell Plato what you're after…", allowFile, chip, onRemoveChip, cost }: { onSend: (t: string, file?: File) => void; busy: boolean; autoFocus?: boolean; placeholder?: string; allowFile?: string; chip?: { title: string; sub?: string } | null; onRemoveChip?: () => void; cost?: ReactNode }) {
   const [input, setInput] = useState("")
   // `allowFile` is the accepted types (e.g. ".pdf,.docx"); when set the paperclip attaches one file.
   const [file, setFile] = useState<File | null>(null)
@@ -112,6 +113,7 @@ function Composer({ onSend, busy, autoFocus, placeholder = "Tell Plato what you'
     </form>
     <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
       <kbd className="font-sans font-semibold">Enter</kbd> to send · <kbd className="font-sans font-semibold">Shift</kbd> + <kbd className="font-sans font-semibold">Enter</kbd> for a new line
+      {cost && <> · {cost}</>}
     </p>
     </>
   )
@@ -275,7 +277,16 @@ function ChatHero({
         </AnimatePresence>
 
         <div className="mt-auto shrink-0 pt-6">
-          <Composer onSend={onSend} busy={busy} autoFocus={started} />
+          <Composer
+            onSend={onSend}
+            busy={busy}
+            autoFocus={started}
+            cost={
+              <>
+                <TokenCost action="search_message" suffix=" Plato tokens a message" /> · a new search <TokenCost action="deep_search" />
+              </>
+            }
+          />
           <p className="mt-2 text-center text-[11px] text-muted-foreground">Plato only searches when you say so. Your data stays private.</p>
         </div>
       </div>

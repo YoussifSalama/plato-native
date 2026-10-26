@@ -15,19 +15,21 @@ import { useTypedArrivals } from "../jobs/components/use-typed-arrivals"
 import { ResumeEditPanel } from "./resume-edit"
 import { VoiceInterviewPanel } from "./voice-interview"
 import { useRouter } from "next/navigation"
+import { TokenCost } from "@/components/plato-tokens"
+import type { EstimateAction } from "@/lib/credits/api"
 import { startInterview } from "@/lib/interviews/api"
 import { ResumeFileCard, ResumePreviewPanel } from "./resume-file"
 
 // Starters adapt to where the seeker is: no resume yet, a target role, and so on. Each one
 // opens a guided workflow, so nobody has to know how to prompt it.
-type Suggestion = { icon: typeof FileText; title: string; sub: string; prompt: string; primary: boolean; voice?: boolean; badge?: string }
+type Suggestion = { icon: typeof FileText; title: string; sub: string; prompt: string; primary: boolean; voice?: boolean; badge?: string; cost?: EstimateAction }
 function suggestionsFor(hasResume: boolean, role: string | null): Suggestion[] {
-  const build: Suggestion = { icon: FileText, title: "Build my resume", sub: "From your profile, ready as a PDF", prompt: "Build my resume", primary: !hasResume, badge: hasResume ? undefined : "Start here" }
-  const tailor: Suggestion = { icon: Target, title: "Tailor to a job", sub: "Paste a posting, get a resume that matches its keywords", prompt: "Tailor my resume to a job", primary: hasResume, badge: hasResume ? "Next step" : undefined }
-  const voice: Suggestion = { icon: Mic, title: "Voice interview", sub: role ? `Talk through a ${role} interview, out loud` : "Talk to Plato out loud, like a real call", prompt: "", primary: false, voice: true }
+  const build: Suggestion = { icon: FileText, title: "Build my resume", sub: "From your profile, ready as a PDF", prompt: "Build my resume", cost: "resume", primary: !hasResume, badge: hasResume ? undefined : "Start here" }
+  const tailor: Suggestion = { icon: Target, title: "Tailor to a job", sub: "Paste a posting, get a resume that matches its keywords", prompt: "Tailor my resume to a job", cost: "resume", primary: hasResume, badge: hasResume ? "Next step" : undefined }
+  const voice: Suggestion = { icon: Mic, title: "Voice interview", sub: role ? `Talk through a ${role} interview, out loud` : "Talk to Plato out loud, like a real call", prompt: "", primary: false, voice: true, cost: "voice_minute" }
   const rest: Suggestion[] = [
     { icon: PenLine, title: "Improve my resume", sub: "Find what is weak and fix it", prompt: "Improve my resume", primary: false },
-    { icon: MessagesSquare, title: "Mock interview (text)", sub: "Real questions, scorecard at the end", prompt: "Give me a mock interview", primary: false },
+    { icon: MessagesSquare, title: "Mock interview (text)", sub: "Real questions, scorecard at the end", prompt: "Give me a mock interview", primary: false, cost: "mock_interview" },
     { icon: BadgeCheck, title: "Prove a skill", sub: "Answer questions, earn it on your CV", prompt: "Test me on a skill I learned", primary: false },
   ]
   return hasResume ? [tailor, voice, build, ...rest] : [build, voice, tailor, ...rest]
@@ -168,6 +170,14 @@ function InterviewStartCard({ card, onVoice }: { card: InterviewCard; onVoice: (
           <Mic className="size-4" />Start voice interview
         </button>
       </div>
+      <p className="flex flex-wrap gap-x-3 text-[11px] text-text-tertiary">
+        <span>
+          Chat interview <TokenCost action="mock_interview" suffix=" tokens" />
+        </span>
+        <span>
+          Voice <TokenCost action="voice_minute" suffix=" tokens / min" />
+        </span>
+      </p>
       {err && <p className="text-xs text-destructive">{err}</p>}
     </div>
   )
@@ -257,6 +267,7 @@ function CareerHero({ threadId, onVoiceFinished, hasResume, steps, firstName, pr
                     </span>
                     <span className="text-sm font-semibold">{s.title}</span>
                     <span className={cn("text-xs", s.primary ? "text-primary-foreground/80" : "text-muted-foreground")}>{s.sub}</span>
+                    {s.cost && <TokenCost action={s.cost} suffix={s.cost === "voice_minute" ? " tokens / min" : " tokens"} className={cn("text-[11px]", s.primary ? "text-primary-foreground/70" : "text-text-tertiary")} />}
                   </motion.button>
                 ))}
               </motion.div>
@@ -280,7 +291,7 @@ function CareerHero({ threadId, onVoiceFinished, hasResume, steps, firstName, pr
         </AnimatePresence>
 
         <div className="mt-auto shrink-0 pt-6">
-          <Composer onSend={onSend} busy={busy} autoFocus={started || !!pinned} allowFile=".pdf,.docx" chip={pinned ? { title: pinned.title, sub: pinned.company } : null} onRemoveChip={onUnpin} placeholder="Tell Plato what you need. Paste a job description or attach your CV." />
+          <Composer onSend={onSend} busy={busy} autoFocus={started || !!pinned} allowFile=".pdf,.docx" chip={pinned ? { title: pinned.title, sub: pinned.company } : null} onRemoveChip={onUnpin} placeholder="Tell Plato what you need. Paste a job description or attach your CV." cost={<TokenCost action="career_message" suffix=" Plato tokens a message" />} />
           <p className="mt-2 text-center text-[11px] text-muted-foreground">Plato only uses facts from your profile and what you confirm here. Your data stays private.</p>
         </div>
       </div>

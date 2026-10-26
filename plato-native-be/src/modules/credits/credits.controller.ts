@@ -12,20 +12,14 @@ import {
 import { z } from 'zod';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  APIFY_PRICES,
-  FEATURE_LABELS,
-  PLANS,
-  planOf,
-  toTokens,
-  VOICE_USD_PER_MINUTE,
-} from './credit-prices';
+import { FEATURE_LABELS, PLANS, planOf } from './credit-prices';
 import { creditAccount } from './credits';
+import { tokenSummary } from './estimates';
 
 const shown = (n: number) => Math.round(n * 10) / 10;
 
-// The seeker's Plato tokens. Never returns dollars: the cost behind a token
-// stays internal (/admin/usage).
+// The seeker's Plato tokens. Never returns what anything costs Plato: only
+// tokens, and the public plan prices. The cost behind a token stays internal.
 @Controller('job-seeker/credits')
 @UseGuards(JwtAuthGuard)
 export class CreditsController {
@@ -62,34 +56,19 @@ export class CreditsController {
     };
   }
 
-  /** What things cost in tokens, to show before the seeker spends them. */
+  /** The plans on offer (public). */
   @Get('prices')
-  async prices() {
-    // the average real charge per call over the last 30 days, across seekers
-    const since = new Date(Date.now() - 30 * 86_400_000);
-    const rows = await this.prisma.creditLedger.groupBy({
-      by: ['feature'],
-      where: { kind: 'consume', created_at: { gte: since } },
-      _avg: { amount: true },
-      _count: { _all: true },
-    });
-    return {
-      plans: PLANS,
-      voicePerMinute: toTokens(VOICE_USD_PER_MINUTE),
-      features: rows
-        .filter((r) => r.feature)
-        .map((r) => ({
-          feature: r.feature,
-          label: FEATURE_LABELS[r.feature!] ?? r.feature,
-          average: shown(-(r._avg.amount ?? 0)),
-          calls: r._count._all,
-        })),
-      boards: Object.values(APIFY_PRICES).map((p) => ({
-        label: p.label,
-        perResult: toTokens(p.perResult),
-        perRun: toTokens(p.perRun), // the board's start fee, once per search
-      })),
-    };
+  prices() {
+    return { plans: PLANS };
+  }
+
+  /**
+   * What things are likely to cost, to show before the seeker spends tokens.
+   * Rounded figures only (estimates.ts): the same answer the assistants get.
+   */
+  @Get('estimates')
+  estimates(@Req() req: AuthenticatedRequest) {
+    return tokenSummary(req.userId);
   }
 
   /**

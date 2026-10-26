@@ -5,6 +5,7 @@ import { JobSeekerSnapshot } from '../discovery/job-seeker-snapshot';
 import { RunStatusSummary } from '../discovery/run-status';
 import { OrchestratorContext } from './orchestrator.context';
 import { orchestratorTools } from './orchestrator.tools';
+import { TOKENS_RULES } from '../credits/estimates';
 
 export interface SeekerContext {
   firstName: string;
@@ -391,7 +392,7 @@ export function createOrchestratorAgent(
 ) {
   return new Agent<OrchestratorContext>({
     name: 'Plato AI',
-    instructions: `${INSTRUCTIONS}\n\n# Seeker\n${describeSeeker(seeker.firstName, seeker.snapshot)}\n\n# Where you are\n${describeLive(live)}${memory}`,
+    instructions: `${INSTRUCTIONS}\n\n# ${TOKENS_RULES}\n\n# Seeker\n${describeSeeker(seeker.firstName, seeker.snapshot)}\n\n# Where you are\n${describeLive(live)}${memory}`,
     model,
     tools: [...orchestratorTools, ...rankingTools],
   });

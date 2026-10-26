@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { tokenSummary } from '../credits/estimates';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { run, type AgentInputItem } from '@openai/agents';
@@ -286,6 +287,7 @@ export class CareerService {
         context: await this.seekerContext(seeker.id, seeker.user.full_name),
       },
       {
+        tokens: () => tokenSummary(seeker.user_id),
         profile: async () => {
           const p = await this.profiles.load(seeker.id);
           return {

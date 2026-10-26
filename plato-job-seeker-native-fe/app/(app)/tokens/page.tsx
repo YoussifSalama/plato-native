@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "cn"
 import { timeAgo } from "@/lib/jobs/links"
 import { Skeleton } from "@/components/ui/skeleton"
-import { resetLabel, useTokens } from "@/components/plato-tokens"
+import { resetLabel, useEstimates, useTokens } from "@/components/plato-tokens"
 import { formatTokens, getTokenPrices, getTokens, startCheckout, type TokenMove, type TokenPrices } from "@/lib/credits/api"
 
 // Holds and their releases are bookkeeping for a voice call: shown as one line by the call's charge.
@@ -30,7 +30,7 @@ export default function TokensPage() {
   const left = acc ? Math.max(0, acc.balance) : 0
   const pct = acc?.monthly ? Math.min(100, (left / acc.monthly) * 100) : 0
   const moves = history?.filter(visible) ?? []
-  const features = (prices?.features ?? []).filter((f) => f.calls >= 3).sort((a, b) => b.average - a.average)
+  const estimates = useEstimates()
 
   return (
     <div className="flex flex-1 flex-col gap-6 px-6 py-6 lg:pr-6 lg:pl-7">
@@ -77,28 +77,16 @@ export default function TokensPage() {
               <span>Browsing jobs, applications and your profile</span>
               <span className="font-medium text-success">Free</span>
             </li>
-            {prices && (
-              <li className="flex justify-between gap-3 text-text-secondary">
-                <span>Voice interview</span>
-                <span className="tabular-nums text-foreground">≈ {formatTokens(prices.voicePerMinute)} / minute</span>
-              </li>
-            )}
-            {features.slice(0, 6).map((f) => (
-              <li key={f.feature} className="flex justify-between gap-3 text-text-secondary">
-                <span>{f.label}</span>
-                <span className="tabular-nums text-foreground">≈ {f.average < 1 ? "<1" : formatTokens(f.average)}</span>
-              </li>
-            ))}
-            {prices && prices.boards.length > 0 && (
-              <li className="flex justify-between gap-3 text-text-secondary">
-                <span>Job-board search, per 40 results</span>
-                <span className="tabular-nums text-foreground">
-                  {formatTokens(Math.min(...prices.boards.map((b) => b.perResult * 40 + b.perRun)))}–{formatTokens(Math.max(...prices.boards.map((b) => b.perResult * 40 + b.perRun)))}
+            {estimates?.map((e) => (
+              <li key={e.action} title={e.note} className="flex justify-between gap-3 text-text-secondary">
+                <span>{e.label}</span>
+                <span className="shrink-0 tabular-nums text-foreground">
+                  {e.about === e.upTo ? `≈ ${formatTokens(e.about)}` : `≈ ${formatTokens(e.about)}, up to ${formatTokens(e.upTo)}`}
                 </span>
               </li>
-            )}
+            ))}
           </ul>
-          <p className="text-xs text-text-tertiary">When your tokens run low, searches use the free job sources and voice calls get shorter instead of stopping.</p>
+          <p className="text-xs text-text-tertiary">Estimates; real use varies a little. A new search often costs much less when Plato already has matching jobs. When your tokens run low, searches use the free job sources and voice calls get shorter instead of stopping.</p>
         </div>
       </section>
 

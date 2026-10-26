@@ -5,17 +5,17 @@ import { apiClient } from "@/lib/api-client"
 // dollars, only tokens.
 export type TokenMove = { id: string; kind: "grant" | "consume" | "hold" | "release" | "adjust"; amount: number; balanceAfter: number; feature: string | null; label: string; at: string }
 export type TokenAccount = { plan: string; balance: number; monthly: number; periodStart: string; resetsAt: string; history: TokenMove[] }
-export type TokenPrices = {
-  plans: Record<string, { label: string; monthly: number; priceUsd: number }>
-  voicePerMinute: number
-  features: { feature: string; label: string; average: number; calls: number }[]
-  boards: { label: string; perResult: number; perRun: number }[]
-}
+export type TokenPrices = { plans: Record<string, { label: string; monthly: number; priceUsd: number }> }
+// Rounded figures from the server (the same ones the assistant uses): "about" is usual, "upTo" the most.
+export type EstimateAction = "search_message" | "career_message" | "resume" | "mock_interview" | "research" | "cv_analysis" | "voice_minute" | "deep_search"
+export type TokenEstimate = { action: EstimateAction; label: string; about: number; upTo: number; note?: string }
+export type TokenEstimates = { plan: string; balance: number; monthly: number; refillsOn: string; estimates: TokenEstimate[] }
 // The body of a 402 from any paid route.
 export type OutOfTokens = { code: "insufficient_tokens"; message: string; balance: number; resetsAt: string; needed?: number }
 
 export const getTokens = async (limit = 20) => (await apiClient.get<TokenAccount>("/job-seeker/credits", { params: { limit } })).data
 export const getTokenPrices = async () => (await apiClient.get<TokenPrices>("/job-seeker/credits/prices")).data
+export const getTokenEstimates = async () => (await apiClient.get<TokenEstimates>("/job-seeker/credits/estimates")).data
 // Start paying for a plan: the provider's checkout URL, or a 503 payments_unavailable until one is connected.
 export const startCheckout = async (plan: "pro" | "max") => (await apiClient.post<{ url: string }>("/job-seeker/credits/checkout", { plan })).data
 

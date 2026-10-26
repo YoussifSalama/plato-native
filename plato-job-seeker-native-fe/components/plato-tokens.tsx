@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Coins } from "lucide-react"
 import { cn } from "cn"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { formatTokens, getTokenPrices, getTokens, OUT_OF_TOKENS_EVENT, TOKENS_CHANGED_EVENT, type OutOfTokens, type TokenAccount } from "@/lib/credits/api"
+import { formatTokens, getTokenEstimates, getTokens, OUT_OF_TOKENS_EVENT, TOKENS_CHANGED_EVENT, type EstimateAction, type OutOfTokens, type TokenAccount, type TokenEstimate } from "@/lib/credits/api"
 
 // One shared copy of the balance for the sidebar, the tokens page and anything
 // that shows a cost. Refreshed after any write (charges land a moment after the
@@ -116,17 +116,35 @@ export function OutOfTokensDialog() {
   )
 }
 
-// The voice call's price per minute, fetched once per page load.
-let voiceRate: Promise<number | null> | null = null
-export function useVoiceRate() {
-  const [rate, setRate] = useState<number | null>(null)
+// What actions are likely to cost, fetched once per page load (they move slowly).
+let estimates: Promise<TokenEstimate[] | null> | null = null
+export function useEstimates() {
+  const [list, setList] = useState<TokenEstimate[] | null>(null)
   useEffect(() => {
-    voiceRate ??= getTokenPrices()
-      .then((p) => p.voicePerMinute)
+    estimates ??= getTokenEstimates()
+      .then((e) => e.estimates)
       .catch(() => null)
-    void voiceRate.then(setRate)
+    void estimates.then(setList)
   }, [])
-  return rate
+  return list
+}
+export function useEstimate(action: EstimateAction) {
+  return useEstimates()?.find((e) => e.action === action) ?? null
+}
+export function useVoiceRate() {
+  return useEstimate("voice_minute")?.about ?? null
+}
+
+// "≈ 10 tokens": a quiet hint beside an action, before the seeker spends anything.
+export function TokenCost({ action, suffix = "", className }: { action: EstimateAction; suffix?: string; className?: string }) {
+  const e = useEstimate(action)
+  if (!e) return null
+  return (
+    <span title={`${e.label}: about ${formatTokens(e.about)} Plato tokens, up to ${formatTokens(e.upTo)}${e.note ? `. ${e.note}` : ""}`} className={cn("inline-flex items-center gap-1 tabular-nums", className)}>
+      <Coins className="size-3 shrink-0" />≈ {formatTokens(e.about)}
+      {suffix}
+    </span>
+  )
 }
 
 // Narrow screens have no sidebar: the balance rides in the top bar.

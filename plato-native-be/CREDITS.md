@@ -37,10 +37,21 @@ The web app's `/tokens` page shows the three plans, with an Upgrade button on ea
 - **Voice interview:** the call is as long as the balance allows, up to 15 minutes. That maximum is reserved (`hold`) when the call starts and settled when the transcript arrives. A call that never reports back keeps its reservation.
 - **Known gap:** two paid actions started at the same moment both pass the balance check. The balance can then dip a little below zero, and the next month's reset clears it.
 
+## Estimates (what the seeker and the assistants see)
+
+`credits/estimates.ts` turns pricing into rounded **about / up to** token figures for each action: a search chat message, a career chat message, a tailored resume, a written mock interview, a web lookup, reading a CV, a voice minute, and a new job search.
+
+- The figures come from the real average charge per feature over 30 days, refreshed every 10 minutes. Until a feature has 5 charges, a starting figure is used.
+- Every figure is rounded up to a "nice" number, so exact rates can't be read back from it.
+- `tokenSummary()` is the only pricing view that leaves the server. It holds the plan, balance, refill date, public plan prices, and the estimates. It never holds dollar costs, rates, models, providers or formulas. A spec checks this.
+- Both assistants, the search assistant (the global panel) and the career chat, have a `get_plato_tokens` tool that returns exactly that summary. They also follow `TOKENS_RULES`: answer only from the tool, and never state or guess costs, margins, providers or the formula, even when pressed. Since they never receive those numbers, there's nothing they could reveal.
+- The web app shows the estimates in three places: on the career tiles, in the chat composers, and on the interview start card. `/tokens` lists them all.
+
 ## Seeker API (web app)
 
 - `GET /job-seeker/credits?limit=20` returns the balance, monthly grant, refill date and history.
-- `GET /job-seeker/credits/prices` returns the plans, the voice cost per minute, the real average charge per feature over 30 days, and the board prices.
+- `GET /job-seeker/credits/prices` returns the plans (public prices).
+- `GET /job-seeker/credits/estimates` returns `tokenSummary()`: balance, refill date, plans, and rounded estimates.
 
 No dollar amount is ever returned to a seeker.
 

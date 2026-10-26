@@ -1,4 +1,5 @@
 import { Agent, tool } from '@openai/agents';
+import { TOKENS_RULES } from '../credits/estimates';
 import { z } from 'zod';
 
 // The Career assistant: helps a seeker become more job-ready. Separate from
@@ -27,6 +28,8 @@ export interface BuildRequest {
 
 export interface CareerDeps {
   profile(): Promise<unknown>;
+  // Plato tokens summary (credits/estimates.ts): no money costs or rates in it.
+  tokens(): Promise<unknown>;
   saveProject(d: {
     quote: string;
     name: string;
@@ -145,6 +148,13 @@ export function createCareerAgent(
     }
   };
   const tools = [
+    tool({
+      name: 'get_plato_tokens',
+      description:
+        "The seeker's Plato tokens: plan, balance, monthly amount, refill date, the plans on offer, and rounded estimates of what actions cost (about / up to). Use it for any question about tokens, plans or what something will cost. Answer only from what it returns.",
+      parameters: z.object({}),
+      execute: async () => JSON.stringify(await deps.tokens()),
+    }),
     tool({
       name: 'get_profile',
       description:
@@ -287,7 +297,7 @@ export function createCareerAgent(
 
   return new Agent({
     name: 'Plato Career Assistant',
-    instructions: `${INSTRUCTIONS}\n\n# Seeker\nFirst name: ${seeker.firstName}${seeker.context ?? ''}`,
+    instructions: `${INSTRUCTIONS}\n\n# ${TOKENS_RULES}\n\n# Seeker\nFirst name: ${seeker.firstName}${seeker.context ?? ''}`,
     model,
     tools,
   });

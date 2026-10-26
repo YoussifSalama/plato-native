@@ -5,6 +5,7 @@ import { isRecentIdentical, summarizeRun } from '../discovery/run-status';
 import { COUNTRY_CODES, isCountryCode } from '../discovery/countries';
 import { checkSalary } from '../discovery/salary-sanity';
 import { buildQuestionCard, QUESTION_IDS } from './intake';
+import { tokenSummary } from '../credits/estimates';
 import {
   APP_PAGES,
   FILTER_KEYS,
@@ -638,7 +639,19 @@ export const getExtensionProgressTool = tool<typeof extensionProgressParams, Orc
   },
 });
 
+// Plato tokens: balance, refill date, plans and rounded cost estimates. The
+// summary holds no money costs, rates or providers, so none can leak from here.
+export const getPlatoTokensTool = tool<typeof noParams, OrchestratorContext>({
+  name: 'get_plato_tokens',
+  description:
+    "The seeker's Plato tokens: plan, balance, monthly amount, refill date, the plans on offer, and rounded estimates of what actions cost (about / up to). Use it for any question about tokens, plans or what something will cost. Answer only from what it returns.",
+  parameters: noParams,
+  execute: async (_input, runContext) =>
+    JSON.stringify(await tokenSummary(runContext!.context.userId)),
+});
+
 export const orchestratorTools = [
+  getPlatoTokensTool,
   getExtensionProgressTool,
   describePageTool,
   gotoTool,

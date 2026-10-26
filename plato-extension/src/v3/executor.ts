@@ -10,8 +10,14 @@
 //     or a second control that submits the form cannot send it again);
 //   - file_upload takes only the staged resume (document id "resume");
 //   - tabs: one tab, the job's; nothing opens or closes.
+//
+// Pacing (the "human" layer, for reliability): a short reading pause before each action, a press only once
+// the control is ready (in view, shown, enabled, still, not covered: content/v3-reader.ts `ready`), a hover
+// before the press, a pause for the page to settle after it, typing at a person's speed, and a wait after
+// typing for suggestion lists. Nothing here is made to look human to bot detection: no random mouse paths,
+// no fingerprint changes, and a human check still stops the run for the seeker.
 import type { BrowserCall, CallResult } from './contract';
-import type { ElementInfo, PageInfo, Point, V3Op } from '../content/v3-reader';
+import type { ElementInfo, PageInfo, Point, Readiness, V3Op } from '../content/v3-reader';
 
 export interface ExecDeps {
   send<T>(msg: V3Op): Promise<T>; // the content script of the job's tab
@@ -50,6 +56,8 @@ const MODS: Record<string, number> = { alt: 1, ctrl: 2, control: 2, meta: 4, cmd
 export function createExecutor(d: ExecDeps) {
   let pressed = false; // Submit pressed once in this run: never again
   const pace = (ms: number) => d.sleep(d.quick ? Math.min(ms, 5) : ms);
+  // a person's timing: never the same twice, within a calm range
+  const human = (min: number, max: number) => pace(min + Math.random() * (max - min));
   const info = () => d.send<PageInfo | null>({ op: 'info' }).catch(() => null);
   const state = async () => {
     const i = await info();
@@ -57,20 +65,26 @@ export function createExecutor(d: ExecDeps) {
   };
   const point = async (t: Target): Promise<Point> => {
     if (t.type === 'coordinate') return { x: t.x, y: t.y };
-    const p = await d.send<Point | null>({ op: 'resolve', ref: t.ref });
-    if (!p) throw new Error(`Unknown or stale ref: ${t.ref}. Call read_page again for current refs.`);
-    return p;
+    // waits until the control can really be pressed; a press that would miss is never sent
+    const r = await d.send<Readiness | null>({ op: 'ready', ref: t.ref, capMs: d.quick ? 600 : 4000 });
+    if (!r) throw new Error(`Unknown or stale ref: ${t.ref}. Call read_page again for current refs.`);
+    if (!r.ok) throw new Error(r.reason);
+    return r.point;
   };
   const mouse = (type: string, p: Point, extra: Record<string, unknown> = {}) => d.cdp('Input.dispatchMouseEvent', { type, x: Math.round(p.x), y: Math.round(p.y), ...extra });
-  // A person's click: press, hold, release at the point (no CDP mouse moves: a background tab waits a frame per move).
+  // A person's click: rest on the control (hover effects, menus open), press, hold, release, then let the page
+  // react. The hover is capped: a background tab can hold a CDP mouse move until its next frame.
   const click = async (p: Point, count = 1) => {
-    await pace(120);
+    await Promise.race([mouse('mouseMoved', p).catch(() => undefined), d.sleep(400)]);
+    await human(90, 220);
     for (let i = 1; i <= count; i++) {
       await mouse('mousePressed', p, { button: 'left', clickCount: i });
-      await pace(70);
+      await human(55, 130);
       await mouse('mouseReleased', p, { button: 'left', clickCount: i });
+      if (i < count) await human(60, 110);
     }
-    await pace(150);
+    await human(150, 300);
+    await d.settle(); // the page answers a press (a menu opens, a step loads) before anything else happens
   };
   const describe = (t: Target) => d.send<ElementInfo | null>(t.type === 'ref' ? { op: 'describe', ref: t.ref } : { op: 'describe', x: t.x, y: t.y }).catch(() => null);
   // Every press and key except the one Submit press runs under the page guard: a form submit it triggers is
@@ -104,8 +118,12 @@ export function createExecutor(d: ExecDeps) {
     }
   };
 
+  // Actions a person would look at the page before doing: a short reading pause first.
+  const LOOK_FIRST = new Set(['left_click', 'double_click', 'type', 'key', 'form_input', 'file_upload', 'scroll', 'hover']);
+
   async function run(name: string, input: Record<string, unknown>, allowed: boolean): Promise<Omit<CallResult, 'call_id'>> {
     const t = input.target as Target;
+    if (LOOK_FIRST.has(name)) await human(350, 850);
     switch (name) {
       case 'navigate': {
         await d.navigate(String(input.url ?? ''));
@@ -133,15 +151,18 @@ export function createExecutor(d: ExecDeps) {
         return { ok: true, text: `Clicked${el?.text ? ` "${el.text.slice(0, 60)}"` : ''}`, state: await state() };
       }
       case 'hover':
-        await mouse('mouseMoved', await point(t));
+        await Promise.race([mouse('mouseMoved', await point(t)).catch(() => undefined), d.sleep(400)]);
+        await human(250, 500);
         return { ok: true, text: 'Hovered', state: await state() };
       case 'type': {
         const text = String(input.text ?? '');
+        // short values letter by letter, long answers word by word, at a typing pace
         for (const piece of text.length > 60 ? (text.match(/\S+\s*/g) ?? [text]) : [...text]) {
           await d.cdp('Input.insertText', { text: piece });
-          await pace(text.length > 60 ? 15 : 25);
+          await (text.length > 60 ? human(20, 60) : human(45, 120));
         }
-        await pace(120);
+        await human(200, 400);
+        await d.settle(); // a type-ahead fetches its suggestions now: let them arrive before the next look
         return { ok: true, text: 'Typed', state: await state() };
       }
       case 'key': {
@@ -149,7 +170,8 @@ export function createExecutor(d: ExecDeps) {
         await guarded(allowed, async () => {
           for (let r = 0; r < Number(input.repeat ?? 1); r++) for (const c of chords) await chord(c);
         });
-        await pace(150);
+        await human(150, 300);
+        await d.settle();
         return { ok: true, text: 'Pressed', state: await state() };
       }
       case 'scroll': {
@@ -157,7 +179,8 @@ export function createExecutor(d: ExecDeps) {
         const n = Number(input.scroll_amount ?? 3) * 100;
         const dir = String(input.scroll_direction ?? 'down');
         await mouse('mouseWheel', p, { deltaX: dir === 'left' ? -n : dir === 'right' ? n : 0, deltaY: dir === 'up' ? -n : dir === 'down' ? n : 0 });
-        await pace(300);
+        await human(300, 600);
+        await d.settle(); // content that loads as it comes into view
         return { ok: true, text: 'Scrolled', state: await state() };
       }
       case 'scroll_to':
@@ -171,7 +194,9 @@ export function createExecutor(d: ExecDeps) {
           await guarded(allowed, () => click(r.clickPoint!)); // boxes get a real click, not a scripted tick
           return { ok: true, text: r.message, state: await state() };
         }
-        return r.ok ? { ok: true, text: r.message, state: await state() } : { ok: false, error: r.message };
+        if (!r.ok) return { ok: false, error: r.message };
+        await d.settle(); // a choice can reveal or reload fields (a city after a country)
+        return { ok: true, text: r.message, state: await state() };
       }
       case 'screenshot':
         return { ok: true, image: { media_type: 'image/png', data: (await shot()).data }, state: await state() };

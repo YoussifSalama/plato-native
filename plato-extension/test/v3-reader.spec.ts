@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { describeAt, describeElement, find, formInput, handle, installGuard, readPage, resolve } from '../src/content/v3-reader';
+import { describeAt, describeElement, find, formInput, handle, installGuard, readPage, ready, resolve } from '../src/content/v3-reader';
 
 // A synthetic application form (not a copy of any site): labels, a select that reveals a field, a file input,
 // a required consent box, an off-screen honeypot, a step button and the Submit control.
@@ -121,5 +121,41 @@ describe('find and resolve', () => {
   });
   it('resolve gives the centre of the element’s box', () => {
     expect(resolve(refOf(readPage(document, 'interactive'), 'Email *'))).toEqual({ x: 60, y: 20 });
+  });
+});
+
+describe('ready: a press only once the control can really be pressed', () => {
+  const at = (el: Element | null) => (document.elementFromPoint = (() => el) as typeof document.elementFromPoint);
+  it('in view, shown, enabled, still and on top: the point to press', async () => {
+    const ref = refOf(readPage(document, 'interactive'), 'First name *');
+    at($('fn'));
+    expect(await ready(document, ref, 500)).toEqual({ ok: true, point: { x: 60, y: 20 } });
+  });
+  it('a cookie banner or a modal on top: not pressed, and the model is told what covers it', async () => {
+    const ref = refOf(readPage(document, 'interactive'), 'Submit application');
+    const banner = document.createElement('div');
+    banner.textContent = 'We use cookies';
+    document.body.append(banner);
+    at(banner);
+    const r = await ready(document, ref, 300);
+    expect(r).toEqual({ ok: false, reason: 'Not pressed: something covers it: div "We use cookies" (close or answer that first).' });
+  });
+  it('a disabled control waits, then says why (a field above may still need a value)', async () => {
+    const ref = refOf(readPage(document, 'interactive'), 'Submit application');
+    ($('submit') as HTMLButtonElement).disabled = true;
+    at($('submit'));
+    const r = await ready(document, ref, 250);
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.reason).toMatch(/disabled/);
+  });
+  it('a control that becomes ready while waiting is pressed then, not refused', async () => {
+    const ref = refOf(readPage(document, 'interactive'), 'Submit application');
+    ($('submit') as HTMLButtonElement).disabled = true;
+    at($('submit'));
+    setTimeout(() => (($('submit') as HTMLButtonElement).disabled = false), 120);
+    expect((await ready(document, ref, 1500)).ok).toBe(true);
+  });
+  it('a ref from before the page changed is named stale', async () => {
+    expect(await ready(document, 'ref_9999', 100)).toEqual({ ok: false, reason: 'Unknown or stale ref: ref_9999. Call read_page again for current refs.' });
   });
 });

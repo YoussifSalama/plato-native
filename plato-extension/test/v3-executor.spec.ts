@@ -14,6 +14,7 @@ function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?:
       switch (msg.op) {
         case 'info': return { url: 'https://jobs.example/apply', title: 'Apply', width: 1280, height: 900 } as T;
         case 'resolve': return (msg.ref === 'ref_gone' ? null : { x: 100, y: 200 }) as T;
+        case 'ready': return (msg.ref === 'ref_gone' ? { ok: false, reason: `Unknown or stale ref: ${msg.ref}. Call read_page again for current refs.` } : msg.ref === 'ref_covered' ? { ok: false, reason: 'Not pressed: something covers it: div "We use cookies" (close or answer that first).' } : { ok: true, point: { x: 100, y: 200 } }) as T;
         case 'describe': return (msg.ref === o.submitRef ? { tag: 'BUTTON', type: 'submit', text: 'Submit application', role: '', isSubmit: true } : msg.ref === 'ref_gone' ? null : { tag: 'BUTTON', type: 'button', text: 'Next', role: '', isSubmit: false }) as T;
         case 'guard': guardArmed++; return { ok: true } as T;
         case 'guarded': return { blocked: o.blockedOnGuard ? 1 : 0 } as T;
@@ -112,6 +113,31 @@ describe('executor: the Submit gate (code, not prompt)', () => {
     const t = tab({ submitRef: 'ref_s' });
     expect(await t.run('left_click', ref('ref_2'), true)).toMatchObject({ ok: true });
     expect(await t.run('key', { text: 'Tab' }, true)).toMatchObject({ ok: true });
+  });
+});
+
+describe('executor: a person\'s pace (the reliability layer)', () => {
+  it('a press rests on the control first, then presses and releases, then lets the page settle', async () => {
+    const t = tab();
+    await t.run('left_click', ref('ref_2'), false);
+    const mouse = t.cdp.filter((c) => c.method === 'Input.dispatchMouseEvent').map((c) => c.params.type);
+    expect(mouse).toEqual(['mouseMoved', 'mousePressed', 'mouseReleased']);
+    expect(t.counts().settled).toBeGreaterThan(0);
+  });
+  it('a control that is covered is never pressed; the model hears what covers it', async () => {
+    const t = tab();
+    const r = await t.run('left_click', ref('ref_covered'), false);
+    expect(r).toMatchObject({ ok: false, error: expect.stringContaining('something covers it') });
+    expect(t.clicks()).toEqual([]);
+  });
+  it('typing and a changed value both wait for the page (suggestions, revealed fields) before the next look', async () => {
+    const t = tab();
+    await t.run('type', { text: 'Cairo' });
+    const afterType = t.counts().settled;
+    expect(afterType).toBe(1);
+    await t.run('form_input', { ...ref('ref_1'), value: 'Egypt' });
+    expect(t.counts().settled).toBe(afterType + 1);
+    expect(t.cdp.filter((c) => c.method === 'Input.insertText').map((c) => c.params.text).join('')).toBe('Cairo');
   });
 });
 

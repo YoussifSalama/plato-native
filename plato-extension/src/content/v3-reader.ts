@@ -27,13 +27,14 @@ export type V3Op =
   | { op: 'page_text' }
   | { op: 'form_input'; ref: string; value: unknown }
   | { op: 'resolve'; ref: string } // scrolls it into view; the point to press
+  | { op: 'ready'; ref: string; capMs?: number } // waits until it can really be pressed (in view, visible, enabled, still, not covered)
   | { op: 'describe'; ref?: string; x?: number; y?: number } // what is there (the Submit gate)
   | { op: 'set_file'; ref: string; name: string; mime: string; data: string } // base64 bytes into the file input at/near the ref
   | { op: 'guard'; ms: number } // cancel any form submit for the next ms
   | { op: 'guarded' } // how many submits the guard cancelled since it was armed (and reset)
   | { op: 'info' }
   | { op: 'state' };
-export const V3_OPS = new Set(['read_page', 'find', 'page_text', 'form_input', 'resolve', 'describe', 'set_file', 'guard', 'guarded', 'info', 'state']);
+export const V3_OPS = new Set(['read_page', 'find', 'page_text', 'form_input', 'resolve', 'ready', 'describe', 'set_file', 'guard', 'guarded', 'info', 'state']);
 
 // One registry per page: refs survive until a navigation (the script reloads with the page).
 const R = { next: 1, byRef: new Map<string, Element>(), byEl: new WeakMap<Element, string>() };
@@ -237,6 +238,42 @@ export function resolve(ref: string): Point | null {
   const r = el.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
+// Is a ref ready for a person's press? The checks a careful person makes without noticing: it is on screen,
+// shown, enabled, has stopped moving (an animation, a layout shift after load), and nothing sits on top of it
+// (a cookie banner, a modal, a sticky header). Waits up to capMs; a press that would miss is never sent.
+export type Readiness = { ok: true; point: Point } | { ok: false; reason: string };
+export async function ready(doc: Document, ref: string, capMs = 4000): Promise<Readiness> {
+  const el = elOf(ref);
+  if (!el) return { ok: false, reason: STALE(ref) };
+  const view = doc.defaultView!;
+  el.scrollIntoView?.({ block: 'center', inline: 'center', behavior: 'smooth' });
+  const wait = (ms: number) => new Promise((r) => view.setTimeout(r, ms));
+  const until = Date.now() + capMs;
+  let last: DOMRect | null = null;
+  let why: string;
+  for (;;) {
+    if (!el.isConnected) return { ok: false, reason: STALE(ref) };
+    const r = el.getBoundingClientRect();
+    const style = view.getComputedStyle(el as HTMLElement);
+    const point = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    const still = !!last && Math.abs(last.left - r.left) < 1 && Math.abs(last.top - r.top) < 1 && Math.abs(last.width - r.width) < 1;
+    const inView = point.y >= 0 && point.x >= 0 && point.y <= view.innerHeight && point.x <= view.innerWidth;
+    const hit = inView && typeof doc.elementFromPoint === 'function' ? doc.elementFromPoint(point.x, point.y) : null;
+    const label = (el as Ctl).labels?.[0];
+    const reachable = !hit || hit === el || el.contains(hit) || hit.contains(el) || (!!label && (hit === label || label.contains(hit)));
+    why =
+      !(r.width > 0 && r.height > 0) || style.visibility === 'hidden' || style.display === 'none' ? 'it is hidden'
+      : (el as Ctl).disabled || el.getAttribute('aria-disabled') === 'true' ? 'it is disabled (a field above may still need a value)'
+      : !inView ? 'it could not be scrolled into view'
+      : !reachable ? `something covers it: ${describeElement(hit!).tag.toLowerCase()} "${describeElement(hit!).text.slice(0, 50)}" (close or answer that first)`
+      : !still ? 'it is still moving'
+      : '';
+    if (!why) return { ok: true, point };
+    if (Date.now() >= until) return { ok: false, reason: `Not pressed: ${why}.` };
+    last = r;
+    await wait(90);
+  }
+}
 // The Submit control, by what it is: a submit button inside a form, or a control that says Submit/Send (application).
 // "Apply", "Next", "Continue", "Review" are steps, not the submission.
 const SUBMIT_TEXT = /^(submit( application| my application)?|send( application| my application)?)$/i;
@@ -298,6 +335,8 @@ export function handle(doc: Document, m: V3Op): unknown {
       return formInput(doc, m.ref, m.value);
     case 'resolve':
       return resolve(m.ref);
+    case 'ready':
+      return ready(doc, m.ref, m.capMs);
     case 'describe':
       return describeAt(doc, m);
     case 'set_file':

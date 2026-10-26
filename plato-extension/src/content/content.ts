@@ -27,7 +27,18 @@ chrome.runtime.onMessage.addListener((msg: unknown, sender, sendResponse: (r: un
   if (isV3Message(msg)) {
     overlay.show();
     try {
-      sendResponse(v3(document, msg));
+      const r = v3(document, msg);
+      if (!(r instanceof Promise)) return void sendResponse(r), false;
+      // `ready` waits for the page; when the control can be pressed, Plato's cursor glides to it first
+      void r.then(
+        async (v: unknown) => {
+          const pt = (v as { ok?: boolean; point?: { x: number; y: number } }).ok ? (v as { point: { x: number; y: number } }).point : null;
+          if (pt) await overlay.pointAt(pt.x, pt.y).catch(() => undefined);
+          sendResponse(v);
+        },
+        (e: unknown) => sendResponse({ ok: false, reason: `page error: ${(e as Error).message}`.slice(0, 300) }),
+      );
+      return true; // answered when the page is ready
     } catch (e) {
       sendResponse({ ok: false, message: `page error: ${(e as Error).message}`.slice(0, 300) });
     }

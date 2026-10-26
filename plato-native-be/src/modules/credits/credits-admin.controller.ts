@@ -13,8 +13,8 @@ import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertAdminKey } from '../usage/admin-key';
-import { PLANS, USD_PER_TOKEN } from './credit-prices';
-import { adjustTokens, creditAccount, setPlan } from './credits';
+import { PLANS, TOPUPS, USD_PER_TOKEN } from './credit-prices';
+import { addTopup, adjustTokens, creditAccount, setPlan } from './credits';
 
 const round = (n: number, d = 4) => Math.round(n * 10 ** d) / 10 ** d;
 
@@ -178,5 +178,23 @@ export class CreditsAdminController {
       .safeParse(body);
     if (!p.success) throw new BadRequestException(p.error.issues);
     return setPlan(await this.userId(ref), p.data.plan);
+  }
+
+  /** Record a top-up sold outside the app (until payments do it): the pack's tokens, never expiring. */
+  @Post(':user/topup')
+  async topup(
+    @Headers('x-admin-key') key: string | undefined,
+    @Param('user') ref: string,
+    @Body() body: unknown,
+  ) {
+    assertAdminKey(this.config, key);
+    const p = z
+      .object({
+        pack: z.enum(Object.keys(TOPUPS) as [string, ...string[]]),
+        ref: z.string().trim().min(3).max(120),
+      })
+      .safeParse(body);
+    if (!p.success) throw new BadRequestException(p.error.issues);
+    return addTopup(await this.userId(ref), p.data.pack, p.data.ref);
   }
 }

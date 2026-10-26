@@ -101,8 +101,8 @@ describe('tokenSummary (what the API and the assistants get)', () => {
       /scraper/i,
     ])
       expect(json).not.toMatch(leak);
-    // the only money in it is the public plan price
-    expect(json.match(/usd/gi)?.length).toBe(3);
+    // the only money in it is the public plan and top-up prices
+    expect(json.match(/usd/gi)?.length).toBe(6);
   });
 
   it('the assistants are told never to state or guess pricing internals', () => {

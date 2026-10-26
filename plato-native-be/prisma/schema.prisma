@@ -133,6 +133,10 @@ model CreditAccount {
   // ~1 token); may dip slightly below zero when a call finishes after the
   // balance ran out. Reset to the plan's grant at period_end.
   balance      Float    @default(0)
+  // Tokens bought as top-ups, included in balance. They are spent last and
+  // never expire: what is left of them, min(topup, balance), carries over
+  // the monthly reset and a plan change.
+  topup        Float    @default(0)
   period_start DateTime
   period_end   DateTime
   created_at   DateTime @default(now())

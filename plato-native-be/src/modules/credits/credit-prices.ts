@@ -30,6 +30,29 @@ export const PLANS: Record<
 };
 export const planOf = (plan: string) => PLANS[plan] ?? PLANS.free;
 
+// One-time packs of extra tokens. They cost more per token than a plan (a plan is
+// the better deal for steady use) and never expire.
+export const TOPUPS: Record<
+  string,
+  { label: string; tokens: number; priceUsd: number }
+> = {
+  small: {
+    label: 'Small',
+    tokens: 1000,
+    priceUsd: Number(process.env.CREDITS_TOPUP_SMALL_USD ?? 5),
+  },
+  medium: {
+    label: 'Medium',
+    tokens: 3000,
+    priceUsd: Number(process.env.CREDITS_TOPUP_MEDIUM_USD ?? 12),
+  },
+  large: {
+    label: 'Large',
+    tokens: 10000,
+    priceUsd: Number(process.env.CREDITS_TOPUP_LARGE_USD ?? 35),
+  },
+};
+
 // A voice interview runs browser <-> OpenAI, so the server never sees its tokens
 // directly. It is reserved per minute at this ceiling when the call starts and
 // settled against the server's own clock (never more than the ceiling).

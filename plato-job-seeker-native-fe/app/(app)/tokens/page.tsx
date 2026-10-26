@@ -63,9 +63,14 @@ export default function TokensPage() {
               <p className="flex items-start gap-1.5 text-sm text-text-secondary">
                 <RefreshCw className="mt-[3px] size-3.5 shrink-0" />
                 <span>
-                  Refills to {formatTokens(acc.monthly)} on <span className="font-semibold text-foreground">{resetLabel(acc.resetsAt)}</span>. Unused tokens don&apos;t carry over.
+                  Refills to {formatTokens(acc.monthly)} on <span className="font-semibold text-foreground">{resetLabel(acc.resetsAt)}</span>. Unused monthly tokens don&apos;t carry over.
                 </span>
               </p>
+              {acc.topup >= 1 && (
+                <p className="text-sm text-text-secondary">
+                  Includes <span className="font-semibold text-foreground">{formatTokens(acc.topup)}</span> bought tokens. They are used after your monthly tokens and never expire.
+                </p>
+              )}
             </>
           )}
         </div>
@@ -91,6 +96,7 @@ export default function TokensPage() {
       </section>
 
       {prices && <Plans plans={prices.plans} current={acc?.plan ?? null} />}
+      {prices?.topups && <TopUps packs={prices.topups} />}
 
       <section className="rounded-lg border bg-card px-5 py-1">
         <h2 className="pt-4 pb-2 text-sm font-semibold text-foreground">History</h2>
@@ -143,7 +149,7 @@ function Plans({ plans, current }: { plans: TokenPrices["plans"]; current: strin
     setBusy(plan)
     setNote(null)
     try {
-      const { url } = await startCheckout(plan)
+      const { url } = await startCheckout({ plan })
       window.location.assign(url)
     } catch (e) {
       setNote(e instanceof AxiosError ? (e.response?.data?.message ?? "Could not start the payment.") : "Could not start the payment.")
@@ -182,6 +188,51 @@ function Plans({ plans, current }: { plans: TokenPrices["plans"]; current: strin
             </div>
           )
         })}
+      </div>
+      {note && <p className="text-sm text-warning">{note}</p>}
+    </section>
+  )
+}
+
+// One-time packs: tokens that never expire, used after the monthly ones.
+function TopUps({ packs }: { packs: TokenPrices["topups"] }) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const buy = async (pack: string) => {
+    setBusy(pack)
+    setNote(null)
+    try {
+      const { url } = await startCheckout({ pack })
+      window.location.assign(url)
+    } catch (e) {
+      setNote(e instanceof AxiosError ? (e.response?.data?.message ?? "Could not start the payment.") : "Could not start the payment.")
+    } finally {
+      setBusy(null)
+    }
+  }
+  const entries = Object.entries(packs)
+  const best = Math.min(...entries.map(([, p]) => p.priceUsd / p.tokens))
+  return (
+    <section id="top-ups" className="flex scroll-mt-6 flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-sm font-semibold text-foreground">Top up</h2>
+        <p className="text-sm text-text-secondary">Need more before your refill? Buy a pack once. Bought tokens never expire and are used after your monthly tokens.</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {entries.map(([key, p]) => (
+          <div key={key} data-ai={`tokens.topup.${key}`} className="flex flex-col gap-3 rounded-lg border bg-card p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-base font-bold text-foreground">{formatTokens(p.tokens)} tokens</span>
+              {p.priceUsd / p.tokens === best && entries.length > 1 && <span className="rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-semibold text-success">Best value</span>}
+            </div>
+            <p className="text-2xl font-bold text-foreground">${p.priceUsd}</p>
+            <p className="text-xs text-text-tertiary">One-time · never expires</p>
+            <Button variant="outline" onClick={() => void buy(key)} disabled={!!busy} className="mt-auto">
+              {busy === key && <Loader2 className="size-4 animate-spin" />}
+              Buy {p.label.toLowerCase()} pack
+            </Button>
+          </div>
+        ))}
       </div>
       {note && <p className="text-sm text-warning">{note}</p>}
     </section>

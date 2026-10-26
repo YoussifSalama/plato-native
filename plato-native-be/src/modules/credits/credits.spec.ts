@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { affordableResults, tokensFor, toTokens } from './credit-prices';
 import {
+  addTopup,
   adjustTokens,
   chargeUsage,
   creditAccount,
@@ -128,20 +129,16 @@ function fakeDb() {
           data,
         }: {
           where: { user_id: string };
-          data: {
-            balance: number | { decrement?: number; increment?: number };
-            plan?: string;
-            period_start?: Date;
-            period_end?: Date;
-          };
+          data: Record<string, unknown>;
         }) => {
-          const a = accounts[where.user_id];
-          const { balance, ...rest } = data;
-          Object.assign(a, rest);
-          if (typeof balance === 'number') a.balance = balance;
-          else {
-            const d = (balance.increment ?? 0) - (balance.decrement ?? 0);
-            a.balance = Math.round((a.balance + d) * 1000) / 1000;
+          const a = accounts[where.user_id] as Record<string, unknown>;
+          // plain values are set; { increment, decrement } move a number
+          for (const [k, v] of Object.entries(data)) {
+            if (v && typeof v === 'object' && !(v instanceof Date)) {
+              const o = v as { increment?: number; decrement?: number };
+              const d = (o.increment ?? 0) - (o.decrement ?? 0);
+              a[k] = Math.round((((a[k] as number) ?? 0) + d) * 1000) / 1000;
+            } else a[k] = v;
           }
           return Promise.resolve({ ...a });
         },
@@ -377,6 +374,59 @@ describe('plans and admin adjustments', () => {
       amount: 250,
       balance_after: 1250,
       meta: { reason: 'refund: board outage' },
+    });
+  });
+});
+
+describe('top-ups (bought tokens are spent last and never expire)', () => {
+  it('buying adds the pack to the balance and to the bought part, with the payment ref', async () => {
+    const { accounts, ledger } = fakeDb();
+    await addTopup('u1', 'small', 'pay_123');
+    expect(accounts.u1).toMatchObject({ balance: 2000, topup: 1000 });
+    expect(ledger.at(-1)).toMatchObject({
+      kind: 'topup',
+      amount: 1000,
+      balance_after: 2000,
+      meta: { pack: 'small', ref: 'pay_123' },
+    });
+    await expect(addTopup('u1', 'huge', 'x')).rejects.toThrow('Unknown top-up');
+  });
+
+  it('the monthly reset keeps what is left of the bought tokens', async () => {
+    const { accounts } = fakeDb();
+    // addTopup checks the account against the real clock: start the period a few days ago
+    const t0 = new Date(Date.now() - 5 * 86_400_000);
+    const later = (months: number) => {
+      const d = new Date(t0);
+      d.setUTCMonth(d.getUTCMonth() + months);
+      return new Date(d.getTime() + 86_400_000);
+    };
+    await creditAccount('u1', t0);
+    await addTopup('u1', 'small', 'p1'); // 1000 monthly + 1000 bought
+    accounts.u1.balance = 1800; // spent 200: all from the monthly part
+    expect((await creditAccount('u1', later(1))).balance).toBe(2000);
+    expect(accounts.u1).toMatchObject({ topup: 1000 });
+    accounts.u1.balance = 500; // spent 1500: monthly gone, 500 of the bought left
+    const acc = await creditAccount('u1', later(2));
+    expect(acc).toMatchObject({ balance: 1500, topup: 500 });
+  });
+
+  it('nothing bought: the reset is the plain grant (no roll-over of monthly tokens)', async () => {
+    const { accounts } = fakeDb();
+    await creditAccount('u1', day('2026-09-01'));
+    accounts.u1.balance = 700;
+    expect((await creditAccount('u1', day('2026-10-02'))).balance).toBe(1000);
+  });
+
+  it('a plan change keeps the bought tokens on top of the new grant', async () => {
+    const { accounts } = fakeDb();
+    await addTopup('u1', 'medium', 'p2'); // 1000 + 3000
+    accounts.u1.balance = 3500;
+    await setPlan('u1', 'pro');
+    expect(accounts.u1).toMatchObject({
+      plan: 'pro',
+      balance: 10000,
+      topup: 3000,
     });
   });
 });

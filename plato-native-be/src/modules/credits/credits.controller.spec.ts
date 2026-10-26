@@ -31,6 +31,16 @@ describe('checkout', () => {
     );
   });
 
+  it('a top-up pack goes to checkout too; an unknown pack is refused', async () => {
+    const err = (await c
+      .checkout(req, { pack: 'medium' })
+      .catch((e: unknown) => e)) as ServiceUnavailableException;
+    expect(err.getResponse()).toMatchObject({ code: 'payments_unavailable' });
+    await expect(c.checkout(req, { pack: 'huge' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
   it('says payments are not open while no provider is connected (never pretends to upgrade)', async () => {
     const err = (await c
       .checkout(req, { plan: 'max' })

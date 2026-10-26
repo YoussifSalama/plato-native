@@ -30,6 +30,17 @@ Every cost already goes through `recordUsage()` (`src/modules/usage/usage.ts`), 
 
 The web app's `/tokens` page shows the three plans, with an Upgrade button on each paid one. The button calls `POST /job-seeker/credits/checkout { plan }`.
 
+## Top-ups
+
+One-time packs: Small has 1,000 tokens for $5, Medium 3,000 for $12, and Large 10,000 for $35. The prices are set with `CREDITS_TOPUP_*_USD`, and the packs are defined in `TOPUPS`.
+
+- A top-up costs more per token than a plan, so a plan stays the better deal for steady use.
+- Bought tokens go into the balance and into `credit_accounts.topup`. They are spent after the monthly tokens and never expire.
+- What's left of them, `min(topup, balance)`, carries over the monthly reset and a plan change. Monthly tokens still don't roll over.
+- `addTopup(userId, pack, ref)` records a purchase: it adds the tokens and writes a `topup` ledger line with the payment reference. The payment webhook will call it.
+- Until a payment provider is connected, an admin records manual sales with `POST /admin/credits/:user/topup { pack, ref }`.
+- On the web app's `/tokens` page, each pack has a Buy button. It calls `POST /job-seeker/credits/checkout { pack }`, which answers `503 payments_unavailable` until a provider is connected. The "Not enough Plato tokens" dialog links to the packs.
+
 ## Enforcement
 
 - **Paid routes** use `TokensGuard`. A seeker with no tokens left gets `402 { code: "insufficient_tokens", balance, resetsAt }` before any model or board is called. These routes are career chat (and its stream), resume suggestions, interviews, the search chat, the onboarding chat, CV analysis, and discover.
@@ -50,7 +61,7 @@ The web app's `/tokens` page shows the three plans, with an Upgrade button on ea
 ## Seeker API (web app)
 
 - `GET /job-seeker/credits?limit=20` returns the balance, monthly grant, refill date and history.
-- `GET /job-seeker/credits/prices` returns the plans (public prices).
+- `GET /job-seeker/credits/prices` returns the plans and top-up packs (public prices).
 - `GET /job-seeker/credits/estimates` returns `tokenSummary()`: balance, refill date, plans, and rounded estimates.
 
 No dollar amount is ever returned to a seeker.

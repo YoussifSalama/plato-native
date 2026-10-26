@@ -106,8 +106,8 @@ export function OutOfTokensDialog() {
             <Button variant="outline" onClick={close}>
               Close
             </Button>
-            <Link href="/tokens" onClick={close} className={buttonVariants()}>
-              See my tokens
+            <Link href="/tokens#top-ups" onClick={close} className={buttonVariants()}>
+              Get more tokens
             </Link>
           </div>
         </div>

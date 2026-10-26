@@ -1,7 +1,13 @@
 import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PLANS, planOf, tokensFor, type MeteredRow } from './credit-prices';
+import {
+  PLANS,
+  planOf,
+  TOPUPS,
+  tokensFor,
+  type MeteredRow,
+} from './credit-prices';
 
 // Plain functions (like recordUsage) so the metering path can charge without
 // threading a service through every call site.
@@ -12,6 +18,10 @@ const addMonth = (d: Date) => {
   n.setUTCMonth(n.getUTCMonth() + 1);
   return n;
 };
+// What is left of the bought tokens: they are spent last, so min(topup, balance).
+const keptTopup = (acc: { topup?: number | null; balance: number }) =>
+  Math.max(0, Math.min(acc.topup ?? 0, acc.balance));
+
 const db = () => {
   const p = PrismaService.instance;
   if (!p) throw new Error('database not ready');
@@ -62,10 +72,12 @@ export async function creditAccount(userId: string, now = new Date()) {
     let start = acc.period_end;
     while (addMonth(start) <= now) start = addMonth(start); // a seeker away for months lands in the current period
     // conditional on the period we read: of two concurrent resets only one wins, so the grant is never doubled
+    const kept = keptTopup(acc); // bought tokens never expire
     const won = await db().creditAccount.updateMany({
       where: { user_id: userId, period_end: acc.period_end },
       data: {
-        balance: grant,
+        balance: grant + kept,
+        topup: kept,
         period_start: start,
         period_end: addMonth(start),
       },
@@ -76,11 +88,12 @@ export async function creditAccount(userId: string, now = new Date()) {
           user_id: userId,
           kind: 'grant',
           amount: grant,
-          balance_after: grant,
+          balance_after: grant + kept,
           meta: {
             reason: 'monthly_reset',
             plan: acc.plan,
             previous_balance: acc.balance,
+            topup_kept: kept,
           },
         },
       });
@@ -237,11 +250,13 @@ export async function setPlan(userId: string, plan: string, now = new Date()) {
   if (!PLANS[plan]) throw new Error(`Unknown plan: ${plan}`);
   const before = await creditAccount(userId, now);
   const grant = PLANS[plan].monthly;
+  const kept = keptTopup(before);
   const acc = await db().creditAccount.update({
     where: { user_id: userId },
     data: {
       plan,
-      balance: grant,
+      balance: grant + kept,
+      topup: kept,
       period_start: now,
       period_end: addMonth(now),
     },
@@ -251,13 +266,38 @@ export async function setPlan(userId: string, plan: string, now = new Date()) {
       user_id: userId,
       kind: 'grant',
       amount: grant,
-      balance_after: grant,
+      balance_after: grant + kept,
       meta: {
         reason: 'plan_change',
         plan,
         from_plan: before.plan,
         previous_balance: before.balance,
       },
+    },
+  });
+  return acc;
+}
+
+/**
+ * A top-up pack was paid for (the payment webhook, or an admin recording a
+ * manual sale): the tokens are added to the balance and to the never-expiring
+ * bought part. `ref` is the payment's id, kept in the ledger.
+ */
+export async function addTopup(userId: string, pack: string, ref: string) {
+  const p = TOPUPS[pack];
+  if (!p) throw new Error(`Unknown top-up: ${pack}`);
+  await creditAccount(userId);
+  const acc = await db().creditAccount.update({
+    where: { user_id: userId },
+    data: { balance: { increment: p.tokens }, topup: { increment: p.tokens } },
+  });
+  await db().creditLedger.create({
+    data: {
+      user_id: userId,
+      kind: 'topup',
+      amount: p.tokens,
+      balance_after: acc.balance,
+      meta: { pack, ref },
     },
   });
   return acc;

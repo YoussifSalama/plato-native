@@ -115,6 +115,7 @@ Sources to add: Himalayas, We Work Remotely, Remotive, Jobgether, Jobicy, Remote
 - [x] Enforce limits server-side: `TokensGuard` answers 402 `insufficient_tokens` (balance + refill date) on every paid route; a deep search asks the paid boards for only as many results as the balance covers (free sources always run, the chat says so); a voice interview is as long as the balance allows, reserved at start and settled on the transcript against the server's clock (the browser's token report is capped, `CREDITS_VOICE_USD_PER_MINUTE`); career research web search calls are now priced
 - [x] Failed or empty runs do not consume credits: done for Apify boards (a run with 0 results, or whose results could not be read, is free); AI calls that error before a response are never metered
 - [x] Admin view: `GET /admin/credits/report` (our cost vs tokens charged per feature and top 50 seekers, plus unattributed cost), `GET /admin/credits/:user`, `POST /admin/credits/:user/adjust`, `POST /admin/credits/:user/plan` (user id or email, `x-admin-key`)
+- [x] Top-ups: one-time packs (1,000 / 3,000 / 10,000 tokens), bought tokens spent last and never expire (carried over resets and plan changes); `/tokens` Top up section; admin can record a manual sale. Buying waits on the payment provider like plans
 - [ ] Re-measure with real traffic for 2 weeks, then fix prices
 
 ---

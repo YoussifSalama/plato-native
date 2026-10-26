@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
-import { Coins } from "lucide-react"
+import { CalendarClock, ChevronRight, Coins, Sparkles } from "lucide-react"
 import { cn } from "cn"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import { formatTokens, getTokenEstimates, getTokens, OUT_OF_TOKENS_EVENT, TOKENS_CHANGED_EVENT, type EstimateAction, type OutOfTokens, type TokenAccount, type TokenEstimate } from "@/lib/credits/api"
 
 // One shared copy of the balance for the sidebar, the tokens page and anything
@@ -79,8 +79,13 @@ export function TokensNav({ collapsed, itemClass }: { collapsed: boolean; itemCl
 export function OutOfTokensDialog() {
   const ref = useRef<HTMLDialogElement>(null)
   const [info, setInfo] = useState<OutOfTokens | null>(null)
+  const [days, setDays] = useState(0)
   useEffect(() => {
-    const on = (e: Event) => setInfo((e as CustomEvent<OutOfTokens>).detail)
+    const on = (e: Event) => {
+      const detail = (e as CustomEvent<OutOfTokens>).detail
+      setDays(Math.max(0, Math.ceil((new Date(detail.resetsAt).getTime() - Date.now()) / 86_400_000)))
+      setInfo(detail)
+    }
     window.addEventListener(OUT_OF_TOKENS_EVENT, on)
     return () => window.removeEventListener(OUT_OF_TOKENS_EVENT, on)
   }, [])
@@ -91,25 +96,60 @@ export function OutOfTokensDialog() {
     if (!info && el.open) el.close()
   }, [info])
   const close = () => setInfo(null)
+  // Three honest ways forward, in the order most people take them.
+  const ways = info
+    ? [
+        { icon: CalendarClock, title: `Wait for your refill`, body: `Your monthly tokens come back on ${resetLabel(info.resetsAt)}, in ${days} day${days === 1 ? "" : "s"}.`, href: null },
+        { icon: Coins, title: "Top up now", body: "One-time packs. Bought tokens never expire.", href: "/tokens#top-ups" },
+        { icon: Sparkles, title: "Move to a bigger plan", body: "More tokens every month, from the next minute.", href: "/tokens" },
+      ]
+    : []
   return (
-    <dialog ref={ref} data-ai-skip onCancel={(e) => (e.preventDefault(), close())} onClick={(e) => e.target === ref.current && close()} className="m-auto w-[min(440px,calc(100vw-2rem))] rounded-lg border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40">
+    <dialog ref={ref} data-ai-skip onCancel={(e) => (e.preventDefault(), close())} onClick={(e) => e.target === ref.current && close()} className="m-auto w-[min(460px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-card p-0 text-foreground shadow-[0_28px_70px_-28px_rgba(79,63,247,0.45)] backdrop:bg-foreground/30 backdrop:backdrop-blur-sm">
       {info && (
-        <div className="flex flex-col gap-4 p-6">
-          <span className="flex size-11 items-center justify-center rounded-full bg-warning-soft text-warning">
-            <Coins className="size-5" />
-          </span>
-          <h2 className="text-lg font-bold">Not enough Plato tokens</h2>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            {info.needed ? `This needs about ${formatTokens(info.needed)} tokens and you have ${formatTokens(Math.max(0, info.balance))} left.` : `You have used this month's Plato tokens.`} Your tokens refill on <span className="font-semibold text-foreground">{resetLabel(info.resetsAt)}</span>. Free features like browsing your jobs and applications keep working.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={close}>
-              Close
-            </Button>
-            <Link href="/tokens#top-ups" onClick={close} className={buttonVariants()}>
-              Get more tokens
-            </Link>
+        <div className="relative flex flex-col gap-5 p-6">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(ellipse_at_top,rgba(217,119,6,0.14),transparent_70%)]" />
+          <div className="relative flex items-start gap-4">
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-warning-soft text-warning">
+              <Coins className="size-6" />
+            </span>
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-bold">You&apos;re out of tokens for this one</h2>
+              <p className="text-sm leading-relaxed text-text-secondary">
+                {info.needed ? `It needs about ${formatTokens(info.needed)} tokens and you have ${formatTokens(Math.max(0, info.balance))} left.` : "This month's tokens are used up."} Browsing your jobs and applications stays free.
+              </p>
+            </div>
           </div>
+          <ul className="relative flex flex-col gap-2">
+            {ways.map(({ icon: Icon, title, body, href }) => {
+              const inner = (
+                <>
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-sm font-semibold text-foreground">{title}</span>
+                    <span className="text-xs text-text-tertiary">{body}</span>
+                  </span>
+                  {href && <ChevronRight className="size-4 text-text-tertiary transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />}
+                </>
+              )
+              return (
+                <li key={title}>
+                  {href ? (
+                    <Link href={href} onClick={close} className="group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:border-primary/30 hover:bg-primary-tint">
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div className="flex items-center gap-3 rounded-lg border border-dashed p-3">{inner}</div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+          <Button variant="outline" onClick={close} className="relative" autoFocus>
+            Not now
+          </Button>
         </div>
       )}
     </dialog>

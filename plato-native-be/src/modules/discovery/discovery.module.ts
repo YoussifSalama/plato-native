@@ -14,9 +14,10 @@ import { MatchingService } from './matching.service';
 import { RunProgressBus } from './run-progress.bus';
 import { LocalIndexAdapter } from './adapters/local-index.adapter';
 import { PublicBoardsAdapter } from './adapters/public-boards.adapter';
+import { CreditsModule } from '../credits/credits.module';
 
 @Module({
-  imports: [UserModule, AuthModule, ApplyModule],
+  imports: [UserModule, AuthModule, ApplyModule, CreditsModule],
   controllers: [DiscoveryController],
   providers: [
     DiscoveryService,

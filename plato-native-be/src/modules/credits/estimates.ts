@@ -1,14 +1,5 @@
-import { PrismaService } from '../prisma/prisma.service';
 import { RUN_TARGET } from '../discovery/discovery-run.helpers';
-import {
-  APIFY_PRICES,
-  PLANS,
-  TOPUPS,
-  planOf,
-  toTokens,
-  VOICE_USD_PER_MINUTE,
-} from './credit-prices';
-import { creditAccount } from './credits';
+import { APIFY_PRICES, toTokens, VOICE_USD_PER_MINUTE } from './credit-prices';
 
 // What an action is likely to cost, in Plato tokens, for the seeker and for the
 // assistants. This is the only view of pricing that leaves the server, so it is
@@ -84,31 +75,6 @@ export function nice(n: number) {
   return Math.round(10 * m);
 }
 
-// Average real charge per feature over 30 days, refreshed at most every 10 minutes;
-// a feature with fewer than 5 charges uses the action's starting figure.
-let cache: { at: number; avg: Map<string, number> } | null = null;
-async function averages() {
-  if (cache && Date.now() - cache.at < 10 * 60_000) return cache.avg;
-  const db = PrismaService.instance;
-  const avg = new Map<string, number>();
-  if (db) {
-    const rows = await db.creditLedger.groupBy({
-      by: ['feature'],
-      where: {
-        kind: 'consume',
-        created_at: { gte: new Date(Date.now() - 30 * 86_400_000) },
-      },
-      _avg: { amount: true },
-      _count: { _all: true },
-    });
-    for (const r of rows)
-      if (r.feature && r._count._all >= 5)
-        avg.set(r.feature, -(r._avg.amount ?? 0));
-  }
-  cache = { at: Date.now(), avg };
-  return avg;
-}
-
 export function buildEstimates(avg: Map<string, number>): Estimate[] {
   const out: Estimate[] = Object.entries(ACTIONS).map(([action, a]) => {
     const raw =
@@ -136,33 +102,6 @@ export function buildEstimates(avg: Map<string, number>): Estimate[] {
     note: 'Often much less, or close to free, when Plato already has matching jobs. With a low balance the search uses fewer paid job boards instead of stopping.',
   });
   return out;
-}
-
-/** The seeker's tokens and what things cost: the one shape the API and both assistants read. */
-export async function tokenSummary(userId: string) {
-  const [acc, avg] = await Promise.all([creditAccount(userId), averages()]);
-  return {
-    plan: planOf(acc.plan).label,
-    balance: Math.max(0, Math.floor(acc.balance)),
-    // bought tokens left in the balance (spent last, never expire)
-    boughtTokensLeft: Math.floor(
-      Math.max(0, Math.min(acc.topup ?? 0, acc.balance)),
-    ),
-    monthly: planOf(acc.plan).monthly,
-    refillsOn: acc.period_end.toISOString().slice(0, 10),
-    estimates: buildEstimates(avg),
-    plans: Object.values(PLANS).map((p) => ({
-      name: p.label,
-      tokensPerMonth: p.monthly,
-      priceUsdPerMonth: p.priceUsd,
-    })),
-    topUps: Object.values(TOPUPS).map((t) => ({
-      name: t.label,
-      tokens: t.tokens,
-      priceUsd: t.priceUsd,
-      expires: false,
-    })),
-  };
 }
 
 // The same rule for both assistants.

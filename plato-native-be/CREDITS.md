@@ -4,9 +4,24 @@ One balance for everything a seeker spends. Every metered call costs what it rea
 
 **1,000 Plato tokens = $1 of our cost** (`CREDITS_USD_PER_TOKEN=0.001`).
 
+## Code structure (`src/modules/credits/`)
+
+| Piece | What it does |
+|---|---|
+| `CreditsService` | Accounts, charges, holds and releases, top-ups, plan changes, the seeker's overview, checkout, and admin lookups. Everything that changes a balance goes through it and writes the ledger. |
+| `CreditsEstimatesService` | The rounded summary that the API and both assistants read. |
+| `CreditsReportService` | The admin view of our cost against the tokens charged. |
+| `TokensGuard` | Answers 402 on paid routes, using the injected `CreditsService`. |
+| `CreditsController`, `CreditsAdminController` | Thin: validate the input, call a service. |
+| `credit-prices.ts`, `estimates.ts` | Pure price tables and helpers, with no state and no database access. |
+
+`CreditsModule` exports `CreditsService`, `CreditsEstimatesService` and `TokensGuard`. The modules that use them import it: discovery, career, chat, interview and profile-extraction.
+
+The one exception to dependency injection is `recordUsage()` in `usage.ts`. It's a plain function called from about 20 places, so it reaches the charge through `CreditsService.instance`, which the service sets in `onModuleInit`.
+
 ## How a charge happens
 
-Every cost already goes through `recordUsage()` (`src/modules/usage/usage.ts`), which writes a row to `usage_events`. Right after that row is written, `chargeUsage()` (`src/modules/credits/credits.ts`) turns the row into tokens with `tokensFor()` (`credit-prices.ts`) and takes them off the seeker's balance. That's an atomic decrement plus one `consume` line in `credit_ledger`.
+Every cost already goes through `recordUsage()` (`src/modules/usage/usage.ts`), which writes a row to `usage_events`. Right after that row is written, `CreditsService.charge()` turns the row into tokens with `tokensFor()` (`credit-prices.ts`) and takes them off the seeker's balance. That's an atomic decrement plus one `consume` line in `credit_ledger`.
 
 | What | Tokens |
 |---|---|
@@ -37,7 +52,7 @@ One-time packs: Small has 1,000 tokens for $5, Medium 3,000 for $12, and Large 1
 - A top-up costs more per token than a plan, so a plan stays the better deal for steady use.
 - Bought tokens go into the balance and into `credit_accounts.topup`. They are spent after the monthly tokens and never expire.
 - What's left of them, `min(topup, balance)`, carries over the monthly reset and a plan change. Monthly tokens still don't roll over.
-- `addTopup(userId, pack, ref)` records a purchase: it adds the tokens and writes a `topup` ledger line with the payment reference. The payment webhook will call it.
+- `CreditsService.addTopup(userId, pack, ref)` records a purchase: it adds the tokens and writes a `topup` ledger line with the payment reference. The payment webhook will call it.
 - Until a payment provider is connected, an admin records manual sales with `POST /admin/credits/:user/topup { pack, ref }`.
 - On the web app's `/tokens` page, each pack has a Buy button. It calls `POST /job-seeker/credits/checkout { pack }`, which answers `503 payments_unavailable` until a provider is connected. The "Not enough Plato tokens" dialog links to the packs.
 
@@ -85,7 +100,7 @@ curl -H "x-admin-key: $KEY" -H 'Content-Type: application/json' \
 
 ## Not built yet
 
-- **Payments (Paymob or Fawry for Egypt, or Stripe).** This needs a merchant account and its keys. Until `PAYMENTS_PROVIDER` is set and its checkout is written into `CreditsController.checkout`, that endpoint answers `503 payments_unavailable`, and the page says that online payment isn't open yet. Once a payment is confirmed, the provider's webhook calls `setPlan(userId, plan)`, which is already in place. Top-ups would call `adjustTokens`. Until then, plans are changed by an admin (see below).
+- **Payments (Paymob or Fawry for Egypt, or Stripe).** This needs a merchant account and its keys. Until `PAYMENTS_PROVIDER` is set and its checkout is written into `CreditsController.checkout`, that endpoint answers `503 payments_unavailable`, and the page says that online payment isn't open yet. Once a payment is confirmed, the provider's webhook calls `CreditsService.setPlan(userId, plan)`, which is already in place. Top-ups would call `adjustTokens`. Until then, plans are changed by an admin (see below).
 - **Prices based on real data.** Run real traffic for two weeks, then set the plan sizes and `CREDITS_VOICE_USD_PER_MINUTE` from `/admin/credits/report`.
 
 ## Setup

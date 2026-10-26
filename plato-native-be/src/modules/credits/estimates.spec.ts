@@ -1,5 +1,6 @@
-import { PrismaService } from '../prisma/prisma.service';
-import { buildEstimates, nice, tokenSummary, TOKENS_RULES } from './estimates';
+import { CreditsService } from './credits.service';
+import { buildEstimates, nice, TOKENS_RULES } from './estimates';
+import { CreditsEstimatesService } from './estimates.service';
 
 describe('nice (coarse figures, so exact rates cannot be read back)', () => {
   it('rounds up to 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8 x 10^n', () => {
@@ -51,13 +52,15 @@ describe('buildEstimates', () => {
   });
 });
 
-describe('tokenSummary (what the API and the assistants get)', () => {
+describe('CreditsEstimatesService.summary (what the API and the assistants get)', () => {
+  let estimates: CreditsEstimatesService;
   beforeEach(() => {
-    PrismaService.instance = {
+    const prisma = {
       creditAccount: {
         findUnique: jest.fn().mockResolvedValue({
           plan: 'free',
           balance: 612.7,
+          topup: 0,
           period_start: new Date('2026-10-01T00:00:00Z'),
           period_end: new Date('2099-11-01T00:00:00Z'),
         }),
@@ -71,11 +74,15 @@ describe('tokenSummary (what the API and the assistants get)', () => {
           },
         ]),
       },
-    } as never;
+    };
+    estimates = new CreditsEstimatesService(
+      prisma as never,
+      new CreditsService(prisma as never),
+    );
   });
 
   it('balance, refill date, public plans and rounded estimates', async () => {
-    const s = await tokenSummary('u1');
+    const s = await estimates.summary('u1');
     expect(s).toMatchObject({
       plan: 'Free',
       balance: 612,
@@ -89,7 +96,7 @@ describe('tokenSummary (what the API and the assistants get)', () => {
   });
 
   it('holds nothing that reveals what Plato pays or how tokens are made', async () => {
-    const json = JSON.stringify(await tokenSummary('u1'));
+    const json = JSON.stringify(await estimates.summary('u1'));
     for (const leak of [
       /cost/i,
       /margin/i,

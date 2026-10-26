@@ -9,7 +9,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { Observable } from 'rxjs';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { chargeUsage } from '../credits/credits';
+import { CreditsService } from '../credits/credits.service';
 import { llmCost } from './pricing';
 
 // Request-scoped user id, so the 11 LLM call sites and the Apify client
@@ -41,8 +41,11 @@ export function recordUsage(row: {
   db.usageEvent
     .create({ data })
     .then((ev) =>
-      // the seeker pays for what was metered, in Plato tokens (credits module)
-      data.user_id ? chargeUsage(data.user_id, data, ev.id) : undefined,
+      // the seeker pays for what was metered, in Plato tokens. CreditsService is
+      // reached through its instance: this plain function is outside Nest's DI.
+      data.user_id
+        ? CreditsService.instance?.charge(data.user_id, data, ev.id)
+        : undefined,
     )
     .catch((e: Error) => logger.warn(`usage not recorded: ${e.message}`));
 }

@@ -13,12 +13,8 @@ import { ResumeProfileService } from '../resume/resume-profile.service';
 import { recordUsage } from '../usage/usage';
 import { voiceCost } from '../usage/pricing';
 import { toTokens, VOICE_USD_PER_MINUTE } from '../credits/credit-prices';
-import {
-  creditAccount,
-  holdTokens,
-  InsufficientTokensException,
-  releaseHold,
-} from '../credits/credits';
+import { CreditsService } from '../credits/credits.service';
+import { InsufficientTokensException } from '../credits/insufficient-tokens.exception';
 import {
   profileBrief,
   VOICE_MAX_MINUTES,
@@ -76,6 +72,7 @@ export class CareerVoiceService {
     private readonly prisma: PrismaService,
     private readonly profiles: ResumeProfileService,
     config: ConfigService,
+    private readonly credits: CreditsService,
   ) {
     this.env = config.get<IEnvParams>('env')!;
   }
@@ -102,7 +99,7 @@ export class CareerVoiceService {
   ) {
     const { seeker } = await this.ownedThread(userId, threadId);
     // The call is as long as the seeker's Plato tokens allow (up to the usual cap).
-    const acc = await creditAccount(userId);
+    const acc = await this.credits.account(userId);
     const perMinute = toTokens(VOICE_USD_PER_MINUTE);
     const minutes = Math.min(
       VOICE_MAX_MINUTES,
@@ -156,7 +153,7 @@ export class CareerVoiceService {
     }
     // reserved now, settled when the transcript arrives; a call that never
     // reports back keeps its reservation
-    await holdTokens(userId, minutes * perMinute, 'career.voice', {
+    await this.credits.hold(userId, minutes * perMinute, 'career.voice', {
       thread: threadId,
       minutes,
     });
@@ -220,19 +217,7 @@ export class CareerVoiceService {
     threadId: string,
     body: z.infer<typeof voiceTranscriptSchema>,
   ) {
-    const holds = await this.prisma.creditLedger.findMany({
-      where: {
-        user_id: userId,
-        kind: 'hold',
-        feature: 'career.voice',
-        settled_at: null,
-      },
-      orderBy: { created_at: 'desc' },
-      take: 10,
-    });
-    const hold = holds.find(
-      (h) => (h.meta as { thread?: string } | null)?.thread === threadId,
-    );
+    const hold = await this.credits.openHold(userId, 'career.voice', threadId);
     const reservedSeconds =
       ((hold?.meta as { minutes?: number } | null)?.minutes ?? 0) * 60;
     const seenSeconds = hold
@@ -245,7 +230,7 @@ export class CareerVoiceService {
     const ceiling = Math.ceil(seenSeconds / 60) * VOICE_USD_PER_MINUTE;
     const u = body.usage;
     const reported = u ? voiceCost(this.env.realtimeModel, u) : null;
-    if (hold) await releaseHold(userId, hold.id);
+    if (hold) await this.credits.release(userId, hold.id);
     recordUsage({
       feature: 'career.voice',
       model: this.env.realtimeModel,

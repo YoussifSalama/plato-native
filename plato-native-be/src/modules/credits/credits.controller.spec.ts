@@ -1,51 +1,41 @@
-import {
-  BadRequestException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { CreditsController } from './credits.controller';
-import { creditAccount } from './credits';
 
-jest.mock('./credits', () => ({ creditAccount: jest.fn() }));
 // @nestjs/jwt ships as ESM, which this Jest setup does not load; the guard is not under test
 jest.mock('../auth/jwt-auth.guard', () => ({ JwtAuthGuard: class {} }));
 
 const req = { userId: 'u1' } as never;
-const c = new CreditsController({} as never);
 
-describe('checkout', () => {
-  beforeEach(() => {
-    delete process.env.PAYMENTS_PROVIDER;
-    (creditAccount as jest.Mock).mockResolvedValue({ plan: 'free' });
+describe('CreditsController (thin: validate, then hand to the service)', () => {
+  const credits = {
+    checkout: jest.fn().mockResolvedValue({ url: 'x' }),
+    overview: jest.fn(),
+  };
+  const c = new CreditsController(credits as never, {} as never);
+  beforeEach(() => jest.clearAllMocks());
+
+  it('a plan or a known pack goes to the service', async () => {
+    await c.checkout(req, { plan: 'max' });
+    await c.checkout(req, { pack: 'small' });
+    expect(credits.checkout.mock.calls).toEqual([
+      ['u1', { plan: 'max' }],
+      ['u1', { pack: 'small' }],
+    ]);
   });
 
-  it('only Pro or Max, and not the plan the seeker already has', async () => {
-    await expect(c.checkout(req, { plan: 'free' })).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
-    await expect(c.checkout(req, {})).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
-    (creditAccount as jest.Mock).mockResolvedValue({ plan: 'pro' });
-    await expect(c.checkout(req, { plan: 'pro' })).rejects.toThrow(
-      'already on Pro',
-    );
+  it('anything else is refused before the service is called', () => {
+    for (const body of [
+      { plan: 'free' },
+      {},
+      { pack: 'huge' },
+      { plan: 'pro', pack: 'x' },
+    ].slice(0, 3))
+      expect(() => c.checkout(req, body)).toThrow(BadRequestException);
+    expect(credits.checkout).not.toHaveBeenCalled();
   });
 
-  it('a top-up pack goes to checkout too; an unknown pack is refused', async () => {
-    const err = (await c
-      .checkout(req, { pack: 'medium' })
-      .catch((e: unknown) => e)) as ServiceUnavailableException;
-    expect(err.getResponse()).toMatchObject({ code: 'payments_unavailable' });
-    await expect(c.checkout(req, { pack: 'huge' })).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
-  });
-
-  it('says payments are not open while no provider is connected (never pretends to upgrade)', async () => {
-    const err = (await c
-      .checkout(req, { plan: 'max' })
-      .catch((e: unknown) => e)) as ServiceUnavailableException;
-    expect(err).toBeInstanceOf(ServiceUnavailableException);
-    expect(err.getResponse()).toMatchObject({ code: 'payments_unavailable' });
+  it('the history limit is passed through as a number', async () => {
+    await c.get(req, '50');
+    expect(credits.overview).toHaveBeenCalledWith('u1', 50);
   });
 });

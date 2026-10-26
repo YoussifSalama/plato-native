@@ -7,9 +7,10 @@ import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { ChatThreadController } from './chat-thread.controller';
 import { ChatThreadService } from './chat-thread.service';
+import { CreditsModule } from '../credits/credits.module';
 
 @Module({
-  imports: [AuthModule, UserModule, DiscoveryModule, ApplyModule],
+  imports: [AuthModule, UserModule, DiscoveryModule, ApplyModule, CreditsModule],
   controllers: [ChatController, ChatThreadController],
   providers: [ChatService, ChatThreadService],
 })

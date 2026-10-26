@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto';
-import { tokenSummary } from '../credits/estimates';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { run, type AgentInputItem } from '@openai/agents';
@@ -25,6 +24,7 @@ import { buildJobSeekerSnapshot } from '../discovery/job-seeker-snapshot';
 import { describeSeeker } from '../chat/orchestrator.agent';
 import { elsewhereMemory } from '../chat/shared-memory';
 import { JobSeekerPreferenceService } from '../user/job-seeker-preference.service';
+import { CreditsEstimatesService } from '../credits/estimates.service';
 
 const HISTORY_LIMIT = 30;
 
@@ -78,6 +78,7 @@ export class CareerService {
     private readonly profiles: ResumeProfileService,
     private readonly preferences: JobSeekerPreferenceService,
     config: ConfigService,
+    private readonly estimates: CreditsEstimatesService,
   ) {
     const env = config.get<IEnvParams>('env')!;
     this.careerModel = env.careerModel;
@@ -287,7 +288,7 @@ export class CareerService {
         context: await this.seekerContext(seeker.id, seeker.user.full_name),
       },
       {
-        tokens: () => tokenSummary(seeker.user_id),
+        tokens: () => this.estimates.summary(seeker.user_id),
         profile: async () => {
           const p = await this.profiles.load(seeker.id);
           return {

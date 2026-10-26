@@ -22,6 +22,7 @@ import { OrchestratorContext, OrchestratorEvent } from './orchestrator.context';
 import type { QuestionCard } from './intake';
 import { metered } from '../usage/usage';
 import { extensionProgress } from '../extension/progress';
+import { CreditsEstimatesService } from '../credits/estimates.service';
 
 const HISTORY_LIMIT = 30;
 
@@ -40,6 +41,7 @@ export class ChatThreadService {
     private readonly preferenceService: JobSeekerPreferenceService,
     private readonly discoveryService: DiscoveryService,
     private readonly applyService: ApplyService,
+    private readonly estimates: CreditsEstimatesService,
   ) {}
 
   private async seekerFor(userId: string) {
@@ -232,6 +234,7 @@ export class ChatThreadService {
       discoveryService: this.discoveryService,
       applyService: this.applyService,
       extensionProgress: () => extensionProgress(this.prisma, jobSeeker.id),
+      tokens: () => this.estimates.summary(userId),
       preferenceService: this.preferenceService,
       snapshot,
     };

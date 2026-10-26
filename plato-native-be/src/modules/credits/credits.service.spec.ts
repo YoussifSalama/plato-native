@@ -1,17 +1,8 @@
+import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
 import { affordableResults, tokensFor, toTokens } from './credit-prices';
-import {
-  addTopup,
-  adjustTokens,
-  chargeUsage,
-  creditAccount,
-  holdTokens,
-  InsufficientTokensException,
-  releaseHold,
-  requireTokens,
-  setPlan,
-} from './credits';
+import { CreditsService } from './credits.service';
+import { InsufficientTokensException } from './insufficient-tokens.exception';
 
 describe('tokensFor (1,000 Plato tokens = $1 of cost)', () => {
   it('an AI call costs its real dollar cost in tokens, so a pricier model costs more', () => {
@@ -74,7 +65,8 @@ describe('tokensFor (1,000 Plato tokens = $1 of cost)', () => {
   });
 });
 
-// A tiny in-memory stand-in for the two collections.
+// A tiny in-memory stand-in for the two collections, injected into the service.
+let svc: CreditsService;
 function fakeDb() {
   const accounts: Record<
     string,
@@ -177,22 +169,22 @@ function fakeDb() {
       ),
     },
   };
-  PrismaService.instance = db as never;
+  svc = new CreditsService(db as never);
   return { accounts, ledger, db };
 }
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
-describe('creditAccount', () => {
+describe('CreditsService.account', () => {
   it('a new seeker gets the free plan grant once, with a one-month period', async () => {
     const { ledger } = fakeDb();
-    const acc = await creditAccount('u1', day('2026-10-25'));
+    const acc = await svc.account('u1', day('2026-10-25'));
     expect(acc).toMatchObject({
       plan: 'free',
       balance: 1000,
       period_end: day('2026-11-25'),
     });
-    await creditAccount('u1', day('2026-10-26'));
+    await svc.account('u1', day('2026-10-26'));
     expect(ledger).toEqual([
       expect.objectContaining({
         kind: 'grant',
@@ -205,8 +197,8 @@ describe('creditAccount', () => {
   it('two first requests at once: one account, one grant', async () => {
     const { ledger, accounts } = fakeDb();
     await Promise.all([
-      creditAccount('u1', day('2026-10-25')),
-      creditAccount('u1', day('2026-10-25')),
+      svc.account('u1', day('2026-10-25')),
+      svc.account('u1', day('2026-10-25')),
     ]);
     expect(Object.keys(accounts)).toEqual(['u1']);
     expect(ledger.filter((l) => l.kind === 'grant')).toHaveLength(1);
@@ -214,11 +206,11 @@ describe('creditAccount', () => {
 
   it('after the period ends the balance resets to the grant (no roll-over), once, into the current period', async () => {
     const { accounts, ledger } = fakeDb();
-    await creditAccount('u1', day('2026-07-01'));
+    await svc.account('u1', day('2026-07-01'));
     accounts.u1.balance = 40;
     const [a, b] = await Promise.all([
-      creditAccount('u1', day('2026-10-05')),
-      creditAccount('u1', day('2026-10-05')),
+      svc.account('u1', day('2026-10-05')),
+      svc.account('u1', day('2026-10-05')),
     ]);
     expect(a.balance).toBe(1000);
     expect(b.balance).toBe(1000);
@@ -237,10 +229,10 @@ describe('creditAccount', () => {
   });
 });
 
-describe('chargeUsage', () => {
+describe('CreditsService.charge', () => {
   it('takes the tokens off the balance and writes one consume line linked to the usage event', async () => {
     const { accounts, ledger } = fakeDb();
-    await chargeUsage(
+    await svc.charge(
       'u1',
       { feature: 'career.chat', model: 'gpt-4.1', cost_usd: 0.0098 },
       'ev1',
@@ -257,10 +249,10 @@ describe('chargeUsage', () => {
 
   it('concurrent charges are all counted', async () => {
     const { accounts } = fakeDb();
-    await creditAccount('u1');
+    await svc.account('u1');
     await Promise.all(
       Array.from({ length: 5 }, () =>
-        chargeUsage('u1', { feature: 'resume.write', cost_usd: 0.002 }),
+        svc.charge('u1', { feature: 'resume.write', cost_usd: 0.002 }),
       ),
     );
     expect(accounts.u1.balance).toBe(990);
@@ -268,21 +260,21 @@ describe('chargeUsage', () => {
 
   it('free usage writes nothing; a database error never throws into the feature', async () => {
     const { ledger, db } = fakeDb();
-    await chargeUsage('u1', { feature: 'extension.v3.turn', cost_usd: 0.3 });
+    await svc.charge('u1', { feature: 'extension.v3.turn', cost_usd: 0.3 });
     expect(ledger).toHaveLength(0);
     db.creditAccount.findUnique.mockRejectedValueOnce(new Error('down'));
     await expect(
-      chargeUsage('u1', { feature: 'career.chat', cost_usd: 0.01 }),
+      svc.charge('u1', { feature: 'career.chat', cost_usd: 0.01 }),
     ).resolves.toBeUndefined();
   });
 });
 
-describe('requireTokens', () => {
+describe('CreditsService.require', () => {
   it('lets a seeker with tokens through and refuses one with none, with 402 and the refill date', async () => {
     const { accounts } = fakeDb();
-    await expect(requireTokens('u1')).resolves.toMatchObject({ balance: 1000 });
+    await expect(svc.require('u1')).resolves.toMatchObject({ balance: 1000 });
     accounts.u1.balance = -0.4;
-    const err = await requireTokens('u1').catch((e: unknown) => e);
+    const err = await svc.require('u1').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(InsufficientTokensException);
     const ex = err as InsufficientTokensException;
     expect(ex.getStatus()).toBe(402);
@@ -295,35 +287,35 @@ describe('requireTokens', () => {
 
   it('refuses when the balance cannot cover what the action needs', async () => {
     fakeDb();
-    await expect(requireTokens('u1', 1500)).rejects.toBeInstanceOf(
+    await expect(svc.require('u1', 1500)).rejects.toBeInstanceOf(
       InsufficientTokensException,
     );
   });
 });
 
-describe('holdTokens / releaseHold', () => {
+describe('CreditsService.hold / release', () => {
   it('a hold takes tokens now; releasing gives them back exactly once', async () => {
     const { accounts, ledger } = fakeDb();
-    await creditAccount('u1');
-    const id = await holdTokens('u1', 300, 'career.voice', {
+    await svc.account('u1');
+    const id = await svc.hold('u1', 300, 'career.voice', {
       thread: 't1',
       minutes: 3,
     });
     expect(accounts.u1.balance).toBe(700);
-    expect(await releaseHold('u1', id)).toBe(true);
-    expect(await releaseHold('u1', id)).toBe(false);
+    expect(await svc.release('u1', id)).toBe(true);
+    expect(await svc.release('u1', id)).toBe(false);
     expect(accounts.u1.balance).toBe(1000);
     expect(ledger.map((l) => l.kind)).toEqual(['grant', 'hold', 'release']);
   });
 
   it("another seeker cannot release someone's hold", async () => {
     const { accounts } = fakeDb();
-    await creditAccount('u1');
-    const id = await holdTokens('u1', 300, 'career.voice', {
+    await svc.account('u1');
+    const id = await svc.hold('u1', 300, 'career.voice', {
       thread: 't1',
       minutes: 3,
     });
-    expect(await releaseHold('u2', id)).toBe(false);
+    expect(await svc.release('u2', id)).toBe(false);
     expect(accounts.u1.balance).toBe(700);
   });
 });
@@ -340,9 +332,9 @@ describe('affordableResults (deep search never outspends the balance)', () => {
 describe('plans and admin adjustments', () => {
   it('moving to a plan starts a fresh period with its full grant, at once', async () => {
     const { accounts, ledger } = fakeDb();
-    await creditAccount('u1', day('2026-10-01'));
+    await svc.account('u1', day('2026-10-01'));
     accounts.u1.balance = 12;
-    await setPlan('u1', 'pro', day('2026-10-20'));
+    await svc.setPlan('u1', 'pro', day('2026-10-20'));
     expect(accounts.u1).toMatchObject({
       plan: 'pro',
       balance: 7000,
@@ -354,20 +346,20 @@ describe('plans and admin adjustments', () => {
       amount: 7000,
       meta: { reason: 'plan_change', from_plan: 'free', previous_balance: 12 },
     });
-    await expect(setPlan('u1', 'platinum')).rejects.toThrow('Unknown plan');
+    await expect(svc.setPlan('u1', 'platinum')).rejects.toThrow('Unknown plan');
   });
 
   it('the monthly reset refills to the plan the seeker is on', async () => {
     const { accounts } = fakeDb();
-    await creditAccount('u1', day('2026-09-01'));
-    await setPlan('u1', 'max', day('2026-09-01'));
+    await svc.account('u1', day('2026-09-01'));
+    await svc.setPlan('u1', 'max', day('2026-09-01'));
     accounts.u1.balance = 3;
-    expect((await creditAccount('u1', day('2026-10-02'))).balance).toBe(25000);
+    expect((await svc.account('u1', day('2026-10-02'))).balance).toBe(25000);
   });
 
   it('an adjustment moves the balance and is in the ledger with its reason', async () => {
     const { accounts, ledger } = fakeDb();
-    await adjustTokens('u1', 250, 'refund: board outage');
+    await svc.adjust('u1', 250, 'refund: board outage');
     expect(accounts.u1.balance).toBe(1250);
     expect(ledger.at(-1)).toMatchObject({
       kind: 'adjust',
@@ -381,7 +373,7 @@ describe('plans and admin adjustments', () => {
 describe('top-ups (bought tokens are spent last and never expire)', () => {
   it('buying adds the pack to the balance and to the bought part, with the payment ref', async () => {
     const { accounts, ledger } = fakeDb();
-    await addTopup('u1', 'small', 'pay_123');
+    await svc.addTopup('u1', 'small', 'pay_123');
     expect(accounts.u1).toMatchObject({ balance: 2000, topup: 1000 });
     expect(ledger.at(-1)).toMatchObject({
       kind: 'topup',
@@ -389,7 +381,9 @@ describe('top-ups (bought tokens are spent last and never expire)', () => {
       balance_after: 2000,
       meta: { pack: 'small', ref: 'pay_123' },
     });
-    await expect(addTopup('u1', 'huge', 'x')).rejects.toThrow('Unknown top-up');
+    await expect(svc.addTopup('u1', 'huge', 'x')).rejects.toThrow(
+      'Unknown top-up',
+    );
   });
 
   it('the monthly reset keeps what is left of the bought tokens', async () => {
@@ -401,32 +395,107 @@ describe('top-ups (bought tokens are spent last and never expire)', () => {
       d.setUTCMonth(d.getUTCMonth() + months);
       return new Date(d.getTime() + 86_400_000);
     };
-    await creditAccount('u1', t0);
-    await addTopup('u1', 'small', 'p1'); // 1000 monthly + 1000 bought
+    await svc.account('u1', t0);
+    await svc.addTopup('u1', 'small', 'p1'); // 1000 monthly + 1000 bought
     accounts.u1.balance = 1800; // spent 200: all from the monthly part
-    expect((await creditAccount('u1', later(1))).balance).toBe(2000);
+    expect((await svc.account('u1', later(1))).balance).toBe(2000);
     expect(accounts.u1).toMatchObject({ topup: 1000 });
     accounts.u1.balance = 500; // spent 1500: monthly gone, 500 of the bought left
-    const acc = await creditAccount('u1', later(2));
+    const acc = await svc.account('u1', later(2));
     expect(acc).toMatchObject({ balance: 1500, topup: 500 });
   });
 
   it('nothing bought: the reset is the plain grant (no roll-over of monthly tokens)', async () => {
     const { accounts } = fakeDb();
-    await creditAccount('u1', day('2026-09-01'));
+    await svc.account('u1', day('2026-09-01'));
     accounts.u1.balance = 700;
-    expect((await creditAccount('u1', day('2026-10-02'))).balance).toBe(1000);
+    expect((await svc.account('u1', day('2026-10-02'))).balance).toBe(1000);
   });
 
   it('a plan change keeps the bought tokens on top of the new grant', async () => {
     const { accounts } = fakeDb();
-    await addTopup('u1', 'medium', 'p2'); // 1000 + 3000
+    await svc.addTopup('u1', 'medium', 'p2'); // 1000 + 3000
     accounts.u1.balance = 3500;
-    await setPlan('u1', 'pro');
+    await svc.setPlan('u1', 'pro');
     expect(accounts.u1).toMatchObject({
       plan: 'pro',
       balance: 10000,
       topup: 3000,
     });
+  });
+});
+
+describe('CreditsService.checkout', () => {
+  const service = (plan = 'free') =>
+    new CreditsService({
+      creditAccount: {
+        findUnique: jest.fn().mockResolvedValue({
+          plan,
+          balance: 10,
+          period_end: new Date('2099-01-01T00:00:00Z'),
+        }),
+      },
+    } as never);
+  beforeEach(() => delete process.env.PAYMENTS_PROVIDER);
+
+  it('refuses the plan the seeker already has, and an unknown pack', async () => {
+    await expect(
+      service('pro').checkout('u1', { plan: 'pro' }),
+    ).rejects.toThrow('already on Pro');
+    await expect(service().checkout('u1', { pack: 'huge' })).rejects.toThrow(
+      'Unknown top-up',
+    );
+  });
+
+  it('never upgrades or tops up without a payment: 503 payments_unavailable until a provider is connected', async () => {
+    for (const item of [{ plan: 'max' as const }, { pack: 'medium' }]) {
+      const err = (await service()
+        .checkout('u1', item)
+        .catch((e: unknown) => e)) as {
+        getStatus(): number;
+        getResponse(): unknown;
+      };
+      expect(err.getStatus()).toBe(503);
+      expect(err.getResponse()).toMatchObject({ code: 'payments_unavailable' });
+    }
+  });
+});
+
+describe('CreditsService.openHold', () => {
+  it("finds this conversation's open reservation, not another's", async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      { id: 'h2', meta: { thread: 't9' } },
+      { id: 'h1', meta: { thread: 't1' } },
+    ]);
+    const svc = new CreditsService({ creditLedger: { findMany } } as never);
+    expect((await svc.openHold('u1', 'career.voice', 't1'))?.id).toBe('h1');
+    expect(await svc.openHold('u1', 'career.voice', 't5')).toBeNull();
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          user_id: 'u1',
+          kind: 'hold',
+          feature: 'career.voice',
+          settled_at: null,
+        },
+      }),
+    );
+  });
+});
+
+describe('CreditsService.resolveUser', () => {
+  it('finds a seeker by email (any case) or id; anything else is a 404', async () => {
+    const findFirst = jest
+      .fn()
+      .mockResolvedValueOnce({ id: 'u1' })
+      .mockResolvedValue(null);
+    const svc = new CreditsService({ user: { findFirst } } as never);
+    expect(await svc.resolveUser('Someone@Example.com')).toBe('u1');
+    expect((findFirst.mock.calls as [unknown][])[0][0]).toMatchObject({
+      where: { email: { equals: 'Someone@Example.com', mode: 'insensitive' } },
+    });
+    await expect(svc.resolveUser('nobody@example.com')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });

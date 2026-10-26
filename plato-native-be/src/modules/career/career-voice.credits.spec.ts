@@ -1,18 +1,27 @@
 import { recordUsage } from '../usage/usage';
-import { releaseHold } from '../credits/credits';
 import { CareerVoiceService } from './career-voice.service';
 
 // @nestjs/config ships as ESM, which this Jest setup does not load; the service only needs its type
 jest.mock('@nestjs/config', () => ({ ConfigService: class {} }));
 jest.mock('../usage/usage', () => ({ recordUsage: jest.fn() }));
-jest.mock('../credits/credits', () => ({
-  ...jest.requireActual<object>('../credits/credits'),
-  releaseHold: jest.fn().mockResolvedValue(true),
-}));
 
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000);
 
+// CreditsService is injected: the reservation it finds and the release are stubbed here.
+const credits = {
+  openHold: jest.fn(),
+  release: jest.fn().mockResolvedValue(true),
+};
+const releaseHold = credits.release;
+
 function service(holds: { id: string; created_at: Date; meta: object }[]) {
+  credits.openHold.mockImplementation(
+    (_u: string, _f: string, thread: string) =>
+      Promise.resolve(
+        holds.find((h) => (h.meta as { thread?: string }).thread === thread) ??
+          null,
+      ),
+  );
   const prisma = {
     jobSeeker: {
       findUnique: jest
@@ -24,10 +33,14 @@ function service(holds: { id: string; created_at: Date; meta: object }[]) {
       update: jest.fn(),
     },
     careerMessage: { createMany: jest.fn() },
-    creditLedger: { findMany: jest.fn().mockResolvedValue(holds) },
   };
   const config = { get: () => ({ realtimeModel: 'gpt-realtime-mini' }) };
-  return new CareerVoiceService(prisma as never, {} as never, config as never);
+  return new CareerVoiceService(
+    prisma as never,
+    {} as never,
+    config as never,
+    credits as never,
+  );
 }
 const charged = () => {
   const calls = (recordUsage as jest.Mock).mock.calls as [

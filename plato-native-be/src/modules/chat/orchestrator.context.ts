@@ -75,6 +75,8 @@ export interface OrchestratorContext extends RankingAgentContext {
   events: OrchestratorEvent[];
   // What the browser extension is doing for this seeker (read-only; extension/progress.ts).
   extensionProgress: () => Promise<unknown>;
+  // The seeker's Plato tokens summary (credits/estimates.service.ts): no money costs or rates in it.
+  tokens: () => Promise<unknown>;
   // Application snapshot: read what's missing, save what the seeker says.
   applyService: ApplyService;
   preferenceService: JobSeekerPreferenceService;

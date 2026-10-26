@@ -5,7 +5,6 @@ import { isRecentIdentical, summarizeRun } from '../discovery/run-status';
 import { COUNTRY_CODES, isCountryCode } from '../discovery/countries';
 import { checkSalary } from '../discovery/salary-sanity';
 import { buildQuestionCard, QUESTION_IDS } from './intake';
-import { tokenSummary } from '../credits/estimates';
 import {
   APP_PAGES,
   FILTER_KEYS,
@@ -647,7 +646,7 @@ export const getPlatoTokensTool = tool<typeof noParams, OrchestratorContext>({
     "The seeker's Plato tokens: plan, balance, monthly amount, refill date, the plans on offer, and rounded estimates of what actions cost (about / up to). Use it for any question about tokens, plans or what something will cost. Answer only from what it returns.",
   parameters: noParams,
   execute: async (_input, runContext) =>
-    JSON.stringify(await tokenSummary(runContext!.context.userId)),
+    JSON.stringify(await runContext!.context.tokens()),
 });
 
 export const orchestratorTools = [

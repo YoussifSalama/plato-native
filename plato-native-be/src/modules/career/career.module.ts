@@ -7,9 +7,10 @@ import { CareerController } from './career.controller';
 import { CareerService } from './career.service';
 import { CareerResumesService } from './career-resumes.service';
 import { CareerVoiceService } from './career-voice.service';
+import { CreditsModule } from '../credits/credits.module';
 
 @Module({
-  imports: [AuthModule, ResumeModule, DocumentsModule, UserModule],
+  imports: [AuthModule, ResumeModule, DocumentsModule, UserModule, CreditsModule],
   controllers: [CareerController],
   providers: [CareerService, CareerResumesService, CareerVoiceService],
 })

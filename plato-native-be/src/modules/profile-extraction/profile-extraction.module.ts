@@ -4,9 +4,10 @@ import { AuthModule } from '../auth/auth.module';
 import { ProfileExtractionController } from './profile-extraction.controller';
 import { ProfileExtractionAgentService } from './profile-extraction-agent.service';
 import { ProfileEvaluationService } from './profile-evaluation.service';
+import { CreditsModule } from '../credits/credits.module';
 
 @Module({
-  imports: [UserModule, AuthModule],
+  imports: [UserModule, AuthModule, CreditsModule],
   controllers: [ProfileExtractionController],
   providers: [ProfileExtractionAgentService, ProfileEvaluationService],
 })

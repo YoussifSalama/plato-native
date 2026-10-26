@@ -51,7 +51,7 @@ import { excludesCountry } from '../apply/eligibility';
 import { companyDomain, normalizeCompany } from './company';
 import { jobEligibility } from './job-eligibility';
 import { recordUsage } from '../usage/usage';
-import { creditAccount } from '../credits/credits';
+import { CreditsService } from '../credits/credits.service';
 import { affordableResults } from '../credits/credit-prices';
 import { employmentOf, isBlueCollar, professionOf } from './classify';
 import { dedupeJobs, dedupeKey } from './dedupe';
@@ -190,6 +190,7 @@ export class DiscoveryService implements OnModuleInit {
     private readonly localIndex: LocalIndexAdapter,
     private readonly publicBoards: PublicBoardsAdapter,
     private readonly notifications: NotificationsBus,
+    private readonly credits: CreditsService,
   ) {}
 
   // ponytail: read straight from env — DiscoveryService has no ConfigService today.
@@ -314,7 +315,7 @@ export class DiscoveryService implements OnModuleInit {
     if (wanted === 0) return 0;
     const acc = await this.prisma.jobSeeker
       .findUnique({ where: { id: jobSeekerId }, select: { user_id: true } })
-      .then((seeker) => (seeker ? creditAccount(seeker.user_id) : null))
+      .then((seeker) => (seeker ? this.credits.account(seeker.user_id) : null))
       .catch((e: unknown) => {
         // metering must not break the search: on a credits error the run keeps its budget
         this.logger.warn(`credits unavailable: ${String(e)}`);

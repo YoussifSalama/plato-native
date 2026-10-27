@@ -61,11 +61,11 @@ const bigUsage = {
 beforeEach(() => jest.clearAllMocks());
 
 describe('voice interview settlement', () => {
-  it('releases the reservation and charges the browser-reported cost when it is under the ceiling', async () => {
+  it('releases the reservation and charges per started minute the server saw, not the browser-reported cost', async () => {
     const svc = service([
       {
         id: 'h1',
-        created_at: minutesAgo(5),
+        created_at: minutesAgo(4.5),
         meta: { thread: 't1', minutes: 10 },
       },
     ]);
@@ -76,10 +76,27 @@ describe('voice interview settlement', () => {
       usage: { ...bigUsage, audioInputTokens: 1000, audioOutputTokens: 1000 },
     });
     expect(releaseHold).toHaveBeenCalledWith('u1', 'h1');
-    expect(charged().cost_usd).toBeCloseTo(0.03, 5); // 1000 x $10/M + 1000 x $20/M
+    expect(charged().cost_usd).toBeCloseTo(0.5, 5); // 4.5 minutes -> 5 started minutes x $0.10
   });
 
-  it('a browser that inflates seconds or tokens pays at most the ceiling over the time the server saw', async () => {
+  it('a browser that reports zero seconds and zero usage still pays for the time the server saw', async () => {
+    const svc = service([
+      {
+        id: 'h1',
+        created_at: minutesAgo(15),
+        meta: { thread: 't1', minutes: 15 },
+      },
+    ]);
+    await svc.saveTranscript('u1', 't1', {
+      mode: 'mock',
+      seconds: 0,
+      turns: [],
+      usage: { ...bigUsage, audioInputTokens: 0, audioOutputTokens: 0 },
+    });
+    expect(charged().cost_usd).toBeCloseTo(1.5, 5); // 15 minutes x $0.10
+  });
+
+  it('a browser that inflates seconds or tokens pays only for the time the server saw', async () => {
     const svc = service([
       {
         id: 'h1',
@@ -97,7 +114,7 @@ describe('voice interview settlement', () => {
     expect(charged().cost_usd).toBeCloseTo(0.3, 5); // 2.5 min seen -> 3 started minutes x $0.10, not 60 min
   });
 
-  it('a browser that reports no usage pays the ceiling for the time, never more than reserved', async () => {
+  it('never more than reserved', async () => {
     const svc = service([
       {
         id: 'h1',

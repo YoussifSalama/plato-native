@@ -15,6 +15,10 @@ const BATCH = 500;
 // first digest isn't empty.
 const SEED_DAYS = 3;
 
+// Jobs from public sources only. A link a seeker pasted is theirs: its title
+// and host are whatever that page says, and it may be a private link.
+const SHARED = { not: 'MANUAL' } as const;
+
 const JOB_FIELDS = {
   id: true,
   source: true,
@@ -28,8 +32,8 @@ const JOB_FIELDS = {
   checked_at: true,
 } as const;
 
-// Walks jobs as they enter the shared index, from any source: another seeker's
-// search, the alert backfill, a pasted link. Every job is matched once against
+// Walks jobs as they enter the shared index from public sources: another
+// seeker's search or the alert backfill. Every job is matched once against
 // every alert. Matches are held for the digest; nothing is sent from here.
 // Seekers never see whose search found a job: a match only records the job.
 @Injectable()
@@ -67,7 +71,11 @@ export class AlertMatcherService implements OnModuleInit, OnModuleDestroy {
       let held = 0;
       for (;;) {
         const jobs = await this.prisma.job.findMany({
-          where: { created_at: { gt: since }, expired_at: null },
+          where: {
+            created_at: { gt: since },
+            expired_at: null,
+            source: SHARED,
+          },
           orderBy: { created_at: 'asc' },
           take: BATCH,
           select: JOB_FIELDS,
@@ -95,6 +103,7 @@ export class AlertMatcherService implements OnModuleInit, OnModuleDestroy {
       where: {
         created_at: { gte: new Date(now.getTime() - SEED_DAYS * 86_400_000) },
         expired_at: null,
+        source: SHARED,
       },
       orderBy: { created_at: 'desc' },
       take: 5000,

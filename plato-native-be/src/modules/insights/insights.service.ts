@@ -267,6 +267,8 @@ export class InsightsService {
       where: {
         company: { contains: term, mode: 'insensitive' },
         expired_at: null,
+        // A pasted link's "company" is just its host name: never shown to others.
+        source: { not: 'MANUAL' },
       },
       select: { company: true },
       orderBy: { created_at: 'desc' },

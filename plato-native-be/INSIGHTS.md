@@ -15,7 +15,7 @@ A seeker asks to hear about new jobs in a **field** ("Frontend Engineer", option
 
 ## How jobs reach alerts
 
-1. **Any job entering the shared index** is matched, whatever brought it in: any seeker's search, a pasted link, or the backfill. So one seeker's search feeds another's alerts. A match stores only the job, never whose search found it. `AlertMatcherService` walks `Job.created_at` from a cursor every 15 minutes.
+1. **Any job entering the shared index from a public source** is matched: any seeker's search or the backfill. So one seeker's search feeds another's alerts. A match stores only the job, never whose search found it. A link a seeker pasted (source `MANUAL`) is never matched or shown to anyone else: its title and company come from that page, and it may be a private link. `AlertMatcherService` walks `Job.created_at` from a cursor every 15 minutes.
 2. **A new alert** is seeded with matches from the last 3 days of the index, so the first digest isn't empty.
 3. **Backfill**, every 6 hours, free sources only. It searches the open feeds and Workable for every alerted role, and fetches the Greenhouse, Lever and Ashby boards of followed companies we already know. No Apify, no tokens spent.
 

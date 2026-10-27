@@ -382,6 +382,31 @@ describe('AlertMatcherService', () => {
     await svc.scan(NOW);
     expect(matches).toHaveLength(2);
   });
+  it('never sends a link one seeker pasted to anyone else', async () => {
+    // stripe.attacker.tld -> company "stripe", title chosen by that page.
+    const pasted = job({
+      source: JobSource.MANUAL,
+      title: 'Frontend Engineer',
+      company: 'stripe',
+      created_at: new Date(NOW.getTime() - 600_000),
+    });
+    const alerts = [
+      field({ id: 'a1' }),
+      field({
+        id: 'a2',
+        kind: 'COMPANY',
+        title: null,
+        company: 'Stripe',
+        company_key: 'stripe',
+      }),
+    ];
+    const { db, matches } = fakeDb({ jobs: [pasted], alerts });
+    const svc = new AlertMatcherService(db as never);
+    await svc.scan(NOW);
+    await svc.seed(alerts[1] as never, NOW);
+    expect(matches).toHaveLength(0);
+    expect(matchesAlert(alerts[1], pasted)).toBe(false);
+  });
 });
 
 describe('DigestService', () => {

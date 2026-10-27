@@ -27,7 +27,7 @@ Every cost already goes through `recordUsage()` (`src/modules/usage/usage.ts`), 
 |---|---|
 | AI call | its dollar cost (tokens × the model's price) ÷ $0.001. A gpt-4.1 career chat reply is about 10 tokens; the same text on gpt-4.1-mini is about 2. |
 | Job board (Apify) | a fixed price per result per platform, plus the board's start fee (`APIFY_PRICES`). 40 results: Talent 28, Indeed 125, Glassdoor 210. A board not in the table pays what Apify reported. An empty run, or one whose results could not be read, is free. |
-| Voice interview | the browser's reported cost, capped at `CREDITS_VOICE_USD_PER_MINUTE` (default $0.10, so 100 tokens) per minute of the time the server saw |
+| Voice interview | `CREDITS_VOICE_USD_PER_MINUTE` (default $0.10, so 100 tokens) per started minute of the time the server saw, never above the reservation. The browser's reported length and tokens are kept for cost tracking only: a client could send zeros |
 | Career research web search | $0.025 per search call (`WEB_SEARCH_USD_PER_CALL`, check OpenAI's page) |
 | Auto apply (`extension.*`, `apply.*`) | free (out of scope) |
 

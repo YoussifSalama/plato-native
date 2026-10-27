@@ -208,10 +208,11 @@ export class CareerVoiceService {
     return { saved: body.turns.length };
   }
 
-  // The browser reports the call's length and tokens, so neither is trusted on
-  // its own: the cost is what the browser's tokens say, capped by the per-minute
-  // ceiling over the time the server saw (from the reservation to now), and never
-  // above what was reserved.
+  // The browser reports the call's length and tokens, so neither decides the
+  // charge: a client could send zeros. The call is billed per started minute of
+  // the time the server saw (from the reservation to the transcript, which the
+  // browser posts as the call ends), never above what was reserved. What the
+  // browser reported is kept for our cost tracking only.
   private async settleVoice(
     userId: string,
     threadId: string,
@@ -223,11 +224,10 @@ export class CareerVoiceService {
     const seenSeconds = hold
       ? Math.min(
           reservedSeconds,
-          body.seconds,
           (Date.now() - hold.created_at.getTime()) / 1000,
         )
       : body.seconds;
-    const ceiling = Math.ceil(seenSeconds / 60) * VOICE_USD_PER_MINUTE;
+    const charge = Math.ceil(seenSeconds / 60) * VOICE_USD_PER_MINUTE;
     const u = body.usage;
     const reported = u ? voiceCost(this.env.realtimeModel, u) : null;
     if (hold) await this.credits.release(userId, hold.id);
@@ -236,7 +236,7 @@ export class CareerVoiceService {
       model: this.env.realtimeModel,
       input_tokens: u ? u.audioInputTokens + u.textInputTokens : 0,
       output_tokens: u ? u.audioOutputTokens + u.textOutputTokens : 0,
-      cost_usd: reported === null ? ceiling : Math.min(reported, ceiling),
+      cost_usd: charge,
       meta: {
         mode: body.mode,
         seconds: body.seconds,

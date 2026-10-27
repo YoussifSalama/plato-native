@@ -67,7 +67,8 @@ const words = (s: string) =>
 // Same title rule the search uses ("Frontend Engineer" also finds
 // "Front-end Developer"), plus an optional place or remote-only.
 export function matchesAlert(alert: AlertLike, job: JobLike): boolean {
-  if (alert.paused) return false;
+  // A link one seeker pasted never goes to another (see AlertMatcherService).
+  if (alert.paused || job.source === JobSource.MANUAL) return false;
   if (alert.kind === 'COMPANY')
     return (
       !!alert.company_key &&

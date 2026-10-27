@@ -54,6 +54,15 @@ export class DocumentsController {
     return jobSeeker.id;
   }
 
+  // The caller's own document, or 404: someone else's id reads as not found.
+  private async ownDocument(userId: string, id: string) {
+    const jobSeekerId = await this.requireJobSeekerId(userId);
+    const document = await this.documentService.findById(id);
+    if (!document || document.job_seeker_id !== jobSeekerId)
+      throw new NotFoundException('Document not found');
+    return document;
+  }
+
   @Post()
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SIZE } }))
   async upload(
@@ -138,9 +147,7 @@ export class DocumentsController {
       throw new BadRequestException('Only PDF or DOCX files are accepted');
     }
 
-    await this.requireJobSeekerId(req.userId);
-    const document = await this.documentService.findById(id);
-    if (!document) throw new NotFoundException('Document not found');
+    const document = await this.ownDocument(req.userId, id);
 
     const version = await this.versionService.findById(
       document.document_version_id,
@@ -193,9 +200,7 @@ export class DocumentsController {
 
   @Delete(':id')
   async remove(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
-    await this.requireJobSeekerId(req.userId);
-    const document = await this.documentService.findById(id);
-    if (!document) throw new NotFoundException('Document not found');
+    const document = await this.ownDocument(req.userId, id);
     await this.storageService.delete(document.storage_key);
     await this.documentService.remove(id);
     return { removed: id };

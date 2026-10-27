@@ -7,7 +7,6 @@ import { AppService } from './app.service';
 import envConfig from './config/env/env.config';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { UserModule } from './modules/user/user.module';
-import { UploadModule } from './modules/upload/upload.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { ProfileExtractionModule } from './modules/profile-extraction/profile-extraction.module';
@@ -33,7 +32,6 @@ import { InsightsModule } from './modules/insights/insights.module';
     }),
     PrismaModule,
     UserModule,
-    UploadModule,
     AuthModule,
     DocumentsModule,
     ProfileExtractionModule,

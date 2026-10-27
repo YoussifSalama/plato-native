@@ -8,7 +8,6 @@ net.setDefaultAutoSelectFamily(false);
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
-import { join } from 'path';
 import { AppModule } from './app.module';
 import { corsFor } from './modules/extension/cors';
 
@@ -16,7 +15,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // Engine v3 turn results carry screenshots (base64 PNG, up to a few MB); the default 100kb json limit refused them (413).
   app.useBodyParser('json', { limit: '12mb' });
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
+  // No public file serving: CVs live in private storage and are read through the API.
   app.use(cookieParser());
   // Per route: web app + cookies, or (extension routes) the extension origin
   // only, no cookies.

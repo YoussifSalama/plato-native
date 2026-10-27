@@ -8,6 +8,7 @@ net.setDefaultAutoSelectFamily(false);
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { corsFor } from './modules/extension/cors';
 
@@ -16,6 +17,24 @@ async function bootstrap() {
   // Engine v3 turn results carry screenshots (base64 PNG, up to a few MB); the default 100kb json limit refused them (413).
   app.useBodyParser('json', { limit: '12mb' });
   // No public file serving: CVs live in private storage and are read through the API.
+  // Behind a proxy (load balancer, Render, Nginx...) set TRUST_PROXY (e.g. 1) so
+  // req.ip is the visitor's address, not the proxy's: the rate limits key on it.
+  if (process.env.TRUST_PROXY)
+    app.set(
+      'trust proxy',
+      /^\d+$/.test(process.env.TRUST_PROXY)
+        ? Number(process.env.TRUST_PROXY)
+        : process.env.TRUST_PROXY,
+    );
+  // Standard protective headers. No CSP: this is a JSON API (the one HTML page,
+  // the live browser viewer, uses an inline script). Cross-origin reads stay
+  // allowed so the web app on its own origin can show screenshots and PDFs.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   app.use(cookieParser());
   // Per route: web app + cookies, or (extension routes) the extension origin
   // only, no cookies.

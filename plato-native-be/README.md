@@ -107,6 +107,12 @@ Details, prices, sources and assumptions:
 
 ## Deployment
 
+Security settings for production:
+
+- `TRUST_PROXY`: set it when the API runs behind a proxy or load balancer (`1` for one hop). Without it, every visitor looks like the proxy's address, and the login, sign-up and extension pairing limits apply to all of them together.
+- Rate limits (in memory, per process): login 10 attempts per account per 15 minutes and 30 per address per minute; sign-up 10 per address per 10 minutes; extension pairing as before.
+- Protective HTTP headers come from `helmet` (no CSP: JSON API).
+
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:

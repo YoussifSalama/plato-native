@@ -3,13 +3,15 @@ import {
   Body,
   Controller,
   Get,
+  HttpException,
+  HttpStatus,
   Post,
   Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { loginSchema, signupSchema } from './auth.schema';
 import {
@@ -20,8 +22,21 @@ import {
 import { IEnvParams } from '../../types/config/env.types';
 import { JobSeekerService } from '../user/job-seeker.service';
 import { JobSeekerPreferenceService } from '../user/job-seeker-preference.service';
+import { RateLimiter } from '../extension/extension-token';
 
 const ACCESS_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MINUTE = 60_000;
+
+// Password guessing and mass sign-ups: per account (works behind any proxy)
+// and, more loosely, per address. In memory, per process, like the extension's.
+export const authLimiter = new RateLimiter();
+function allow(key: string, limit: number, windowMs: number) {
+  if (!authLimiter.hit(key, limit, windowMs))
+    throw new HttpException(
+      'Too many attempts. Wait a few minutes and try again.',
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+}
 
 @Controller('auth')
 export class AuthController {
@@ -44,9 +59,11 @@ export class AuthController {
 
   @Post('signup')
   async signup(
+    @Req() req: Request,
     @Body() body: unknown,
     @Res({ passthrough: true }) res: Response,
   ) {
+    allow(`signup-ip:${req.ip}`, 10, 10 * MINUTE);
     const parsed = signupSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
 
@@ -57,11 +74,14 @@ export class AuthController {
 
   @Post('login')
   async login(
+    @Req() req: Request,
     @Body() body: unknown,
     @Res({ passthrough: true }) res: Response,
   ) {
+    allow(`login-ip:${req.ip}`, 30, MINUTE);
     const parsed = loginSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    allow(`login:${parsed.data.email.trim().toLowerCase()}`, 10, 15 * MINUTE);
 
     const { token, user } = await this.authService.login(parsed.data);
     this.setAccessTokenCookie(res, token);

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
+import { validateEnv } from './config/env/validate-env';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { UsageContextInterceptor } from './modules/usage/usage';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -26,9 +28,12 @@ import { InsightsModule } from './modules/insights/insights.module';
 
 @Module({
   imports: [
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [envConfig],
+      // Stop at boot, with every missing or malformed setting named.
+      validate: validateEnv,
     }),
     PrismaModule,
     UserModule,
@@ -53,6 +58,8 @@ import { InsightsModule } from './modules/insights/insights.module';
   providers: [
     AppService,
     { provide: APP_INTERCEPTOR, useClass: UsageContextInterceptor },
+    // Reports unexpected errors to Sentry (when SENTRY_DSN is set), then answers as Nest normally does.
+    { provide: APP_FILTER, useClass: SentryGlobalFilter },
   ],
 })
 export class AppModule {}

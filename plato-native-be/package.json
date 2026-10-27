@@ -33,6 +33,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@openai/agents": "^0.17.0",
     "@prisma/client": "^6.19.3",
+    "@sentry/nestjs": "11.7.0",
     "apify-client": "^2.25.0",
     "bcryptjs": "^3.0.3",
     "cloakbrowser": "^0.5.12",

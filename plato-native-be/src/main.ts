@@ -1,4 +1,6 @@
 import 'dotenv/config';
+// First, so error reporting can hook into everything loaded after it.
+import './instrument';
 import dns from 'node:dns';
 import net from 'node:net';
 // No IPv6 route here: Node's happy-eyeballs gives IPv4 only 250ms, then fails

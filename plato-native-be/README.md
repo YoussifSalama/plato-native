@@ -107,6 +107,10 @@ Details, prices, sources and assumptions:
 
 ## Deployment
 
+Settings: copy `.env.example` to `.env`. The API checks its settings at boot and, if anything required is missing or malformed, stops with one message naming each problem (never the values).
+
+Error monitoring: set `SENTRY_DSN` (and optionally `SENTRY_ENVIRONMENT`) and unexpected errors (5xx, crashes) are reported to Sentry. Request bodies, cookies, query strings, auth headers and user details are stripped first (`src/instrument.ts`). Without a DSN nothing is sent.
+
 Security settings for production:
 
 - `TRUST_PROXY`: set it when the API runs behind a proxy or load balancer (`1` for one hop). Without it, every visitor looks like the proxy's address, and the login, sign-up and extension pairing limits apply to all of them together.

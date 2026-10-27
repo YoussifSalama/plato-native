@@ -13,7 +13,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
-import { loginSchema, signupSchema } from './auth.schema';
+import { AccountService } from './account.service';
+import {
+  forgotSchema,
+  loginSchema,
+  resetSchema,
+  signupSchema,
+  tokenSchema,
+} from './auth.schema';
 import {
   ACCESS_TOKEN_COOKIE,
   AuthenticatedRequest,
@@ -45,6 +52,7 @@ export class AuthController {
     private readonly configService: ConfigService,
     private readonly jobSeekerService: JobSeekerService,
     private readonly preferenceService: JobSeekerPreferenceService,
+    private readonly account: AccountService,
   ) {}
 
   private setAccessTokenCookie(res: Response, token: string) {
@@ -69,6 +77,8 @@ export class AuthController {
 
     const { token, user } = await this.authService.signup(parsed.data);
     this.setAccessTokenCookie(res, token);
+    // The confirmation email must not hold up, or fail, the sign-up.
+    void this.account.sendVerification(user.id).catch(() => undefined);
     return user;
   }
 
@@ -108,5 +118,40 @@ export class AuthController {
       ...user,
       onboarding_completed: preferences?.source === 'USER_CONFIRMED',
     };
+  }
+
+  /** Emails a reset link if the address has an account; the answer is the same either way. */
+  @Post('forgot-password')
+  async forgotPassword(@Req() req: Request, @Body() body: unknown) {
+    allow(`forgot-ip:${req.ip}`, 10, 15 * MINUTE);
+    const parsed = forgotSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    const email = parsed.data.email.trim();
+    allow(`forgot:${email.toLowerCase()}`, 3, 60 * MINUTE);
+    return this.account.forgotPassword(email);
+  }
+
+  /** Sets a new password from the emailed link and signs out every other session. */
+  @Post('reset-password')
+  async resetPassword(@Req() req: Request, @Body() body: unknown) {
+    allow(`reset-ip:${req.ip}`, 20, 15 * MINUTE);
+    const parsed = resetSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    return this.account.resetPassword(parsed.data.token, parsed.data.password);
+  }
+
+  @Post('verify-email')
+  async verifyEmail(@Req() req: Request, @Body() body: unknown) {
+    allow(`verify-ip:${req.ip}`, 20, 15 * MINUTE);
+    const parsed = tokenSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Invalid link');
+    return this.account.verifyEmail(parsed.data.token);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('resend-verification')
+  resendVerification(@Req() req: AuthenticatedRequest) {
+    allow(`resend:${req.userId}`, 3, 60 * MINUTE);
+    return this.account.sendVerification(req.userId);
   }
 }

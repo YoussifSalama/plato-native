@@ -175,9 +175,14 @@ export class DigestService implements OnModuleInit, OnModuleDestroy {
     if (settings.email && this.mail.enabled) {
       const seeker = await this.prisma.jobSeeker.findUnique({
         where: { id: jobSeekerId },
-        select: { user: { select: { email: true, full_name: true } } },
+        select: {
+          user: {
+            select: { email: true, full_name: true, email_verified_at: true },
+          },
+        },
       });
-      if (seeker?.user.email) {
+      // Only to an address its owner confirmed: never mail a typo'd or borrowed one.
+      if (seeker?.user.email && seeker.user.email_verified_at) {
         const unsubscribeUrl = `${appUrl()}/unsubscribe?token=${settings.unsubscribe_token}`;
         const mail = digestEmail({
           name: seeker.user.full_name,

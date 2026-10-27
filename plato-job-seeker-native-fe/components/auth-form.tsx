@@ -271,9 +271,14 @@ function LoginForm() {
       </Field>
 
       <Field data-invalid={!!errors.password}>
-        <FieldLabel htmlFor="password">
-          Password <RequiredMark />
-        </FieldLabel>
+        <div className="flex items-center justify-between">
+          <FieldLabel htmlFor="password">
+            Password <RequiredMark />
+          </FieldLabel>
+          <a href="/forgot-password" className="text-xs font-medium text-primary underline-offset-4 hover:underline">
+            Forgot password?
+          </a>
+        </div>
         <Input id="password" type="password" {...register("password")} placeholder={"eg. ••••••••"} />
         <FieldError errors={[errors.password]} />
       </Field>

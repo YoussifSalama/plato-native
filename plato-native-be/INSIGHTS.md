@@ -11,6 +11,7 @@ A seeker asks to hear about new jobs in a **field** ("Frontend Engineer", option
   - Greenhouse, Lever, Workable and the free feeds: the listing is fetched again unless we looked in the last 24h. If it's gone, the job is marked expired and dropped. If there's no answer (blocked or timeout), the job goes only if under 7 days old.
   - Boards we can't check (LinkedIn, Indeed…): only jobs under 7 days old go.
 - **Never the same job twice.** `AlertMatch` is unique per (seeker, job), even when two of their alerts match it.
+- **Only to confirmed addresses.** Alert emails go only to an email its owner confirmed (link in the welcome email). Until then alerts arrive in the app only.
 - **Free, limited by plan.** Free 3 roles / 5 companies, Pro 10 / 25, Max 20 / 50 (`ALERT_LIMITS`). After a downgrade, the oldest alerts within the new limit keep working.
 
 ## How jobs reach alerts

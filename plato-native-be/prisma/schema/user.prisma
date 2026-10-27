@@ -6,6 +6,11 @@ model User {
   password_hash String
   gender Gender @default(OTHER)
 
+  // Set when the seeker opens the link in the confirmation email.
+  email_verified_at    DateTime?
+  // Sessions issued before this are refused (set by a password reset).
+  sessions_valid_after DateTime?
+
   job_seeker JobSeeker?
 
   created_at DateTime @default(now())

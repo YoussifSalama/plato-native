@@ -8,6 +8,8 @@ export type AuthUser = {
   email: string
   phone: string
   onboarding_completed?: boolean
+  // Confirmed through the link in the welcome email.
+  email_verified?: boolean
 }
 
 async function request<T>(promise: Promise<{ data: T }>): Promise<T> {
@@ -38,4 +40,10 @@ function getMe(): Promise<AuthUser> {
   return request(apiClient.get("/auth/me"))
 }
 
-export { signup, login, logout, getMe }
+// Password reset and email confirmation (links sent by email).
+const forgotPassword = (email: string) => request<{ ok: boolean }>(apiClient.post("/auth/forgot-password", { email }))
+const resetPassword = (token: string, password: string) => request<{ ok: boolean }>(apiClient.post("/auth/reset-password", { token, password }))
+const verifyEmail = (token: string) => request<{ ok: boolean }>(apiClient.post("/auth/verify-email", { token }))
+const resendVerification = () => request<{ sent: boolean }>(apiClient.post("/auth/resend-verification"))
+
+export { signup, login, logout, getMe, forgotPassword, resetPassword, verifyEmail, resendVerification }

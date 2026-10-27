@@ -276,7 +276,11 @@ function fakeDb(state: {
     jobSeeker: {
       findMany: async () => [{ id: 's1', user_id: 'u1' }],
       findUnique: async () => ({
-        user: { email: 'mona@example.com', full_name: 'Mona Ali' },
+        user: {
+          email: 'mona@example.com',
+          full_name: 'Mona Ali',
+          email_verified_at: NOW,
+        },
       }),
     },
     creditAccount: { findMany: async () => [{ user_id: 'u1', plan: 'free' }] },
@@ -514,6 +518,21 @@ describe('DigestService', () => {
     );
     await svc.sendDue(NOW);
     expect(digests).toHaveLength(0);
+  });
+
+  it('no email to an address its owner never confirmed', async () => {
+    const jobs = [job({ created_at: daysAgo(0.5) })];
+    const { svc, m, b, db } = await setup(jobs);
+    db.jobSeeker.findUnique = async () => ({
+      user: {
+        email: 'mona@example.com',
+        full_name: 'Mona Ali',
+        email_verified_at: null as unknown as Date,
+      },
+    });
+    await svc.sendDue(NOW);
+    expect(m.send).not.toHaveBeenCalled();
+    expect(b.publish).toHaveBeenCalledTimes(1);
   });
 
   it('email off, or in-app off, is respected', async () => {

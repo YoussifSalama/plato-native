@@ -12,8 +12,12 @@ import { LoginInput, SignupInput } from './auth.schema';
 const SALT_ROUNDS = 10;
 
 function toSafeUser(user: User) {
-  const { password_hash: _password_hash, ...safeUser } = user;
-  return safeUser;
+  const {
+    password_hash: _password_hash,
+    sessions_valid_after: _sessions_valid_after,
+    ...safeUser
+  } = user;
+  return { ...safeUser, email_verified: !!user.email_verified_at };
 }
 
 @Injectable()

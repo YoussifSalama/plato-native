@@ -18,6 +18,7 @@ describe('AuthController rate limits', () => {
     { get: () => ({ nodeEnv: 'test' }) } as never,
     {} as never,
     {} as never,
+    { sendVerification: jest.fn(async () => ({ sent: false })) } as never,
   );
   const res = { cookie: jest.fn() } as never;
   const req = (ip: string) => ({ ip }) as never;

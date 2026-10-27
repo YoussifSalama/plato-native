@@ -9,6 +9,7 @@ import { cn } from "cn"
 import { getMe, type AuthUser } from "@/lib/auth/api"
 import { NotificationsProvider, useNotifications } from "@/components/notifications-provider"
 import { TokensChip, TokensNav } from "@/components/plato-tokens"
+import { VerifyEmailBanner } from "@/components/verify-email-banner"
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
@@ -181,6 +182,7 @@ function Frame({ children }: { children: ReactNode }) {
           </nav>
           <TokensChip />
         </div>
+        {user && user.email_verified === false && <VerifyEmailBanner email={user.email} />}
         {children}
       </div>
     </div>

@@ -1,0 +1,21 @@
+enum AuthTokenKind {
+    RESET_PASSWORD
+    VERIFY_EMAIL
+}
+
+// One-time links sent by email. Only a hash of the secret is stored, so a
+// database read can't be turned into a working link.
+model AuthToken {
+  id         String        @id @default(auto()) @map("_id") @db.ObjectId
+  user_id    String        @db.ObjectId
+  kind       AuthTokenKind
+  token_hash String        @unique
+  expires_at DateTime
+  // Written as an explicit null on create: Mongo's null filter does not match a missing field.
+  used_at    DateTime?
+
+  created_at DateTime @default(now())
+
+  @@index([user_id, kind])
+  @@map("auth_tokens")
+}

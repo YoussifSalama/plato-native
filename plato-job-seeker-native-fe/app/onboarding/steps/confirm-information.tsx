@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { motion } from "motion/react"
 import {
   AlertTriangle,
@@ -89,8 +89,8 @@ function ConfirmInformationStep({ onContinue }: { onContinue: () => void }) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<SectionKey | null>(null)
   const [editingSection, setEditingSection] = useState<SectionKey | null>(null)
-  const editedSections = useRef(new Set<SectionKey>())
-  const sectionRefs = useRef<Partial<Record<SectionKey, HTMLDivElement | null>>>({})
+  // Sections the seeker changed by hand (sent with the save). State, not a ref: it is read while rendering the save's handlers.
+  const [editedSections, setEditedSections] = useState<SectionKey[]>([])
 
   useEffect(() => {
     Promise.all([getProfile(), listDocuments()])
@@ -124,13 +124,13 @@ function ConfirmInformationStep({ onContinue }: { onContinue: () => void }) {
   }
 
   function markEdited(key: SectionKey) {
-    editedSections.current.add(key)
+    setEditedSections((prev) => (prev.includes(key) ? prev : [...prev, key]))
   }
 
   function focusSection(keys: SectionKey[]) {
     if (keys.length === 0) return
     setExpandedSection(keys[0])
-    setTimeout(() => sectionRefs.current[keys[0]]?.scrollIntoView({ behavior: "smooth", block: "center" }), 50)
+    setTimeout(() => document.getElementById(`confirm-section-${keys[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50)
   }
 
   async function handleReplaceDocument(id: string, file: File) {
@@ -152,7 +152,7 @@ function ConfirmInformationStep({ onContinue }: { onContinue: () => void }) {
         languages: profile.languages,
         skills: profile.skills,
         location: profile.location,
-        editedSections: Array.from(editedSections.current),
+        editedSections,
       })
       onContinue()
     } catch (e) {
@@ -193,9 +193,7 @@ function ConfirmInformationStep({ onContinue }: { onContinue: () => void }) {
               <motion.div
                 key={section.key}
                 variants={fadeUpItem}
-                ref={(el) => {
-                  sectionRefs.current[section.key] = el
-                }}
+                id={`confirm-section-${section.key}`}
               >
                 <CollapsibleSectionCard
                   icon={section.icon}

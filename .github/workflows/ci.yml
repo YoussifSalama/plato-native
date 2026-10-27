@@ -1,0 +1,77 @@
+# Every push and pull request: the checks a contributor runs locally, for the
+# three apps. Nothing here needs a secret or a database.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (typecheck, tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plato-native-be
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: plato-native-be/package-lock.json
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npx jest --ci
+      - run: npx nest build
+
+  extension:
+    name: Extension (lint, typecheck, unit and browser tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plato-extension
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: plato-extension/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      # The runtime suites load the built extension into a real Chromium.
+      - run: npx playwright-core install --with-deps chromium
+      - run: npm run test:runtime
+      - run: npm run test:runtime:v3
+      - run: npm run build
+
+  web:
+    name: Web app (lint, typecheck, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plato-job-seeker-native-fe
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: plato-job-seeker-native-fe/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run build

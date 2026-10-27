@@ -540,6 +540,84 @@ export class DiscoveryService implements OnModuleInit {
     return this.bus.stream(runId);
   }
 
+  /**
+   * Put new jobs in the shared index without tying them to a seeker (the job-alert
+   * backfill). Same filters as a search: professional work, one row per posting.
+   */
+  async indexJobs(jobs: NormalizedJob[]): Promise<number> {
+    let stored = 0;
+    for (const raw of dedupeJobs(jobs.filter((j) => !isBlueCollar(j.title)))) {
+      try {
+        await this.indexJob(raw);
+        stored++;
+      } catch (err) {
+        this.logger.warn(
+          `Skipped ${raw.source} job ${raw.url}: ${String(err)}`,
+        );
+      }
+    }
+    return stored;
+  }
+
+  // One posting, one row, whichever board it came from. One company, one spelling.
+  private async indexJob(raw: NormalizedJob) {
+    const job = {
+      ...raw,
+      company: normalizeCompany(raw.company).name || raw.company,
+      profession: professionOf(raw.title),
+      employment: employmentOf(raw.title, raw.job_type),
+      dedupe_key: dedupeKey(raw),
+    };
+    // One posting, one row: the same job can arrive from two adapters with
+    // different ids (Apify's id vs the ATS's own), but the URL is the same.
+    const sameUrl = await this.prisma.job.findFirst({
+      where: { source: job.source, url: job.url },
+      select: { id: true },
+    });
+    // Already stored from another board (same company, title and place,
+    // posted within two weeks)? Use that row instead of a second copy.
+    const twin = sameUrl
+      ? null
+      : await this.prisma.job.findFirst({
+          where: {
+            dedupe_key: job.dedupe_key,
+            expired_at: null,
+            OR: [
+              { posted_at: null },
+              {
+                posted_at: {
+                  gte: new Date(
+                    (job.posted_at?.getTime() ?? Date.now()) - 14 * 86_400_000,
+                  ),
+                  lte: new Date(
+                    (job.posted_at?.getTime() ?? Date.now()) + 14 * 86_400_000,
+                  ),
+                },
+              },
+            ],
+          },
+          select: { id: true },
+        });
+    const row = twin
+      ? twin
+      : sameUrl
+        ? await this.prisma.job.update({
+            where: { id: sameUrl.id },
+            data: { ...job, external_id: undefined },
+          })
+        : await this.prisma.job.upsert({
+            where: {
+              source_external_id: {
+                source: job.source,
+                external_id: job.external_id,
+              },
+            },
+            create: job,
+            update: job,
+          });
+    return row;
+  }
+
   private async persistJobs(
     jobSeekerId: string,
     runId: string,
@@ -559,68 +637,12 @@ export class DiscoveryService implements OnModuleInit {
         `Run ${runId}: merged ${professional.length - unique.length} duplicate posting(s) across boards`,
       );
     for (const raw of unique) {
-      // One company, one spelling, from the first time we see it.
-      const job = {
-        ...raw,
-        company: normalizeCompany(raw.company).name || raw.company,
-        profession: professionOf(raw.title),
-        employment: employmentOf(raw.title, raw.job_type),
-        dedupe_key: dedupeKey(raw),
-      };
-      // One posting, one row: the same job can arrive from two adapters with
-      // different ids (Apify's id vs the ATS's own), but the URL is the same.
-      const key = `${job.source}|${job.url}`;
+      const key = `${raw.source}|${raw.url}`;
       if (seen.has(key)) continue;
       seen.add(key);
       // One malformed posting must not sink the whole run: skip it, keep going.
       try {
-        const sameUrl = await this.prisma.job.findFirst({
-          where: { source: job.source, url: job.url },
-          select: { id: true },
-        });
-        // Already stored from another board (same company, title and place,
-        // posted within two weeks)? Use that row instead of a second copy.
-        const twin = sameUrl
-          ? null
-          : await this.prisma.job.findFirst({
-              where: {
-                dedupe_key: job.dedupe_key,
-                expired_at: null,
-                OR: [
-                  { posted_at: null },
-                  {
-                    posted_at: {
-                      gte: new Date(
-                        (job.posted_at?.getTime() ?? Date.now()) -
-                          14 * 86_400_000,
-                      ),
-                      lte: new Date(
-                        (job.posted_at?.getTime() ?? Date.now()) +
-                          14 * 86_400_000,
-                      ),
-                    },
-                  },
-                ],
-              },
-              select: { id: true },
-            });
-        const row = twin
-          ? twin
-          : sameUrl
-            ? await this.prisma.job.update({
-                where: { id: sameUrl.id },
-                data: { ...job, external_id: undefined },
-              })
-            : await this.prisma.job.upsert({
-                where: {
-                  source_external_id: {
-                    source: job.source,
-                    external_id: job.external_id,
-                  },
-                },
-                create: job,
-                update: job,
-              });
+        const row = await this.indexJob(raw);
         await this.prisma.jobSeekerJobMatch.upsert({
           where: {
             job_seeker_id_job_id: {
@@ -642,7 +664,7 @@ export class DiscoveryService implements OnModuleInit {
         matched++;
       } catch (err) {
         this.logger.warn(
-          `Skipped ${job.source} job ${job.url}: ${err instanceof Error ? err.message.split('\n').slice(-2).join(' ') : String(err)}`,
+          `Skipped ${raw.source} job ${raw.url}: ${err instanceof Error ? err.message.split('\n').slice(-2).join(' ') : String(err)}`,
         );
       }
     }

@@ -4,7 +4,7 @@ import { ExtensionProgressNav } from "@/components/extension-progress"
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Bell, Briefcase, ChevronRight, FileText, GraduationCap, HelpCircle, Home, MessageCircle, PanelLeftClose, PanelLeftOpen, Puzzle, User } from "lucide-react"
+import { Bell, BellRing, Briefcase, ChevronRight, FileText, GraduationCap, HelpCircle, Home, MessageCircle, PanelLeftClose, PanelLeftOpen, Puzzle, User } from "lucide-react"
 import { cn } from "cn"
 import { getMe, type AuthUser } from "@/lib/auth/api"
 import { NotificationsProvider, useNotifications } from "@/components/notifications-provider"
@@ -14,6 +14,7 @@ const NAV = [
   { href: "/", label: "Home", icon: Home },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/applications", label: "Applications", icon: FileText },
+  { href: "/insights", label: "Job alerts", icon: BellRing },
   { href: "/career", label: "Career", icon: GraduationCap },
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/notifications", label: "Notifications", icon: Bell },

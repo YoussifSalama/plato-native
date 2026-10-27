@@ -22,6 +22,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { UsageModule } from './modules/usage/usage.module';
 import { ExtensionModule } from './modules/extension/extension.module';
 import { CreditsModule } from './modules/credits/credits.module';
+import { MailModule } from './modules/mail/mail.module';
+import { InsightsModule } from './modules/insights/insights.module';
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { CreditsModule } from './modules/credits/credits.module';
     UsageModule,
     ExtensionModule,
     CreditsModule,
+    MailModule,
+    InsightsModule,
   ],
   controllers: [AppController],
   providers: [

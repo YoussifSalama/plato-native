@@ -11,6 +11,7 @@ import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobSeekerService } from '../user/job-seeker.service';
 import {
+  alertNotification,
   applicationNotification,
   NOTIFY_APPLICATION_STATUSES,
   runNotification,
@@ -34,12 +35,12 @@ export class NotificationsController {
     return jobSeeker.id;
   }
 
-  // The feed is derived from runs and applications, not stored separately:
+  // The feed is derived from runs, applications and job-alert digests, not stored separately:
   // ponytail: no notifications collection — add one when a notification needs to outlive its source row or be dismissed server-side.
   @Get()
   async list(@Req() req: AuthenticatedRequest) {
     const job_seeker_id = await this.requireJobSeekerId(req.userId);
-    const [runs, applications] = await Promise.all([
+    const [runs, applications, digests] = await Promise.all([
       this.prisma.discoveryRun.findMany({
         where: { job_seeker_id },
         orderBy: { started_at: 'desc' },
@@ -58,6 +59,11 @@ export class NotificationsController {
         orderBy: { updated_at: 'desc' },
         take: FEED_LIMIT,
       }),
+      this.prisma.alertDigest.findMany({
+        where: { job_seeker_id },
+        orderBy: { created_at: 'desc' },
+        take: FEED_LIMIT,
+      }),
     ]);
     return [
       ...runs.map(runNotification),
@@ -70,6 +76,7 @@ export class NotificationsController {
             'unsupported',
         )
         .map(applicationNotification),
+      ...digests.map(alertNotification),
     ]
       .sort((a, b) => b.at.localeCompare(a.at))
       .slice(0, FEED_LIMIT);

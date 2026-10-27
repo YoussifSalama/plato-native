@@ -10,7 +10,8 @@ export interface SeekerNotification {
   // Stable per (thing, state): a status change is a new, unread notification.
   id: string;
   // queue: live-only batch messages (ETA up front, summary at the end).
-  kind: 'run' | 'application' | 'queue';
+  // alert: a job-alert digest (stored, so it outlives the jobs it lists).
+  kind: 'run' | 'application' | 'queue' | 'alert';
   status: string;
   tone: NotificationTone;
   title: string;

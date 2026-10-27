@@ -86,6 +86,8 @@ model Job {
   @@unique([source, external_id])
   @@index([dedupe_key])
   @@index([checked_at])
+  // Job alerts walk new jobs in the order they entered the index.
+  @@index([created_at])
   @@map("jobs")
 }
 

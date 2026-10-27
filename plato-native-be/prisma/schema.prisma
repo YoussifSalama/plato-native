@@ -146,7 +146,8 @@ model CreditAccount {
 }
 
 // Every change to a balance, append-only: grant (plan grant or monthly reset),
-// consume (a metered usage event), hold / release (a reservation), adjust (admin).
+// consume (a metered usage event), hold / release (a reservation), topup (a bought
+// pack), adjust (admin).
 model CreditLedger {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   user_id        String   @db.ObjectId
@@ -194,6 +195,111 @@ enum JobSeekerDocumentStatus {
 enum SectionStatus {
     LOOKS_GOOD
     NEEDS_ATTENTION
+}
+
+// ========== insights.prisma ==========
+
+// Job alerts ("insights"): a seeker asks to hear about new jobs in a field or
+// at companies they follow. New jobs from any source (other seekers' searches
+// included, the scheduled backfill too) are matched as they enter the index,
+// held as AlertMatch rows, and sent together in one digest on the seeker's
+// cadence. Never one message per job, never a closed job.
+
+enum AlertKind {
+    FIELD
+    COMPANY
+}
+
+enum AlertCadence {
+    DAILY
+    EVERY_3_DAYS
+    WEEKLY
+}
+
+model JobAlert {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String    @db.ObjectId
+  kind          AlertKind
+
+  // FIELD: the role asked for ("Frontend Engineer"), and optionally where.
+  title       String?
+  location    String?
+  remote_only Boolean?
+  // COMPANY: the shown name and its comparison key (normalizeCompany).
+  company     String?
+  company_key String?
+
+  paused Boolean @default(false)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id])
+  @@index([company_key])
+  @@map("job_alerts")
+}
+
+// One new job for one seeker. Unique per (seeker, job): two alerts that both
+// match the same posting still send it once, and a sent job is never sent again.
+model AlertMatch {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String   @db.ObjectId
+  alert_id      String   @db.ObjectId
+  job_id        String   @db.ObjectId
+
+  // Set when it went out in a digest, or when it was dropped before sending
+  // (closed, too old, or unverifiable and not recent). Written as explicit
+  // nulls on create: Mongo's null filter does not match a missing field.
+  digest_id  String?   @db.ObjectId
+  sent_at    DateTime?
+  dropped    String?
+
+  created_at DateTime @default(now())
+
+  @@unique([job_seeker_id, job_id])
+  @@index([job_seeker_id, sent_at])
+  @@map("alert_matches")
+}
+
+// How and how often a seeker hears about their alerts.
+model AlertSettings {
+  id            String       @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String       @unique @db.ObjectId
+  cadence       AlertCadence @default(EVERY_3_DAYS)
+  email         Boolean      @default(true)
+  in_app        Boolean      @default(true)
+  // Secret for the one-click unsubscribe link in every email.
+  unsubscribe_token String   @unique
+  last_digest_at    DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("alert_settings")
+}
+
+// One digest that went out: the stored in-app notification, and what the email listed.
+model AlertDigest {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String   @db.ObjectId
+  job_ids       String[] @db.ObjectId
+  // Short "3 new React jobs, 2 at Stripe" style summary, made at send time.
+  headline      String
+  emailed       Boolean  @default(false)
+
+  created_at DateTime @default(now())
+
+  @@index([job_seeker_id, created_at])
+  @@map("alert_digests")
+}
+
+// Where the matcher got to in the job index (Job.created_at), so each job is matched once.
+model InsightsCursor {
+  id  String   @id @default(auto()) @map("_id") @db.ObjectId
+  key String   @unique
+  at  DateTime
+
+  @@map("insights_cursors")
 }
 
 // ========== interview.prisma ==========
@@ -317,6 +423,8 @@ model Job {
   @@unique([source, external_id])
   @@index([dedupe_key])
   @@index([checked_at])
+  // Job alerts walk new jobs in the order they entered the index.
+  @@index([created_at])
   @@map("jobs")
 }
 

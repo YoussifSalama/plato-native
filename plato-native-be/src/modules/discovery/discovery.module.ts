@@ -32,6 +32,6 @@ import { CreditsModule } from '../credits/credits.module';
     LocalIndexAdapter,
     PublicBoardsAdapter,
   ],
-  exports: [DiscoveryService],
+  exports: [DiscoveryService, OpenFeedsAdapter, PublicBoardsAdapter],
 })
 export class DiscoveryModule {}

@@ -12,8 +12,9 @@ import type { SeekerNotification } from "@/lib/notifications/api"
 const FILTERS = [
   { key: "all", label: "All", test: () => true },
   { key: "unread", label: "Unread", test: null },
-  { key: "application", label: "Applications", test: (n: SeekerNotification) => n.kind !== "run" },
+  { key: "application", label: "Applications", test: (n: SeekerNotification) => n.kind === "application" || n.kind === "queue" },
   { key: "run", label: "Searches", test: (n: SeekerNotification) => n.kind === "run" },
+  { key: "alert", label: "Job alerts", test: (n: SeekerNotification) => n.kind === "alert" },
 ] as const
 type FilterKey = (typeof FILTERS)[number]["key"]
 
@@ -32,7 +33,7 @@ export default function NotificationsPage() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
-          <p className="text-sm text-text-secondary">Searches that finished and applications that moved. Updates arrive live.</p>
+          <p className="text-sm text-text-secondary">Searches that finished, applications that moved and new jobs from your alerts. Updates arrive live.</p>
         </div>
         <button type="button" data-ai="notifications.mark-all-read" disabled={!unread} onClick={markAllRead} className="h-9 rounded-md border bg-card px-3.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50">
           Mark all read
@@ -90,7 +91,7 @@ export default function NotificationsPage() {
                   </span>
                   <span className="line-clamp-2 block text-sm text-text-secondary">{n.body}</span>
                   <span className="mt-0.5 block text-xs text-text-tertiary">
-                    {n.kind === "run" ? "Search" : n.kind === "queue" ? "Apply queue" : "Application"} · {timeAgo(n.at)}
+                    {n.kind === "run" ? "Search" : n.kind === "queue" ? "Apply queue" : n.kind === "alert" ? "Job alerts" : "Application"} · {timeAgo(n.at)}
                   </span>
                 </span>
                 <ArrowRight className="size-4 shrink-0 text-lavender" />

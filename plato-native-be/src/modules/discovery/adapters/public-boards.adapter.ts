@@ -378,7 +378,7 @@ export class PublicBoardsAdapter implements DiscoveryAdapter {
     return jobs.filter((j) => matchesQuery(j, query));
   }
 
-  private async fetchBoard(b: Board): Promise<NormalizedJob[]> {
+  async fetchBoard(b: Board): Promise<NormalizedJob[]> {
     const slug = encodeURIComponent(b.slug);
     if (b.source === 'GREENHOUSE') {
       const res = await getJson<{ jobs?: GreenhouseJob[] }>(

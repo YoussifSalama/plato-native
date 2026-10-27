@@ -129,3 +129,25 @@ export function applicationNotification(
     at: app.updated_at.toISOString(),
   };
 }
+
+interface DigestLike {
+  id: string;
+  job_ids: string[];
+  headline: string;
+  created_at: Date;
+}
+
+// A job-alert digest: one bell entry for many jobs, never one per job.
+export function alertNotification(digest: DigestLike): SeekerNotification {
+  const n = digest.job_ids.length;
+  return {
+    id: `alert:${digest.id}`,
+    kind: 'alert',
+    status: 'NEW_JOBS',
+    tone: 'info',
+    title: n === 1 ? 'A new job for you' : `${n} new jobs for you`,
+    body: digest.headline,
+    href: `/insights?digest=${digest.id}`,
+    at: digest.created_at.toISOString(),
+  };
+}

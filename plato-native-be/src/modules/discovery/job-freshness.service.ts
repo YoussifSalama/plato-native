@@ -24,7 +24,7 @@ export function listingGone(status: number, body: string): boolean | null {
 // closes. Boards that block bots (LinkedIn, Indeed, Glassdoor...) are never
 // polled: a block would look like "closed".
 // ponytail: Ashby is a single-page app whose closed jobs still return 200; add a check through its API if needed.
-const CHECKABLE: JobSource[] = [
+export const CHECKABLE: JobSource[] = [
   JobSource.GREENHOUSE,
   JobSource.LEVER,
   JobSource.WORKABLE,
@@ -37,6 +37,20 @@ const BATCH = 100;
 const RECHECK_MS = 3 * 86_400_000;
 const EVERY_MS = 6 * 3_600_000;
 const UA = 'Plato/1.0 (checking whether a posting is still open)';
+
+// One look at a listing page: true closed, false open, null don't know.
+export async function probeListing(url: string): Promise<boolean | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'user-agent': UA },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8_000),
+    });
+    return listingGone(res.status, (await res.text()).slice(0, 200_000));
+  } catch {
+    return null;
+  }
+}
 
 @Injectable()
 export class JobFreshnessService implements OnModuleInit, OnModuleDestroy {
@@ -78,20 +92,7 @@ export class JobFreshnessService implements OnModuleInit, OnModuleDestroy {
     for (let i = 0; i < jobs.length; i += 5) {
       await Promise.all(
         jobs.slice(i, i + 5).map(async (job) => {
-          let gone: boolean | null = null;
-          try {
-            const res = await fetch(job.apply_url ?? job.url, {
-              headers: { 'user-agent': UA },
-              redirect: 'follow',
-              signal: AbortSignal.timeout(8_000),
-            });
-            gone = listingGone(
-              res.status,
-              (await res.text()).slice(0, 200_000),
-            );
-          } catch {
-            gone = null;
-          }
+          const gone = await probeListing(job.apply_url ?? job.url);
           if (gone) closed++;
           await this.prisma.job.update({
             where: { id: job.id },

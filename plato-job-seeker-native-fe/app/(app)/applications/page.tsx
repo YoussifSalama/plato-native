@@ -27,6 +27,7 @@ import { JOBS_HOME, threadHref, timeAgo } from "@/lib/jobs/links"
 import { applicationHref, applicationReason, canRetry, isVerifySubmission, needsAttention, retryLabel, roughly, statusView, STATUS_STAGE, STEP_STAGE } from "@/lib/jobs/application-status"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SourceTile } from "@/components/source-tile"
+import { PillTabs } from "@/components/pill-tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StageStepper } from "../jobs/components/stage-stepper"
 import { ApplicationProof } from "./application-proof"
@@ -244,26 +245,7 @@ function ApplicationsContent() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {TABS.map((t) => {
-          const n = scoped.filter((a) => inTab(t.key, a)).length
-          return (
-            <button
-              key={t.key}
-              data-ai={`applications.tab.${t.key}`}
-              type="button"
-              aria-pressed={tab === t.key}
-              onClick={() => setQuery({ tab: t.key })}
-              className={cn(
-                "flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-                tab === t.key ? "border-primary bg-primary-soft text-primary" : "border-border bg-card text-text-secondary hover:bg-muted",
-                t.key === "needs" && n > 0 && tab !== t.key && "border-warning/40 text-warning",
-              )}
-            >
-              {t.label}
-              <span className="text-xs tabular-nums opacity-70">{n}</span>
-            </button>
-          )
-        })}
+        <PillTabs id="applications-tabs" tabs={TABS.map((t) => ({ key: t.key, label: t.label, count: scoped.filter((a) => inTab(t.key, a)).length, attention: t.key === "needs" && scoped.some((a) => inTab("needs", a)) }))} value={tab} onChange={(k) => setQuery({ tab: k })} label="Applications" dataAi="applications.tab" />
         <div className="ml-auto flex items-center gap-2 text-[13px] text-muted-foreground">
           Platform:
           <Select items={sourceOptions} value={source ?? ALL} onValueChange={(v) => setQuery({ source: v })}>

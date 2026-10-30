@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { ChevronDown, Leaf } from "lucide-react"
 import { cn } from "cn"
+import { PillTabs } from "@/components/pill-tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatTokens, type TokenMove } from "@/lib/credits/api"
 import { timeAgo } from "@/lib/jobs/links"
@@ -117,22 +118,7 @@ export function History({ history }: { history: TokenMove[] | null }) {
     <section className="flex flex-col gap-4 rounded-xl border bg-card p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-foreground">History</h2>
-        <div className="flex gap-1 rounded-full bg-muted p-1" role="tablist" aria-label="Filter history">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              role="tab"
-              aria-selected={filter === f.key}
-              data-ai={`tokens.history.${f.key}`}
-              onClick={() => (setFilter(f.key), setLimit(12))}
-              className={cn("relative rounded-full px-3.5 py-1 text-sm font-medium transition-colors", filter === f.key ? "text-primary" : "text-text-secondary hover:text-foreground")}
-            >
-              {filter === f.key && <motion.span layoutId="history-filter" transition={spring.micro} className="absolute inset-0 rounded-full bg-card shadow-sm" />}
-              <span className="relative">{f.label}</span>
-            </button>
-          ))}
-        </div>
+        <PillTabs id="history-filter" tabs={FILTERS} value={filter} onChange={(k) => (setFilter(k), setLimit(12))} label="Filter history" dataAi="tokens.history" />
       </div>
 
       {history === null ? (

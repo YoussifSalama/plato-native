@@ -6,6 +6,7 @@ import { ArrowRight, BellOff } from "lucide-react"
 import { cn } from "cn"
 import { timeAgo } from "@/lib/jobs/links"
 import { NotificationIcon, useNotifications } from "@/components/notifications-provider"
+import { PillTabs } from "@/components/pill-tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { SeekerNotification } from "@/lib/notifications/api"
 
@@ -40,21 +41,7 @@ export default function NotificationsPage() {
         </button>
       </header>
 
-      <div className="flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            data-ai={`notifications.filter.${f.key}`}
-            type="button"
-            onClick={() => setFilter(f.key)}
-            aria-pressed={filter === f.key}
-            className={cn("flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors", filter === f.key ? "border-primary bg-primary-soft text-primary" : "border-border bg-card text-text-secondary hover:bg-muted")}
-          >
-            {f.label}
-            <span className="text-xs tabular-nums opacity-70">{count(f.key)}</span>
-          </button>
-        ))}
-      </div>
+      <PillTabs id="notifications-filter" tabs={FILTERS.map((f) => ({ key: f.key, label: f.label, count: count(f.key) }))} value={filter} onChange={setFilter} label="Filter notifications" dataAi="notifications.filter" />
 
       <div className="rounded-lg border bg-card px-5 py-1">
         {loading && (

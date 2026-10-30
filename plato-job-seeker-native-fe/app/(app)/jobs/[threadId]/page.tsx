@@ -4,7 +4,6 @@ import { use, useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Plus, Search } from "lucide-react"
-import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import {
   createThread,
@@ -38,6 +37,7 @@ const SearchingView = dynamic(() => import("../components/searching-view").then(
 import { useJourneyLog } from "../components/journey/use-journey-log"
 import { ResultsView } from "../components/results-view"
 import { NotificationBell } from "../components/notification-bell"
+import { PillTabs } from "@/components/pill-tabs"
 
 const RESULTS_PROMPTS = ["Which of these fit me best?", "Find remote jobs", "Show me more options"]
 const SEARCHING_PROMPTS = ["How far along is it?", "Why is it taking long?", "What are you searching for?"]
@@ -277,21 +277,7 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
           </Link>
           <h1 className="text-2xl font-bold text-foreground">{thread?.title ?? "Search"}</h1>
           {view === "results" && (
-            <div className="flex items-center gap-5">
-              {TABS.map((t) => (
-                <button
-                  key={t.key}
-                  data-ai={`results.tab.${t.key}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === t.key}
-                  onClick={() => setTab(t.key)}
-                  className={cn("border-b-2 px-1 py-2.5 text-sm font-medium transition-colors", tab === t.key ? "border-primary text-primary" : "border-transparent text-text-tertiary hover:text-text-secondary")}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
+            <PillTabs id="results-tabs" tabs={TABS} value={tab} onChange={setTab} label="Results" dataAi="results.tab" />
           )}
         </div>
         <div className="flex flex-wrap items-center gap-3.5">

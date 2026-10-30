@@ -14,9 +14,10 @@ module.exports = {
     {
       name: 'plato-fe',
       cwd: './plato-job-seeker-native-fe',
-      script: 'node_modules/next/dist/bin/next',
-      args: 'start -p 3001',
-      env: { NODE_ENV: 'production' },
+      // next.config has output: 'standalone', so `next start` would not serve /_next/static. After `npm run build`:
+      //   cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public
+      script: '.next/standalone/server.js',
+      env: { NODE_ENV: 'production', PORT: 3001, HOSTNAME: '0.0.0.0' },
       max_memory_restart: '500M',
       time: true,
     },

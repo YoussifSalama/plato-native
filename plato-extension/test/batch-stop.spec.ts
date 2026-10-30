@@ -16,7 +16,7 @@ const run: BatchRun = { id: 'r', label: 'test', itemIds: ['i1'], meta: { i1: { j
 const row: Row = { itemId: 'i1', meta: run.meta.i1!, status: 'needs', item };
 const actions = () => {
   const fns = (keys: string[]) => Object.fromEntries(keys.map((k) => [k, vi.fn()]));
-  return { ...fns(['pair', 'unlink', 'refresh', 'view', 'menu', 'toggleLog', 'chat', 'answer']), jobs: fns(['pickSearch', 'picker', 'filter', 'more', 'toggle', 'selectVisible', 'dropItem', 'sheet', 'resumeMode', 'start']), batch: fns(['stop', 'cancelJob', 'release', 'resume', 'answerJob', 'retry', 'submitNow', 'checkPage', 'attest', 'notSure', 'notSubmitted', 'resumeChoice', 'watch', 'ticket', 'newBatch', 'retryFailed']) } as unknown as Actions & { batch: Record<string, ReturnType<typeof vi.fn>> };
+  return { ...fns(['pair', 'unlink', 'refresh', 'view', 'menu', 'toggleLog', 'chat', 'answer']), jobs: fns(['pickSearch', 'picker', 'filter', 'more', 'toggle', 'selectVisible', 'site', 'dropItem', 'sheet', 'resumeMode', 'start']), batch: fns(['stop', 'cancelJob', 'release', 'resume', 'answerJob', 'retry', 'submitNow', 'checkPage', 'attest', 'notSure', 'notSubmitted', 'resumeChoice', 'watch', 'ticket', 'newBatch', 'retryFailed']) } as unknown as Actions & { batch: Record<string, ReturnType<typeof vi.fn>> };
 };
 const draw = (session: PanelState['sessions'][string]) => {
   const a = actions();

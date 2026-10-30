@@ -27,6 +27,7 @@ export interface JobsState {
   sort: 'best' | 'newest';
   remote: boolean;
   fromPlato: boolean;
+  site?: string | null; // client-side: only the loaded jobs applied through this site (LINKEDIN, LEVER, …); null = every site
   picked: PickKey[];
   resumeMode: 'profile' | 'tailored';
 }
@@ -71,6 +72,7 @@ export interface JobsActions {
   more(): void; // next page of the current search
   toggle(key: PickKey): void; // refused past the cap (the runner says so)
   selectVisible(): void; // tick what is on screen, up to the cap
+  site(site: string | null): void; // the client-side site chip (no fetch): show only the loaded jobs applied through that site
   dropItem(id: string): void; // remove a queued job (server CANCELLED)
   sheet(open: boolean): void;
   resumeMode(mode: 'profile' | 'tailored'): void;

@@ -20,7 +20,7 @@ import { createTokenStore } from '../core/token-store';
 import type { ApiItem, Decision, Evidence, PolicyMap, SearchJob } from '../core/types';
 import { registry } from '../providers';
 import { render, type Actions, type PanelState, type PickKey } from './view';
-import { canStart, JOBS_PAGE_SIZE, latestBatch, queuedItems } from './jobs-view';
+import { canStart, JOBS_PAGE_SIZE, latestBatch, queuedItems, visibleJobs } from './jobs-view';
 import type { AnswerQuestion, OrchestratorEvent, OrchestratorRequest } from './../core/types';
 
 // The side panel runs the whole flow. It is the only place (besides the
@@ -1147,11 +1147,12 @@ const actions: Actions = {
     filter: (patch) => void guard(async () => (Object.assign(state.jobs, patch), fetchJobs(false))),
     more: () => void guard(() => fetchJobs(true)),
     toggle: togglePick,
+    site: (site) => ((state.jobs.site = site), draw()), // client-side only: nothing is fetched
     selectVisible: () => {
       if (runner.isActive()) return toast('A batch is running. New jobs wait until it finishes.');
       const j = state.jobs;
       const room = MAX_BATCH_JOBS - j.picked.length;
-      const add = j.jobs.filter((x) => x.applyable && !x.queued && !j.picked.includes(`job:${x.id}`)).map((x) => `job:${x.id}` as PickKey);
+      const add = visibleJobs(j).filter((x) => x.applyable && !x.queued && !j.picked.includes(`job:${x.id}`)).map((x) => `job:${x.id}` as PickKey); // what the site chip shows, not the whole page
       j.picked = [...j.picked, ...add.slice(0, room)];
       draw();
       if (add.length > room) toast(`Added ${Math.max(0, room)}. The batch is full at ${MAX_BATCH_JOBS}; ${add.length - room} not added.`);

@@ -17,7 +17,7 @@ const job = (i: number, over: Partial<SearchJob> = {}): SearchJob => ({ id: `j${
 type Mocked = Actions & { jobs: Record<string, ReturnType<typeof vi.fn>>; batch: Record<string, ReturnType<typeof vi.fn>> } & Record<string, unknown>;
 const actions = (): Mocked => {
   const fns = (keys: string[]) => Object.fromEntries(keys.map((k) => [k, vi.fn()]));
-  return { ...fns(['pair', 'unlink', 'refresh', 'view', 'menu', 'toggleLog', 'chat', 'answer']), jobs: fns(['pickSearch', 'picker', 'filter', 'more', 'toggle', 'selectVisible', 'dropItem', 'sheet', 'resumeMode', 'start']), batch: fns(['stop', 'cancelJob', 'release', 'resume', 'answerJob', 'retry', 'submitNow', 'checkPage', 'attest', 'notSure', 'notSubmitted', 'resumeChoice', 'watch', 'ticket', 'newBatch', 'retryFailed']) } as unknown as Mocked;
+  return { ...fns(['pair', 'unlink', 'refresh', 'view', 'menu', 'toggleLog', 'chat', 'answer']), jobs: fns(['pickSearch', 'picker', 'filter', 'more', 'toggle', 'selectVisible', 'site', 'dropItem', 'sheet', 'resumeMode', 'start']), batch: fns(['stop', 'cancelJob', 'release', 'resume', 'answerJob', 'retry', 'submitNow', 'checkPage', 'attest', 'notSure', 'notSubmitted', 'resumeChoice', 'watch', 'ticket', 'newBatch', 'retryFailed']) } as unknown as Mocked;
 };
 const base = (): PanelState => ({ status: 'ready', toasts: [], items: [], sessions: {}, progress: {}, cards: {}, pendingOutbox: 0, policy: { fx: 'FILL_ONLY' }, view: 'jobs', jobs: { searches: [], pickerOpen: false, jobs: [], jobsTotal: 0, known: {}, loading: false, q: '', sort: 'best', remote: false, fromPlato: false, picked: [], resumeMode: 'profile' }, run: null, rows: [] });
 const draw = (s: Partial<PanelState>, a = actions()) => {
@@ -210,5 +210,32 @@ describe('panel view', () => {
     const { root } = draw({ pendingOutbox: 2, error: 'Cannot reach Plato right now.' });
     expect(root.textContent).toContain('2 update(s) waiting');
     expect(root.querySelector('.banner.err')?.textContent).toContain('Cannot reach');
+  });
+});
+
+describe('jobs view: the site chips filter the loaded jobs on the client', () => {
+  const search = { id: 's1', title: 'Frontend', locations: ['Cairo'], remote: null, job_count: 3, featured: false, created_at: '2026-10-30T00:00:00Z' };
+  const jobs = [job(1, { source: 'LINKEDIN' }), job(2, { source: 'LEVER' }), job(3, { source: 'INDEED', site: 'GREENHOUSE' }), job(4, { source: 'LINKEDIN' })];
+  const state = (site: string | null = null): Partial<PanelState> => ({ jobs: { ...base().jobs, searches: [search], searchId: 's1', jobs, jobsTotal: 9, site } });
+  it('one chip per site with its count on this page; a click asks for that site; the list and the count follow; the chip toggles off', () => {
+    const d = draw(state());
+    const chips = [...d.root.querySelectorAll('#sites button')].map((b) => b.textContent!.trim());
+    expect(chips).toEqual(['All sites · 4', 'Linkedin · 2', 'Lever · 1', 'Greenhouse · 1']);
+    expect(d.root.querySelectorAll('#jobs .job').length).toBe(4);
+    (d.root.querySelector('#f-site-lever') as HTMLButtonElement).click();
+    expect(d.a.jobs.site).toHaveBeenCalledWith('LEVER');
+    const f = draw(state('LEVER'));
+    expect(f.root.querySelectorAll('#jobs .job').length).toBe(1);
+    expect(f.root.querySelector('#count')!.textContent).toBe('1 of 9 jobs · Lever');
+    expect(f.root.querySelector('#f-site-lever')!.getAttribute('aria-pressed')).toBe('true');
+    (f.root.querySelector('#f-site-lever') as HTMLButtonElement).click();
+    expect(f.a.jobs.site).toHaveBeenCalledWith(null);
+    expect(f.root.querySelector('#select-visible')!.textContent).toContain('Select 1');
+  });
+  it('a stale site (no longer on the page) shows everything; one site only shows no chips', () => {
+    const d = draw(state('WORKABLE'));
+    expect(d.root.querySelectorAll('#jobs .job').length).toBe(4);
+    const one = draw({ jobs: { ...base().jobs, searches: [search], searchId: 's1', jobs: [job(1, { source: 'LEVER' })], jobsTotal: 1 } });
+    expect(one.root.querySelector('#sites')).toBeNull();
   });
 });

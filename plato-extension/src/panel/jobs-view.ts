@@ -10,6 +10,10 @@ import { avatar, banner, btn, h, type Actions, type PanelState, type PickKey } f
 export const JOBS_PAGE_SIZE = 20;
 
 const label = (s: string) => s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ');
+/** The site an application goes through: the ATS behind a board listing when known (Indeed → Greenhouse), else the board itself. */
+export const siteOf = (x: SearchJob) => (x.site ?? x.source).toUpperCase();
+/** The loaded jobs the site chip leaves visible (a chip for a site no longer on the page counts as none). */
+export const visibleJobs = (j: { jobs: SearchJob[]; site?: string | null }) => (j.site && j.jobs.some((x) => siteOf(x) === j.site) ? j.jobs.filter((x) => siteOf(x) === j.site) : j.jobs);
 export const canStart = (i: ApiItem, s: PanelState, registry: Registry) => !!i.provider && registry.policyOf(i.provider, s.policy) === 'FILL_ONLY' && !!registry.get(i.provider)?.adapter;
 export const blockedWhy = (i: ApiItem, s: PanelState, registry: Registry) => (!i.provider || registry.policyOf(i.provider, s.policy) !== 'FILL_ONLY' ? 'Not available: this site is not enabled for Plato yet.' : 'Not available yet: nothing is built for this site.');
 /** Queued on Plato: waiting server items that are not part of the batch running now. */
@@ -102,14 +106,22 @@ export function renderJobs(doc: Document, s: PanelState, a: Actions, registry: R
       chip(j.sort === 'newest', 'Newest first', () => a.jobs.filter({ sort: j.sort === 'newest' ? 'best' : 'newest' }), 'f-sort'),
       chip(j.remote, 'Remote', () => a.jobs.filter({ remote: !j.remote }), 'f-remote'),
       fromPlato ? chip(j.fromPlato, `From Plato · ${fromPlato}`, () => a.jobs.filter({ fromPlato: !j.fromPlato }), 'f-plato') : null));
+    // the site chips: client-side, over the jobs loaded so far; counts are what is on the page, not the server's total
+    const sites = [...j.jobs.reduce((m, x) => m.set(siteOf(x), (m.get(siteOf(x)) ?? 0) + 1), new Map<string, number>())].sort((p, q) => q[1] - p[1]);
+    const active = j.site && sites.some(([k]) => k === j.site) ? j.site : null;
+    if (sites.length > 1)
+      out.push(h(doc, 'div', { class: 'filters sites', id: 'sites', attrs: { role: 'group', 'aria-label': 'Apply site' } },
+        chip(!active, `All sites · ${j.jobs.length}`, () => a.jobs.site(null), 'f-site-all'),
+        ...sites.map(([k, n]) => chip(active === k, `${label(k)} · ${n}`, () => a.jobs.site(active === k ? null : k), `f-site-${k.toLowerCase()}`))));
+    const visible = visibleJobs(j);
     const room = MAX_BATCH_JOBS - j.picked.length;
-    const pickable = j.jobs.filter((x) => x.applyable && !x.queued && !j.picked.includes(`job:${x.id}`)).length;
-    out.push(h(doc, 'div', { class: 'lhead' }, h(doc, 'span', { class: 'n num', id: 'count', text: j.loading && !j.jobs.length ? 'Loading…' : `${j.jobsTotal} job${j.jobsTotal === 1 ? '' : 's'}` }),
+    const pickable = visible.filter((x) => x.applyable && !x.queued && !j.picked.includes(`job:${x.id}`)).length;
+    out.push(h(doc, 'div', { class: 'lhead' }, h(doc, 'span', { class: 'n num', id: 'count', text: j.loading && !j.jobs.length ? 'Loading…' : active ? `${visible.length} of ${j.jobsTotal} job${j.jobsTotal === 1 ? '' : 's'} · ${label(active)}` : `${j.jobsTotal} job${j.jobsTotal === 1 ? '' : 's'}` }),
       !running && pickable && room > 0 ? btn(doc, `Select ${Math.min(room, pickable)} on this page`, a.jobs.selectVisible, 'btn ghost sm', { id: 'select-visible' }) : null));
     const list = h(doc, 'div', { class: 'jobs', id: 'jobs' });
     if (j.loading && !j.jobs.length) list.append(h(doc, 'div', { class: 'skel' }), h(doc, 'div', { class: 'skel' }), h(doc, 'div', { class: 'skel' }));
     else if (!j.jobs.length) list.append(h(doc, 'div', { class: 'empty card' }, h(doc, 'span', { class: 'eico' }, icon(doc, 'search')), h(doc, 'h3', { text: 'No jobs match' }), h(doc, 'p', { text: 'Try another search, or clear the filters.' }), btn(doc, 'Clear filters', () => a.jobs.filter({ q: '', remote: false, fromPlato: false }), 'btn soft')));
-    for (const x of j.jobs) list.append(jobRow(doc, x, s, a, running));
+    for (const x of visible) list.append(jobRow(doc, x, s, a, running));
     out.push(list);
     if (j.jobs.length < j.jobsTotal) out.push(btn(doc, j.loading ? 'Loading…' : `Show more (${j.jobsTotal - j.jobs.length} left)`, a.jobs.more, 'btn block', { disabled: s.busy || j.loading, id: 'more' }));
   } else if (!j.searches.length && !queued.length) {

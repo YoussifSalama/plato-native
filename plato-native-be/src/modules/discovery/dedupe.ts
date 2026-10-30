@@ -20,7 +20,7 @@ export function dedupeKey(
 // (company's own ATS), then the one with the longer description.
 const OWN_ATS = /(greenhouse|lever|ashbyhq|workable)\./i;
 const score = (j: NormalizedJob) =>
-  (OWN_ATS.test(j.apply_url ?? j.url) ? 1_000_000 : 0) +
+  (OWN_ATS.test(j.apply_url || j.url) ? 1_000_000 : 0) +
   (j.description?.length ?? 0) +
   (j.salary_min ? 500 : 0);
 

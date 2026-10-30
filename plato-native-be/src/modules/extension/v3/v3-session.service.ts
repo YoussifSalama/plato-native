@@ -7,7 +7,7 @@ import { CandidateService } from '../candidate.service';
 import type { ExtensionPrincipal } from '../extension.service';
 import { profileSummary } from '../profile-summary';
 import { readSettings } from '../settings';
-import { parseOutcome, type BrowserCall, type CallResult, type Outcome, type TurnRequest, type TurnResponse } from './v3-contract';
+import { applyPageOf, parseOutcome, type BrowserCall, type CallResult, type Outcome, type TurnRequest, type TurnResponse } from './v3-contract';
 
 // Engine v3: one Claude conversation per application, driven by the browser use tool. The backend is the brain:
 // it builds the prompt from the seeker's profile, asks Claude for the next browser actions, checks them, and hands
@@ -203,7 +203,7 @@ export class V3SessionService {
     const job = await this.prisma.job.findUniqueOrThrow({ where: { id: jobId }, select: { title: true, company: true, description: true, location: true, url: true, apply_url: true } });
     const candidate = await this.candidates.load(p.jobSeekerId);
     const settings = readSettings((await this.prisma.jobSeeker.findUnique({ where: { id: p.jobSeekerId }, select: { extension_settings: true } }))?.extension_settings);
-    const url = job.apply_url ?? job.url;
+    const url = applyPageOf(job);
     const host = new URL(url).hostname;
     const hosts = [host, registrable(host), ...(job.url ? [new URL(job.url).hostname] : [])];
     const today = new Date().toISOString().slice(0, 10);
@@ -224,7 +224,7 @@ ${profileSummary(candidate)}`;
 
   private async jobUrl(jobId: string) {
     const job = await this.prisma.job.findUnique({ where: { id: jobId }, select: { url: true, apply_url: true } });
-    return job?.apply_url ?? job?.url;
+    return job ? applyPageOf(job) : undefined;
   }
 
   private bill(s: Session, r: Anthropic.Beta.BetaMessage) {

@@ -75,5 +75,5 @@ export function effectiveApplySource(job: {
   if (ACCOUNT_GATED.has(job.source)) return null;
   const direct = DIRECT_ATS[job.source];
   if (direct) return direct;
-  return detectAtsHost(job.apply_url ?? job.url);
+  return detectAtsHost(job.apply_url || job.url);
 }

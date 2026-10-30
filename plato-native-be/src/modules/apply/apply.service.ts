@@ -654,7 +654,7 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
         'checking',
         'Checking the posting is still open and reading its form',
       );
-      const schema = await adapter.loadForm(app.job.apply_url ?? app.job.url);
+      const schema = await adapter.loadForm(app.job.apply_url || app.job.url);
 
       emit(
         'mapping',

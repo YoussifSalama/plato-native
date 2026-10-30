@@ -108,7 +108,7 @@ export class DigestService implements OnModuleInit, OnModuleDestroy {
     for (let i = 0; i < toCheck.length; i += 5)
       await Promise.all(
         toCheck.slice(i, i + 5).map(async (job) => {
-          const gone = await probeListing(job.apply_url ?? job.url);
+          const gone = await probeListing(job.apply_url || job.url);
           await this.prisma.job.update({
             where: { id: job.id },
             data: { checked_at: now, ...(gone && { expired_at: now }) },
@@ -193,7 +193,7 @@ export class DigestService implements OnModuleInit, OnModuleDestroy {
             location: j.location,
             remote: j.remote_type === JobRemoteType.REMOTE,
             posted_at: j.posted_at,
-            url: j.apply_url ?? j.url,
+            url: j.apply_url || j.url,
           })),
           appUrl: appUrl(),
           unsubscribeUrl,

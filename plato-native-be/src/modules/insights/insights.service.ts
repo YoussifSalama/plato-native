@@ -253,7 +253,7 @@ export class InsightsService {
           location: j.location,
           remote: j.remote_type === JobRemoteType.REMOTE,
           posted_at: j.posted_at,
-          url: j.apply_url ?? j.url,
+          url: j.apply_url || j.url,
           closed: !!j.expired_at,
         })),
     }));

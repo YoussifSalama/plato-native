@@ -92,7 +92,7 @@ export class JobFreshnessService implements OnModuleInit, OnModuleDestroy {
     for (let i = 0; i < jobs.length; i += 5) {
       await Promise.all(
         jobs.slice(i, i + 5).map(async (job) => {
-          const gone = await probeListing(job.apply_url ?? job.url);
+          const gone = await probeListing(job.apply_url || job.url);
           if (gone) closed++;
           await this.prisma.job.update({
             where: { id: job.id },

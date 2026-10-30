@@ -1,4 +1,4 @@
-import { parseOutcome } from './v3-contract';
+import { applyPageOf, parseOutcome } from './v3-contract';
 import { registrable, V3SessionService } from './v3-session.service';
 
 describe('parseOutcome', () => {
@@ -90,5 +90,14 @@ describe('V3SessionService.status', () => {
       model: 'm',
     });
     expect(svc.status({ jobSeekerId: 'other' } as never, 'i1')).toBeNull();
+  });
+});
+
+describe('applyPageOf', () => {
+  it('uses apply_url when the job has one and the listing url otherwise, treating an empty apply_url as none (LinkedIn stores "")', () => {
+    expect(applyPageOf({ apply_url: 'https://jobs.lever.co/x/apply', url: 'https://x.com/job' })).toBe('https://jobs.lever.co/x/apply');
+    expect(applyPageOf({ apply_url: null, url: 'https://x.com/job' })).toBe('https://x.com/job');
+    expect(applyPageOf({ apply_url: '', url: 'https://eg.linkedin.com/jobs/view/1' })).toBe('https://eg.linkedin.com/jobs/view/1');
+    expect(() => new URL(applyPageOf({ apply_url: '', url: 'https://eg.linkedin.com/jobs/view/1' }))).not.toThrow();
   });
 });

@@ -7,6 +7,9 @@ import { z } from 'zod';
 
 export const V3_CONTRACT_VERSION = 1;
 
+/** The page an application starts on: apply_url when the job has one, else the listing. Board jobs (LinkedIn) store apply_url as '' (not null); `??` kept it and `new URL('')` threw (2026-10-30). */
+export const applyPageOf = (job: { apply_url?: string | null; url: string }): string => job.apply_url || job.url;
+
 export const callResultSchema = z.object({
   call_id: z.string().min(1).max(64),
   ok: z.boolean(),

@@ -79,9 +79,7 @@ await T('pairing: wrong code is refused and no token is stored', async () => {
 await T('pairing: right code stores the token (service worker can read it) and lists the queue', async () => {
   await panel.locator('#code').fill('ABCD-EFGH');
   await btn(panel, 'Link this browser').click();
-  await panel.getByText('You’re linked!').waitFor(); // first run: the welcome, then the waiting jobs
-  await btn(panel, /Review \d+ waiting job/).click();
-  await panel.getByText('Engineer 1').waitFor();
+  await panel.locator('.job').filter({ hasText: 'Engineer 1' }).waitFor({ timeout: 15000 }); // the queue, the newest pick ticked for the first batch
   eq(await storageToken(), TOKEN);
   const ex = apiCalls('/extension/pairing/exchange').at(-1);
   eq([ex.origin, ex.auth, ex.cookie], [ORIGIN, null, null], 'exchange');
@@ -94,10 +92,9 @@ await T('every API request: extension origin, Bearer token, NO cookie', async ()
 });
 
 await T('policy: blocked provider shows no Start and is never claimed or opened', async () => {
-  const sections = panel.locator('section.item');
-  const blocked = sections.filter({ hasText: 'Engineer 9' });
+  const blocked = panel.locator('.job').filter({ hasText: 'Engineer 9' });
   await blocked.waitFor();
-  eq(await blocked.getByRole('button', { name: 'Start' }).count(), 0);
+  eq(await blocked.getAttribute('aria-disabled'), 'true', 'a blocked job cannot be picked');
   ok((await blocked.textContent()).includes('not enabled'), 'no reason shown');
   eq(apiCalls('/extension/v1/items/9/claim').length, 0);
   ok(!seen.some((r) => r.url.includes('workable')), 'a workable URL was requested');
@@ -167,62 +164,91 @@ await T('the service worker answers no message (nothing can ask it for the token
   await p.close();
 });
 
-async function startItem(p, n, beforeArm) {
-  const sec = p.locator('section.item').filter({ hasText: `Engineer ${n}` });
-  const opened = ctx.waitForEvent('page', { timeout: 8000 });
-  opened.catch(() => undefined);
-  await sec.getByRole('button', { name: 'Start' }).click();
-  let tab;
-  try { tab = await opened; } catch (e) { throw new Error(`${e.message}\npanel says: ${(await p.locator('main').innerText()).replace(/\n+/g, ' | ')}\napi: ${JSON.stringify(api.log.slice(-4))}`, { cause: e }); }
-  await tab.waitForLoadState('domcontentloaded');
-  // the generic loop: the resume (this run's preference) goes in first, one decision, every field filled
-  // (the required consent box included: the AI ticks it), auto-submit off -> armed for the person
-  await sec.getByText(/Press Submit on the job page yourself|Plato lost the page|Still needed/).first().waitFor({ timeout: 90000 });
-  if (beforeArm) await beforeArm(tab);
-  return tab;
-}
+// The batch runs its jobs in order (the stub's speed setting opens one tab at a time): 1, 2, 3, 4, 5. Each flow below
+// settles its job, which frees the slot for the next one; the next tab is awaited BEFORE the click that frees it.
+const row = (p, n) => p.locator(`[data-item="${n}"]`);
+const ARMED = /Press Submit on the job page yourself|Plato lost the page|Needs you/i;
+const nextTab = () => { const p = ctx.waitForEvent('page', { timeout: 60000 }); p.catch(() => undefined); return p; };
+const loaded = async (p) => { const t = await p; await t.waitForLoadState('domcontentloaded'); return t; };
+let tab;
 
-await T('flow A: arm is recorded BEFORE the person is told to submit; person submits; page confirmation is recorded', async () => {
-  servers.api.log.length = 0;
-  api.decisions.length = 0;
-  const tab = await startItem(panel, 1, async (tab) => {
-    // the page was inspected, decided ONCE per page state and filled; the city (revealed by the country) got its own decision
-    const val = (sel) => tab.locator(sel).evaluate((e) => (e.type === 'checkbox' ? String(e.checked) : e.value));
-    eq([await val('#fn'), await val('#ln'), await val('#em'), await val('#ph'), await val('#co'), await val('#ci'), await val('#msg')], ['Youssif', 'Salama', 'y@example.com', '+201001234567', 'EG', 'Cairo', 'I like what Acme builds.'], 'filled fields (city appears after the country is chosen; the free text is written, not left to the person)');
-    eq([await val('#terms'), await val('#pw'), await val('#trap')], ['true', '', ''], 'required consent ticked by the decision; password and honeypot untouched');
-    eq(await tab.locator('#cv').evaluate((e) => e.files[0]?.name ?? ''), 'profile-resume.pdf', 'the chosen resume went into the upload field');
-    eq(itemOnServer('1').resume_choice, 'profile', 'the choice is kept on the application');
-    eq(api.decisions.length, 2, 'decisions so far: the form, then the revealed city');
-    const labels = api.decisions[0].fields.map((f) => f.label);
-    ok(labels.includes('First name') && !labels.some((l) => /password|website/i.test(l)), `decision fields: ${labels.join(', ')}`);
-    eq(api.decisions[1].fields.map((f) => f.label), ['City'], 'the second decision is the revealed field only; nothing filled is sent again');
-    const text = await panel.locator('main').innerText();
-    ok(!/SECRET/.test(text), 'non-identity candidate data reached the panel view');
-    eq(fixture.submits, 0, 'the engine submitted the form');
-    eq(itemOnServer('1').state, 'AWAITING_SUBMIT', 'armed by itself once complete');
-  });
-  eq(api.decisions.length, 2, 'no decision while nothing changed');
-  eq(api.log.filter((l) => l.path.endsWith('/transition') && l.method === 'POST').length, 4); // PREPARING FILLING REVIEW AWAITING
-  eq(fixture.submits, 0, 'extension submitted by itself');
+await T('the batch starts only from the sheet: the five fillable jobs, one tab at a time', async () => {
+  eq(await panel.locator('#picked').textContent(), '5 / 10', 'the newest pick is ticked, the blocked job is not');
+  await btn(panel, 'Review batch').click();
+  await panel.locator('#sheet').waitFor();
+  ok(/One batch at a time/.test(await panel.locator('#sheet').textContent()), 'the sheet states the rule');
+  const opened = nextTab();
+  await panel.locator('#start-batch').click();
+  tab = await loaded(opened);
+  await panel.locator('#batch-head').waitFor();
+});
+
+await T('flow A: arm is recorded BEFORE the person is told to submit; Submit for me presses once; page confirmation is recorded', async () => {
+  await row(panel, 1).getByText(ARMED).first().waitFor({ timeout: 90000 });
+  // the page was inspected, decided ONCE per page state and filled; the city (revealed by the country) got its own decision
+  const val = (sel) => tab.locator(sel).evaluate((e) => (e.type === 'checkbox' ? String(e.checked) : e.value));
+  eq([await val('#fn'), await val('#ln'), await val('#em'), await val('#ph'), await val('#co'), await val('#ci'), await val('#msg')], ['Youssif', 'Salama', 'y@example.com', '+201001234567', 'EG', 'Cairo', 'I like what Acme builds.'], 'filled fields (city appears after the country is chosen; the free text is written, not left to the person)');
+  eq([await val('#terms'), await val('#pw'), await val('#trap')], ['true', '', ''], 'required consent ticked by the decision; password and honeypot untouched');
+  eq(await tab.locator('#cv').evaluate((e) => e.files[0]?.name ?? ''), 'profile-resume.pdf', 'the chosen resume went into the upload field');
+  eq(itemOnServer('1').resume_choice, 'profile', 'the choice is kept on the application');
+  eq(api.decisions.length, 2, 'decisions so far: the form, then the revealed city');
+  const labels = api.decisions[0].fields.map((f) => f.label);
+  ok(labels.includes('First name') && !labels.some((l) => /password|website/i.test(l)), `decision fields: ${labels.join(', ')}`);
+  eq(api.decisions[1].fields.map((f) => f.label), ['City'], 'the second decision is the revealed field only; nothing filled is sent again');
+  const text = await panel.locator('main').innerText();
+  ok(!/SECRET/.test(text), 'non-identity candidate data reached the panel view');
+  eq(fixture.submits, 0, 'the engine submitted the form');
+  eq(itemOnServer('1').state, 'AWAITING_SUBMIT', 'armed by itself once complete');
+  eq(api.log.filter((l) => l.path === '/extension/v1/items/1/transition' && l.method === 'POST').length, 4); // PREPARING FILLING REVIEW AWAITING
   // "Submit for me": the seeker's explicit go-ahead for this job; the loop presses Submit and confirms from the page
-  await panel.locator('section.item').filter({ hasText: 'Engineer 1' }).getByRole('button', { name: 'Submit for me' }).click();
+  const opened = nextTab();
+  await row(panel, 1).getByRole('button', { name: 'Submit for me' }).click();
   await tab.waitForURL('**/confirmed.html', { timeout: 30000 });
   eq(fixture.submits, 1);
-  await panel.locator('section.item').filter({ hasText: 'Engineer 1' }).waitFor({ state: 'detached', timeout: 20000 });
+  await row(panel, 1).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 20000 });
   eq([itemOnServer('1').state, itemOnServer('1').detail?.marker], ['SUBMITTED_CONFIRMED', 'Application received']);
   eq(fixture.submits, 1, 'extra submit');
   await tab.close();
+  tab = await loaded(opened);
 });
 
-await T('flow E: listing -> Apply -> 3-step dialog: a page rejects a value (repair), type-ahead, tick list, radio, Next/Review, armed at Submit', async () => {
+await T('flow B: panel restarts after arming, form still open -> the batch is found again, the job is VERIFY (never resubmitted); the person settles it', async () => {
+  const before = fixture.submits;
+  await row(panel, 2).getByText(ARMED).first().waitFor({ timeout: 90000 });
+  const opened = nextTab(); // job 3 starts when the reloaded panel finds a free slot
+  await panel.reload(); // the "crash": all in-memory sessions are gone
+  await row(panel, 2).getByText(/cannot tell whether this was sent/).waitFor({ timeout: 15000 });
+  eq([itemOnServer('2').state, itemOnServer('2').verify_reason], ['VERIFY', 'form_still_open_after_restart']);
+  eq(fixture.submits, before, 'submitted during reconcile');
+  await row(panel, 2).getByRole('button', { name: 'It was not' }).click();
+  await row(panel, 2).locator('.pill').filter({ hasText: 'Failed' }).waitFor({ timeout: 10000 });
+  eq(itemOnServer('2').state, 'FAILED');
+  eq(fixture.submits, before);
+  await tab.close();
+  tab = await loaded(opened);
+});
+
+await T('flow C: person submitted, then the panel crashed before recording -> reconcile finds the confirmation and the batch records it', async () => {
+  const before = fixture.submits;
+  await row(panel, 3).getByText(ARMED).first().waitFor({ timeout: 90000 });
+  await personSubmits(tab); // the person completes the rest and submits
+  await tab.waitForURL('**/confirmed.html');
+  await panel.close(); // crash before anything was recorded
+  eq(itemOnServer('3').state, 'AWAITING_SUBMIT');
+  panel = await openPanel();
+  globalThis.__panel = panel;
+  const opened = nextTab(); // job 4 opens once the reopened panel has reconciled (armed after the panel page itself)
+  await row(panel, 3).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 15000 }); // reconcile runs before the first draw
+  eq([itemOnServer('3').state, itemOnServer('3').detail?.marker], ['SUBMITTED_CONFIRMED', 'Application received']);
+  eq(fixture.submits, before + 1, 'exactly the person’s one submit');
+  await tab.close();
+  tab = await loaded(opened);
+});
+
+await T('flow E: listing -> Apply -> 3-step dialog: a page rejects a value (repair), type-ahead, tick list, radio, Next/Review, armed at Submit; Check the page records the confirmation', async () => {
   api.decisions.length = 0; api.repairs.length = 0;
   const before = fixture.submits;
-  const sec = panel.locator('section.item').filter({ hasText: 'Engineer 4' });
-  const opened = ctx.waitForEvent('page', { timeout: 15000 });
-  opened.catch(() => undefined);
-  await sec.getByRole('button', { name: 'Start' }).click();
-  const tab = await opened;
-  await sec.getByText(/Press Submit on the job page yourself|Plato lost the page|Still needed/).first().waitFor({ timeout: 90000 });
+  await row(panel, 4).getByText(ARMED).first().waitFor({ timeout: 90000 });
   const val = (sel) => tab.locator(sel).evaluate((e) => (e.type === 'checkbox' || e.type === 'radio' ? String(e.checked) : e.value));
   eq([await val('#fn'), await val('#em'), await val('#ph')], ['Youssif', 'y@example.com', '201001234567'], 'step 1 filled; the phone the page rejected was corrected by the repair call');
   eq(api.repairs.length, 1, 'exactly one repair call, after the real failure');
@@ -237,80 +263,60 @@ await T('flow E: listing -> Apply -> 3-step dialog: a page rejects a value (repa
   await tab.locator('#submit').click();
   await tab.waitForURL('**/confirmed.html');
   eq(fixture.submits, before + 1);
-  await btn(panel, 'Check the page').click();
-  await panel.getByText('The page shows a confirmation').waitFor();
+  const opened = nextTab();
+  await row(panel, 4).getByRole('button', { name: 'Check the page' }).click();
+  await row(panel, 4).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 15000 });
   eq(itemOnServer('4').state, 'SUBMITTED_CONFIRMED');
   await tab.close();
+  tab = await loaded(opened);
 });
 
 await T('flow F: the page rejects Submit with an inline field error -> the error is read, the field repaired, Submit pressed once more, confirmed', async () => {
   api.decisions.length = 0; api.repairs.length = 0;
   const before = fixture.submits;
-  const sec = panel.locator('section.item').filter({ hasText: 'Engineer 5' });
-  const opened = ctx.waitForEvent('page', { timeout: 15000 });
-  opened.catch(() => undefined);
-  await sec.getByRole('button', { name: 'Start' }).click();
-  const tab = await opened;
-  await sec.getByText(/Press Submit on the job page yourself|Plato lost the page|Still needed/).first().waitFor({ timeout: 90000 });
+  await row(panel, 5).getByText(ARMED).first().waitFor({ timeout: 90000 });
   eq(await tab.locator('#loc').inputValue(), '', 'the stand-in AI has no value for Location on the first decision');
   eq(api.repairs.length, 0, 'no repair before anything failed');
   // the seeker's go-ahead: the loop presses Submit; the page refuses it and shows the error next to the list
-  await sec.getByRole('button', { name: 'Submit for me' }).click();
+  await row(panel, 5).getByRole('button', { name: 'Submit for me' }).click();
   await tab.waitForURL('**/confirmed.html', { timeout: 60000 });
   eq(fixture.submits, before + 1, 'exactly one real submission');
   eq(api.repairs.length, 1, 'one repair call, carrying the page error');
   ok(/This field is required/.test(api.repairs[0].questions[0]?.hint ?? ''), `the repair question carries the page's error: ${api.repairs[0].questions[0]?.hint}`);
-  await sec.waitFor({ state: 'detached', timeout: 20000 });
+  await row(panel, 5).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 20000 });
   eq(itemOnServer('5').state, 'SUBMITTED_CONFIRMED');
   await tab.close();
 });
 
-await T('flow B: panel restarts after arming, form still open -> VERIFY (never resubmitted); person settles it', async () => {
-  const before = fixture.submits;
-  const tab = await startItem(panel, 2);
-  await panel.reload(); // the "crash": all in-memory sessions are gone
-  await panel.getByText('cannot tell whether this was sent').waitFor();
-  eq([itemOnServer('2').state, itemOnServer('2').verify_reason], ['VERIFY', 'form_still_open_after_restart']);
-  eq(fixture.submits, before, 'submitted during reconcile');
-  await btn(panel, 'I did not submit it').click();
-  await sleep(300); await panel.getByText('Nothing queued').or(panel.getByText('Engineer 3')).first().waitFor();
-  eq(itemOnServer('2').state, 'FAILED');
-  eq(fixture.submits, before);
-  await tab.close();
+await T('the batch finishes with every outcome on one summary', async () => {
+  await panel.locator('#batch-summary').waitFor({ timeout: 20000 });
+  const t = await panel.locator('#batch-summary').textContent();
+  ok(/Batch finished/.test(t) && /4 of 5 applications sent/.test(t), `summary: ${t.slice(0, 200)}`);
 });
 
-await T('flow C: person submitted, then the panel crashed before recording -> reconcile finds the confirmation', async () => {
-  const before = fixture.submits;
-  const tab = await startItem(panel, 3);
-  await personSubmits(tab); // the person completes the rest and submits
-  await tab.waitForURL('**/confirmed.html');
-  await panel.close(); // crash before anything was recorded
-  eq(itemOnServer('3').state, 'AWAITING_SUBMIT');
-  panel = await openPanel();
-  globalThis.__panel = panel;
-  await panel.getByText('Engineer 9').waitFor({ timeout: 8000 }); // list loaded (reconcile runs before the first draw)
-  eq(await panel.locator('section.item').filter({ hasText: 'Engineer 3' }).count(), 0);
-  eq([itemOnServer('3').state, itemOnServer('3').detail?.marker], ['SUBMITTED_CONFIRMED', 'Application received']);
-  eq(fixture.submits, before + 1, 'exactly the person’s one submit');
-  await tab.close();
-});
-
-await T('flow D: tab closed after arming (page gone) -> VERIFY, not "submitted", not retried', async () => {
+await T('flow D: a new batch after a server reset; the tab is closed after arming (page gone) -> VERIFY, not "submitted", not retried', async () => {
   servers.reset();
   await panel.reload();
-  const tab = await startItem(panel, 1);
-  await tab.close();
+  await panel.locator('.job').filter({ hasText: 'Engineer 1' }).waitFor({ timeout: 15000 });
+  await btn(panel, 'Review batch').click();
+  const opened = nextTab();
+  await panel.locator('#start-batch').click();
+  const t = await loaded(opened);
+  await row(panel, 1).getByText(ARMED).first().waitFor({ timeout: 90000 });
+  await t.close();
   await panel.reload();
-  await panel.getByText('cannot tell whether this was sent').waitFor();
+  await row(panel, 1).getByText(/cannot tell whether this was sent/).waitFor({ timeout: 15000 });
   eq([itemOnServer('1').state, itemOnServer('1').verify_reason], ['VERIFY', 'page_closed']);
   eq(fixture.submits, 0);
 });
 
 await T('401 from the API: the panel drops the token and asks to pair again', async () => {
   api.force401 = true;
-  await panel.getByRole('button', { name: 'Menu' }).click(); // Refresh lives in the ⋮ menu now
-  await btn(panel, 'Refresh').click();
-  await panel.getByText('no longer linked').waitFor();
+  // the batch is still running in the background (its heartbeats and the periodic refresh may see the 401 first);
+  // Refresh in the ⋮ menu is the explicit way to hit the API, skipped if the panel already dropped the link
+  const gone = panel.getByText('no longer linked').waitFor({ timeout: 30000 });
+  await panel.getByRole('button', { name: 'Menu' }).click({ timeout: 5000 }).then(() => panel.getByRole('menuitem', { name: 'Refresh' }).click({ timeout: 3000 })).catch(() => undefined);
+  await gone;
   eq(await storageToken(), null);
   api.force401 = false;
 });
@@ -318,10 +324,9 @@ await T('401 from the API: the panel drops the token and asks to pair again', as
 await T('unlink: server revokes this device and the token is cleared', async () => {
   await panel.locator('#code').fill('ABCD-EFGH');
   await btn(panel, 'Link this browser').click();
-  await btn(panel, /Review \d+ waiting job/).click(); // first run: welcome, then the waiting jobs
-  await panel.getByText('Engineer 2').waitFor();
+  await panel.locator('#tab-jobs').waitFor({ timeout: 15000 }); // linked again: the panel shows its views
   await panel.getByRole('button', { name: 'Menu' }).click();
-  await btn(panel, 'Unlink this browser').click();
+  await panel.getByRole('menuitem', { name: 'Unlink this browser' }).click();
   await panel.locator('#code').waitFor();
   eq(apiCalls('/extension/v1/device').at(-1)?.method, 'DELETE');
   eq(await storageToken(), null);

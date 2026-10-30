@@ -171,3 +171,14 @@ export interface Decision {
   ask_seeker: { question: string; choices: string[] } | null;
   aiFailed: boolean;
 }
+
+// How the extension applies for this seeker (GET/POST /extension/v1/settings).
+export interface RunSettings {
+  autoSubmit: boolean;
+  coverLetter: boolean;
+  speed: 'careful' | 'smart' | 'fast';
+  customMessage: string;
+  tabs: number; // jobs open at once, from the speed
+  resume: string | null;
+  resumeMode: 'profile' | 'tailored'; // what goes into resume upload fields
+}

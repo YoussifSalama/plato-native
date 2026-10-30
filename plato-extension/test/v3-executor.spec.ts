@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { V3Op } from '../src/content/v3-reader';
-import { createExecutor, REFUSE_AGAIN, REFUSE_OTHER_SUBMIT, REFUSE_SUBMIT, type ExecDeps } from '../src/v3/executor';
+import type { Changed, V3Op } from '../src/content/v3-reader';
+import { createExecutor, REFUSE_AGAIN, REFUSE_FILLED, REFUSE_OTHER_SUBMIT, REFUSE_SUBMIT, type ExecDeps } from '../src/v3/executor';
 
 // A fake tab: the content script answers refs by a small table; chrome.debugger calls are recorded.
-function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } } } = {}) {
+function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } }; changed?: Changed } = {}) {
   const cdp: { method: string; params: Record<string, unknown> }[] = [];
   const ops: V3Op[] = [];
   const nav: string[] = [];
@@ -23,6 +23,8 @@ function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?:
         case 'page_text': return 'Apply here' as T;
         case 'form_input': return (o.formInput ?? { ok: true, message: 'Set to "x"' }) as T;
         case 'set_file': return { ok: true, message: `Uploaded ${msg.name}` } as T;
+        case 'changed': return (o.changed ?? { active: null, fields: [] }) as T;
+        case 'typed': return { ok: true } as T;
         case 'state': return { captcha: false } as T;
       }
     },
@@ -195,5 +197,25 @@ describe('executor: members', () => {
     expect(await t.run('new_tab', { url: 'https://x' })).toEqual({ call_id: 'c-new_tab', ok: false, error: 'new_tab is not available in this browser.' });
     expect(await t.run('javascript_exec', { code: '1' })).toMatchObject({ ok: false });
     expect((await t.run('wait', { duration: 99 })).error).toMatch(/between 0 and 30/);
+  });
+});
+
+describe('a value the page filled since the last read is never typed over (Lever fills name, email and phone from the resume)', () => {
+  const filled: Changed = { active: 'ref_1', fields: [{ ref: 'ref_1', label: 'Full name *', value: 'Test Seeker' }] };
+  it('type into such a field is refused with the value the field holds; nothing is inserted', async () => {
+    const t = tab({ changed: filled });
+    expect(await t.run('type', { text: 'Test Seeker' })).toEqual({ call_id: 'c-type', ok: false, error: REFUSE_FILLED('Full name *', 'Test Seeker') });
+    expect(t.cdp.filter((c) => c.method === 'Input.insertText')).toEqual([]);
+  });
+  it('type into another field goes ahead, and the typed value is marked as ours', async () => {
+    const t = tab({ changed: { ...filled, active: 'ref_2' } });
+    expect(await t.run('type', { text: 'Cairo' })).toMatchObject({ ok: true, text: 'Typed' });
+    expect(t.cdp.filter((c) => c.method === 'Input.insertText').length).toBe(5);
+    expect(t.ops.map((o) => o.op)).toContain('typed');
+  });
+  it('file_upload reports the fields the page then filled from the file', async () => {
+    const t = tab({ changed: { active: null, fields: filled.fields } });
+    expect((await t.run('file_upload', { ...ref('ref_6'), document_ids: ['resume'] })).text).toBe('Uploaded cv.pdf. The page then filled from it: Full name * = "Test Seeker". Do not type into those; read the page again.');
+    expect(await tab().run('file_upload', { ...ref('ref_6'), document_ids: ['resume'] })).toMatchObject({ ok: true, text: 'Uploaded cv.pdf' });
   });
 });

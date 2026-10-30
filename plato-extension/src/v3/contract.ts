@@ -16,16 +16,32 @@ export interface CallResult {
   state?: { tabs: { tab_id: string; title: string; url: string; active?: boolean }[] };
   error?: string;
 }
+// A question the brain cannot answer from the profile, shaped so the panel draws the right control (panel/ask-form.ts).
+export interface AskQuestion {
+  id: string;
+  label: string; // a complete question, answerable without seeing the page
+  type: 'boolean' | 'choice' | 'multi' | 'text' | 'textarea';
+  options?: string[];
+  other?: boolean; // "Something else" with a free text box, beside the options
+  why?: string; // the form field behind it and the fact the profile lacks
+  required?: boolean; // default true
+}
+export interface SeekerAnswer {
+  id: string;
+  label: string;
+  value: string;
+}
 export interface TurnRequest {
   // start: open (or restart) the conversation. results: the previous turn's calls ran. seeker_answer: the seeker answered an ASK.
   // solved: the seeker cleared a human check. submit: the item is armed, the model may press Submit once. check: read the page, press nothing.
   event: 'start' | 'results' | 'seeker_answer' | 'solved' | 'submit' | 'check';
   results?: CallResult[];
   text?: string;
+  answers?: SeekerAnswer[]; // seeker_answer: the structured answers behind `text`
 }
 export type Outcome =
   | { kind: 'submit_ready'; summary: string }
-  | { kind: 'ask'; question: string }
+  | { kind: 'ask'; question: string; questions?: AskQuestion[] } // question: the one-line summary; questions: what the panel draws (absent from an older backend)
   | { kind: 'captcha'; text: string }
   | { kind: 'closed'; reason: string }
   | { kind: 'blocked'; reason: string }

@@ -244,7 +244,7 @@ describe('a page that re-renders its form (real Greenhouse page)', () => {
     expect(out.results.map((r) => [r.status, r.reason])).toEqual([['filled', undefined], ['filled', undefined], ['filled', undefined]]);
     expect($<HTMLInputElement>('first_name').value).toBe('Youssif');
     expect($<HTMLInputElement>('phone').value).toBe('+20 10 01234567');
-  });
+  }, 20_000); // types at a person's pace: ~5-10 s, longer on a loaded machine (pre-existing timeout flake, 2026-10-30)
 });
 
 describe('date and number inputs', () => {

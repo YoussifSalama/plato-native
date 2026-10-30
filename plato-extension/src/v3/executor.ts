@@ -17,7 +17,7 @@
 // typing for suggestion lists. Nothing here is made to look human to bot detection: no random mouse paths,
 // no fingerprint changes, and a human check still stops the run for the seeker.
 import type { BrowserCall, CallResult } from './contract';
-import type { ElementInfo, PageInfo, Point, Readiness, V3Op } from '../content/v3-reader';
+import type { Changed, ElementInfo, PageInfo, Point, Readiness, V3Op } from '../content/v3-reader';
 
 export interface ExecDeps {
   send<T>(msg: V3Op): Promise<T>; // the content script of the job's tab
@@ -34,6 +34,8 @@ const TAB = 'tab_1';
 export const REFUSE_SUBMIT = 'Refused: Submit is not allowed yet. Answer SUBMIT_READY when every required field holds a correct value.';
 export const REFUSE_AGAIN = 'Refused: Submit was already pressed once. Read the page and report what it says.';
 export const REFUSE_OTHER_SUBMIT = 'Refused: that action would have submitted the form; it was cancelled. Submit only with the Submit control itself, once.';
+// Typing appends. A field the page filled after the model's last read (a resume parse, a script) would end up doubled.
+export const REFUSE_FILLED = (label: string, value: string) => `Refused: "${label}" already holds "${value}", filled by the page after your last read. Typing would append to it. Read the page again; to replace a value use form_input.`;
 const KEYS: Record<string, { key: string; code: string; vk: number; text?: string }> = {
   Enter: { key: 'Enter', code: 'Enter', vk: 13, text: '\r' },
   Return: { key: 'Enter', code: 'Enter', vk: 13, text: '\r' },
@@ -156,11 +158,16 @@ export function createExecutor(d: ExecDeps) {
         return { ok: true, text: 'Hovered', state: await state() };
       case 'type': {
         const text = String(input.text ?? '');
+        // a person looks at the field first: a value the page put there since the last read is not typed over
+        const ch = await d.send<Changed | null>({ op: 'changed' }).catch(() => null);
+        const hit = ch?.active ? ch.fields.find((f) => f.ref === ch.active) : undefined;
+        if (hit) return { ok: false, error: REFUSE_FILLED(hit.label, hit.value) };
         // short values letter by letter, long answers word by word, at a typing pace
         for (const piece of text.length > 60 ? (text.match(/\S+\s*/g) ?? [text]) : [...text]) {
           await d.cdp('Input.insertText', { text: piece });
           await (text.length > 60 ? human(20, 60) : human(45, 120));
         }
+        await d.send({ op: 'typed' }).catch(() => undefined); // the value is ours now
         await human(200, 400);
         await d.settle(); // a type-ahead fetches its suggestions now: let them arrive before the next look
         return { ok: true, text: 'Typed', state: await state() };
@@ -170,6 +177,7 @@ export function createExecutor(d: ExecDeps) {
         await guarded(allowed, async () => {
           for (let r = 0; r < Number(input.repeat ?? 1); r++) for (const c of chords) await chord(c);
         });
+        await d.send({ op: 'typed' }).catch(() => undefined); // a Backspace or a shortcut changed the value: ours
         await human(150, 300);
         await d.settle();
         return { ok: true, text: 'Pressed', state: await state() };
@@ -212,8 +220,21 @@ export function createExecutor(d: ExecDeps) {
         if (!file) return { ok: false, error: 'No resume is available for this application.' };
         const r = await d.send<{ ok: boolean; message: string }>({ op: 'set_file', ref: t.ref, ...file });
         if (!r.ok) return { ok: false, error: r.message };
-        await d.sleep(d.quick ? 50 : 1500); // the page may parse the file and fill fields from it
-        return { ok: true, text: r.message, state: await state() };
+        // The page may parse the file and fill fields from it, a few seconds later (Lever: name, email, phone,
+        // links). Wait for that and say which fields it filled, so the model reads them instead of typing over them.
+        await d.sleep(d.quick ? 50 : 1500);
+        const filledBy = async () => (await d.send<Changed | null>({ op: 'changed' }).catch(() => null))?.fields ?? [];
+        let filled = await filledBy();
+        for (let i = 0; !filled.length && i < (d.quick ? 0 : 8); i++) {
+          await d.sleep(500);
+          filled = await filledBy();
+        }
+        if (filled.length && !d.quick) {
+          await d.sleep(1000); // the rest of the parse lands
+          filled = await filledBy();
+        }
+        const note = filled.length ? `. The page then filled from it: ${filled.map((f) => `${f.label} = "${f.value}"`).join('; ')}. Do not type into those; read the page again.` : '';
+        return { ok: true, text: r.message + note, state: await state() };
       }
       case 'wait': {
         const s = Number(input.duration ?? 1);

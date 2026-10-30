@@ -11,6 +11,8 @@ if (!['production', 'fixtures'].includes(flavor)) throw new Error(`Unknown flavo
 // Engine: v3 (the browser use tool, default) or v2 (frozen). The fixtures build keeps v2 for its runtime suite; test/runtime/v3.mjs builds v3.
 const engine = (process.argv.find((a) => a.startsWith('--engine=')) ?? `--engine=${process.env.PLATO_ENGINE ?? (flavor === 'fixtures' ? 'v2' : 'v3')}`).split('=')[1];
 if (!['v2', 'v3'].includes(engine)) throw new Error(`Unknown engine ${engine}`);
+// Auto-submit: on (default; Plato presses Submit once SUBMIT_READY) or off (--submit=off: the run stops armed and the person presses Submit). Live-test aid, never the shipped default.
+const autoSubmit = (process.argv.find((a) => a.startsWith('--submit=')) ?? '--submit=on').split('=')[1] !== 'off';
 const apiOrigin = process.env.PLATO_API_ORIGIN ?? (flavor === 'fixtures' ? 'http://127.0.0.1:4011' : 'http://localhost:3000');
 const u = new URL(apiOrigin);
 if (u.origin !== apiOrigin || (u.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(u.hostname)))
@@ -38,7 +40,7 @@ const swapExtra = {
     b.onResolve({ filter: /\/extra$/ }, () => ({ path: join(root, 'src/providers/extra.fixtures.ts') }));
   },
 };
-const common = { plugins: [swapExtra], bundle: true, format: 'iife', target: 'chrome116', minify: false, legalComments: 'none', define: { __FLAVOR__: JSON.stringify(flavor), __ENGINE__: JSON.stringify(engine), __API_ORIGIN__: JSON.stringify(apiOrigin), __WEB_ORIGIN__: JSON.stringify(webOrigin), __BUILD__: JSON.stringify(new Date().toTimeString().slice(0, 5) + ' ' + new Date().toISOString().slice(5, 10)) }, logLevel: 'warning' };
+const common = { plugins: [swapExtra], bundle: true, format: 'iife', target: 'chrome116', minify: false, legalComments: 'none', define: { __FLAVOR__: JSON.stringify(flavor), __ENGINE__: JSON.stringify(engine), __AUTO_SUBMIT__: JSON.stringify(autoSubmit), __API_ORIGIN__: JSON.stringify(apiOrigin), __WEB_ORIGIN__: JSON.stringify(webOrigin), __BUILD__: JSON.stringify(new Date().toTimeString().slice(0, 5) + ' ' + new Date().toISOString().slice(5, 10)) }, logLevel: 'warning' };
 // The manifest comes from the same registry the panel uses.
 const m = await build({ entryPoints: [join(root, 'src/manifest.entry.ts')], bundle: true, platform: 'node', format: 'esm', write: false, plugins: [swapExtra], define: common.define, logLevel: 'warning' });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(m.outputFiles[0].text).toString('base64'));
@@ -51,4 +53,4 @@ if (flavor === 'fixtures') entries['probe.js'] = 'src/content/probe.ts';
 for (const [file, entry] of Object.entries(entries)) await build({ ...common, entryPoints: [join(root, entry)], outfile: join(out, file) });
 writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 for (const f of ['panel.html', 'panel.css']) copyFileSync(join(root, f), join(out, f));
-console.log(`built ${flavor} (engine ${engine}) -> ${out.replace(root + '/', '')} (api ${apiOrigin}, content scripts: ${manifest.content_scripts ? manifest.content_scripts[0].matches.join(', ') : 'none'})`);
+console.log(`built ${flavor} (engine ${engine}, auto-submit ${autoSubmit ? 'on' : 'OFF'}) -> ${out.replace(root + '/', '')} (api ${apiOrigin}, content scripts: ${manifest.content_scripts ? manifest.content_scripts[0].matches.join(', ') : 'none'})`);

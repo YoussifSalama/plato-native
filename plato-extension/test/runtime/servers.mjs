@@ -36,7 +36,7 @@ function v3Turn(store, item, body) {
   if (body.event === 'start') { st.phase = 'fill'; return reply([READ]); }
   if (body.event === 'submit') { st.submitAllowed = true; return reply([READ]); }
   if (body.event === 'solved') return reply([READ]);
-  if (body.event === 'seeker_answer') { st.answer = body.text ?? ''; return reply([READ]); }
+  if (body.event === 'seeker_answer') { st.answer = body.answers?.find((a) => a.id === 'why')?.value ?? body.text ?? ''; st.answers = body.answers ?? null; return reply([READ]); } // the structured answer by id; the text is the fallback
   const results = body.results ?? [];
   const text = results.map((r) => r.text ?? '').join('\n');
   if (st.phase === 'pressed') { st.phase = 'reading'; return reply([{ name: 'get_page_text', input: {} }]); }
@@ -53,7 +53,7 @@ function v3Turn(store, item, body) {
   }
   if (st.submitAllowed && submitBtn) { st.phase = 'pressed'; const r = reply([{ name: 'left_click', input: { target: { type: 'ref', ref: submitBtn.ref } } }, { name: 'wait', input: { duration: 1 } }]); st.pressed = true; return r; } // allowed on this turn; pressed from the next (as the backend records it from the result)
   if (st.rogue && submitBtn && !st.rogueTried) { st.rogueTried = true; return reply([{ name: 'left_click', input: { target: { type: 'ref', ref: submitBtn.ref } } }, { name: 'type', input: { text: 'never typed' } }]); }
-  if (st.asks && !st.asked) { st.asked = true; return outcome({ kind: 'ask', question: 'Why do you want to work at Acme?' }); }
+  if (st.asks && !st.asked) { st.asked = true; return outcome({ kind: 'ask', question: 'The form asks two things your profile does not hold.', questions: [{ id: 'relocate', label: 'Are you willing to relocate to Lima?', type: 'boolean', options: ['Yes', 'No'], why: "Required field 'Willing to relocate?'." }, { id: 'why', label: 'Why do you want to work at Acme?', type: 'textarea', why: "Required field 'Why us?'." }] }); }
   const values = st.answer ? { ...V3_VALUES, 'Why us?': st.answer } : V3_VALUES;
   const calls = [];
   for (const l of lines) {
@@ -122,6 +122,7 @@ export function startServers({ extensionOrigin }) {
       // the panel's run settings and queue (stubs: auto-submit OFF, so the person presses Submit)
       if (url.pathname === '/extension/v1/settings') return json(200, { autoSubmit: false, coverLetter: true, speed: 'smart', customMessage: '', tabs: 1, resume: null, resumeMode: 'profile' });
       if (url.pathname === '/extension/v1/queue') return json(200, []);
+      if (url.pathname === '/extension/v1/queue/drop') { const ids = body.itemIds ?? []; let n = 0; for (const i of api.items) if (ids.includes(i.id) && i.state === 'PENDING') { i.state = 'CANCELLED'; n++; } return json(200, { dropped: n }); }
       if (url.pathname === '/extension/v1/consent') return json(200, { ok: true });
       // the panel chat's orchestrator: a stand-in that answers nothing and acts on nothing (the job's own run continues)
       if (url.pathname === '/extension/v1/orchestrator') { api.orchestrator.push(body); return json(200, { reply: '', events: [] }); }

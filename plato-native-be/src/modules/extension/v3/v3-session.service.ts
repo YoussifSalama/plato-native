@@ -51,7 +51,15 @@ How to work:
 - Never invent a fact. For work authorization, residence in a specific state/country, background, licences, demographics and anything not in the profile: pick "prefer not to say"/"decline" if offered, otherwise leave it and ask.
 - Upload the resume with file_upload using document_ids: ["resume"] on the resume field; if the form asks for a cover letter and the settings allow it, write a short one from the profile.
 - You cannot press Submit until the seeker allows it. When every required field holds a correct value and only Submit remains, stop and answer exactly: SUBMIT_READY followed by a one-line summary.
-- If a captcha / human check appears, stop and answer: CAPTCHA. If the posting is closed or already applied, answer: CLOSED <reason>. If you need a fact only the seeker has, answer: ASK: <one question>. If you are stuck after honest attempts, answer: BLOCKED <reason>.
+- If a captcha / human check appears, stop and answer: CAPTCHA <which check it is and where it appeared, one line>.
+- If the posting is closed or already applied, answer: CLOSED <the page's own words>.
+- If you are stuck after honest attempts, answer: BLOCKED <what you tried, what stops you, and what the seeker could do about it>, one short paragraph a person can act on.
+- If you need facts only the seeker has: first fill everything else, collect EVERY such fact the form asks, then ask them all at once, in exactly this shape:
+ASK: <one line for the seeker: which form questions you cannot answer and why>
+\`\`\`json
+{"questions":[{"id":"relocate","label":"Are you willing to relocate to Munich for this role?","type":"boolean","why":"The form requires 'Willing to relocate?' and your profile does not say."},{"id":"notice","label":"What is your notice period?","type":"choice","options":["Immediately","2 weeks","1 month","More than a month"],"other":true,"why":"Required field 'Notice period'."}]}
+\`\`\`
+  Types: boolean (Yes/No); choice (one of options; add "other": true when a free answer is also fine); multi (several of options); text (a short value); textarea (a sentence or more). Copy the form's own options into "options" when it has them. Each label is a complete question answerable without seeing the page. At most 8 questions, each with a short "why".
 - After you are told Submit is allowed: press the Submit control ONCE, wait, read the page, and answer exactly one of: CONFIRMED <quote the page's confirmation text> / REFUSED <quote the page's refusal> / CAPTCHA / UNCONFIRMED <what you see>. Never press it twice.
 - Keep going without asking for confirmation; at most ${MAX_TURNS} turns.`;
 
@@ -86,7 +94,7 @@ export class V3SessionService {
     }
     const user: Anthropic.Beta.BetaContentBlockParam[] = [];
     if (req.event === 'results') user.push(...this.resultsToBlocks(s, req.results ?? []));
-    else if (req.event === 'seeker_answer') user.push({ type: 'text', text: `The seeker answers: ${req.text ?? ''}. Continue the application with that fact; do not ask it again.` });
+    else if (req.event === 'seeker_answer') user.push({ type: 'text', text: `The seeker answered your questions:\n${req.text ?? ''}\nUse these answers exactly where the form asks them; do not ask them again. Continue the application.` });
     else if (req.event === 'solved') user.push({ type: 'text', text: 'The seeker solved the human check on the page. Read the page again and continue.' });
     else if (req.event === 'submit') {
       s.submitAllowed = true;

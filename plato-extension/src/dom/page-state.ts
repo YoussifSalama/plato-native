@@ -12,13 +12,13 @@ export interface PageState {
   confirmed: string | null; // the marker text/URL that proves a submission, if any
 }
 
-const CONFIRM_TEXT = /(thank you for applying|thanks for applying|your application has been (submitted|received|sent)|application (submitted|received)|we(?:'|’)?ve received your application)/i;
+const CONFIRM_TEXT = /(thank you for applying|thanks for applying|your application (has been|was) (submitted|received|sent)|application (submitted|received|sent)|we(?:'|’)?ve received your application|\bapplied \d+\s?(?:mo|[mhdw]|minutes?|hours?|days?|weeks?|months?) ago\b)/i;
 const CONFIRM_PATH = /\/(confirmation|thanks|thank-you|application-submitted)(\/|$|\?)/i;
 const CLOSED_TEXT = /(no longer (available|accepting|open)|position (has been|is) (filled|closed)|job (is )?(no longer|not found)|this job (has expired|is closed)|page you(?:'|’)?re looking for)/i;
 const HUMAN_TEXT = /(verify (that )?you(?:'|’)?re (a )?human|verify you are (a )?human|are you a robot|complete the security check)/i;
 
 export function pageState(doc: Document): PageState {
-  const text = (doc.body?.innerText ?? '').slice(0, 20000);
+  const text = (doc.body?.innerText ?? doc.body?.textContent ?? '').slice(0, 20000); // textContent: jsdom (tests) has no innerText
   const href = doc.location?.href ?? '';
   const url = (() => {
     try {

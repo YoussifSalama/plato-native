@@ -1,7 +1,6 @@
 import type { Decision } from './types';
 import type { TurnRequest, TurnResponse } from '../v3/contract';
-import type { RunSettings } from '../panel/ready';
-import type { AnswerQuestion, ApiItem, Candidate, ConsentBody, JobFilters, JobsPage, OrchestratorEvent, OrchestratorRequest, PolicyMap, SearchCard, TransitionBody } from './types';
+import type { AnswerQuestion, ApiItem, Candidate, ConsentBody, JobFilters, JobsPage, OrchestratorEvent, OrchestratorRequest, PolicyMap, RunSettings, SearchCard, TransitionBody } from './types';
 
 export class ApiError extends Error {
   constructor(

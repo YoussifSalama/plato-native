@@ -1,25 +1,27 @@
 import { ApiError, createApi } from '../core/api';
 import { createOrchestrator, OrchestratorError, type Session } from '../core/orchestrator';
 import { createOutbox } from '../core/outbox';
+import { BatchError, createBatchRunner, MAX_BATCH_JOBS, pickToggle, type BatchRun, type JobMeta, type Live } from '../core/batch-runner';
 import { blockingError, type FormReview } from '../core/form-review';
 import { NEEDS_YOU, V3 } from '../core/messages';
 import type { V3Op } from '../content/v3-reader';
+import type { PageState } from '../dom/page-state';
 import { createExecutor } from '../v3/executor';
-import { runV3 } from '../v3/run';
+import { runV3, type StopKind, type V3Result } from '../v3/run';
+import type { AskQuestion, SeekerAnswer } from '../v3/contract';
 import type { TurnRequest } from '../v3/contract';
 import { runAiApply, type EaResult } from './ai-apply';
 import { createTrusted } from './trusted';
 import type { Snapshot } from '../dom/snapshot';
 import { hash } from '../dom/inspect';
 import { FORM_FILE, FORM_OPTIONS, PAGE_SETTLE, PAGE_STATE, SNAP_PRESS, SNAP_TAKE } from '../core/messages';
-import { latestBatch } from './view';
 import { startFormReview } from './form-review-hook';
 import { createTokenStore } from '../core/token-store';
-import type { ApiItem, Decision, Evidence, PolicyMap } from '../core/types';
+import type { ApiItem, Decision, Evidence, PolicyMap, SearchJob } from '../core/types';
 import { registry } from '../providers';
-import { render, type Actions, type PanelState } from './view';
+import { render, type Actions, type PanelState, type PickKey } from './view';
+import { canStart, JOBS_PAGE_SIZE, latestBatch, queuedItems } from './jobs-view';
 import type { AnswerQuestion, OrchestratorEvent, OrchestratorRequest } from './../core/types';
-import { JOBS_PAGE_SIZE, MAX_JOBS, MAX_TABS, SEARCH_PAGE_SIZE, type Wizard, type WizardAction } from './wizard';
 
 // The side panel runs the whole flow. It is the only place (besides the
 // service worker's one-line storage restriction) that ever sees the token.
@@ -28,8 +30,23 @@ const api = createApi({ base: __API_ORIGIN__, getToken: () => tokens.get() });
 const outbox = createOutbox(chrome.storage.local);
 let policy: PolicyMap | undefined;
 const root = document.getElementById('root')!;
-const state: PanelState = { status: 'loading', items: [], sessions: {}, cards: {}, formReviews: {}, pendingOutbox: 0, assistant: { messages: [], thinking: false } };
+const state: PanelState = {
+  status: 'loading', toasts: [], items: [], sessions: {}, progress: {}, cards: {}, formReviews: {}, pendingOutbox: 0, assistant: { messages: [], thinking: false },
+  view: 'jobs', jobs: { searches: [], pickerOpen: false, jobs: [], jobsTotal: 0, known: {}, loading: false, q: '', sort: 'best', remote: false, fromPlato: false, picked: [], resumeMode: 'profile' },
+  run: null, rows: [],
+};
 const reviews = new Map<string, FormReview>();
+// The batch: one at a time, up to MAX_BATCH_JOBS, guarded in core/batch-runner.ts. Its record lives in session storage
+// (a reloaded panel finds it again; a browser restart adopts what the server still lists).
+const RUN_KEY = 'run';
+const runner = createBatchRunner({
+  get: async () => {
+    const r = (await chrome.storage.session.get(RUN_KEY))[RUN_KEY] as BatchRun | undefined;
+    return r && Array.isArray(r.itemIds) && r.outcomes ? r : null;
+  },
+  set: (r) => chrome.storage.session.set({ [RUN_KEY]: r }),
+});
+const MAX_TABS = 10;
 
 const orch = createOrchestrator({
   api,
@@ -39,7 +56,7 @@ const orch = createOrchestrator({
   onLost: (id) => {
     delete state.sessions[id];
     const t = state.items.find((i) => i.id === id)?.job?.title ?? 'a job';
-    state.notice = `Plato lost its hold on “${t}” (the server took it back). It returns to the queue.`;
+    toast(`Plato lost its hold on “${t}” (the server took it back). It returns to the queue.`, 'err');
     log('warn', `Lost hold on “${t}”: the server no longer has this browser as its owner.`);
     void refresh();
   },
@@ -49,12 +66,40 @@ const orch = createOrchestrator({
 const tabKey = (id: string) => `tab:${id}`;
 const rememberTab = (id: string, tabId: number) => chrome.storage.session.set({ [tabKey(id)]: tabId });
 const recallTab = async (id: string) => ((await chrome.storage.session.get(tabKey(id)))[tabKey(id)] as number | undefined);
+const tabAlive = async (id: string) => {
+  const tabId = await recallTab(id);
+  return tabId !== undefined && (await chrome.tabs.get(tabId).then(() => true, () => false));
+};
 
-const draw = () => render(document, root, state, actions, registry);
+let drawTimer: ReturnType<typeof setTimeout> | undefined;
+const draw = () => {
+  clearTimeout(drawTimer);
+  drawTimer = undefined;
+  render(document, root, state, actions, registry);
+};
+// Background redraws (a loop's progress, the periodic refresh) are coalesced, and held while the person has the menu,
+// the sheet or the chat open: a full redraw under their pointer would swallow the click. Closing the overlay redraws.
+const overlayOpen = () => !!(state.menuOpen || state.sheet || state.chatOpen);
+const scheduleDraw = () =>
+  (drawTimer ??= setTimeout(() => {
+    drawTimer = undefined;
+    if (overlayOpen()) return;
+    draw();
+  }, 250));
 let errorAt = 0;
 // The activity log (⋮ → Activity log): what happened and why, so nothing changes silently.
 const log = (level: 'info' | 'warn' | 'error', text: string) => {
   state.log = [...(state.log ?? []), { at: new Date().toLocaleTimeString(), level, text: text.slice(0, 240) }].slice(-60);
+};
+let toastId = 0;
+const toast = (text: string, kind?: 'ok' | 'err') => {
+  const t = { id: ++toastId, text, kind };
+  state.toasts = [...state.toasts, t].slice(-3);
+  scheduleDraw();
+  setTimeout(() => {
+    state.toasts = state.toasts.filter((x) => x !== t);
+    scheduleDraw();
+  }, 3600);
 };
 const fail = (e: unknown) => {
   errorAt = Date.now();
@@ -63,7 +108,8 @@ const fail = (e: unknown) => {
     void tokens.clear();
     state.status = 'unpaired';
     state.error = 'This browser is no longer linked. Link it again.';
-  } else state.error = e instanceof OrchestratorError || e instanceof ApiError ? e.message : 'Something went wrong. Nothing was submitted.';
+  } else if (e instanceof BatchError) toast(e.message, 'err');
+  else state.error = e instanceof OrchestratorError || e instanceof ApiError ? e.message : 'Something went wrong. Nothing was submitted.';
   draw();
 };
 const guard = async (fn: () => Promise<void>) => {
@@ -93,6 +139,13 @@ async function probeFor(item: ApiItem): Promise<Evidence> {
   return (await def.adapter()).inspectOutcome(tabId);
 }
 
+// The seeker's speed setting decides how many jobs are open at once (careful 2, smart 4, fast 8).
+const tabLimit = () => Math.min(state.settings?.tabs ?? MAX_TABS, MAX_TABS);
+const autoSubmitDefault = () => (__FLAVOR__ === 'fixtures' ? !!state.settings?.autoSubmit : __AUTO_SUBMIT__); // production always presses Submit (owner rule 2026-10-21); the test build keeps the setting
+const metaOf = (i: ApiItem): JobMeta => ({ jobId: i.job_id, title: i.job?.title ?? 'Job', company: i.job?.company ?? '', provider: i.provider });
+
+let preselected = false;
+let finishedToasted: string | null = null;
 async function refresh() {
   try {
     const flushed = await orch.flushOutbox();
@@ -108,33 +161,52 @@ async function refresh() {
     const items = await api.batches();
     const decided = await orch.reconcile(items, probeFor);
     state.cards = Object.fromEntries(decided.map((d) => [d.item.id, d.plan]));
+    for (const d of decided) if (d.plan.action === 'confirm') runner.record(d.item.id, 'submitted', `The page confirmed it: “${d.plan.marker}”.`); // proven after a restart, by the page itself
     // reconcile may have recorded evidence or VERIFY: reload what the server now says
     state.items = decided.some((d) => d.plan.action === 'confirm' || d.plan.action === 'to-verify') ? await api.batches() : items;
     state.pendingOutbox = (await outbox.list()).length;
-    // the Ready card: run settings and the match range of what is waiting (best effort, never blocks the queue)
-    if (state.items.some((i) => i.state === 'PENDING')) {
-      const [st, q] = await Promise.all([api.settings().catch(() => state.settings ?? null), api.queue().catch(() => [])]);
-      state.settings = st;
-      const ms = q.map((x) => x.match).filter((x) => x > 0);
-      state.matchRange = ms.length ? `${Math.min(...ms)}%–${Math.max(...ms)}%` : null;
+    if (!state.settings) state.settings = await api.settings().catch(() => null);
+    state.autoSubmitPreview = autoSubmitDefault();
+    if (state.settings && !preselected) state.jobs.resumeMode = state.settings.resumeMode;
+    // the batch record is gone (browser restart) but jobs are open on the server: they are the batch
+    if (!runner.current()) {
+      const open = state.items.filter((i) => i.state !== 'PENDING');
+      if (open.length) runner.adopt(open.map((i) => ({ itemId: i.id, meta: metaOf(i) })), open[0]!.batch?.label ? `“${open[0]!.batch!.label}” search` : 'Picked on Plato', autoSubmitDefault());
     }
+    const run = runner.current();
+    const live: Live = { sessions: state.sessions, tabsAlive: new Set() };
+    if (run) for (const id of run.itemIds) if (!state.sessions[id] && (await tabAlive(id))) live.tabsAlive.add(id);
+    state.rows = runner.settle(state.items, live);
+    state.run = runner.current();
+    state.eta = runner.eta(state.rows, tabLimit());
+    if (state.run?.status === 'finished' && finishedToasted !== state.run.id) {
+      finishedToasted = state.run.id;
+      state.view = 'batch';
+      toast('Batch finished. You can start another one.', 'ok');
+    }
+    // the first look at the queue: the newest pick made on Plato is ticked for the next batch
+    if (!preselected) {
+      preselected = true;
+      if (!runner.isActive() && !state.jobs.picked.length) state.jobs.picked = latestBatch(queuedItems(state), (i) => canStart(i, state, registry)).slice(0, MAX_BATCH_JOBS).map((i) => `item:${i.id}` as PickKey);
+    }
+    state.jobs.picked = state.jobs.picked.filter((k) => !k.startsWith('item:') || queuedItems(state).some((i) => `item:${i.id}` === k)); // a queued job that went away leaves the selection
     state.status = 'ready';
     if (Date.now() - errorAt > 12_000) state.error = undefined; // a fresh failure stays on screen long enough to read
-    if (state.running) setTimeout(() => void runQueue(), 0);
-    watchBlocked();
-    if (!state.wizard) void resumeOrphans(); // a reloaded panel picks its open jobs back up by itself
+    if (runner.isActive()) setTimeout(() => void runQueue(), 0);
+    void resumeOrphans(); // a reloaded panel picks its open jobs back up by itself
     if (!Object.values(state.sessions).some((x) => x.message === 'submit_failed')) void chrome.action.setBadgeText({ text: '' });
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return fail(e);
     state.status = state.status === 'loading' ? 'ready' : state.status;
     state.error = 'Cannot reach Plato right now. Showing the last known state; nothing was submitted.';
   }
-  draw();
+  scheduleDraw();
 }
 
 const sessionOf = (item: ApiItem) => orch.session(item.id) as Session;
-const setStep = (item: ApiItem, step: 'preparing' | 'review' | 'armed' | 'needs-user', message?: string, detail?: string) => {
-  state.sessions[item.id] = { step, message, detail };
+const setStep = (item: ApiItem, step: 'preparing' | 'review' | 'armed' | 'needs-user', message?: string, detail?: string, extra: { stop?: StopKind; ask?: AskQuestion[] } = {}) => {
+  if (!orch.session(item.id)) return void delete state.sessions[item.id]; // the job was cancelled or lost meanwhile: nothing to show as live
+  state.sessions[item.id] = { step, message, detail, ...extra };
   if (step === 'needs-user') {
     // the seeker is looking at the tab: say what is needed right there (amber overlay) and on the icon
     const tabId = orch.session(item.id)?.tabId;
@@ -142,155 +214,7 @@ const setStep = (item: ApiItem, step: 'preparing' | 'review' | 'armed' | 'needs-
     void chrome.action.setBadgeText({ text: '!' });
     void chrome.action.setBadgeBackgroundColor({ color: '#d97706' });
   }
-  return state.sessions[item.id];
 };
-
-const review = (item: ApiItem, fn: (c: FormReview) => Promise<unknown> | unknown) =>
-  void guard(async () => {
-    const c = reviews.get(item.id);
-    if (!c) return;
-    await fn(c);
-    state.formReviews![item.id] = c.get();
-  });
-
-// ---- first-run / new-batch wizard: pick a search, pick jobs, allow tabs ----
-const blankWizard = (step: Wizard['step']): Wizard => ({ step, searches: [], searchPage: 0, jobs: [], jobsTotal: 0, sources: [], filters: {}, picked: [], jobsPage: 0, declining: false, declineReason: '', autoSubmit: true, resumeMode: state.settings?.resumeMode ?? 'profile' }); // Plato presses Submit unless the seeker turns it off here
-
-async function openWizard(step: Wizard['step']) {
-  const w = blankWizard(step);
-  state.wizard = w;
-  if (step === 'search') {
-    w.searches = await api.searches();
-    w.searchId = w.searches[0]?.id; // the server orders: searches with jobs added on Plato, then newest
-  }
-  draw();
-}
-
-// One page of this search's jobs, filtered and sorted by the server (same rules as the web's Jobs page).
-async function fetchJobs(w: Wizard) {
-  const r = await api.searchJobs(w.searchId!, { ...w.filters, skip: w.jobsPage * JOBS_PAGE_SIZE, take: JOBS_PAGE_SIZE });
-  w.jobs = r.items;
-  w.jobsTotal = r.total;
-  return r;
-}
-
-async function loadJobs(w: Wizard) {
-  w.filters = {};
-  w.jobsPage = 0;
-  const r = await fetchJobs(w);
-  w.sources = r.sources ?? [];
-  // pre-tick only what the seeker queued from the web; never everything
-  w.picked = (r.queued ?? []).slice(0, MAX_JOBS);
-}
-
-function wizardResume() {
-  const ids = state.items.filter((i) => i.state === 'PENDING' && i.provider && registry.policyOf(i.provider, policy) === 'FILL_ONLY').map((i) => i.job_id).slice(0, MAX_JOBS);
-  state.wizard = { ...blankWizard('consent'), picked: ids, existing: true };
-}
-
-async function wizardStep(a: WizardAction) {
-  if (a.type === 'resume') return wizardResume();
-  const w = state.wizard;
-  if (!w) return a.type === 'continue' ? openWizard('search') : undefined;
-  switch (a.type) {
-    case 'skip':
-      state.wizard = undefined;
-      return;
-    case 'continue':
-      if (w.step === 'welcome') return openWizard('search');
-      if (w.step === 'search' && w.searchId) {
-        await loadJobs(w);
-        w.step = 'jobs';
-      } else if (w.step === 'jobs' && w.picked.length) w.step = 'consent';
-      return;
-    case 'back':
-      w.declining = false;
-      w.step = w.step === 'consent' ? 'jobs' : 'search';
-      return;
-    case 'page':
-      w.searchPage = Math.max(0, Math.min(a.page, Math.ceil(w.searches.length / SEARCH_PAGE_SIZE) - 1));
-      return;
-    case 'jobs-page':
-      w.jobsPage = Math.max(0, Math.min(a.page, Math.ceil(w.jobsTotal / JOBS_PAGE_SIZE) - 1));
-      await fetchJobs(w);
-      return;
-    case 'filter':
-      w.filters = { ...w.filters, ...a.patch };
-      w.jobsPage = 0;
-      await fetchJobs(w);
-      return;
-    case 'pick-matching': {
-      // every job matching the current filters (up to the cap), not just this page
-      const all = await api.searchJobs(w.searchId!, { ...w.filters, skip: 0, take: MAX_JOBS });
-      w.picked = [...new Set([...w.picked, ...all.items.filter((j) => j.applyable).map((j) => j.id)])].slice(0, MAX_JOBS);
-      return;
-    }
-    case 'pick-search':
-      w.searchId = a.id;
-      return;
-    case 'toggle-job':
-      w.picked = w.picked.includes(a.id) ? w.picked.filter((x) => x !== a.id) : [...w.picked, a.id].slice(0, MAX_JOBS);
-      return;
-    case 'pick-none':
-      w.picked = [];
-      return;
-    case 'declining':
-      w.declining = a.on;
-      return;
-    case 'auto-submit':
-      w.autoSubmit = a.on;
-      return;
-    case 'resume-mode':
-      w.resumeMode = a.mode;
-      return;
-    case 'decline': {
-      const reason = a.reason.trim();
-      if (reason.length < 3) throw new OrchestratorError('bad_state', 'Please tell us why, in a few words.');
-      await api.consent({ decision: 'decline', reason, jobs: w.picked.length, tabs: Math.min(w.picked.length, MAX_TABS) });
-      state.wizard = undefined;
-      state.notice = 'Declined. Nothing was opened or queued.';
-      return;
-    }
-    case 'allow': {
-      const tabs = Math.min(w.picked.length, MAX_TABS);
-      await api.consent({ decision: 'allow', jobs: w.picked.length, tabs, auto_submit: true });
-      state.autoSubmit = w.autoSubmit;
-      // the choices on this step are the seeker's preferences from now on
-      if (w.resumeMode !== state.settings?.resumeMode) state.settings = await api.saveSettings({ resumeMode: w.resumeMode }).catch(() => state.settings ?? null);
-      const r = w.existing ? undefined : await api.createBatch(w.picked, w.searchId);
-      state.wizard = undefined;
-      // the runner starts ONLY this run's jobs (not older queued ones), MAX_TABS at a time
-      state.runIds = [...new Set([...(state.runIds ?? []), ...(r?.items.map((i) => i.id) ?? []), ...state.items.filter((i) => i.state === 'PENDING' && w.picked.includes(i.job_id)).map((i) => i.id)])]; // new items plus ones already queued for these jobs
-      state.running = state.runIds.length > 0;
-      void chrome.storage.session.set({ run: { running: state.running, autoSubmit: state.autoSubmit, runIds: state.runIds } }); // survives a panel reload
-      state.notice = r ? `${r.items.length} job(s) queued${r.rejected.length ? `, ${r.rejected.length} skipped (already queued or not available)` : ''}.` : 'Applying started.';
-      await refresh();
-      void runQueue();
-      return;
-    }
-  }
-}
-
-// The seeker's speed setting decides how many jobs are open at once (careful 2, smart 4, fast 8).
-const tabLimit = () => Math.min(state.settings?.tabs ?? MAX_TABS, MAX_TABS);
-
-// ---- runner: up to MAX_TABS jobs open at once, all in one "Plato" tab group ----
-const GROUP_KEY = 'plato-group';
-// Serialised: tabs open concurrently, and without this each one saw "no group yet" and made its own.
-let grouping: Promise<void> = Promise.resolve();
-const groupTab = (tabId: number) => (grouping = grouping.then(() => groupTabNow(tabId)));
-async function groupTabNow(tabId: number) {
-  try {
-    let gid = (await chrome.storage.session.get(GROUP_KEY))[GROUP_KEY] as number | undefined;
-    if (gid !== undefined) await chrome.tabGroups.get(gid).catch(() => (gid = undefined));
-    if (gid === undefined) gid = (await chrome.tabGroups.query({ title: 'Plato' }))[0]?.id; // reuse an existing Plato group (e.g. after a panel reload)
-    gid = await chrome.tabs.group(gid === undefined ? { tabIds: [tabId] } : { tabIds: [tabId], groupId: gid });
-    await chrome.tabGroups.update(gid, { title: 'Plato', color: 'purple' });
-    await chrome.storage.session.set({ [GROUP_KEY]: gid });
-  } catch {
-    /* cosmetic: the job still runs ungrouped */
-  }
-}
 
 const pendingFill = (ctl: FormReview) => ctl.get().rows.filter((r) => r.choice === 'use' && !r.locked && r.status === 'pending' && r.proposed !== undefined);
 // One round only: fields the page reveals while filling are NOT filled from the keyword fallback;
@@ -312,7 +236,6 @@ const RESUME_ASK = 'Resume: which resume should Plato upload?';
 const toQuestion = (r: ReviewRow): AnswerQuestion => ({ id: r.id, label: r.label.slice(0, 300), type: answerType(r), required: r.required, ...(r.options?.length && { options: r.options.map((o) => o.label.slice(0, 200)) }), ...((r.error || r.form || r.kind === 'combobox' || r.kind === 'checkbox') && { hint: [r.error && `The page shows an error on this field: "${r.error.slice(0, 120)}"`, r.form && `In the form "${r.form.slice(0, 80)}"`, r.kind === 'combobox' && (r.options?.length ? 'A dropdown: answer with one of the options exactly; if your true value is not offered, the closest truthful option (Other, None of the above, Prefer not to say)' : `A type-ahead list${r.optionsTotal ? ` of ${r.optionsTotal} options` : ''}: answer with the exact option name as the site would list it (e.g. a country name)`), r.kind === 'checkbox' && (r.required ? 'A required box: the application cannot be sent without it' : 'An optional box')].filter(Boolean).join('. ') }) });
 // What the page shows, without field values: equal signatures = nothing changed since the last look.
 const pageSig = (sn: Snapshot) => hash(JSON.stringify([sn.url, sn.dialogOpen, sn.dialogTitle, sn.elements.map((e) => e.label), sn.fields, sn.alerts, sn.text]));
-
 
 // A fill went wrong: tell the AI what it answered and what the page did, and take its corrected value.
 // Returns how many fields got a new value (0 = the AI has nothing better: the seeker is asked).
@@ -352,30 +275,35 @@ const WHY: Record<string, string> = { 'page-cleared': 'the page cleared it', 'va
 const aiDown = new Set<string>(); // items whose last AI draft call failed (network / provider)
 const whyEmpty = (r: { reason?: string; proposed?: unknown }, itemId: string) => (r.reason ? (WHY[r.reason] ?? r.reason) : r.proposed !== undefined ? 'not filled' : aiDown.has(itemId) ? 'AI not reachable' : 'no answer yet');
 
-// What a finished run means for the job, the same for every site.
-async function finishRun(item: ApiItem, s: Session, result: EaResult) {
+// What a finished run means for the job, the same for every site. Terminal outcomes are recorded on the batch.
+async function finishRun(item: ApiItem, s: Session, result: EaResult | V3Result) {
   jot(item.id, result.kind === 'needs-user' ? `Stopped for the seeker: ${result.why}` : result.kind === 'confirmed' ? `Submitted: the page confirms (${result.marker}).` : result.kind === 'ready' ? 'Complete: waiting for the seeker to press Submit.' : result.kind === 'skip' ? `Skipped: ${result.why}` : 'Submit pressed, no confirmation on the page.');
   if (result.kind === 'confirmed') {
-    const ev = await orch.observe(s); // records the confirmation when the page's own marker shows it
-    if (ev.kind !== 'confirmed' && orch.session(item.id)) await orch.confirm(s, result.marker); // else the proof the engine quoted from the page
+    if (orch.session(item.id)) {
+      // still held: record the confirmation when the page's own marker shows it, else the proof the engine quoted from the page
+      const ev = await orch.observe(s);
+      if (ev.kind !== 'confirmed' && orch.session(item.id)) await orch.confirm(s, result.marker);
+    } // else a look during the run already recorded it (engine v2 observes the page on every look)
     delete state.sessions[item.id];
     reviews.delete(item.id);
     delete state.formReviews![item.id];
+    runner.record(item.id, 'submitted', `The page confirmed it: “${result.marker.replace(/^page:/, '')}”.`);
   } else if (result.kind === 'ready') setStep(item, 'armed');
   else if (result.kind === 'skip') {
     await orch.skip(s, result.reason, result.why); // SKIPPED with the true reason, not "needs you"
     delete state.sessions[item.id];
-    state.notice = `Skipped “${item.job?.title ?? 'job'}”: ${result.why}`;
-  } else if (result.kind === 'unconfirmed') await orch.notSure(s, 'easy_apply_unconfirmed'); // pressed once; never again
+    runner.record(item.id, 'skipped', result.why);
+    toast(`Skipped “${item.job?.title ?? 'job'}”: ${result.why}`);
+  } else if (result.kind === 'unconfirmed') {
+    // pressed once; never again. The page's own marker (page-state.ts) may still prove it, e.g. LinkedIn's "Application sent"
+    const ev = orch.session(item.id) ? await orch.observe(s).catch(() => ({ kind: 'unknown' }) as Evidence) : ({ kind: 'unknown' } as Evidence);
+    if (ev.kind === 'confirmed') {
+      delete state.sessions[item.id];
+      runner.record(item.id, 'submitted', `The page confirmed it: “${ev.marker}”.`);
+    } else await orch.notSure(s, 'easy_apply_unconfirmed');
+  }
   else {
-    setStep(item, 'needs-user', result.why.includes(RESUME_ASK) ? 'resume' : 'questions', result.why);
-    if (!result.why.includes(RESUME_ASK)) {
-      // the question is asked in the chat right away; the seeker's answer goes back to this job, which then continues
-      const a = (state.assistant ??= { messages: [], thinking: false });
-      const q = `${item.job?.title ?? 'This job'}${item.job?.company ? ` at ${item.job.company}` : ''}: ${result.why}`;
-      if (a.messages.at(-1)?.content !== q) a.messages.push({ role: 'assistant', content: q });
-      a.ask = { jobId: item.id, question: '', choices: [] };
-    }
+    setStep(item, 'needs-user', result.why.includes(RESUME_ASK) ? 'resume' : 'questions', result.why, 'stop' in result ? { stop: result.stop, ask: result.ask } : {});
     void api.stop(item.id, { reason: stopKind(result.why), message: result.why.slice(0, 300) }).catch(() => undefined); // for the stop report
     void chrome.action.setBadgeText({ text: '!' });
     void chrome.action.setBadgeBackgroundColor({ color: '#d97706' });
@@ -400,14 +328,20 @@ chrome.debugger.onDetach.addListener(({ tabId }) => void (tabId !== undefined &&
 
 // The application's journal: what Plato did on each page (decided, filled, failed, pressed, stopped). The AI gets it
 // with every decision and the chat gets it with every turn: neither forgets the steps already taken.
-// Kept in session storage so a reloaded panel still has it.
+// Kept in session storage so a reloaded panel still has it. The last line is the row's progress text.
 const journals = new Map<string, string[]>();
 const runStart = new Map<string, number>(); // when each job's run started: journal lines carry +seconds
 const jot = (itemId: string, line: string) => {
   const t0 = runStart.get(itemId) ?? (runStart.set(itemId, Date.now()), Date.now());
   const at = `+${((Date.now() - t0) / 1000).toFixed(1)}s`;
-  const j = [...(journals.get(itemId) ?? []), `${at} ${line.replace(/\s+/g, ' ').trim()}`.slice(0, 300)].slice(-60);
+  const clean = line.replace(/\s+/g, ' ').trim();
+  const j = [...(journals.get(itemId) ?? []), `${at} ${clean}`.slice(0, 300)].slice(-60);
   journals.set(itemId, j);
+  state.progress[itemId] = clean.slice(0, 140);
+  // the row's progress line is updated in place: a full redraw several times a second would detach the buttons
+  // under the person's pointer while a job runs (the next draw shows the line anyway)
+  const step = root.querySelector(`[data-item="${itemId}"] .step`);
+  if (step) step.textContent = state.progress[itemId]!;
   void chrome.storage.session.set({ [`journal:${itemId}`]: j }).catch(() => undefined);
 };
 // Timing trace (developer view, not the seeker's journal): how long each wait took. Kept in session storage.
@@ -448,7 +382,7 @@ const journalOf = async (itemId: string) => {
 
 // Jobs the seeker explicitly asked Plato to submit (chat "submit", or the button): overrides the run setting for that job.
 const submitOverride = new Set<string>();
-// What the seeker said about a job in the chat ("apply anyway", a salary): sent with its next decision, never asked again.
+// What the seeker said about a job ("apply anyway", a salary, the answer to Plato's question): sent with its next decision, never asked again.
 const notes = new Map<string, string[]>();
 const note = (itemId: string, text: string) => {
   const list = notes.get(itemId) ?? [];
@@ -479,7 +413,7 @@ async function runAi(item: ApiItem) {
   // job (chat or the button). No per-site list: the site's own policy already decided whether Plato may fill it.
   // Plato always presses Submit once the form is complete (owner, 2026-10-21: no preference). The test build keeps
   // the run setting so the crash / recovery flows can still exercise a job that waits at Submit.
-  const auto = __FLAVOR__ === 'fixtures' ? submitOverride.has(item.id) || !!state.autoSubmit : true;
+  const auto = submitOverride.has(item.id) || (__FLAVOR__ === 'fixtures' ? !!state.autoSubmit : __AUTO_SUBMIT__); // "Submit for me" always wins
   try {
     const canFill = !!registry.get(item.provider ?? '')?.capabilities.fillForms; // owner has enabled filling on this site
     let ctl: FormReview | null = null; // this page's inspected fields and the decision's values
@@ -537,7 +471,7 @@ async function runAi(item: ApiItem) {
         : [];
     const show = () => {
       if (ctl) state.formReviews![item.id] = ctl.get();
-      draw();
+      scheduleDraw();
     };
     const result = await runAiApply({
       settle: async () => !!(await timed(item.id, 'settle', send<{ settled: boolean } | undefined>({ type: PAGE_SETTLE }).catch(() => undefined)))?.settled,
@@ -545,6 +479,7 @@ async function runAi(item: ApiItem) {
         const sn = await timed(item.id, 'look:snapshot', snap());
         alerts = sn.alerts;
         const e = await timed(item.id, 'look:observe', orch.observe(s).catch(() => ({ kind: 'unknown' }) as Evidence)); // records SUBMITTED_CONFIRMED itself
+        if (e.kind === 'confirmed') runner.record(item.id, 'submitted', `The page confirmed it: “${e.marker}”.`);
         return { sig: pageSig(sn), confirmed: e.kind === 'confirmed' ? e.marker : null, loading: sn.loading, text: sn.text };
       },
       decide: async (history) => {
@@ -693,6 +628,13 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 // ---- Engine v3: the backend holds the Claude conversation; this panel runs each browser action in the job's tab ----
 // A stopped run remembers how its conversation continues (the seeker's answer, a solved captcha); a fresh run starts over.
 const v3Next = new Map<string, 'seeker_answer' | 'solved'>();
+const v3Answers = new Map<string, SeekerAnswer[]>(); // the form's structured answers, sent with the next seeker_answer turn
+// What a thrown error means for the person: Plato's own failure (server, network) or the job's tab gone. Never a text box.
+const lostResult = (e: unknown): V3Result => {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (e instanceof ApiError) return { kind: 'needs-user', stop: 'error', why: `Plato's server failed while working on this job (${e.status ? `HTTP ${e.status}: ` : ''}${msg.slice(0, 100)}). Nothing was typed or sent since the last step. Press Try again; if it repeats, the problem is on Plato's side, not the job site.` };
+  return { kind: 'needs-user', stop: 'lost', why: `Plato lost contact with the job's tab (${msg.slice(0, 100)}). Nothing was sent. Open the tab, then press Try again.` };
+};
 const v3Running = new Set<string>();
 // The tab finished loading: Chrome's own event, not a poll. Resolves at once if it already has.
 const tabLoaded = (tabId: number, capMs: number) =>
@@ -716,7 +658,7 @@ async function runV3Item(item: ApiItem) {
   const s = sessionOf(item);
   const tabId = s.tabId;
   if (tabId === undefined) return void v3Running.delete(item.id);
-  const auto = __FLAVOR__ === 'fixtures' ? submitOverride.has(item.id) || !!state.autoSubmit : true; // see runAi
+  const auto = submitOverride.has(item.id) || (__FLAVOR__ === 'fixtures' ? !!state.autoSubmit : __AUTO_SUBMIT__); // see runAi
   const send = <T>(msg: V3Op) => timedTab(tabId, `v3 ${msg.op}`, limit(chrome.tabs.sendMessage(tabId, { type: V3, ...msg }) as Promise<T>, 15_000, `page ${msg.op}`));
   // the page says when it is loaded and quiet; while its script is not there yet (mid-navigation) ask again
   const settle = async () => {
@@ -759,8 +701,20 @@ async function runV3Item(item: ApiItem) {
     });
     const next = v3Next.get(item.id);
     v3Next.delete(item.id);
-    const first: TurnRequest = next === 'seeker_answer' ? { event: 'seeker_answer', text: (notes.get(item.id)?.at(-1) ?? '').slice(0, 2000) } : next === 'solved' ? { event: 'solved' } : { event: 'start' };
-    jot(item.id, first.event === 'start' ? 'Engine v3: the AI reads the page and fills it.' : `Engine v3: continuing (${first.event}).`);
+    const answers = v3Answers.get(item.id);
+    v3Answers.delete(item.id);
+    const first: TurnRequest = next === 'seeker_answer' ? { event: 'seeker_answer', text: (notes.get(item.id)?.at(-1) ?? '').slice(0, 4000), ...(answers?.length && { answers }) } : next === 'solved' ? { event: 'solved' } : auto && s.item.state === 'AWAITING_SUBMIT' ? { event: 'submit' } : { event: 'start' }; // an armed item + "Submit for me": continue the same conversation at Submit, no refill (session_lost falls back to start below)
+    if (first.event === 'start') {
+      // What is this page? A confirmation already on it ("Application submitted", "Applied 3w ago") ends the job here:
+      // no brain turn, no refill, no navigate away. ponytail: the page-state.ts regex is the classifier; the brain's CLOSED covers the rest
+      await settle();
+      const st = await send<PageState | undefined>({ op: 'state' }).catch(() => undefined);
+      if (st?.confirmed) {
+        jot(item.id, `The page already shows a confirmation (“${st.confirmed}”): nothing to fill.`);
+        return await finishRun(item, s, { kind: 'confirmed', marker: `page:${st.confirmed}` });
+      }
+    }
+    jot(item.id, first.event === 'start' ? 'Engine v3: the AI reads the page and fills it.' : first.event === 'submit' ? 'Engine v3: the seeker allowed Submit; pressing it once.' : `Engine v3: continuing (${first.event}).`);
     const result = await runV3(
       {
         turn: async (req) => {
@@ -768,7 +722,7 @@ async function runV3Item(item: ApiItem) {
             return await timed(item.id, `v3:turn:${req.event}`, api.v3Turn(item.id, req));
           } catch (e) {
             // the backend lost the conversation (restart): start over from the page as it is
-            if (e instanceof ApiError && e.status === 409 && /session_lost/.test(e.message) && req.event !== 'start') return api.v3Turn(item.id, { event: 'start' });
+            if (e instanceof ApiError && e.status === 409 && /session_lost/.test(e.message) && req.event !== 'start' && !executor.submitPressed()) return api.v3Turn(item.id, { event: 'start' }); // after a press, starting over would navigate off the confirmation: runV3 checks the page instead
             throw e;
           }
         },
@@ -776,6 +730,7 @@ async function runV3Item(item: ApiItem) {
         pageText: () => send<string>({ op: 'page_text' }),
         captcha: async () => !!(await send<{ captcha?: boolean } | undefined>({ op: 'state' }))?.captcha,
         arm: async () => void (s.item.state !== 'AWAITING_SUBMIT' && (await orch.armForSubmit(s))),
+        pressed: () => executor.submitPressed(),
         autoSubmit: auto,
         jot: (line) => jot(item.id, line),
         sleep,
@@ -787,16 +742,13 @@ async function runV3Item(item: ApiItem) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     log('error', `apply loop (v3): ${msg}`);
-    await finishRun(item, s, { kind: 'needs-user', why: `Plato lost the page (${msg.slice(0, 120)}). Open the tab and try again.` });
+    await finishRun(item, s, lostResult(e));
   } finally {
     v3Running.delete(item.id);
     await trusted.detach(tabId); // the yellow "debugging" bar goes away between runs
   }
 }
 
-// The seeker opted in and the server allows this provider: press Submit, then watch the page.
-// Retry ONLY while the form is still on screen (the click did nothing). If the page changed
-// without proof, that is VERIFY, never a second submit. After 3 tries the seeker is alerted.
 const jobUrlOf = new Map<string, string>();
 
 // ---- resume: jobs this device holds but this panel instance forgot (panel closed / extension reloaded) ----
@@ -817,10 +769,10 @@ async function resumeOrphans(): Promise<number> {
         const url = item.job?.apply_url ?? item.job?.url ?? '';
         jobUrlOf.set(item.id, url);
         setStep(item, 'review');
-        draw();
+        scheduleDraw();
         if (item.state !== 'REVIEW') {
           const r = await orch.prepare(s, url); // CLAIMED / NEEDS_USER: carry on from the start of the page
-          if (r !== 'review') return void (r === 'needs-user' ? setStep(item, 'needs-user', String((s.item.detail as { reason?: string } | null)?.reason ?? ''), (s.item.detail as { message?: string } | null)?.message) : delete state.sessions[item.id]);
+          if (r !== 'review') return void afterPrepare(item, s, r);
         }
         await runAi(item);
       } catch {
@@ -834,7 +786,22 @@ async function resumeOrphans(): Promise<number> {
   return n;
 }
 
-// One job: claim, open its tab (grouped), prepare. Shared by the Start button and the runner.
+// What prepare() decided when the page was not simply ready: the row says so, and the batch records what is final.
+function afterPrepare(item: ApiItem, s: Session, r: 'needs-user' | 'failed' | 'skipped') {
+  const msg = String((s.item.detail as { message?: string } | null)?.message ?? '');
+  if (r === 'skipped') {
+    // closed posting / already applied: the server has it as SKIPPED with the true reason
+    delete state.sessions[item.id];
+    runner.record(item.id, 'skipped', msg || 'Nothing to apply to.');
+    toast(`Skipped “${item.job?.title ?? 'job'}”: ${msg || 'nothing to apply to'}`);
+  } else if (r === 'needs-user') setStep(item, 'needs-user', String((s.item.detail as { reason?: string } | null)?.reason ?? ''), msg || undefined);
+  else {
+    delete state.sessions[item.id];
+    runner.record(item.id, 'failed', msg || 'The site blocked the application.');
+  }
+}
+
+// One job of the batch: claim, open its tab (grouped), prepare, run.
 async function startItem(item: ApiItem) {
   // The page that holds the form: the posting's own apply link when a supported provider owns it
   // (aggregators like Google Jobs link to the real Greenhouse page there), else the listing.
@@ -843,6 +810,7 @@ async function startItem(item: ApiItem) {
   if (!job) throw new OrchestratorError('bad_state', 'This item has no job page');
   // Policy, adapter and the server lock come first; only then the person's own tab opens.
   const s = await orch.claim(item);
+  runner.markStarted(item.id);
   jobUrlOf.set(item.id, job);
   // A tab already open for this job (the panel was closed and reopened): reuse it, never open a second one.
   const prior = await recallTab(item.id);
@@ -858,28 +826,36 @@ async function startItem(item: ApiItem) {
   if (r === 'review') {
     setStep(item, 'review');
     await runAi(item); // every site: the AI fills and drives the page
-  } else if (r === 'skipped') {
-    // closed posting / already applied: the server has it as SKIPPED with the true reason
-    delete state.sessions[item.id];
-    state.notice = `Skipped “${item.job?.title ?? 'job'}”: ${String((s.item.detail as { message?: string } | null)?.message ?? 'nothing to apply to')}`;
-  } else if (r === 'needs-user') setStep(item, 'needs-user', String((s.item.detail as { reason?: string } | null)?.reason ?? ''), (s.item.detail as { message?: string } | null)?.message);
-  else delete state.sessions[item.id];
+  } else afterPrepare(item, s, r);
+}
+
+// ---- runner: the batch's jobs, up to the speed setting's tabs open at once, all in one "Plato" tab group ----
+const GROUP_KEY = 'plato-group';
+// Serialised: tabs open concurrently, and without this each one saw "no group yet" and made its own.
+let grouping: Promise<void> = Promise.resolve();
+const groupTab = (tabId: number) => (grouping = grouping.then(() => groupTabNow(tabId)));
+async function groupTabNow(tabId: number) {
+  try {
+    let gid = (await chrome.storage.session.get(GROUP_KEY))[GROUP_KEY] as number | undefined;
+    if (gid !== undefined) await chrome.tabGroups.get(gid).catch(() => (gid = undefined));
+    if (gid === undefined) gid = (await chrome.tabGroups.query({ title: 'Plato' }))[0]?.id; // reuse an existing Plato group (e.g. after a panel reload)
+    gid = await chrome.tabs.group(gid === undefined ? { tabIds: [tabId] } : { tabIds: [tabId], groupId: gid });
+    await chrome.tabGroups.update(gid, { title: 'Plato', color: 'purple' });
+    await chrome.storage.session.set({ [GROUP_KEY]: gid });
+  } catch {
+    /* cosmetic: the job still runs ungrouped */
+  }
 }
 
 // ponytail: sliding window, not strict rounds: a slot frees as soon as a job leaves the panel's
-// sessions, so "10 at a time" holds without waiting for the slowest job in a round.
+// sessions, so "N at a time" holds without waiting for the slowest job in a round.
 let launching = false;
 const tried = new Set<string>(); // a job that failed to start is not retried in a loop
 async function runQueue() {
-  if (launching || !state.running) return;
-  const waiting = state.items.filter((i) => state.runIds?.includes(i.id) && i.state === 'PENDING' && !tried.has(i.id) && !state.sessions[i.id] && i.provider && registry.policyOf(i.provider, policy) === 'FILL_ONLY' && registry.get(i.provider)?.adapter);
-  if (!waiting.length) {
-    if (!Object.keys(state.sessions).length) {
-      state.running = false;
-      void chrome.storage.session.set({ run: { running: false, autoSubmit: state.autoSubmit, runIds: state.runIds ?? [] } }); // the run's job ids stay: a lease sweep after a reload puts them back in the queue and "continue" must find them
-    }
-    return;
-  }
+  const run = runner.current();
+  if (launching || !run || run.status !== 'running') return;
+  const waiting = state.items.filter((i) => run.itemIds.includes(i.id) && i.state === 'PENDING' && !tried.has(i.id) && !state.sessions[i.id] && canStart(i, state, registry));
+  if (!waiting.length) return;
   const slots = tabLimit() - Object.keys(state.sessions).length;
   if (slots <= 0) return;
   launching = true;
@@ -887,16 +863,116 @@ async function runQueue() {
     const batch = waiting.slice(0, slots);
     batch.forEach((i) => tried.add(i.id));
     const res = await Promise.allSettled(batch.map(startItem));
-    const bad = res.find((r): r is PromiseRejectedResult => r.status === 'rejected');
     for (const r of res) if (r.status === 'rejected') log('error', `A job could not start: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
-    if (bad) state.notice = bad.reason instanceof OrchestratorError ? bad.reason.message : 'One job could not be started. Nothing was submitted.';
+    const bad = res.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (bad) toast(bad.reason instanceof OrchestratorError ? bad.reason.message : 'One job could not be started. Nothing was submitted.', 'err');
   } finally {
     launching = false;
   }
   await refresh();
 }
 
-// ---- orchestrator: talks to the seeker when a job is blocked ----
+// ---- the batch begins here, and only here ----
+async function startBatch() {
+  const j = state.jobs;
+  const jobIds = j.picked.filter((k) => k.startsWith('job:')).map((k) => k.slice(4));
+  const itemIds = j.picked.filter((k) => k.startsWith('item:')).map((k) => k.slice(5));
+  if (j.picked.length > MAX_BATCH_JOBS) throw new BatchError('cap', `A batch holds at most ${MAX_BATCH_JOBS} jobs.`);
+  if (runner.isActive()) throw new BatchError('active', 'A batch is already running. Wait for it to finish.');
+  const settings = state.settings ?? (await api.settings().catch(() => null));
+  state.settings = settings;
+  if (settings && j.resumeMode !== settings.resumeMode) state.settings = await api.saveSettings({ resumeMode: j.resumeMode }).catch(() => settings); // the choice on the sheet is the seeker's preference from now on
+  const created = jobIds.length ? await api.createBatch(jobIds, j.searchId) : null;
+  const fresh = created?.items ?? [];
+  const queued = state.items.filter((i) => itemIds.includes(i.id) && i.state === 'PENDING');
+  const all = [...fresh, ...queued];
+  if (!all.length) throw new BatchError('empty', created?.rejected.length ? 'None of these jobs can be queued (already queued, applied, or not available).' : 'Pick at least one job.');
+  const label = jobIds.length ? (j.searches.find((s) => s.id === j.searchId)?.title ?? 'Picked on Plato') : (queued[0]?.batch?.label ? `“${queued[0].batch.label}” search` : 'Picked on Plato');
+  const auto = autoSubmitDefault();
+  runner.start(all.map((i) => ({ itemId: i.id, meta: metaOf(i) })), label, auto); // the guard: one batch, up to the cap
+  state.autoSubmit = auto;
+  await api.consent({ decision: 'allow', jobs: all.length, tabs: Math.min(all.length, tabLimit()), auto_submit: auto }).catch(() => undefined); // the audit log of the go-ahead
+  log('info', `Batch started: ${all.length} job(s) (${fresh.length} new, ${queued.length} queued), ${tabLimit()} at a time.`);
+  tried.clear();
+  j.picked = [];
+  state.sheet = false;
+  state.view = 'batch';
+  finishedToasted = null;
+  if (created?.rejected.length) toast(`${created.rejected.length} job${created.rejected.length === 1 ? '' : 's'} skipped: already queued, applied, or not available.`);
+  await refresh();
+  void runQueue();
+}
+
+async function stopBatch() {
+  const run = runner.current();
+  if (!run || run.status !== 'running') return;
+  // still queued on the server and not opened by this panel meanwhile (a job that started since takes the session path below)
+  const queued = state.rows.filter((r) => r.status === 'queued' && !orch.session(r.itemId) && state.items.find((i) => i.id === r.itemId)?.state === 'PENDING').map((r) => r.itemId);
+  if (queued.length) {
+    const r = await api.dropFromQueue(queued);
+    log('info', `Stop batch: ${r.dropped} queued job(s) removed.`);
+    queued.forEach((id) => runner.record(id, 'cancelled', 'Not started: you stopped the batch.'));
+  }
+  let failed = 0;
+  for (const r of state.rows) {
+    const s = orch.session(r.itemId);
+    if (!s || s.item.state === 'AWAITING_SUBMIT') continue; // armed: no way back; the person settles it
+    if (!(await cancelSession(s, 'Stopped before Submit. Nothing was sent.'))) failed++;
+  }
+  if (failed) toast(`${failed} job${failed === 1 ? '' : 's'} could not be cancelled on the server; the tab was closed. Refresh to see the truth.`, 'err');
+  await refresh();
+}
+// Cancel one open job: the server records CANCELLED, the tab closes so nothing keeps running on it. A cancel the
+// server refuses (the loop moved the item meanwhile) still closes the tab and drops the session; the next refresh
+// shows what the server has. Returns whether the server accepted it.
+async function cancelSession(s: Session, why: string) {
+  const tabId = s.tabId;
+  let ok = true;
+  try {
+    await orch.cancel(s);
+  } catch (e) {
+    ok = false;
+    log('warn', `Cancel refused by the server: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  delete state.sessions[s.item.id];
+  if (ok) runner.record(s.item.id, 'cancelled', why);
+  if (tabId !== undefined) await chrome.tabs.remove(tabId).catch(() => undefined);
+  return ok;
+}
+
+// ---- jobs view: searches and their jobs ----
+async function loadSearches() {
+  const j = state.jobs;
+  j.searches = await api.searches();
+  j.searchId ??= j.searches[0]?.id; // the server orders: searches with jobs added on Plato, then newest
+  if (j.searchId) await fetchJobs(false);
+}
+async function fetchJobs(append: boolean) {
+  const j = state.jobs;
+  if (!j.searchId) return;
+  j.loading = true;
+  draw();
+  try {
+    const r = await api.searchJobs(j.searchId, { q: j.q || undefined, sort: j.sort, remoteType: j.remote ? 'REMOTE' : undefined, fromPlato: j.fromPlato || undefined, skip: append ? j.jobs.length : 0, take: JOBS_PAGE_SIZE });
+    j.jobs = append ? [...j.jobs, ...r.items] : r.items;
+    j.jobsTotal = r.total;
+    for (const x of r.items) j.known[x.id] = x;
+  } finally {
+    j.loading = false;
+  }
+}
+const togglePick = (key: PickKey) => {
+  if (runner.isActive()) return toast('A batch is running. New jobs wait until it finishes.');
+  const r = pickToggle(state.jobs.picked, key, MAX_BATCH_JOBS);
+  state.jobs.picked = r.picked;
+  draw();
+  if (r.refused) {
+    toast(`Batch is full (${MAX_BATCH_JOBS} of ${MAX_BATCH_JOBS}). Remove one to add another.`, 'err');
+    root.querySelector(`[data-key="${key}"]`)?.classList.add('shake');
+  }
+};
+
+// ---- orchestrator: the chat, on demand ----
 const BLOCKER: Record<string, OrchestratorRequest['state']['blocked'][number]['blocker']> = { login: 'login', mfa: 'mfa', captcha: 'captcha', questions: 'questions', submit_failed: 'submit_failed' };
 const gather = (withOrphans = false): OrchestratorRequest['state'] => {
   const c = { queued: 0, working: 0, review: 0, submitted: 0, failed: 0, skipped: 0 };
@@ -907,6 +983,7 @@ const gather = (withOrphans = false): OrchestratorRequest['state'] => {
     else if (i.state === 'SKIPPED') c.skipped++;
     else c.working++;
   }
+  for (const r of state.rows) if (r.outcome?.kind === 'submitted') c.submitted++;
   const blocked = state.items.slice(0, 50).flatMap((i) => {
     const sess = state.sessions[i.id];
     if (withOrphans && isOrphan(i) && !resuming.has(i.id)) return [{ id: i.id, title: (i.job?.title ?? 'Job').slice(0, 120), company: (i.job?.company ?? '').slice(0, 120), blocker: 'other' as const, detail: 'Open from before the panel was reloaded: not running here. Use resume_jobs.' }];
@@ -987,17 +1064,11 @@ const applyEvent = async (e: OrchestratorEvent, a: NonNullable<PanelState['assis
   } else if (e.type === 'resume') {
     tried.clear(); // an explicit "continue": jobs that failed to start earlier may try again
     const n = await resumeOrphans();
-    const mine = state.items.filter((i) => state.runIds?.includes(i.id) && i.state === 'PENDING').length; // this run's jobs the server put back in the queue
-    state.running = n + mine > 0;
-    void chrome.storage.session.set({ run: { running: state.running, autoSubmit: state.autoSubmit, runIds: state.runIds ?? [] } });
     void runQueue();
-    const other = state.items.filter((i) => i.state === 'PENDING' && !state.runIds?.includes(i.id)).length;
-    a.messages.push({ role: 'assistant', content: n + mine ? `Resumed: ${n} open job${n === 1 ? '' : 's'} reattached, ${mine} restarted from the queue.` : `Nothing from your current run is waiting.${other ? ` The ${other} jobs in Waiting are older ones: press Start applying to run them.` : ''}` });
+    a.messages.push({ role: 'assistant', content: n ? `Resumed: ${n} open job${n === 1 ? '' : 's'} reattached.` : 'Nothing from your batch is waiting to be resumed.' });
   } else if (e.type === 'account') a.messages.push({ role: 'assistant', content: `${e.site}: ${e.reason}` });
-  else if (e.type === 'pause') {
-    state.running = false;
-    a.messages.push({ role: 'assistant', content: `Paused: ${e.reason}` });
-  } else if (e.type === 'skip') {
+  else if (e.type === 'pause') a.messages.push({ role: 'assistant', content: `To pause, press Stop batch on the Batch view. ${e.reason}` });
+  else if (e.type === 'skip') {
     // Only the seeker drops a job. The chat may suggest it; it never happens on a loading problem.
     const lastUser = [...a.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
     const asked = /\b(skip|drop|remove|cancel|forget|don'?t apply|not interested)\b|سيب|تخطى|الغي|إلغاء/i.test(lastUser);
@@ -1005,17 +1076,16 @@ const applyEvent = async (e: OrchestratorEvent, a: NonNullable<PanelState['assis
     else {
       const item = state.items.find((i) => i.id === e.jobId);
       const s = item && orch.session(item.id);
-      if (s) await orch.cancel(s);
+      if (s) await cancelSession(s, `Skipped: ${e.reason}`);
       delete state.sessions[e.jobId];
       a.messages.push({ role: 'assistant', content: `Skipped: ${e.reason}` });
     }
   }
 };
 
-let lastBlocked = '';
 async function consultOrchestrator(message: string | null) {
   const a = (state.assistant ??= { messages: [], thinking: false });
-  const st = gather(true); // a chat turn may mention jobs left open by a reload; the automatic watcher does not
+  const st = gather(true); // a chat turn may mention jobs left open by a reload
   if (message) {
     a.messages.push({ role: 'user', content: message });
     a.ask = undefined;
@@ -1032,122 +1102,28 @@ async function consultOrchestrator(message: string | null) {
   }
 }
 
-// Ask the orchestrator once per change in what is blocked, never in a loop.
-function watchBlocked() {
-  const sig = gather().blocked.map((b) => `${b.id}:${b.blocker}`).join(',');
-  if (!sig || sig === lastBlocked || state.assistant?.thinking) return void (sig || (lastBlocked = ''));
-  lastBlocked = sig;
-  void consultOrchestrator(null).then(draw, () => {
-    if (state.assistant) state.assistant.thinking = false;
-    draw();
-  });
-}
-
-// "Start applying to all N jobs": everything waiting that Plato can fill, with the saved settings.
-async function startAll() {
-  const ids = latestBatch(state.items, (i) => !!i.provider && registry.policyOf(i.provider, policy) === 'FILL_ONLY' && !!registry.get(i.provider)?.adapter).map((i) => i.id);
-  if (!ids.length) return;
-  const st = state.settings ?? (await api.settings());
-  state.settings = st;
-  await api.consent({ decision: 'allow', jobs: Math.min(ids.length, 50), tabs: Math.min(st.tabs, MAX_TABS), auto_submit: st.autoSubmit }); // the audit log of the go-ahead
-  state.autoSubmit = st.autoSubmit;
-  state.runIds = [...new Set([...(state.runIds ?? []), ...ids])];
-  state.running = true;
-  tried.clear();
-  void chrome.storage.session.set({ run: { running: true, autoSubmit: state.autoSubmit, runIds: state.runIds } });
-  state.runNote = `Applying to ${ids.length} job${ids.length === 1 ? '' : 's'}, ${Math.min(st.tabs, MAX_TABS)} at a time.`; // shown only while jobs are live
-  void runQueue();
+// Run the steps again from where the job stopped (after the seeker fixed something on the page, or answered).
+async function rerun(item: ApiItem) {
+  const s = orch.session(item.id);
+  if (!s) return toast('This job is not open in this panel. Release it and start it again.', 'err');
+  const url = jobUrlOf.get(item.id) ?? item.job?.url ?? '';
+  setStep(item, 'preparing');
+  draw();
+  // NEEDS_USER may go back through prepare; a job already past it resumes in place
+  if (item.state === 'NEEDS_USER' || item.state === 'CLAIMED') {
+    const r = await orch.prepare(s, url);
+    if (r !== 'review') return void afterPrepare(item, s, r);
+  }
+  void runAi(item).then(() => refresh()); // the loop runs for minutes: never inside the busy guard, or every button stays disabled
 }
 
 const actions: Actions = {
-  toggleLog: () => ((state.showLog = !state.showLog), draw()),
-  dropItems: (ids) =>
-    void guard(async () => {
-      const r = await api.dropFromQueue(ids);
-      state.notice = `${r.dropped} waiting job${r.dropped === 1 ? '' : 's'} removed.`;
-      log('info', `Removed ${r.dropped} waiting job(s) (asked for ${ids.length}).`);
-      await refresh();
-    }),
+  view: (v) => ((state.view = v), (state.menuOpen = false), (state.jobs.pickerOpen = false), draw()),
   menu: (open) => ((state.menuOpen = open), draw()),
-  readyCard: {
-    start: () => void guard(startAll),
-    customize: () => void guard(() => wizardStep({ type: 'continue' })),
-    openResume: () => void chrome.tabs.create({ url: `${__WEB_ORIGIN__}/career` }),
-    setting: (patch) =>
-      void guard(async () => {
-        state.settings = await api.saveSettings(patch);
-        state.autoSubmit = state.settings.autoSubmit;
-      }),
-  },
-  resumeJob: () => void guard(async () => void (await resumeOrphans())),
-  // Run the steps again from where the job stopped (after the seeker fixed something, or the page loaded late).
-  // "Submit for me": the seeker's explicit go-ahead for this job; the loop presses Submit and confirms from the page.
-  submitNow: (item) =>
-    void guard(async () => {
-      if (!orch.session(item.id)) return void (state.notice = 'This job is not open in this panel. Release it and start it again.');
-      submitOverride.add(item.id);
-      log('info', `Submit for me pressed for “${item.job?.title ?? item.id}”.`);
-      setStep(item, 'preparing');
-      draw();
-      await runAi(item);
-      await refresh();
-    }),
-  // The resume for this application, asked once: kept on the server, then the run carries on.
-  resumeChoice: (item, choice) =>
-    void guard(async () => {
-      await api.resumeChoice(item.id, choice);
-      item.resume_choice = choice;
-      const it = state.items.find((i) => i.id === item.id);
-      if (it) it.resume_choice = choice;
-      if (!orch.session(item.id)) return void (state.notice = 'This job is not open in this panel. Release it and start it again.');
-      setStep(item, 'preparing');
-      draw();
-      await runAi(item);
-      await refresh();
-    }),
-  retry: (item) =>
-    void guard(async () => {
-      const s = orch.session(item.id);
-      if (!s) return void (state.notice = 'This job is not open in this panel. Release it and start it again.');
-      const url = jobUrlOf.get(item.id) ?? item.job?.url ?? '';
-      setStep(item, 'preparing');
-      draw();
-      // NEEDS_USER may go back through prepare; a job already past it resumes in place
-      if (item.state === 'NEEDS_USER' || item.state === 'CLAIMED') {
-        const r = await orch.prepare(s, url);
-        if (r !== 'review') return void (r === 'needs-user' ? setStep(item, 'needs-user', String((s.item.detail as { reason?: string } | null)?.reason ?? ''), (s.item.detail as { message?: string } | null)?.message) : delete state.sessions[item.id]);
-        await runAi(item);
-      } else await runAi(item);
-      await refresh();
-    }),
-  ticket: (item) => {
-    const sess = state.sessions[item.id];
-    const what = item.state === 'VERIFY' ? 'Plato could not confirm whether this was submitted' : sess?.detail ? `these required fields are still empty: ${sess.detail}` : sess?.message === 'submit_failed' ? 'Plato could not press Submit' : `it is blocked (${sess?.message ?? 'needs me'})`;
-    void guard(() => consultOrchestrator(`I opened the ticket for "${item.job?.title ?? 'this job'}" at ${item.job?.company ?? ''}: ${what}. Look at the fields listed for this job and my profile. If you can write the answer from my facts, do it and put it in the form; if a fact is truly missing, ask me for that one thing. Be brief.`));
-  },
-  clearQueue: (ask) => {
-    // "Clear queue" (ask = true) shows the question; "Yes, clear" (the click event) clears; "No" (false) cancels.
-    if (typeof ask === 'boolean') {
-      state.clearArmed = ask;
-      return draw();
-    }
-    state.clearArmed = false;
-    void guard(async () => {
-      const r = await api.clearQueue();
-      state.runIds = [];
-      state.running = false;
-      void chrome.storage.session.set({ run: { running: false, autoSubmit: state.autoSubmit, runIds: [] } });
-      // check the server really dropped them: never claim "cleared" on faith
-      state.items = await api.batches();
-      const left = state.items.filter((i) => i.state === 'PENDING').length;
-      log(left ? 'error' : 'info', `Clear queue: server cleared ${r.cleared}, ${left} still waiting.`);
-      state.notice = left ? `Clear did not work: the server still has ${left} waiting job${left === 1 ? '' : 's'} (cleared ${r.cleared}). Restart the Plato backend and try again.` : `${r.cleared} waiting job${r.cleared === 1 ? '' : 's'} cleared.`;
-      await refresh();
-    });
-  },
+  toggleLog: () => ((state.showLog = !state.showLog), draw()),
+  chat: (open) => ((state.chatOpen = open), draw()),
   answer: (text) =>
     void guard(async () => {
-      if (/^start applying\b/i.test(text.trim()) && state.items.some((i) => i.state === 'PENDING')) return startAll();
       const asked = state.assistant?.ask?.jobId ?? null;
       if (asked) note(asked, text.trim().slice(0, 300)); // the answer belongs to that job's next decision
       await consultOrchestrator(text);
@@ -1155,18 +1131,173 @@ const actions: Actions = {
       const item = asked ? state.items.find((i) => i.id === asked) : undefined;
       if (item && state.sessions[item.id]?.step === 'needs-user' && orch.session(item.id)) {
         setStep(item, 'preparing');
-        draw();
-        await runAi(item);
-        await refresh();
+        void runAi(item).then(() => refresh());
       }
     }),
-  wizard: (a) => void guard(() => wizardStep(a)),
-  formChoose: (item, formId) => review(item, (c) => c.chooseForm(formId)),
-  formRestart: (item) => review(item, (c) => c.start()),
-  reviewToggle: (item, id, choice) => review(item, (c) => c.toggle(id, choice)),
-  reviewFill: (item, version) => review(item, (c) => c.fillApproved(version)),
-  reviewRetry: (item, version) => review(item, (c) => c.retryFailed(version)),
-  reviewReinspect: (item) => review(item, (c) => c.reinspect()),
+  jobs: {
+    pickSearch: (id) =>
+      void guard(async () => {
+        const j = state.jobs;
+        j.pickerOpen = false;
+        if (id === j.searchId) return;
+        Object.assign(j, { searchId: id, q: '', remote: false, fromPlato: false, sort: 'best', jobs: [], jobsTotal: 0 });
+        await fetchJobs(false);
+      }),
+    picker: (open) => ((state.jobs.pickerOpen = open), draw()),
+    filter: (patch) => void guard(async () => (Object.assign(state.jobs, patch), fetchJobs(false))),
+    more: () => void guard(() => fetchJobs(true)),
+    toggle: togglePick,
+    selectVisible: () => {
+      if (runner.isActive()) return toast('A batch is running. New jobs wait until it finishes.');
+      const j = state.jobs;
+      const room = MAX_BATCH_JOBS - j.picked.length;
+      const add = j.jobs.filter((x) => x.applyable && !x.queued && !j.picked.includes(`job:${x.id}`)).map((x) => `job:${x.id}` as PickKey);
+      j.picked = [...j.picked, ...add.slice(0, room)];
+      draw();
+      if (add.length > room) toast(`Added ${Math.max(0, room)}. The batch is full at ${MAX_BATCH_JOBS}; ${add.length - room} not added.`);
+    },
+    dropItem: (id) =>
+      void guard(async () => {
+        const r = await api.dropFromQueue([id]);
+        state.jobs.picked = state.jobs.picked.filter((k) => k !== `item:${id}`);
+        log('info', `Removed ${r.dropped} waiting job(s) from the queue.`);
+        await refresh();
+      }),
+    sheet: (open) => void guard(async () => void ((state.sheet = open), open && !state.settings && (state.settings = await api.settings().catch(() => null)))),
+    resumeMode: (mode) => ((state.jobs.resumeMode = mode), draw()),
+    start: () => void guard(startBatch),
+  },
+  batch: {
+    stop: (what) => {
+      if (what === 'yes') {
+        state.stopArmed = false;
+        return void guard(stopBatch);
+      }
+      state.stopArmed = what === 'ask';
+      draw();
+    },
+    cancelJob: (item) =>
+      void guard(async () => {
+        const s = orch.session(item.id);
+        if (s) await cancelSession(s, 'Cancelled before Submit. Nothing was sent.');
+        else if (item.state === 'PENDING') {
+          await api.dropFromQueue([item.id]);
+          runner.record(item.id, 'cancelled', 'Removed from this batch.');
+        }
+        await refresh();
+      }),
+    release: (item) =>
+      void guard(async () => {
+        await orch.release(item);
+        runner.record(item.id, 'cancelled', 'Released. Nothing was sent.');
+        await refresh();
+      }),
+    resume: () =>
+      void guard(async () => {
+        tried.clear();
+        const n = await resumeOrphans();
+        if (!n) toast('Nothing could be reattached: those tabs are gone. Release them instead.');
+        void runQueue();
+      }),
+    answerJob: (item, text, answers) =>
+      void guard(async () => {
+        note(item.id, text.slice(0, 4000));
+        if (answers?.length) {
+          v3Answers.set(item.id, answers);
+          void api.remember(answers.map((x) => ({ question: x.label.slice(0, 300), value: x.value.slice(0, 1000) }))).catch(() => undefined); // kept for later forms: never asked again
+        }
+        jot(item.id, `The seeker answered: ${text.replace(/\n/g, '; ').slice(0, 160)}`);
+        await rerun(item);
+      }),
+    retry: (item) => void guard(() => rerun(item)),
+    // "Submit for me": the seeker's explicit go-ahead for this job; the loop presses Submit and confirms from the page.
+    submitNow: (item) =>
+      void guard(async () => {
+        if (!orch.session(item.id)) return void toast('This job is not open in this panel. Release it and start it again.', 'err');
+        submitOverride.add(item.id);
+        log('info', `Submit for me pressed for “${item.job?.title ?? item.id}”.`);
+        setStep(item, 'preparing');
+        void runAi(item).then(() => refresh());
+      }),
+    checkPage: (item) =>
+      void guard(async () => {
+        const s = orch.session(item.id);
+        const ev = s ? await orch.observe(s) : await probeFor(item);
+        if (ev.kind === 'confirmed') {
+          runner.record(item.id, 'submitted', `The page confirmed it: “${ev.marker}”.`);
+          delete state.sessions[item.id];
+        }
+        toast(ev.kind === 'confirmed' ? 'The page shows a confirmation. Recorded.' : 'The page does not clearly show a confirmation yet.');
+        await refresh();
+      }),
+    attest: (item) =>
+      void guard(async () => {
+        const s = orch.session(item.id);
+        if (s) await orch.attest(s);
+        else await orch.settle(item, 'submitted');
+        delete state.sessions[item.id];
+        reviews.delete(item.id);
+        delete state.formReviews![item.id];
+        runner.record(item.id, 'submitted', 'You confirmed it was sent.');
+        await refresh();
+      }),
+    notSure: (item) =>
+      void guard(async () => {
+        await orch.notSure(sessionOf(item));
+        await refresh();
+      }),
+    notSubmitted: (item) =>
+      void guard(async () => {
+        await orch.settle(item, 'not-submitted');
+        runner.record(item.id, 'failed', 'You said it was not sent. Plato will not try again by itself.');
+        await refresh();
+      }),
+    // The resume for this application, asked once: kept on the server, then the run carries on.
+    resumeChoice: (item, choice) =>
+      void guard(async () => {
+        await api.resumeChoice(item.id, choice);
+        item.resume_choice = choice;
+        const it = state.items.find((i) => i.id === item.id);
+        if (it) it.resume_choice = choice;
+        if (!orch.session(item.id)) return void toast('This job is not open in this panel. Release it and start it again.', 'err');
+        setStep(item, 'preparing');
+        void runAi(item).then(() => refresh());
+      }),
+    watch: (item) =>
+      void (async () => {
+        const tabId = orch.session(item.id)?.tabId ?? (await recallTab(item.id));
+        if (tabId === undefined) return toast('That tab is gone.');
+        await chrome.tabs.update(tabId, { active: true }).catch(() => toast('That tab is gone.'));
+      })(),
+    ticket: (item) => {
+      const sess = state.sessions[item.id];
+      const what = item.state === 'VERIFY' ? 'Plato could not confirm whether this was submitted' : sess?.detail ? `it stopped with: ${sess.detail}` : sess?.message === 'submit_failed' ? 'Plato could not press Submit' : `it is blocked (${sess?.message ?? 'needs me'})`;
+      state.chatOpen = true;
+      void guard(() => consultOrchestrator(`I opened the ticket for "${item.job?.title ?? 'this job'}" at ${item.job?.company ?? ''}: ${what}. Look at the fields listed for this job and my profile. If you can write the answer from my facts, do it and put it in the form; if a fact is truly missing, ask me for that one thing. Be brief.`));
+    },
+    newBatch: () => {
+      runner.clear();
+      state.run = null;
+      state.rows = [];
+      state.jobs.picked = [];
+      state.view = 'jobs';
+      draw();
+    },
+    // The failed jobs of the finished batch, as a new selection: the server lets a FAILED job be tried again.
+    retryFailed: () => {
+      const run = runner.current();
+      if (!run) return;
+      const failed = state.rows.filter((r) => r.status === 'failed');
+      for (const r of failed) state.jobs.known[r.meta.jobId] ??= { id: r.meta.jobId, title: r.meta.title, company: r.meta.company, location: null, source: r.meta.provider ?? '', match: null, applyable: true } satisfies SearchJob;
+      runner.clear();
+      state.run = null;
+      state.rows = [];
+      state.jobs.picked = failed.map((r) => `job:${r.meta.jobId}` as PickKey).slice(0, MAX_BATCH_JOBS);
+      state.view = 'jobs';
+      state.sheet = state.jobs.picked.length > 0;
+      draw();
+    },
+  },
   pair: (code, label) =>
     void guard(async () => {
       // A refused code is not an expired link: show the server's reason, keep the form.
@@ -1177,9 +1308,10 @@ const actions: Actions = {
         });
       await tokens.set(r.token);
       state.status = 'loading';
+      preselected = false;
       await refresh();
-      // first run: celebrate, show what is waiting and what happens next
-      state.wizard = { ...blankWizard('welcome'), waiting: state.items.filter((i) => i.state === 'PENDING').length, sites: registry.all.filter((d) => registry.policyOf(d.id, policy) === 'FILL_ONLY' && d.adapter).map((d) => d.label) };
+      await loadSearches().catch(fail);
+      toast('Linked. Jobs you added on Plato are ticked for your first batch.', 'ok');
     }),
   unlink: () =>
     void guard(async () => {
@@ -1189,67 +1321,19 @@ const actions: Actions = {
       await tokens.clear();
       state.status = 'unpaired';
       state.items = [];
+      state.sessions = {};
     }),
   refresh: () => void refresh(),
-  start: (item) =>
-    void guard(async () => {
-      await startItem(item);
-      await refresh();
-    }),
-  ready: (item) =>
-    void guard(async () => {
-      await orch.armForSubmit(sessionOf(item));
-      setStep(item, 'armed');
-      await refresh();
-    }),
-  checkPage: (item) =>
-    void guard(async () => {
-      const s = orch.session(item.id);
-      const ev = s ? await orch.observe(s) : await probeFor(item);
-      state.notice = ev.kind === 'confirmed' ? 'The page shows a confirmation. Recorded.' : 'The page does not clearly show a confirmation yet.';
-      await refresh();
-    }),
-  attest: (item) =>
-    void guard(async () => {
-      const s = orch.session(item.id);
-      if (s) await orch.attest(s);
-      else await orch.settle(item, 'submitted');
-      delete state.sessions[item.id];
-      reviews.delete(item.id);
-      delete state.formReviews![item.id];
-      await refresh();
-    }),
-  notSure: (item) =>
-    void guard(async () => {
-      await orch.notSure(sessionOf(item));
-      await refresh();
-    }),
-  notSubmitted: (item) =>
-    void guard(async () => {
-      await orch.settle(item, 'not-submitted');
-      await refresh();
-    }),
-  cancel: (item) =>
-    void guard(async () => {
-      await orch.cancel(sessionOf(item));
-      delete state.sessions[item.id];
-      await refresh();
-    }),
-  release: (item) =>
-    void guard(async () => {
-      await orch.release(item);
-      await refresh();
-    }),
 };
 
 // The person pressed Stop on the page overlay: cancel that job's session.
 chrome.runtime.onMessage.addListener((msg: unknown, sender) => {
   if (sender.id !== chrome.runtime.id || (msg as { type?: string } | null)?.type !== 'plato:stop' || sender.tab?.id === undefined) return;
   const item = state.items.find((i) => orch.session(i.id)?.tabId === sender.tab!.id);
-  if (item) void actions.cancel(item);
+  if (item) void actions.batch.cancelJob(item);
 });
 
-// Only one panel instance may run the queue (two would double-open tabs and double-ask the AI).
+// Only one panel instance may run the batch (two would double-open tabs and double-ask the AI).
 const PANEL_ID = Math.random().toString(36).slice(2);
 async function holdsPanelLock(): Promise<boolean> {
   try {
@@ -1274,14 +1358,11 @@ async function boot() {
     return draw();
   }
   setInterval(() => void holdsPanelLock(), 3000); // keep the lock while this panel is open
-  try {
-    const run = (await chrome.storage.session.get('run')).run as { running?: boolean; autoSubmit?: boolean; runIds?: string[] } | undefined;
-    state.running = !!run?.running;
-    state.runIds = run?.runIds ?? [];
-    state.autoSubmit = !!run?.autoSubmit;
-  } catch {
-    /* no saved run: the banner offers to start */
-  }
+  const run = await runner.restore();
+  state.run = run;
+  state.autoSubmit = run?.autoSubmit ?? false;
+  if (run?.status === 'finished') finishedToasted = run.id;
+  if (run?.status === 'running') state.view = 'batch';
   try {
     await tokens.ensureTrusted(); // before ANY read of the token
   } catch {
@@ -1294,7 +1375,9 @@ async function boot() {
     return draw();
   }
   await refresh();
+  if (state.status === 'ready') loadSearches().then(draw, (e) => (log('warn', `searches: ${e instanceof Error ? e.message : String(e)}`), draw()));
   setInterval(() => document.visibilityState === 'visible' && void refresh(), 15_000);
+  setInterval(() => runner.isActive() && state.view === 'batch' && ((state.eta = runner.eta(state.rows, tabLimit())), scheduleDraw()), 5_000); // the estimate counts down between refreshes
   // jobs queued from the website show up as soon as the seeker comes back to the panel
   window.addEventListener('focus', () => void refresh());
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && void refresh());

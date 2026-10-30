@@ -32,9 +32,15 @@ export type V3Op =
   | { op: 'set_file'; ref: string; name: string; mime: string; data: string } // base64 bytes into the file input at/near the ref
   | { op: 'guard'; ms: number } // cancel any form submit for the next ms
   | { op: 'guarded' } // how many submits the guard cancelled since it was armed (and reset)
+  | { op: 'changed' } // text fields whose value the PAGE changed since the model last read them (a resume parse, a script), and the active ref
+  | { op: 'typed' } // the executor typed or pressed keys: the active field's value is ours now
   | { op: 'info' }
   | { op: 'state' };
-export const V3_OPS = new Set(['read_page', 'find', 'page_text', 'form_input', 'resolve', 'ready', 'describe', 'set_file', 'guard', 'guarded', 'info', 'state']);
+export const V3_OPS = new Set(['read_page', 'find', 'page_text', 'form_input', 'resolve', 'ready', 'describe', 'set_file', 'guard', 'guarded', 'changed', 'typed', 'info', 'state']);
+export interface Changed {
+  active: string | null;
+  fields: { ref: string; label: string; value: string }[];
+}
 
 // One registry per page: refs survive until a navigation (the script reloads with the page).
 const R = { next: 1, byRef: new Map<string, Element>(), byEl: new WeakMap<Element, string>() };
@@ -56,6 +62,12 @@ export const STALE = (ref: string) => `Unknown or stale ref: ${ref}. Call read_p
 type Ctl = HTMLInputElement;
 const txt = (s: unknown) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const inner = (el: Element) => (el as HTMLElement).innerText ?? el.textContent ?? '';
+// Text values as the model last read them. A value the page sets afterwards (Lever fills name, email and phone from
+// the resume a few seconds after the upload) is listed by `changed`, and the executor refuses to type over it: typing
+// appends, which gave "Test SeekerTest Seeker" on a live run. `typed` and form_input mark a value as ours.
+const TYPED_ROLES = new Set(['textbox', 'combobox', 'spinbutton']);
+const seen = new WeakMap<Element, string>();
+const fieldValue = (el: Element) => txt((el as Ctl).value) || (roleOf(el) === 'combobox' ? chosenText(el) : '');
 const vis = (el: Element, doc: Document) => {
   const r = el.getBoundingClientRect();
   if (!(r.width > 0 || r.height > 0)) return false;
@@ -127,6 +139,7 @@ export function describe(el: Element, doc: Document): string {
   const role = roleOf(el);
   const c = el as Ctl;
   const parts: string[] = [];
+  if (TYPED_ROLES.has(role)) seen.set(el, fieldValue(el)); // what the model is about to see is what it plans on
   const name = FIELD_ROLES.has(role) ? labelText(el, doc) : txt(inner(el) || c.value || el.getAttribute('aria-label') || (el as HTMLImageElement).alt || '');
   parts.push(`${role} "${name.slice(0, 120)}"`);
   if (FIELD_ROLES.has(role) && required(el, doc)) parts.push('required');
@@ -206,6 +219,7 @@ export function formInput(doc: Document, ref: string, value: unknown): { ok: boo
     s.focus();
     setNative(s, opt.value);
     s.blur();
+    seen.set(s, fieldValue(s));
     return s.value === opt.value ? { ok: true, message: `Selected "${txt(opt.text)}"` } : { ok: false, message: 'The select did not keep the value' };
   }
   const role = roleOf(el);
@@ -223,12 +237,31 @@ export function formInput(doc: Document, ref: string, value: unknown): { ok: boo
     c.focus();
     setNative(el, want);
     c.blur();
+    seen.set(el, fieldValue(el));
     const shown = String(c.value);
     const digits = (s: string) => s.replace(/\D/g, '');
     const ok = shown === want || (c.type === 'tel' && !!digits(want) && (digits(shown) === digits(want) || digits(want).endsWith(digits(shown))));
     return ok ? { ok: true, message: `Set to "${shown.slice(0, 60)}"` } : { ok: false, message: `The field shows "${shown.slice(0, 60)}" instead; for a type-ahead list, click it, type, then click the matching option` };
   }
   return { ok: false, message: 'form_input works on inputs, selects, checkboxes and radios; use left_click and type for this element' };
+}
+/** Text fields the page filled or changed since the model last read them, and the field that is active (about to be typed into). */
+export function changed(doc: Document): Changed {
+  const fields: Changed['fields'] = [];
+  for (const [ref, el] of R.byRef) {
+    const last = seen.get(el);
+    if (last === undefined || !el.isConnected) continue;
+    const value = fieldValue(el);
+    if (value !== last) fields.push({ ref, label: labelText(el, doc).slice(0, 80), value: value.slice(0, 60) });
+  }
+  const a = doc.activeElement;
+  return { active: (a && R.byEl.get(a)) || null, fields };
+}
+/** The executor typed or pressed keys in the active field: its value is ours now, not something the page did. */
+export function typed(doc: Document): { ok: true } {
+  const a = doc.activeElement;
+  if (a && seen.has(a)) seen.set(a, fieldValue(a));
+  return { ok: true };
 }
 /** Where to press a ref, after scrolling it into view. */
 export function resolve(ref: string): Point | null {
@@ -341,6 +374,10 @@ export function handle(doc: Document, m: V3Op): unknown {
       return describeAt(doc, m);
     case 'set_file':
       return setFile(doc, m.ref, m);
+    case 'changed':
+      return changed(doc);
+    case 'typed':
+      return typed(doc);
     case 'guard':
       guard.until = Date.now() + Math.min(m.ms, 5000);
       guard.blocked = 0;

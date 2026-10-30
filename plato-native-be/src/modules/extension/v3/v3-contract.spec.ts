@@ -7,8 +7,8 @@ describe('parseOutcome', () => {
       kind: 'submit_ready',
       summary: 'every field holds a value',
     });
-    expect(parseOutcome('ASK: Are you authorised to work in Germany?')).toEqual(
-      { kind: 'ask', question: 'Are you authorised to work in Germany?' },
+    expect(parseOutcome('ASK: Are you authorised to work in Germany?')).toMatchObject(
+      { kind: 'ask', question: 'Are you authorised to work in Germany?', questions: [{ id: 'answer', type: 'textarea' }] },
     );
     expect(parseOutcome('CONFIRMED Thank you for applying')).toEqual({
       kind: 'confirmed',
@@ -37,7 +37,7 @@ describe('parseOutcome', () => {
       parseOutcome(
         'There is one field I cannot answer.\nASK: What is your notice period?',
       ),
-    ).toEqual({ kind: 'ask', question: 'What is your notice period?' });
+    ).toMatchObject({ kind: 'ask', question: 'What is your notice period?' });
   });
 
   it('never turns words without a keyword into success', () => {
@@ -99,5 +99,37 @@ describe('applyPageOf', () => {
     expect(applyPageOf({ apply_url: null, url: 'https://x.com/job' })).toBe('https://x.com/job');
     expect(applyPageOf({ apply_url: '', url: 'https://eg.linkedin.com/jobs/view/1' })).toBe('https://eg.linkedin.com/jobs/view/1');
     expect(() => new URL(applyPageOf({ apply_url: '', url: 'https://eg.linkedin.com/jobs/view/1' }))).not.toThrow();
+  });
+});
+
+describe('parseOutcome: ASK with structured questions', () => {
+  const fenced = `I filled everything else.
+ASK: The form requires two facts your profile does not hold.
+\`\`\`json
+{"questions":[{"id":"relocate","label":"Are you willing to relocate to Munich?","type":"boolean","why":"Required field."},{"id":"notice","label":"What is your notice period?","type":"choice","options":["Immediately","1 month"],"other":true},{"id":"relocate","label":"duplicate id","type":"text"}]}
+\`\`\``;
+  it('reads the one-line summary and the JSON block; booleans get Yes/No; duplicate ids are dropped; required defaults to true', () => {
+    const o = parseOutcome(fenced);
+    expect(o.kind).toBe('ask');
+    if (o.kind !== 'ask') return;
+    expect(o.question).toBe('The form requires two facts your profile does not hold.');
+    expect(o.questions.map((q) => q.id)).toEqual(['relocate', 'notice']);
+    expect(o.questions[0]).toMatchObject({ type: 'boolean', options: ['Yes', 'No'], required: true, why: 'Required field.' });
+    expect(o.questions[1]).toMatchObject({ type: 'choice', options: ['Immediately', '1 month'], other: true });
+  });
+  it('a bare object works too; a choice without options becomes a text question', () => {
+    const o = parseOutcome('ASK: One thing. {"questions":[{"id":"salary","label":"Expected salary?","type":"choice"}]}');
+    expect(o.kind === 'ask' && o.questions[0]).toMatchObject({ id: 'salary', type: 'text' });
+    expect(o.kind === 'ask' && o.question).toBe('One thing.');
+  });
+  it('no block, malformed JSON, or too many questions: the line itself becomes one free-text question (never nothing)', () => {
+    for (const text of ['ASK: Are you authorised to work in Peru?', 'ASK: Are you authorised to work in Peru? ```json {not json``` ', `ASK: Are you authorised to work in Peru? {"questions":${JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ id: 'q' + i, label: 'Q' + i, type: 'text' })))}}`]) {
+      const o = parseOutcome(text);
+      expect(o.kind === 'ask' && o.questions).toEqual([{ id: 'answer', label: 'Are you authorised to work in Peru?', type: 'textarea', required: true }]);
+    }
+  });
+  it('the other stops keep the brain’s description', () => {
+    expect(parseOutcome('CAPTCHA hCaptcha challenge appeared right after Submit on the Lever form')).toEqual({ kind: 'captcha', text: 'CAPTCHA hCaptcha challenge appeared right after Submit on the Lever form' });
+    expect(parseOutcome('BLOCKED The Apply button opens a login page; the site needs an account first.')).toEqual({ kind: 'blocked', reason: 'The Apply button opens a login page; the site needs an account first.' });
   });
 });

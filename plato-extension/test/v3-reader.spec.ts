@@ -159,3 +159,28 @@ describe('ready: a press only once the control can really be pressed', () => {
     expect(await ready(document, 'ref_9999', 100)).toEqual({ ok: false, reason: 'Unknown or stale ref: ref_9999. Call read_page again for current refs.' });
   });
 });
+
+describe('changed and typed: values the page set since the model last read them', () => {
+  it('lists a field the page filled after the read, names the active field, and forgets it once the model reads again or we set it', () => {
+    const t = readPage(document, 'interactive');
+    const fn = refOf(t, 'First name *');
+    expect(handle(document, { op: 'changed' })).toEqual({ active: null, fields: [] });
+    ($('fn') as HTMLInputElement).value = 'Test Seeker'; // the page's own autofill (a resume parse)
+    $('fn').focus();
+    expect(handle(document, { op: 'changed' })).toEqual({ active: fn, fields: [{ ref: fn, label: 'First name *', value: 'Test Seeker' }] });
+    readPage(document, 'interactive'); // the model saw it
+    expect(handle(document, { op: 'changed' })).toEqual({ active: fn, fields: [] });
+    ($('em') as HTMLInputElement).value = 'a@b.c';
+    expect((handle(document, { op: 'changed' }) as { fields: unknown[] }).fields).toHaveLength(1);
+    formInput(document, refOf(t, 'Email *'), 'x@y.z'); // ours now
+    expect(handle(document, { op: 'changed' })).toMatchObject({ fields: [] });
+  });
+  it('typed: what the executor typed into the active field is ours, so a second type into it (a type-ahead) is not refused', () => {
+    const t = readPage(document, 'interactive');
+    $('ph').focus();
+    ($('ph') as HTMLInputElement).value = 'Cai'; // what our key events produced
+    expect((handle(document, { op: 'changed' }) as { fields: unknown[] }).fields).toHaveLength(1);
+    handle(document, { op: 'typed' });
+    expect(handle(document, { op: 'changed' })).toEqual({ active: refOf(t, 'Phone'), fields: [] });
+  });
+});

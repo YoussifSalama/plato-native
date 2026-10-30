@@ -1,77 +1,117 @@
+import type { AskQuestion, SeekerAnswer } from '../v3/contract';
+import type { StopKind } from '../v3/run';
 import type { ReconcileAction } from '../core/reconcile';
-import type { ReviewState, Row } from '../core/form-review';
-import type { ApiItem, PolicyMap } from '../core/types';
+import type { ReviewState } from '../core/form-review';
+import type { BatchRun, Row } from '../core/batch-runner';
+import type { ApiItem, PolicyMap, RunSettings, SearchCard, SearchJob } from '../core/types';
 import type { Registry } from '../providers/registry';
 import { renderChat, type Assistant } from './assistant';
-import { icon } from './icons';
-import { renderReady, type ReadyActions, type RunSettings } from './ready';
-import { renderWizard, type Wizard, type WizardAction } from './wizard';
+import { icon, type IconName } from './icons';
+import { renderDock, renderJobs, renderSheet } from './jobs-view';
+import { renderBatch } from './batch-view';
 
 // Pure rendering: state in, DOM out. Text only (textContent): job titles come
 // from third-party listings and must never be parsed as HTML.
+// The panel: header, Jobs | Batch nav, one scrolling body, the batch dock pinned at the bottom.
 export type SessionStep = 'preparing' | 'review' | 'armed' | 'needs-user';
+export type PickKey = `item:${string}` | `job:${string}`; // a queued server item, or a job from a search
+export interface JobsState {
+  searches: SearchCard[];
+  searchId?: string;
+  pickerOpen: boolean;
+  jobs: SearchJob[]; // the pages loaded so far of the current search, filtered and sorted by the server
+  jobsTotal: number;
+  known: Record<string, SearchJob>; // every job seen, so a pick survives a change of search or page
+  loading: boolean;
+  q: string;
+  sort: 'best' | 'newest';
+  remote: boolean;
+  fromPlato: boolean;
+  picked: PickKey[];
+  resumeMode: 'profile' | 'tailored';
+}
+export interface Toast {
+  id: number;
+  text: string;
+  kind?: 'ok' | 'err';
+}
 export interface PanelState {
   status: 'loading' | 'unpaired' | 'ready';
   error?: string;
   notice?: string;
-  runNote?: string; // "Applying to N jobs…": drawn only while the run has jobs
+  toasts: Toast[];
   items: ApiItem[];
   policy?: PolicyMap; // server policy; undefined = unknown = everything blocked
-  sessions: Record<string, { step: SessionStep; message?: string; detail?: string }>;
+  sessions: Record<string, { step: SessionStep; message?: string; detail?: string; stop?: StopKind; ask?: AskQuestion[] }>; // stop/ask: why a v3 run stopped and the questions to draw
+  progress: Record<string, string>; // item id -> the last journal line (what Plato is doing on that page)
   cards: Record<string, ReconcileAction>;
-  formReviews?: Record<string, ReviewState>; // the form review, per item with a live session
+  formReviews?: Record<string, ReviewState>; // engine v2 bookkeeping; not drawn
   pendingOutbox: number;
   busy?: boolean;
-  assistant?: Assistant; // the orchestrator, while a job is blocked or it has something to say
-  autoSubmit?: boolean; // this run: the seeker let Plato press Submit
-  runIds?: string[]; // item ids of the current run: the runner starts only these, never older queued jobs
-  settings?: RunSettings | null; // run settings from the server (Ready card)
-  matchRange?: string | null; // e.g. "72%–100%" for the waiting jobs
-  menuOpen?: boolean; // header ⋮ menu
-  clearArmed?: boolean;
-  log?: { at: string; level: 'info' | 'warn' | 'error'; text: string }[]; // what the panel did and why
-  showLog?: boolean; // the first click on Clear queue: the button now asks to confirm
-  running?: boolean; // the runner is opening queued jobs, up to 10 tabs at a time
-  wizard?: Wizard; // first-run / new-batch flow; takes over the panel while set
+  assistant?: Assistant; // the orchestrator chat, opened on demand
+  chatOpen?: boolean;
+  autoSubmit?: boolean; // this run: Plato presses Submit
+  settings?: RunSettings | null;
+  view: 'jobs' | 'batch';
+  jobs: JobsState;
+  sheet?: boolean; // the batch review sheet
+  menuOpen?: boolean;
+  stopArmed?: boolean; // "Stop batch" asked; waiting for Yes / Keep going
+  run: BatchRun | null; // the batch this panel is applying to (or the last finished one)
+  rows: Row[]; // the batch's rows, from the server list and this panel's sessions
+  eta?: { ms: number; basis: number } | 'first' | null; // the runner's estimate for the rows
+  autoSubmitPreview?: boolean; // what the sheet promises: Plato presses Submit (production), or the person does (test builds)
+  log?: { at: string; level: 'info' | 'warn' | 'error'; text: string }[];
+  showLog?: boolean;
 }
-export interface Actions {
-  wizard?(a: WizardAction): void;
-  resumeJob?(item: ApiItem): void; // reattach to a job left open by a reload
-  readyCard?: ReadyActions; // the Ready-to-apply card
-  menu?(open: boolean): void;
-  toggleLog?(): void;
-  dropItems?(ids: string[]): void; // remove waiting jobs (one batch)
-  retry?(item: ApiItem): void; // run the steps again from where the job stopped
-  resumeChoice?(item: ApiItem, choice: 'profile' | 'tailored'): void; // which resume this application uploads
-  submitNow?(item: ApiItem): void; // the seeker's explicit go-ahead: Plato presses Submit on this job
-  ticket?(item: ApiItem): void; // open the chat on this job's problem
-  clearQueue?(go?: boolean): void; // true = ask first, true again via Yes = clear; false = cancel the question
-  answer?(text: string): void; // the seeker's reply to the orchestrator
-  pair(code: string, label: string): void;
-  unlink(): void;
-  refresh(): void;
-  start(item: ApiItem): void;
-  ready(item: ApiItem): void; // the person says the form is ready; THEY submit
+export interface JobsActions {
+  pickSearch(id: string): void;
+  picker(open: boolean): void;
+  filter(patch: Partial<Pick<JobsState, 'q' | 'sort' | 'remote' | 'fromPlato'>>): void;
+  more(): void; // next page of the current search
+  toggle(key: PickKey): void; // refused past the cap (the runner says so)
+  selectVisible(): void; // tick what is on screen, up to the cap
+  dropItem(id: string): void; // remove a queued job (server CANCELLED)
+  sheet(open: boolean): void;
+  resumeMode(mode: 'profile' | 'tailored'): void;
+  start(): void; // the one way a batch begins
+}
+export interface BatchActions {
+  stop(what: 'ask' | 'no' | 'yes'): void;
+  cancelJob(item: ApiItem): void; // one running or queued job
+  release(item: ApiItem): void; // an interrupted job this panel no longer holds
+  resume(): void; // reattach interrupted jobs whose tab is still open
+  answerJob(item: ApiItem, text: string, answers?: SeekerAnswer[]): void; // the answers to Plato's questions (the form's lines, and the structured answers behind them); the job continues
+  retry(item: ApiItem): void; // "I did it, continue": run again from where it stopped
+  submitNow(item: ApiItem): void; // the seeker's explicit go-ahead: Plato presses Submit on this job
   checkPage(item: ApiItem): void;
   attest(item: ApiItem): void;
   notSure(item: ApiItem): void;
   notSubmitted(item: ApiItem): void;
-  cancel(item: ApiItem): void;
-  release(item: ApiItem): void;
-  // Form review (nothing is filled until the person approves, for the version they saw)
-  formChoose(item: ApiItem, formId: string): void;
-  formRestart(item: ApiItem): void;
-  reviewToggle(item: ApiItem, rowId: string, choice: 'use' | 'skip'): void;
-  reviewFill(item: ApiItem, version: number): void;
-  reviewRetry(item: ApiItem, version: number): void;
-  reviewReinspect(item: ApiItem): void;
+  resumeChoice(item: ApiItem, choice: 'profile' | 'tailored'): void;
+  watch(item: ApiItem): void; // bring the job's tab to the front
+  ticket(item: ApiItem): void; // open the chat on this job's problem
+  newBatch(): void; // after a finished batch: back to Jobs with an empty selection
+  retryFailed(): void; // a new selection from the failed jobs of the finished batch
+}
+export interface Actions {
+  pair(code: string, label: string): void;
+  unlink(): void;
+  refresh(): void;
+  view(v: 'jobs' | 'batch'): void;
+  menu(open: boolean): void;
+  toggleLog(): void;
+  chat(open: boolean): void;
+  answer(text: string): void; // the seeker's message to the orchestrator chat
+  jobs: JobsActions;
+  batch: BatchActions;
 }
 
 type Child = Node | string | null | false | undefined;
 export function h<K extends keyof HTMLElementTagNameMap>(
   doc: Document,
   tag: K,
-  props: { class?: string; text?: string; disabled?: boolean; onclick?: () => void; type?: string; placeholder?: string; id?: string; maxlength?: number; autocomplete?: string; href?: string } = {},
+  props: { class?: string; text?: string; disabled?: boolean; onclick?: () => void; type?: string; placeholder?: string; id?: string; maxlength?: number; autocomplete?: string; href?: string; attrs?: Record<string, string> } = {},
   ...children: Child[]
 ) {
   const el = doc.createElement(tag);
@@ -84,344 +124,127 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   if (props.autocomplete) el.setAttribute('autocomplete', props.autocomplete);
   if (props.href) el.setAttribute('href', props.href);
   if (props.disabled) el.setAttribute('disabled', '');
+  if (props.attrs) for (const [k, v] of Object.entries(props.attrs)) el.setAttribute(k, v);
   if (props.onclick) el.addEventListener('click', props.onclick);
   for (const c of children) if (c) el.append(c);
   return el;
 }
-
-const STATE_LABEL: Record<string, string> = {
-  PENDING: 'Waiting',
-  CLAIMED: 'Started',
-  PREPARING: 'Preparing',
-  NEEDS_USER: 'Needs you',
-  FILLING: 'Filling',
-  REVIEW: 'Review',
-  AWAITING_SUBMIT: 'Waiting for you to submit',
-  VERIFY: 'Please check',
-};
-const NEEDS_TEXT: Record<string, string> = {
-  login: 'Log in on the site yourself, then continue.',
-  mfa: 'Complete the site’s verification yourself, then continue.',
-  captcha: 'Complete the human check yourself, then continue.',
-  questions: 'The form asks something Plato cannot answer. Answer it on the page.',
-};
-const BLOCK_TEXT: Record<string, string> = {
-  blocked: 'Not available: this site is not enabled for Plato yet.',
-  none: 'Not available yet: nothing is built for this site.',
-};
+export const btn = (doc: Document, text: string, onclick: () => void, cls = 'btn', o: { disabled?: boolean; icon?: IconName; id?: string } = {}) =>
+  h(doc, 'button', { class: cls, onclick, disabled: o.disabled, id: o.id, type: 'button' }, o.icon ? icon(doc, o.icon) : null, text);
+// The company tile: a letter on a hue from the name (real logos when image assets ship).
+export function avatar(doc: Document, company: string, cls = 'av') {
+  const el = h(doc, 'span', { class: cls, text: (company.trim().charAt(0) || '?').toUpperCase() });
+  const hue = [...company].reduce((a, c) => a + c.charCodeAt(0) * 7, 0) % 360;
+  el.style.setProperty('background', `hsl(${hue} 52% 46%)`);
+  return el;
+}
+export const banner = (doc: Document, kind: 'info' | 'warn' | 'err', ico: IconName, title: string | null, text: string, ...acts: Child[]) =>
+  h(doc, 'div', { class: `banner ${kind}` }, icon(doc, ico), h(doc, 'div', {}, title ? h(doc, 'strong', { text: title }) : null, text, acts.some(Boolean) ? h(doc, 'div', { class: 'acts' }, ...acts) : null));
 
 export function render(doc: Document, root: HTMLElement, s: PanelState, a: Actions, registry: Registry) {
-  const typing = doc.activeElement?.id === 'answer' ? (doc.activeElement as HTMLInputElement).selectionStart : null; // keep the cursor in the chat box across redraws
+  // keep the cursor in whatever box the person is typing in across redraws
+  const active = doc.activeElement as HTMLInputElement | null;
+  const keep = active && root.contains(active) && active.id ? { id: active.id, pos: active.selectionStart } : null;
+  const scroll = root.querySelector('.body')?.scrollTop ?? 0;
   root.replaceChildren();
-  root.className = s.status === 'ready' && !s.wizard ? 'queue' : '';
   try {
     renderInner(doc, root, s, a, registry);
   } finally {
+    const body = root.querySelector('.body');
+    if (body) body.scrollTop = scroll;
     const msgs = root.querySelector('#msgs');
     if (msgs) msgs.scrollTop = msgs.scrollHeight;
-    const box = root.querySelector<HTMLInputElement>('#answer');
-    if (typing !== null && box) {
-      box.focus();
-      box.setSelectionRange(typing, typing);
+    if (keep) {
+      const el = doc.getElementById(keep.id) as HTMLInputElement | null;
+      if (el) {
+        el.focus();
+        if (keep.pos !== null && el.setSelectionRange) try { el.setSelectionRange(keep.pos, keep.pos); } catch { /* not a text box */ }
+      }
     }
   }
 }
 
-// One header everywhere: mark, name, connection line; on the right whatever the screen needs.
-function topHeader(doc: Document, s: PanelState, right: (Node | null)[]) {
+function header(doc: Document, s: PanelState, a: Actions) {
   const linked = s.status !== 'unpaired';
-  return h(doc, 'header', { class: 'top' },
-    h(doc, 'div', { class: 'brand' }, h(doc, 'span', { class: 'mark', text: 'P' }),
-      h(doc, 'div', { class: 'brand-text' }, h(doc, 'h1', { text: 'Plato Apply' }),
-        h(doc, 'p', { class: 'status-line' }, h(doc, 'span', { class: `dot${linked && s.policy ? ' ok' : ''}` }), h(doc, 'span', { text: !linked ? 'Not linked yet' : s.policy ? 'Connected' : 'Offline' }), h(doc, 'span', { class: 'build', text: `build ${__BUILD__}` })))),
-    ...right);
+  const live = !!s.run && s.run.status === 'running';
+  const conn = h(doc, 'div', { class: `conn${linked && s.policy ? ' ok' : ''}` }, h(doc, 'i'), h(doc, 'span', { text: !linked ? 'Not linked' : s.policy ? 'Connected' : 'Offline · showing the last known state' }));
+  const more = h(doc, 'button', { class: 'ibtn', id: 'menu-btn', type: 'button', onclick: () => a.menu(!s.menuOpen), attrs: { 'aria-label': 'Menu', 'aria-expanded': String(!!s.menuOpen) } }, icon(doc, 'more'));
+  return h(doc, 'header', { class: 'hdr' }, h(doc, 'span', { class: `mark${live ? ' live' : ''}`, text: 'P' }), h(doc, 'div', { class: 'ttl' }, h(doc, 'h1', { text: 'Plato Apply' }), conn), linked ? more : null);
 }
-const closeBtn = (doc: Document) => {
-  const b = h(doc, 'button', { class: 'icon-btn', id: 'close-btn', onclick: () => window.close() }, icon(doc, 'close'));
-  b.setAttribute('aria-label', 'Close');
-  return b;
-};
-
-// Waiting jobs of the newest pick only: older batches are shown apart, never silently mixed in.
-const batchKey = (i: ApiItem) => i.batch_id;
-export function latestBatch(items: ApiItem[], ok: (i: ApiItem) => boolean = () => true) {
-  const pending = items.filter((i) => i.state === 'PENDING' && ok(i));
-  const newest = pending.reduce<ApiItem | null>((b, i) => (!b || (i.batch?.created_at ?? '') > (b.batch?.created_at ?? '') ? i : b), null);
-  return newest ? pending.filter((i) => batchKey(i) === batchKey(newest)) : [];
+function menu(doc: Document, s: PanelState, a: Actions) {
+  const item = (text: string, fn: () => void) => h(doc, 'button', { type: 'button', text, onclick: () => (a.menu(false), fn()), attrs: { role: 'menuitem' } });
+  return h(doc, 'div', { class: 'menu', id: 'menu', attrs: { role: 'menu' } },
+    item('Ask Plato', () => a.chat(true)),
+    item(s.showLog ? 'Hide activity log' : 'Activity log', a.toggleLog),
+    item('Refresh', a.refresh),
+    item('Unlink this browser', a.unlink),
+    h(doc, 'p', { class: 'build', text: `build ${__BUILD__}` }));
 }
-const batchTitle = (i: ApiItem) => {
-  const when = i.batch?.created_at ? new Date(i.batch.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-  return `${i.batch?.label ? `“${i.batch.label}” search` : 'Picked on Plato'}${when ? ` · ${when}` : ''}`;
-};
+function nav(doc: Document, s: PanelState, a: Actions) {
+  const tab = (v: 'jobs' | 'batch', text: string, badge?: Node | null) => h(doc, 'button', { type: 'button', class: '', onclick: () => a.view(v), attrs: { role: 'tab', 'aria-selected': String(s.view === v), id: `tab-${v}` } }, text, badge);
+  let badge: Node | null = null;
+  if (s.run) {
+    const needs = s.rows.filter((r) => r.status === 'needs' || r.status === 'verify' || r.status === 'interrupted').length;
+    const done = s.rows.filter((r) => !!r.outcome).length;
+    if (needs) badge = h(doc, 'span', { class: 'b warn', text: String(needs) });
+    else if (s.run.status === 'finished') badge = h(doc, 'span', { class: 'b ok' }, icon(doc, 'check'));
+    else badge = h(doc, 'span', { class: 'b num', text: `${done}/${s.run.itemIds.length}` });
+  }
+  return h(doc, 'nav', { class: 'seg', attrs: { role: 'tablist' } }, tab('jobs', 'Jobs'), tab('batch', 'Batch', badge));
+}
 
 function renderInner(doc: Document, root: HTMLElement, s: PanelState, a: Actions, registry: Registry) {
-  if (s.error) root.append(h(doc, 'p', { class: 'error', text: s.error }));
-  if (s.notice) root.append(h(doc, 'p', { class: 'notice', text: s.notice }));
-  else if (s.runNote && s.running && s.items.length) root.append(h(doc, 'p', { class: 'notice', text: s.runNote }));
-
-  if (s.status === 'loading') return void root.append(h(doc, 'p', { text: 'Loading…' }));
+  root.append(header(doc, s, a));
+  if (s.status === 'loading') return void root.append(h(doc, 'div', { class: 'body' }, h(doc, 'div', { class: 'stack' }, h(doc, 'div', { class: 'skel' }), h(doc, 'div', { class: 'skel' }), h(doc, 'div', { class: 'skel' }))));
 
   if (s.status === 'unpaired') {
-    const code = h(doc, 'input', { id: 'code', type: 'text', placeholder: 'ABCD-EFGH', maxlength: 20, autocomplete: 'off' });
-    const label = h(doc, 'input', { id: 'label', type: 'text', placeholder: 'This browser', maxlength: 60, autocomplete: 'off' });
-    const step = (n: number, text: string) => h(doc, 'li', {}, h(doc, 'span', { class: 'num', text: String(n) }), h(doc, 'span', { text }));
-    root.prepend(topHeader(doc, s, [closeBtn(doc)]));
-    root.append(
-      h(doc, 'section', { class: 'hero ready' },
-        h(doc, 'div', { class: 'ready-head' }, h(doc, 'span', { class: 'ready-ico' }, icon(doc, 'link')),
-          h(doc, 'div', {}, h(doc, 'h1', { text: 'Link this browser to Plato' }), h(doc, 'p', { class: 'meta', text: 'Only you can link a browser to your account. It takes a few seconds.' }))),
-        h(doc, 'ol', { class: 'steps' },
-          step(1, 'In Plato, open Extension in the sidebar.'),
-          step(2, 'Press “Generate code” and copy it.'),
-          step(3, 'Paste it here and press Link.')),
-        code,
-        label,
-        h(doc, 'button', { id: 'link', class: 'primary block cta', text: 'Link this browser', disabled: s.busy, onclick: () => a.pair(code.value, label.value || 'This browser') })),
-    );
+    const code = h(doc, 'input', { class: 'field', id: 'code', type: 'text', placeholder: 'ABCD-EFGH', maxlength: 20, autocomplete: 'off', attrs: { 'aria-label': 'Pairing code' } });
+    const label = h(doc, 'input', { class: 'field', id: 'label', type: 'text', placeholder: 'Name this browser (optional)', maxlength: 60, autocomplete: 'off', attrs: { 'aria-label': 'Browser name' } });
+    const step = (n: number, text: string) => h(doc, 'li', {}, h(doc, 'span', { class: 'n', text: String(n) }), h(doc, 'span', { text }));
+    root.append(h(doc, 'div', { class: 'body' },
+      s.error ? banner(doc, 'err', 'alert', null, s.error) : null,
+      h(doc, 'section', { class: 'card pad link' },
+        h(doc, 'span', { class: 'tile' }, icon(doc, 'link')),
+        h(doc, 'h2', { text: 'Link this browser to Plato' }),
+        h(doc, 'p', { text: 'Only you can link a browser to your account. It takes a few seconds.' }),
+        h(doc, 'ol', { class: 'steps' }, step(1, 'In Plato, open Extension in the sidebar.'), step(2, 'Press “Generate code” and copy it.'), step(3, 'Paste it here and press Link.')),
+        code, label,
+        btn(doc, 'Link this browser', () => a.pair(code.value, label.value || 'This browser'), 'btn primary block', { disabled: s.busy, id: 'link' }))));
     return;
   }
 
-  if (s.wizard && a.wizard) {
-    root.prepend(topHeader(doc, s, [s.wizard.step === 'welcome' ? null : h(doc, 'button', { class: 'link', text: 'Skip', onclick: () => a.wizard!({ type: 'skip' }) }), closeBtn(doc)]));
-    return renderWizard(doc, root, s.wizard, a.wizard, !!s.busy);
-  }
-
-  const anyEnabled = registry.all.some((p) => registry.policyOf(p.id, s.policy) === 'FILL_ONLY');
-  const early = Array.from(root.children); // error / notice lines drawn before the header: they belong in the scroll area
-  root.append(
-    topHeader(doc, s, [
-      a.menu ? (() => {
-        const b = h(doc, 'button', { class: 'icon-btn', id: 'menu-btn', onclick: () => a.menu!(!s.menuOpen) }, icon(doc, 'more'));
-        b.setAttribute('aria-label', 'Menu');
-        b.setAttribute('aria-expanded', String(!!s.menuOpen));
-        return b;
-      })() : null,
-      closeBtn(doc),
-    ]),
-  );
-  if (s.menuOpen && a.menu) {
-    const item = (text: string, fn: () => void) => h(doc, 'button', { class: 'menu-item', text, onclick: () => (a.menu!(false), fn()) });
-    root.append(h(doc, 'div', { class: 'menu', id: 'menu' },
-      a.wizard ? item('New batch', () => a.wizard!({ type: 'continue' })) : null,
-      item('Refresh', a.refresh),
-      a.toggleLog ? item(s.showLog ? 'Hide activity log' : 'Activity log', a.toggleLog) : null,
-      a.clearQueue ? item('Clear queue', () => a.clearQueue!(true)) : null,
-      item('Unlink this browser', a.unlink)));
-  }
-  const stack = h(doc, 'div', { class: 'stack', id: 'stack' });
-  stack.append(...early);
-  root.append(stack);
-  if (!s.policy) stack.append(h(doc, 'p', { class: 'notice', text: 'Cannot reach Plato to check which sites are enabled. Everything stays off until it can.' }));
-  else if (!anyEnabled) stack.append(h(doc, 'p', { class: 'notice', text: 'No sites are enabled yet. Your queue is kept safely; nothing will be opened or filled.' }));
-  if (s.pendingOutbox) stack.append(h(doc, 'p', { class: 'notice', text: `${s.pendingOutbox} update(s) waiting to reach Plato. They are sent in order when you are back online.` }));
-
-  const canStart = (i: ApiItem) => !s.sessions[i.id] && !!i.provider && registry.policyOf(i.provider, s.policy) === 'FILL_ONLY' && !!registry.get(i.provider)?.adapter;
-  const startable = s.items.filter((i) => i.state === 'PENDING' && canStart(i)).length;
-  const newest = latestBatch(s.items, canStart);
-  if (newest.length && !s.running && a.readyCard) {
-    stack.append(renderReady(doc, newest.length, s.matchRange ?? null, s.settings ?? null, a.readyCard, !!s.busy, batchTitle(newest[0]!)));
-    const older = s.items.filter((i) => i.state === 'PENDING' && !newest.includes(i));
-    if (older.length && a.dropItems)
-      stack.append(h(doc, 'p', { class: 'older-note' }, `${older.length} older waiting job${older.length === 1 ? '' : 's'} from earlier picks are not included. `,
-        h(doc, 'button', { class: 'hint-link', id: 'drop-older', text: 'Remove them', disabled: s.busy, onclick: () => a.dropItems!(older.map((i) => i.id)) })));
-  }
-  else if (startable && !s.running && a.wizard)
-    stack.append(h(doc, 'section', { class: 'assistant', id: 'ready-banner' },
-      h(doc, 'p', { class: 'ask', text: `${startable} job${startable === 1 ? '' : 's'} ready to apply.` }),
-      h(doc, 'button', { class: 'primary', text: 'Start applying', disabled: s.busy, onclick: () => a.wizard!({ type: 'resume' }) })));
-  if (!s.items.length)
-    stack.append(h(doc, 'section', { class: 'ready empty-card' },
-      h(doc, 'div', { class: 'ready-head' }, h(doc, 'span', { class: 'ready-ico' }, icon(doc, 'inbox')),
-        h(doc, 'div', {}, h(doc, 'h2', { text: 'Nothing queued.' }), h(doc, 'p', { class: 'meta', text: 'Pick jobs on Plato with “Apply with Plato”, or choose them here from one of your searches.' }))),
-      a.wizard ? h(doc, 'button', { class: 'primary block cta', id: 'choose-jobs', text: 'Choose jobs to apply to', disabled: s.busy, onclick: () => a.wizard!({ type: 'continue' }) }) : null));
-
-  if (s.clearArmed && a.clearQueue) {
-    const n = s.items.filter((i) => i.state === 'PENDING').length;
-    stack.prepend(h(doc, 'div', { class: 'confirm', id: 'clear-confirm' },
-      h(doc, 'span', { text: `Clear ${n} waiting job${n === 1 ? '' : 's'}?` }),
-      h(doc, 'button', { class: 'danger', id: 'clear-yes', text: 'Yes, clear', disabled: s.busy, onclick: a.clearQueue }),
-      h(doc, 'button', { id: 'clear-no', text: 'No', disabled: s.busy, onclick: () => a.clearQueue!(false) })));
-  }
-  // What happened, in order: the panel's own log (opened from the ⋮ menu)
+  root.append(nav(doc, s, a));
+  if (s.menuOpen) root.append(menu(doc, s, a));
+  const body = h(doc, 'div', { class: 'body' });
+  if (s.menuOpen) body.addEventListener('click', () => a.menu(false)); // a click anywhere else closes the menu
+  const stack = h(doc, 'div', { class: 'stack' });
+  body.append(stack);
+  if (s.error) stack.append(banner(doc, 'err', 'alert', null, s.error));
+  if (s.notice) stack.append(banner(doc, 'info', 'sparkle', null, s.notice));
+  if (!s.policy) stack.append(banner(doc, 'err', 'wifi', 'Cannot reach Plato', 'Showing the last known state. Nothing is opened or filled until Plato answers again.'));
+  else if (!registry.all.some((p) => registry.policyOf(p.id, s.policy) === 'FILL_ONLY')) stack.append(banner(doc, 'warn', 'alert', 'No sites are enabled yet', 'Your queue is kept safely; nothing will be opened or filled.'));
+  if (s.pendingOutbox) stack.append(banner(doc, 'info', 'clock', null, `${s.pendingOutbox} update(s) waiting to reach Plato. They are sent in order when you are back online.`));
   if (s.showLog) {
-    const box = h(doc, 'section', { class: 'ready log', id: 'activity-log' }, h(doc, 'h2', { text: 'Activity log' }));
-    for (const e of [...(s.log ?? [])].reverse()) box.append(h(doc, 'p', { class: `log-line ${e.level}` }, h(doc, 'span', { class: 'meta', text: e.at }), ` ${e.text}`));
+    const box = h(doc, 'section', { class: 'card log', id: 'activity-log' }, h(doc, 'h2', { text: 'Activity log' }));
+    for (const e of [...(s.log ?? [])].reverse()) box.append(h(doc, 'p', { class: `log-line ${e.level}` }, h(doc, 'span', { class: 'meta', text: e.at }), e.text));
     if (!s.log?.length) box.append(h(doc, 'p', { class: 'meta', text: 'Nothing yet.' }));
-    stack.prepend(box);
+    stack.append(box);
   }
-  // Jobs in collapsible groups: what needs the person first, then what is running, then what waits.
-  const needsYou = (i: ApiItem) => i.state === 'VERIFY' || i.state === 'NEEDS_USER' || s.sessions[i.id]?.step === 'needs-user';
-  const groups: { title: string; items: ApiItem[]; open: boolean }[] = [
-    { title: 'Needs you', items: s.items.filter(needsYou), open: true },
-    { title: 'In progress', items: s.items.filter((i) => !needsYou(i) && i.state !== 'PENDING'), open: true },
-    { title: 'Waiting', items: s.items.filter((i) => !needsYou(i) && i.state === 'PENDING'), open: s.items.length <= 6 },
-  ];
-  for (const g of groups) {
-    if (!g.items.length) continue;
-    const d = h(doc, 'details', { class: 'group' }, h(doc, 'summary', { text: `${g.title} · ${g.items.length}` }));
-    if (g.open) d.setAttribute('open', '');
-    if (g.title === 'Waiting' && a.clearQueue) {
-      // Clear queue asks first, and the question STAYS until answered (no timeout): Yes clears, No cancels
-      // the question is drawn at the TOP of the list (see below): inside a collapsed group nobody saw it
-      if (!s.clearArmed) d.append(h(doc, 'button', { class: 'link', id: 'clear-queue', text: 'Clear queue', disabled: s.busy, onclick: () => a.clearQueue!(true) }));
-    }
-    if (g.title === 'Waiting') {
-      // one block per pick, newest first, each with its own Remove
-      const byBatch = new Map<string, ApiItem[]>();
-      for (const i of g.items) byBatch.set(i.batch_id, [...(byBatch.get(i.batch_id) ?? []), i]);
-      for (const list of [...byBatch.values()].sort((x, y) => (y[0]!.batch?.created_at ?? '').localeCompare(x[0]!.batch?.created_at ?? ''))) {
-        d.append(h(doc, 'div', { class: 'batch-head' }, h(doc, 'span', { text: `${batchTitle(list[0]!)} · ${list.length}` }),
-          a.dropItems ? h(doc, 'button', { class: 'hint-link', text: 'Remove', disabled: s.busy, onclick: () => a.dropItems!(list.map((i) => i.id)) }) : null));
-        for (const item of list) d.append(renderItem(doc, item, s, a, registry));
-      }
-    } else for (const item of g.items) d.append(renderItem(doc, item, s, a, registry));
-    stack.append(d);
+  if (s.view === 'batch') stack.append(...renderBatch(doc, s, a, registry));
+  else stack.append(...renderJobs(doc, s, a, registry));
+  root.append(body);
+  if (s.view === 'jobs') root.append(renderDock(doc, s, a));
+
+  if (s.toasts.length) root.append(h(doc, 'div', { class: 'toasts' }, ...s.toasts.map((t) => h(doc, 'div', { class: `toast${t.kind ? ` ${t.kind}` : ''}`, text: t.text, attrs: { role: 'status' } }))));
+  if (s.sheet) root.append(...renderSheet(doc, s, a));
+  if (s.chatOpen && s.assistant) {
+    const running = !!s.run && s.run.status === 'running';
+    const close = h(doc, 'button', { class: 'ibtn', type: 'button', onclick: () => a.chat(false), attrs: { 'aria-label': 'Close' } }, icon(doc, 'close'));
+    root.append(
+      h(doc, 'div', { class: 'scrim', onclick: () => a.chat(false) }),
+      h(doc, 'div', { class: 'drawer', id: 'chat', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Ask Plato' } },
+        h(doc, 'div', { class: 'dh' }, h(doc, 'h2', { text: 'Ask Plato' }), close),
+        renderChat(doc, s.assistant, a.answer, running ? 'running' : s.jobs.picked.length ? 'ready' : 'idle')),
+    );
   }
-  if (s.assistant && a.answer) root.append(renderChat(doc, s.assistant, a.answer, s.running && s.items.length ? 'running' : startable ? 'ready' : 'idle'));
-}
-
-function renderItem(doc: Document, item: ApiItem, s: PanelState, a: Actions, registry: Registry) {
-  const sess = s.sessions[item.id];
-  const card = s.cards[item.id];
-  const policy = item.provider ? registry.policyOf(item.provider, s.policy) : 'BLOCKED';
-  const def = item.provider ? registry.get(item.provider) : undefined;
-  const el = h(doc, 'section', { class: 'item' });
-  el.append(
-    h(doc, 'div', { class: 'item-head' },
-      h(doc, 'span', { class: 'avatar', text: (item.job?.company ?? '?').trim().charAt(0).toUpperCase() || '?' }),
-      h(doc, 'div', { class: 'item-title' }, h(doc, 'h2', { text: item.job?.title ?? 'Job' }), h(doc, 'p', { class: 'meta', text: [item.job?.company, def?.label ?? item.provider].filter(Boolean).join(' · ') })),
-      h(doc, 'p', { class: `badge ${item.state}`, text: STATE_LABEL[item.state] ?? item.state })),
-  );
-  const actions = h(doc, 'div', { class: 'actions' });
-  const btn = (text: string, fn: () => void, cls = '') => actions.append(h(doc, 'button', { class: cls, text, disabled: s.busy, onclick: fn }));
-
-  switch (item.state) {
-    case 'PENDING':
-      if (policy !== 'FILL_ONLY') el.append(h(doc, 'p', { class: 'blocked', text: BLOCK_TEXT.blocked }));
-      else if (!def?.adapter) el.append(h(doc, 'p', { class: 'blocked', text: BLOCK_TEXT.none }));
-      else btn('Start', () => a.start(item));
-      break;
-    case 'CLAIMED':
-    case 'PREPARING':
-      if (item.mine === false) {
-        el.append(h(doc, 'p', { class: 'meta', text: 'Another linked browser is working on this job.' }));
-        break;
-      }
-    // falls through: this browser holds it, so it is shown like any job being worked on
-    case 'FILLING':
-    case 'NEEDS_USER':
-    case 'REVIEW':
-      if (sess) {
-        if (sess.step === 'needs-user' && sess.message === 'resume' && a.resumeChoice) {
-          el.append(h(doc, 'p', { text: 'This application asks for a resume. Which one should Plato upload?' }));
-          btn('Use my profile resume', () => a.resumeChoice!(item, 'profile'), 'primary');
-          btn('Make one for this job', () => a.resumeChoice!(item, 'tailored'));
-        } else if (sess.step === 'needs-user') el.append(h(doc, 'p', { text: sess.detail ? (sess.message === 'questions' && !/not found|did not|could not|no |still needed/i.test(sess.detail) ? `Still needed: ${sess.detail}. Plato is asking you in the chat below.` : sess.detail) : (NEEDS_TEXT[sess.message ?? ''] ?? 'Plato stopped here. Open the ticket to see why.') }));
-        if (sess.step === 'review') {
-          el.append(h(doc, 'p', { text: 'Plato is filling this form. It submits only if you allowed it; otherwise, or if it cannot, you press Submit.' }));
-          const rv = s.formReviews?.[item.id];
-          if (rv) el.append(renderFormReview(doc, rv, item, a, !!s.busy));
-          btn('The form is ready — I will submit it myself', () => a.ready(item), 'primary');
-        }
-        btn('Cancel', () => a.cancel(item));
-      } else {
-        el.append(h(doc, 'p', { text: 'This was started in an earlier session and is not open here. It has not been submitted.' }));
-        if (a.resumeJob) btn('Resume', () => a.resumeJob!(item), 'primary');
-        btn('Release this job', () => a.release(item));
-      }
-      break;
-    case 'AWAITING_SUBMIT':
-      el.append(h(doc, 'p', { class: 'warn', text: sess?.message === 'submit_failed' ? 'Plato tried to submit and could not. Press Submit on the job page yourself. Come back here when you have.' : 'Press Submit on the job page yourself. Come back here when you have.' }));
-      if (a.submitNow && sess) btn('Submit for me', () => a.submitNow!(item), 'primary');
-      btn('Check the page', () => a.checkPage(item));
-      btn('I submitted it', () => a.attest(item), a.submitNow && sess ? undefined : 'primary');
-      btn('I am not sure', () => a.notSure(item));
-      break;
-    case 'VERIFY':
-      el.append(h(doc, 'p', { class: 'warn', text: 'Plato cannot tell whether this was sent. Check the site or your email for a confirmation. Plato will not send it again by itself.' }));
-      if (item.verify_reason) el.append(h(doc, 'p', { class: 'meta', text: `Reason: ${item.verify_reason}` }));
-      btn('I submitted it', () => a.attest(item), 'primary');
-      btn('I did not submit it', () => a.notSubmitted(item));
-      break;
-  }
-  // A job that needs the person is a ticket: tap it and the chat opens on exactly that problem.
-  if (a.ticket && (sess?.step === 'needs-user' || item.state === 'VERIFY')) {
-    el.classList.add('ticket');
-    el.append(h(doc, 'button', { class: 'primary', text: 'Open ticket in chat', disabled: s.busy, onclick: () => a.ticket!(item) }));
-    if (a.retry && sess) el.append(h(doc, 'button', { text: 'Try again', disabled: s.busy, onclick: () => a.retry!(item) }));
-    el.addEventListener('click', (e) => {
-      if (!(e.target as HTMLElement).closest('button, a, input')) a.ticket!(item);
-    });
-  }
-  if (card?.action === 'ask-user') el.append(h(doc, 'p', { class: 'meta', text: 'Nothing on the page proves the outcome.' }));
-  if (actions.childElementCount) el.append(actions);
-  return el;
-}
-
-const cap = (xs: string[], n = 6) => (xs.length > n ? [...xs.slice(0, n), `…and ${xs.length - n} more`] : xs);
-const STATUS_TEXT: Record<Row['status'], string> = {
-  pending: '',
-  filled: 'Filled',
-  failed: 'Failed',
-  stale: 'Changed on the page: review again',
-  'user-edited': 'You changed this: left alone',
-  ineligible: 'No longer fillable',
-};
-
-// The review the person works through BEFORE anything is filled. Nothing here
-// submits; the buttons only fill approved fields, retry failed ones, or look
-// at the page again.
-function renderFormReview(doc: Document, st: ReviewState, item: ApiItem, a: Actions, busy: boolean) {
-  const box = h(doc, 'div', { class: 'review' });
-  if (st.error) box.append(h(doc, 'p', { class: 'error', text: st.error }));
-  for (const n of st.notes) box.append(h(doc, 'p', { class: 'meta', text: n }));
-
-  if (st.phase === 'choosing-form') {
-    box.append(h(doc, 'p', { text: 'Which form is this application?' }));
-    for (const f of st.forms)
-      box.append(
-        h(doc, 'div', { class: 'row' },
-          h(doc, 'strong', { text: f.label }),
-          h(doc, 'p', { class: 'meta', text: `${f.fieldCount} fillable field(s), ${f.unsupportedCount} Plato cannot fill${f.sample.length ? ` · ${f.sample.join(', ')}` : ''}` }),
-          h(doc, 'button', { text: 'Use this form', disabled: busy, onclick: () => a.formChoose(item, f.id) })),
-      );
-    return box;
-  }
-
-  box.append(h(doc, 'p', { class: 'meta', text: `Form: ${st.formLabel ?? 'this page'}` }));
-  if (st.forms.length > 1) box.append(h(doc, 'button', { class: 'link', text: 'Change form', disabled: busy, onclick: () => a.formRestart(item) }));
-
-  const shown = st.rows.filter((r) => r.category !== 'unmapped');
-  const left = st.rows.filter((r) => r.category === 'unmapped').map((r) => r.label);
-  for (const r of shown) {
-    const row = h(doc, 'div', { class: `row ${r.status}` });
-    row.append(h(doc, 'strong', { text: `${r.label}${r.required ? ' *' : ''}` }));
-    if (r.proposed !== undefined)
-      row.append(h(doc, 'p', { class: 'meta', text: `${r.shown ?? String(r.proposed)} · ${r.source ?? ''}${r.confidence !== undefined ? ` · ${Math.round(r.confidence * 100)}%` : ''}` }));
-    const state = STATUS_TEXT[r.status] + (r.reason && r.status === 'failed' ? ` (${r.reason})` : '');
-    if (state) row.append(h(doc, 'p', { class: r.status === 'filled' ? 'meta' : 'warn', text: state }));
-    if (r.note) row.append(h(doc, 'p', { class: 'meta', text: r.note }));
-    if (r.locked) row.append(h(doc, 'p', { class: 'meta', text: `Skip: ${r.lockReason ?? ''}${r.category === 'unsupported' && r.reason ? ` (${r.reason})` : ''}` }));
-    else if (r.status === 'pending' || r.status === 'failed') {
-      const mk = (c: 'use' | 'skip', text: string) => {
-        const b = h(doc, 'button', { class: r.choice === c ? 'primary' : '', text, disabled: busy, onclick: () => a.reviewToggle(item, r.id, c) });
-        b.setAttribute('aria-pressed', String(r.choice === c));
-        return b;
-      };
-      row.append(h(doc, 'div', { class: 'actions' }, mk('use', 'Use'), mk('skip', 'Skip')));
-    }
-    box.append(row);
-  }
-  if (left.length) box.append(h(doc, 'p', { class: 'meta', text: `Other fields, left for you: ${cap(left).join(', ')}` }));
-  if (st.sensitiveExcluded) box.append(h(doc, 'p', { class: 'meta', text: `${st.sensitiveExcluded} sensitive field(s) (passwords, codes, payment) were left alone.` }));
-  if (st.submitAttempts) box.append(h(doc, 'p', { class: 'warn', text: 'The page tried to submit while filling. That was blocked.' }));
-
-  const approved = st.rows.filter((r) => r.choice === 'use' && !r.locked && r.status === 'pending' && r.proposed !== undefined).length;
-  const failed = st.rows.filter((r) => r.status === 'failed' && r.choice === 'use' && !r.locked).length;
-  const bar = h(doc, 'div', { class: 'actions' });
-  bar.append(h(doc, 'button', { class: 'primary', text: `Fill ${approved} approved field(s)`, disabled: busy || !approved || st.phase === 'round-limit', onclick: () => a.reviewFill(item, st.version) }));
-  if (failed) bar.append(h(doc, 'button', { text: `Retry ${failed} failed`, disabled: busy, onclick: () => a.reviewRetry(item, st.version) }));
-  bar.append(h(doc, 'button', { text: 'Re-inspect page', disabled: busy, onclick: () => a.reviewReinspect(item) }));
-  box.append(bar, h(doc, 'p', { class: 'meta', text: `Fill round ${Math.min(st.fillRounds, 3)} of 3. Plato submits only when you allowed it.` }));
-  return box;
 }

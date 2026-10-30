@@ -32,7 +32,9 @@ export const turnRequestSchema = z.object({
   // solved: the seeker cleared a human check. submit: the item is armed, the model may press Submit once.
   event: z.enum(['start', 'results', 'seeker_answer', 'solved', 'submit', 'check']),
   results: z.array(callResultSchema).max(64).optional(),
-  text: z.string().max(2000).optional(),
+  text: z.string().max(4000).optional(),
+  // seeker_answer: the structured answers behind `text` (one per question the brain asked), when the panel's form collected them
+  answers: z.array(z.object({ id: z.string().min(1).max(40), label: z.string().min(1).max(300), value: z.string().max(2000) })).max(20).optional(),
 });
 export type TurnRequest = z.infer<typeof turnRequestSchema>;
 
@@ -42,9 +44,23 @@ export interface BrowserCall {
   input: Record<string, unknown>;
 }
 
+// A question the brain cannot answer from the profile, shaped so the panel can draw the right control instead of a
+// text box: Yes/No pills, a choice list, several picks, a short value, or a sentence. The brain asks them all at once.
+export const askQuestionSchema = z.object({
+  id: z.string().min(1).max(40).regex(/^[a-z0-9_-]+$/i),
+  label: z.string().min(1).max(300), // a complete question the seeker can answer without seeing the page
+  type: z.enum(['boolean', 'choice', 'multi', 'text', 'textarea']),
+  options: z.array(z.string().min(1).max(120)).max(20).optional(),
+  other: z.boolean().optional(), // "Something else" with a free text box, beside the options
+  why: z.string().max(300).optional(), // the form field behind it and the fact the profile lacks
+  required: z.boolean().optional(), // default true
+});
+export type AskQuestion = z.infer<typeof askQuestionSchema>;
+export const askSchema = z.object({ questions: z.array(askQuestionSchema).min(1).max(8) });
+
 export type Outcome =
   | { kind: 'submit_ready'; summary: string }
-  | { kind: 'ask'; question: string }
+  | { kind: 'ask'; question: string; questions: AskQuestion[] } // question: the one-line summary; questions: what the panel draws
   | { kind: 'captcha'; text: string }
   | { kind: 'closed'; reason: string }
   | { kind: 'blocked'; reason: string }
@@ -71,9 +87,38 @@ export function parseOutcome(text: string): Outcome {
   if (/^REFUSED\b/i.test(t)) return { kind: 'refused', quote: m(/^REFUSED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
   if (/^UNCONFIRMED\b/i.test(t)) return { kind: 'unconfirmed', text: t.slice(0, 300) };
   if (/^CAPTCHA\b/i.test(t)) return { kind: 'captcha', text: t.slice(0, 300) };
-  if (/^ASK\s*:/i.test(t)) return { kind: 'ask', question: m(/^ASK\s*:\s*([\s\S]*)$/i).slice(0, 400) };
+  if (/^ASK\s*:/i.test(t)) return parseAsk(m(/^ASK\s*:\s*([\s\S]*)$/i));
   if (/^CLOSED\b/i.test(t)) return { kind: 'closed', reason: m(/^CLOSED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
   if (/^BLOCKED\b/i.test(t)) return { kind: 'blocked', reason: m(/^BLOCKED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
   // no keyword: the model stopped talking; treat as blocked with its words, never as success
   return { kind: 'blocked', reason: (t || 'The model ended without a result.').slice(0, 300) };
+}
+
+/** `ASK: <one line>` followed by a ```json {"questions":[…]} block (or a bare object). A missing or malformed block
+ * still asks: the line becomes one free-text question, so the seeker is never shown nothing. */
+export function parseAsk(body: string): Extract<Outcome, { kind: 'ask' }> {
+  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(body);
+  const open = body.indexOf('{');
+  const raw = fence?.[1] ?? (open >= 0 ? body.slice(open, body.lastIndexOf('}') + 1) : '');
+  const line = (fence ? body.slice(0, fence.index) : open >= 0 ? body.slice(0, open) : body).replace(/\s+/g, ' ').trim().slice(0, 400);
+  let questions: AskQuestion[] | undefined;
+  if (raw) {
+    try {
+      const parsed = askSchema.safeParse(JSON.parse(raw));
+      if (parsed.success) questions = parsed.data.questions;
+    } catch {
+      /* not JSON: the line alone is asked */
+    }
+  }
+  const seen = new Set<string>();
+  questions = questions
+    ?.filter((q) => !seen.has(q.id) && seen.add(q.id))
+    .map((q) => {
+      const options = q.type === 'boolean' ? ['Yes', 'No'] : q.options?.filter(Boolean);
+      // a choice with no options is a free answer; a boolean always has its two
+      const type = (q.type === 'choice' || q.type === 'multi') && !options?.length ? 'text' : q.type;
+      return { ...q, type, ...(options?.length && { options }), required: q.required !== false };
+    });
+  const question = line || questions?.map((q) => q.label).join(' ') || 'Plato needs an answer from you to finish this application.';
+  return { kind: 'ask', question, questions: questions?.length ? questions : [{ id: 'answer', label: question, type: 'textarea', required: true }] };
 }

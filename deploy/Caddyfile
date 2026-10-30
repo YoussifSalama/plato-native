@@ -1,0 +1,10 @@
+# Two hostnames, both from .env. Caddy fetches and renews the certificates itself.
+{$WEB_DOMAIN} {
+	encode gzip
+	reverse_proxy web:3001
+}
+
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy api:3000
+}

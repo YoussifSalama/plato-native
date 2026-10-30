@@ -4,7 +4,7 @@ MV3 side-panel extension that helps a person fill job applications **in their ow
 
 - `src/core`: provider-agnostic engine (API client, token store, outbox, orchestrator, reconcile).
 - `src/providers`: provider contract + registry. Registrations only.
-- `src/panel`: side panel UI. `src/background.ts`: restricts storage, opens the panel.
+- `src/panel`: side panel UI (`view.ts` shell, `jobs-view.ts`, `batch-view.ts`); `src/core/batch-runner.ts`: one batch at a time, up to 10 jobs, outcomes and the estimate. `src/background.ts`: restricts storage, opens the panel.
 - Manifest: `permissions: [sidePanel, storage, tabGroups]` (tabGroups only to label Plato's tabs), no host permissions, no content scripts in production.
 
 ```

@@ -60,7 +60,8 @@ export class AuthController {
     res.cookie(ACCESS_TOKEN_COOKIE, token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: nodeEnv === 'production',
+      // Secure in production, unless COOKIE_SECURE=false: a plain-http run on a bare IP (no TLS yet) would otherwise lose the cookie
+      secure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : nodeEnv === 'production',
       maxAge: ACCESS_TOKEN_MAX_AGE_MS,
     });
   }

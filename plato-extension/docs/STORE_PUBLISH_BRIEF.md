@@ -60,9 +60,9 @@ Architecture, so you can answer reviewer questions truthfully:
 **Privacy policy URL**: required. If `https://jobs.platohiring.com/privacy` does not exist yet, STOP and tell
 the owner; the submission cannot be completed without a live page.
 
-**Store listing**: category "Productivity"; language English; a 128×128 icon (take `icon128.png` from the zip, or
-the owner's logo); at least one screenshot 1280×800 or 640×400 of the side panel (the owner can take it from
-Chrome with the extension loaded unpacked from `plato-extension/dist/production`). Short description = the
+**Store listing**: category "Productivity"; language English; store icon `plato-extension/store/store-icon-128.png`;
+screenshots (1280×800) in `plato-extension/store/screens/01-jobs.png … 05-filled.png` (made by `scripts/screens.mjs`
+from the fixtures build; upload all five in order); small promo tile `plato-extension/store/small-promo-tile-440x280.png`. Short description = the
 manifest description. Detailed description: expand the "What the extension is" section above, plain words.
 
 **Distribution**: Unlisted is the right first choice (only people with the link can install, no public search),

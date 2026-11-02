@@ -4,7 +4,16 @@
 	reverse_proxy web:3001
 }
 
+# www goes to the bare domain
+www.{$WEB_DOMAIN} {
+	redir https://{$WEB_DOMAIN}{uri} permanent
+}
+
 {$API_DOMAIN} {
 	encode gzip
+	# the extension posts screenshots (a few MB) per turn
+	request_body {
+		max_size 16MB
+	}
 	reverse_proxy api:3000
 }

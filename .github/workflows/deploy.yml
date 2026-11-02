@@ -1,0 +1,112 @@
+# Deploy to the VPS on every push to main: build the API and web images, push them to GHCR, then over SSH
+# copy the compose file + Caddyfile to /opt/plato and `docker compose pull && up`. Secrets live only on the
+# server (/opt/plato/.env, written by hand once); this workflow carries none of them.
+#
+# Repository secrets needed: VPS_HOST (187.55.226.14), VPS_USER (deploy), VPS_SSH_KEY (the private key whose
+# public half is in /home/deploy/.ssh/authorized_keys on the VPS).
+# Repository variable (optional): API_DOMAIN, baked into the web image as NEXT_PUBLIC_API_URL (default api.platohiring.com).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/plato-api
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/plato-web
+
+jobs:
+  build:
+    name: Build and push images
+    runs-on: ubuntu-latest
+    outputs:
+      api_image: ${{ steps.names.outputs.api }}
+      web_image: ${{ steps.names.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: names
+        run: |
+          echo "api=${API_IMAGE,,}:${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          echo "web=${WEB_IMAGE,,}:${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          echo "API_LOWER=${API_IMAGE,,}" >> "$GITHUB_ENV"
+          echo "WEB_LOWER=${WEB_IMAGE,,}" >> "$GITHUB_ENV"
+      - name: API image
+        uses: docker/build-push-action@v6
+        with:
+          context: plato-native-be
+          push: true
+          tags: |
+            ${{ env.API_LOWER }}:${{ github.sha }}
+            ${{ steps.names.outputs.api }}
+            ${{ env.API_LOWER }}:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - name: Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: plato-job-seeker-native-fe
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://${{ vars.API_DOMAIN || 'api.platohiring.com' }}
+          tags: |
+            ${{ env.WEB_LOWER }}:${{ github.sha }}
+            ${{ steps.names.outputs.web }}
+            ${{ env.WEB_LOWER }}:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+  deploy:
+    name: Deploy on the VPS
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Copy compose file and Caddyfile
+        run: |
+          scp -i ~/.ssh/deploy docker-compose.yml "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/plato/docker-compose.yml"
+          ssh -i ~/.ssh/deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" 'mkdir -p /opt/plato/deploy'
+          scp -i ~/.ssh/deploy deploy/Caddyfile "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/plato/deploy/Caddyfile"
+      - name: Pull and restart
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          API_TAG: ${{ needs.build.outputs.api_image }}
+          WEB_TAG: ${{ needs.build.outputs.web_image }}
+        run: |
+          ssh -i ~/.ssh/deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "set -e; cd /opt/plato; test -f .env || { echo 'missing /opt/plato/.env'; exit 1; };
+             echo '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin;
+             export API_IMAGE='$API_TAG' WEB_IMAGE='$WEB_TAG';
+             docker compose pull api web;
+             docker compose up -d --remove-orphans;
+             docker image prune -f >/dev/null;
+             docker compose ps"
+      - name: Smoke check
+        run: |
+          sleep 20
+          curl -fsS -o /dev/null -w 'web %{http_code}\n' "https://${{ vars.WEB_DOMAIN || 'platohiring.com' }}/"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://${{ vars.API_DOMAIN || 'api.platohiring.com' }}/extension/v1/me")
+          echo "api $code"; test "$code" = "403" -o "$code" = "401"

@@ -2,9 +2,10 @@
 # three apps. Nothing here needs a secret or a database.
 name: CI
 
+# Manual only while the GitHub account is locked for billing (every run failed at startup, 2026-11-02).
+# Restore `push:` and `pull_request:` once Actions work again.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}

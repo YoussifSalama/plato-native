@@ -7,9 +7,9 @@
 # Repository variable (optional): API_DOMAIN, baked into the web image as NEXT_PUBLIC_API_URL (default api.platohiring.com).
 name: Deploy
 
+# Manual only while the GitHub account is locked for billing (2026-11-02): the VPS deploys itself with deploy/deploy.sh.
+# Restore `push: branches: [main]` once Actions work again.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:

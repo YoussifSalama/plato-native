@@ -33,7 +33,7 @@ describe('packaging guard', () => {
     assertProductionDir(prod);
     const out = join(tmp, 'ok.zip');
     const r = packageProduction(prod, out);
-    expect(r.files).toEqual(['background.js', 'content.js', 'manifest.json', 'panel.css', 'panel.html', 'panel.js']);
+    expect(r.files).toEqual(['background.js', 'content.js', 'icon128.png', 'icon16.png', 'icon32.png', 'icon48.png', 'manifest.json', 'panel.css', 'panel.html', 'panel.js']);
     const entries = readZip(out);
     for (const [name, data] of Object.entries(entries)) expect((data as Buffer).equals(readFileSync(join(prod, name)))).toBe(true);
   });

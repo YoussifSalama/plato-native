@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 
 // Exactly what a production build may contain. Anything else (probe.js,
 // source maps, fixtures, stray files) fails the guard.
-export const ALLOWED_FILES = ['background.js', 'manifest.json', 'panel.css', 'panel.html', 'panel.js'];
+export const ALLOWED_FILES = ['background.js', 'icon128.png', 'icon16.png', 'icon32.png', 'icon48.png', 'manifest.json', 'panel.css', 'panel.html', 'panel.js'];
 const OPTIONAL_FILES = ['content.js']; // only when the manifest declares a content script
 const FORBIDDEN_IN_JS = [/fixtureProvider/, /platoProbe/, /plato:inspect/, /127\.0\.0\.1/, /localhost/, /\(fixtures\)/, /FIXTURE_ORIGIN/];
 const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/;

@@ -14,7 +14,7 @@ beforeAll(() => {
 
 describe('production bundle', () => {
   it('ships no fixture provider, probe, or local fixture origin', () => {
-    expect(readdirSync(join(root, 'dist/production')).sort()).toEqual(['background.js', 'content.js', 'manifest.json', 'panel.css', 'panel.html', 'panel.js']);
+    expect(readdirSync(join(root, 'dist/production')).sort()).toEqual(['background.js', 'content.js', 'icon128.png', 'icon16.png', 'icon32.png', 'icon48.png', 'manifest.json', 'panel.css', 'panel.html', 'panel.js']);
     for (const f of ['background.js', 'panel.js', 'content.js']) {
       const src = read('production', f);
       expect(src).not.toMatch(/fixtureProvider|platoProbe|127\.0\.0\.1:4012|plato:inspect/);

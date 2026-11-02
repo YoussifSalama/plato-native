@@ -53,4 +53,5 @@ if (flavor === 'fixtures') entries['probe.js'] = 'src/content/probe.ts';
 for (const [file, entry] of Object.entries(entries)) await build({ ...common, entryPoints: [join(root, entry)], outfile: join(out, file) });
 writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 for (const f of ['panel.html', 'panel.css']) copyFileSync(join(root, f), join(out, f));
+for (const f of ['icon16.png', 'icon32.png', 'icon48.png', 'icon128.png']) copyFileSync(join(root, 'icons', f), join(out, f));
 console.log(`built ${flavor} (engine ${engine}, auto-submit ${autoSubmit ? 'on' : 'OFF'}) -> ${out.replace(root + '/', '')} (api ${apiOrigin}, content scripts: ${manifest.content_scripts ? manifest.content_scripts[0].matches.join(', ') : 'none'})`);

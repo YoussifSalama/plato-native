@@ -20,5 +20,6 @@ export API_IMAGE=plato-api:local WEB_IMAGE=plato-web:local
 docker compose -p plato build --pull api web
 docker compose -p plato up -d --remove-orphans
 docker image prune -f >/dev/null
+docker builder prune -f --filter until=72h >/dev/null 2>&1 || true   # build cache from older deploys; weekly job does the rest
 docker compose -p plato ps
 echo "== done: https://$(grep '^WEB_DOMAIN=' .env | cut -d= -f2)  api https://$(grep '^API_DOMAIN=' .env | cut -d= -f2)"

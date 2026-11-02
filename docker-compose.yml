@@ -1,8 +1,17 @@
 # Plato on one VPS: Mongo (single-node replica set, Prisma needs one), Redis, API, web app, Caddy (the only
 # public ports; TLS from Let's Encrypt). Settings and secrets come from ./.env next to this file (deploy/env.example).
 # Local smoke test: WEB_DOMAIN=localhost API_DOMAIN=api.localhost -> Caddy serves a self-signed cert.
+# Every container's logs rotate: 20 MB x 3 files, so logs can never fill the disk (the usual cause of a stuck VPS).
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "3"
+
 services:
   mongo:
+    <<: *logging
     image: mongo:8
     restart: unless-stopped
     command: >
@@ -23,6 +32,7 @@ services:
       start_period: 20s
 
   redis:
+    <<: *logging
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
@@ -35,6 +45,7 @@ services:
       retries: 10
 
   api:
+    <<: *logging
     image: ${API_IMAGE:-ghcr.io/youssifsalama/plato-api:latest}
     build: ./plato-native-be
     restart: unless-stopped
@@ -56,6 +67,7 @@ services:
         condition: service_healthy
 
   web:
+    <<: *logging
     image: ${WEB_IMAGE:-ghcr.io/youssifsalama/plato-web:latest}
     build:
       context: ./plato-job-seeker-native-fe
@@ -66,6 +78,7 @@ services:
       - api
 
   caddy:
+    <<: *logging
     image: caddy:2-alpine
     restart: unless-stopped
     ports:

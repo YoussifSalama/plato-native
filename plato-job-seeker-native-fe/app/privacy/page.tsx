@@ -33,7 +33,7 @@ export default function PrivacyPage() {
         <ul className="mt-2 list-disc space-y-1 pl-6">
           <li><b>AI providers (OpenAI, Anthropic):</b> to rank jobs, write answers and drive the extension, your profile and the text of the job posting or application form are sent to these providers for processing. They are not used to train their models under the terms we use.</li>
           <li><b>Job sources:</b> your search terms are sent to public job boards and aggregators to fetch listings. Your profile is not.</li>
-          <li><b>The employer:</b> when you apply, what you submit (profile details, resume, answers) goes to that employer's application form, exactly as you would submit it yourself.</li>
+          <li><b>The employer:</b> when you apply, what you submit (profile details, resume, answers) goes to that employer&apos;s application form, exactly as you would submit it yourself.</li>
           <li><b>Email delivery:</b> account emails (confirmation, password reset, job alerts) are sent through an email delivery service that sees your address and the message.</li>
           <li><b>Error monitoring:</b> when enabled, crash reports may include a user id; passwords, tokens and keys are stripped before they leave the server.</li>
         </ul>

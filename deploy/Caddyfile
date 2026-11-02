@@ -1,8 +1,4 @@
-# Hostnames come from .env. Caddy fetches and renews every certificate itself.
-#   WEB_DOMAIN      the job-seeker web app (app.platohiring.com)
-#   API_DOMAIN      the API (api.platohiring.com)
-#   LANDING_DOMAIN  the bare domain (platohiring.com): redirects to the app until a landing page exists
-
+# Two hostnames, both from .env (WEB_DOMAIN = the web app, API_DOMAIN = the API). Caddy fetches and renews the certificates itself.
 {$WEB_DOMAIN} {
 	encode gzip
 	reverse_proxy web:3001
@@ -15,9 +11,4 @@
 		max_size 16MB
 	}
 	reverse_proxy api:3000
-}
-
-# The bare domain and www: a landing page later; a redirect to the app for now.
-{$LANDING_DOMAIN}, www.{$LANDING_DOMAIN} {
-	redir https://{$WEB_DOMAIN}{uri} permanent
 }

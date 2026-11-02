@@ -88,7 +88,6 @@ services:
     environment:
       WEB_DOMAIN: ${WEB_DOMAIN}
       API_DOMAIN: ${API_DOMAIN}
-      LANDING_DOMAIN: ${LANDING_DOMAIN:-platohiring.com}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

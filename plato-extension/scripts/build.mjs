@@ -12,6 +12,8 @@ if (!['production', 'fixtures'].includes(flavor)) throw new Error(`Unknown flavo
 const engine = (process.argv.find((a) => a.startsWith('--engine=')) ?? `--engine=${process.env.PLATO_ENGINE ?? (flavor === 'fixtures' ? 'v2' : 'v3')}`).split('=')[1];
 if (!['v2', 'v3'].includes(engine)) throw new Error(`Unknown engine ${engine}`);
 // Auto-submit: on (default; Plato presses Submit once SUBMIT_READY) or off (--submit=off: the run stops armed and the person presses Submit). Live-test aid, never the shipped default.
+// --store: the Chrome Web Store package (no manifest key; the store assigns the id).
+const store = process.argv.includes('--store');
 const autoSubmit = (process.argv.find((a) => a.startsWith('--submit=')) ?? '--submit=on').split('=')[1] !== 'off';
 const apiOrigin = process.env.PLATO_API_ORIGIN ?? (flavor === 'fixtures' ? 'http://127.0.0.1:4011' : 'http://localhost:3000');
 const u = new URL(apiOrigin);
@@ -44,7 +46,7 @@ const common = { plugins: [swapExtra], bundle: true, format: 'iife', target: 'ch
 // The manifest comes from the same registry the panel uses.
 const m = await build({ entryPoints: [join(root, 'src/manifest.entry.ts')], bundle: true, platform: 'node', format: 'esm', write: false, plugins: [swapExtra], define: common.define, logLevel: 'warning' });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(m.outputFiles[0].text).toString('base64'));
-const manifest = mod.buildManifest({ flavor, apiOrigin, registry: mod.registry });
+const manifest = mod.buildManifest({ flavor, apiOrigin, registry: mod.registry, store });
 
 // No enabled provider = no content script file at all.
 const entries = { 'background.js': 'src/background.ts', 'panel.js': 'src/panel/main.ts' };
@@ -54,4 +56,4 @@ for (const [file, entry] of Object.entries(entries)) await build({ ...common, en
 writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 for (const f of ['panel.html', 'panel.css']) copyFileSync(join(root, f), join(out, f));
 for (const f of ['icon16.png', 'icon32.png', 'icon48.png', 'icon128.png']) copyFileSync(join(root, 'icons', f), join(out, f));
-console.log(`built ${flavor} (engine ${engine}, auto-submit ${autoSubmit ? 'on' : 'OFF'}) -> ${out.replace(root + '/', '')} (api ${apiOrigin}, content scripts: ${manifest.content_scripts ? manifest.content_scripts[0].matches.join(', ') : 'none'})`);
+console.log(`built ${flavor}${store ? ' [store package, no key]' : ''} (engine ${engine}, auto-submit ${autoSubmit ? 'on' : 'OFF'}) -> ${out.replace(root + '/', '')} (api ${apiOrigin}, content scripts: ${manifest.content_scripts ? manifest.content_scripts[0].matches.join(', ') : 'none'})`);

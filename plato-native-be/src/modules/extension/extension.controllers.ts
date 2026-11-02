@@ -24,7 +24,7 @@ import {
   ExtensionAuthGuard,
   ExtensionPublic,
   ExtensionRequest,
-  extensionOrigin,
+  isExtensionOrigin,
   ExtensionScopes,
   limiter,
 } from './extension-auth.guard';
@@ -180,8 +180,7 @@ export class ExtensionPairingController {
   @Post('exchange')
   @ExtensionPublic()
   async exchange(@Req() req: Request, @Body() body: unknown) {
-    const allowed = extensionOrigin();
-    if (!allowed || req.headers.origin !== allowed)
+    if (!isExtensionOrigin(req.headers.origin))
       throw new ForbiddenException('Origin not allowed');
     // Wrong guesses are throttled per caller and, as a breaker, across all callers.
     const ip = req.ip ?? 'unknown';

@@ -160,3 +160,11 @@ describe('CORS per route', () => {
       });
   });
 });
+
+describe('corsFor: several extension origins', () => {
+  it('EXTENSION_ORIGIN may list the unpacked build id and the Web Store id; extension routes allow both, the web app none', () => {
+    const o = corsFor({ url: '/extension/v1/me' }, 'https://web', 'chrome-extension://aaaa, chrome-extension://bbbb');
+    expect(o.origin).toEqual(['chrome-extension://aaaa', 'chrome-extension://bbbb']);
+    expect(corsFor({ url: '/jobs' }, 'https://web', 'chrome-extension://aaaa, chrome-extension://bbbb').origin).toBe('https://web');
+  });
+});

@@ -10,11 +10,12 @@ export const isExtensionRoute = (url = '') =>
 export function corsFor(
   req: Pick<Request, 'url'>,
   web: string,
-  ext: string | undefined,
+  ext: string | undefined, // one origin, or several comma-separated (dev build id, store id)
 ): CorsOptions {
+  const origins = (ext ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   if (isExtensionRoute(req.url))
     return {
-      origin: ext || false,
+      origin: origins.length > 1 ? origins : origins[0] || false,
       credentials: false,
       methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Authorization', 'Content-Type'],

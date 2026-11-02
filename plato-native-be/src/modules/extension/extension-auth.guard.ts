@@ -27,7 +27,10 @@ export const EXTENSION_PUBLIC_KEY = 'extension:public';
 export const ExtensionPublic = () => SetMetadata(EXTENSION_PUBLIC_KEY, true);
 
 /** The one origin allowed to use extension routes. Unset = everything denied. */
-export const extensionOrigin = () => process.env.EXTENSION_ORIGIN || null;
+/** The extension origins the API trusts: EXTENSION_ORIGIN, one or several (comma-separated: the unpacked dev build's id and the Web Store's id). */
+export const extensionOrigins = (): string[] => (process.env.EXTENSION_ORIGIN ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+export const extensionOrigin = () => extensionOrigins()[0] ?? null;
+export const isExtensionOrigin = (origin: string | undefined) => !!origin && extensionOrigins().includes(origin);
 
 export const TOKEN_LIMIT = { limit: 120, windowMs: 60_000 };
 export const limiter = new RateLimiter();
@@ -50,8 +53,7 @@ export class ExtensionAuthGuard implements CanActivate {
     if (!scopes) throw new ForbiddenException('Route has no declared scope');
 
     // Defense in depth (CORS is browser-side only; the token is the credential).
-    const allowed = extensionOrigin();
-    if (!allowed || req.headers.origin !== allowed)
+    if (!isExtensionOrigin(req.headers.origin))
       throw new ForbiddenException('Origin not allowed');
 
     const header = req.headers.authorization;

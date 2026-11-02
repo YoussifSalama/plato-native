@@ -71,3 +71,14 @@ describe('content scripts follow the registry', () => {
     expect(m.permissions).toEqual(['sidePanel', 'storage', 'tabGroups', 'debugger']);
   });
 });
+
+describe('the store package', () => {
+  it('carries no key (the Web Store refuses one and assigns its own id); the unpacked build keeps the pinned key', () => {
+    const registry = createRegistry(DEFINITIONS);
+    const store = buildManifest({ flavor: 'production', apiOrigin: 'https://api.plato.test', registry, store: true });
+    const dev = buildManifest({ flavor: 'production', apiOrigin: 'https://api.plato.test', registry });
+    expect(store).not.toHaveProperty('key');
+    expect(dev).toHaveProperty('key');
+    expect({ ...store, key: dev.key }).toEqual(dev); // the only difference
+  });
+});

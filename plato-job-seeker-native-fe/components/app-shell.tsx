@@ -5,12 +5,14 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Bell, BellRing, Briefcase, ChevronRight, FileText, GraduationCap, HelpCircle, Home, MessageCircle, PanelLeftClose, PanelLeftOpen, Puzzle, User } from "lucide-react"
+import { Bell, BellRing, Briefcase, FileText, GraduationCap, HelpCircle, Home, MessageCircle, PanelLeftClose, PanelLeftOpen, Puzzle, User } from "lucide-react"
 import { cn } from "cn"
 import { getMe, type AuthUser } from "@/lib/auth/api"
 import { NotificationsProvider, useNotifications } from "@/components/notifications-provider"
 import { TokensChip, TokensNav } from "@/components/plato-tokens"
 import { VerifyEmailBanner } from "@/components/verify-email-banner"
+import { PlatoMark } from "@/components/plato-orb"
+import { SpatialBackdrop } from "@/components/spatial-backdrop"
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
@@ -89,78 +91,97 @@ function Frame({ children }: { children: ReactNode }) {
 
   const item = (active: boolean) =>
     cn(
-      "flex items-center gap-3 rounded-sm text-sm font-medium transition-colors",
+      "flex items-center gap-3 rounded-2xl text-sm transition-all duration-200",
       collapsed ? "size-11 justify-center" : "px-3.5 py-2.5",
-      active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-text-secondary hover:bg-primary-tint hover:text-foreground",
+      active
+        ? "bg-white font-semibold text-primary shadow-[0_1px_2px_rgb(0_58_110/0.06),0_8px_22px_-10px_rgb(0_58_110/0.3)]"
+        : "font-medium text-text-secondary hover:bg-white/55 hover:text-foreground",
     )
 
   return (
-    <div className={cn("theme-app grid min-h-dvh grid-cols-1 bg-background text-foreground transition-[grid-template-columns] duration-300", collapsed ? "lg:grid-cols-[76px_1fr]" : "lg:grid-cols-[264px_1fr]")}>
-      <aside className={cn("hidden flex-col justify-between border-r border-sidebar-border bg-sidebar py-6 lg:sticky lg:top-0 lg:flex lg:h-dvh", collapsed ? "px-3" : "px-4")}>
-        <div className="flex flex-col gap-7">
-          <div className={cn("flex items-center", collapsed ? "flex-col gap-3" : "justify-between px-1.5")}>
-            <Link href="/" data-ai="nav.logo" className="flex items-center gap-2.5" title="Plato">
-              <Image src="/logo.png" alt="" width={30} height={30} priority className="size-[30px] shrink-0 drop-shadow-[0_2px_8px_rgba(0,161,226,0.35)]" />
-              {!collapsed && <span className="text-xl font-bold text-foreground">Plato</span>}
-            </Link>
-            <button
-              type="button"
-              onClick={toggle}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              aria-expanded={!collapsed}
-              title={collapsed ? "Expand" : "Collapse"}
-              className="flex size-8 items-center justify-center rounded-sm border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-            </button>
+    <div className={cn("theme-app glass-scope grid min-h-dvh grid-cols-1 text-foreground transition-[grid-template-columns] duration-300", collapsed ? "lg:grid-cols-[104px_1fr]" : "lg:grid-cols-[284px_1fr]")}>
+      <SpatialBackdrop />
+      {/* Floating glass sidebar: brand, navigation, a status card, the account. */}
+      <div className="hidden lg:sticky lg:top-0 lg:block lg:h-dvh lg:py-4 lg:pl-4">
+        <aside className={cn("glass-panel flex h-full flex-col justify-between rounded-[28px] py-5", collapsed ? "px-3" : "px-3.5")}>
+          <div className="flex min-h-0 flex-col gap-6">
+            <div className={cn("flex items-center", collapsed ? "flex-col gap-3" : "justify-between gap-2 pr-0.5 pl-1.5")}>
+              <Link href="/" data-ai="nav.logo" className="flex min-w-0 items-center gap-3" title="Plato">
+                <PlatoMark size={38} />
+                {!collapsed && (
+                  <span className="min-w-0">
+                    <span className="block text-[17px] leading-tight font-extrabold tracking-tight text-foreground">Plato</span>
+                    <span className="block truncate text-[11.5px] text-text-tertiary">Your AI job hunter</span>
+                  </span>
+                )}
+              </Link>
+              <button
+                type="button"
+                onClick={toggle}
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-expanded={!collapsed}
+                title={collapsed ? "Expand" : "Collapse"}
+                className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-white/70 hover:text-foreground"
+              >
+                {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+              </button>
+            </div>
+
+            <nav className={cn("scroll-thin -mr-1 flex min-h-0 flex-col gap-1 overflow-y-auto pr-1", collapsed && "items-center")}>
+              {NAV.map(({ href, label, icon: Icon }) => {
+                const active = href === "/" ? pathname === "/" : pathname.startsWith(href)
+                return (
+                  <Link key={href} href={href} data-ai={`nav.${label.toLowerCase()}`} aria-current={active ? "page" : undefined} title={collapsed ? label : undefined} className={item(active)}>
+                    <span className="relative shrink-0">
+                      <Icon className="size-[18px]" />
+                      {collapsed && badge[href] > 0 && <span className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive" />}
+                    </span>
+                    {!collapsed && <span className="flex-1 truncate">{label}</span>}
+                    {!collapsed && badge[href] > 0 && (
+                      <span className={cn("flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold", href === "/applications" ? "bg-warning-soft text-warning" : "bg-destructive text-white")}>{badge[href] > 9 ? "9+" : badge[href]}</span>
+                    )}
+                  </Link>
+                )
+              })}
+            </nav>
           </div>
 
-          <nav className={cn("flex flex-col gap-1", collapsed && "items-center")}>
-            {NAV.map(({ href, label, icon: Icon }) => {
-              const active = href === "/" ? pathname === "/" : pathname.startsWith(href)
-              return (
-                <Link key={href} href={href} data-ai={`nav.${label.toLowerCase()}`} aria-current={active ? "page" : undefined} title={collapsed ? label : undefined} className={item(active)}>
-                  <span className="relative shrink-0">
-                    <Icon className="size-[18px]" />
-                    {collapsed && badge[href] > 0 && <span className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive" />}
-                  </span>
-                  {!collapsed && <span className="flex-1 truncate">{label}</span>}
-                  {!collapsed && badge[href] > 0 && (
-                    <span className={cn("flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold", href === "/applications" ? "bg-warning-soft text-warning" : "bg-destructive text-white")}>{badge[href] > 9 ? "9+" : badge[href]}</span>
+          <div className={cn("flex flex-col gap-3", collapsed && "items-center")}>
+            {/* Status card: what is running for the seeker right now. */}
+            {collapsed ? (
+              <div className="flex flex-col items-center gap-1">
+                <ExtensionProgressNav collapsed itemClass={item(false)} />
+                <TokensNav collapsed itemClass={item(pathname.startsWith("/tokens"))} />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-0.5 rounded-2xl border border-white/80 bg-white/70 p-1.5 shadow-[0_8px_24px_-16px_rgb(0_58_110/0.35)]">
+                <ExtensionProgressNav collapsed={false} variant="row" itemClass="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] transition-colors hover:bg-primary-tint" />
+                <TokensNav collapsed={false} variant="row" itemClass={cn("flex rounded-xl px-2.5 py-2 text-[13px] transition-colors hover:bg-primary-tint", pathname.startsWith("/tokens") && "bg-primary-tint")} />
+              </div>
+            )}
+            {user && (
+              <div className={cn("flex items-center gap-1", collapsed ? "flex-col" : "pl-1")}>
+                <Link href="/profile" title={collapsed ? titleCase(user.full_name) : undefined} className={cn("group flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl p-1.5 transition-colors hover:bg-white/55", collapsed && "justify-center")}>
+                  <span className="flex size-[38px] shrink-0 items-center justify-center rounded-full bg-brand-gradient text-xs font-bold text-white shadow-[0_6px_14px_-6px_rgb(0_91_167/0.6)]">{initials(user.full_name)}</span>
+                  {!collapsed && (
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-foreground">{titleCase(user.full_name)}</span>
+                      <span className="block truncate text-xs text-text-tertiary">Job seeker · View profile</span>
+                    </span>
                   )}
                 </Link>
-              )
-            })}
-          </nav>
-        </div>
-
-        <div className={cn("flex flex-col gap-3.5", collapsed && "items-center")}>
-          <ExtensionProgressNav collapsed={collapsed} itemClass={item(false)} />
-          <TokensNav collapsed={collapsed} itemClass={item(pathname.startsWith("/tokens"))} />
-          <a href="#" title={collapsed ? "Help & Support" : undefined} className={cn(item(false), !collapsed && "pl-1.5")}>
-            <HelpCircle className="size-[17px] shrink-0" />
-            {!collapsed && "Help & Support"}
-          </a>
-          {user && (
-            <Link href="/profile" title={collapsed ? titleCase(user.full_name) : undefined} className={cn("flex items-center gap-2.5 border-t border-sidebar-border pt-4 pb-2", collapsed ? "w-full justify-center" : "px-1.5")}>
-              <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-navy text-xs font-bold text-white">{initials(user.full_name)}</span>
-              {!collapsed && (
-                <>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-foreground">{titleCase(user.full_name)}</span>
-                    <span className="block text-xs text-text-tertiary">View profile</span>
-                  </span>
-                  <ChevronRight className="size-3.5 text-lavender" />
-                </>
-              )}
-            </Link>
-          )}
-        </div>
-      </aside>
+                <a href="#" title="Help & Support" aria-label="Help & Support" className="flex size-9 shrink-0 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-white/70 hover:text-foreground">
+                  <HelpCircle className="size-[17px]" />
+                </a>
+              </div>
+            )}
+          </div>
+        </aside>
+      </div>
 
       <div className="flex min-w-0 flex-col">
         {/* Compact nav for < lg, where the sidebar is hidden. */}
-        <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-sidebar-border bg-sidebar/95 px-4 py-2.5 backdrop-blur lg:hidden">
+        <div className="glass-panel sticky top-2 z-30 mx-2 mt-2 flex items-center gap-3 rounded-2xl px-3 py-2 lg:hidden">
           <Link href="/" className="flex items-center gap-2">
             <Image src="/logo.png" alt="Plato" width={28} height={28} className="size-7" />
           </Link>
@@ -172,7 +193,7 @@ function Frame({ children }: { children: ReactNode }) {
                   key={href}
                   href={href}
                   data-ai={`nav.${label.toLowerCase()}`}
-                  className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium", active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-text-secondary")}
+                  className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium", active ? "bg-white font-semibold text-primary shadow-sm" : "text-text-secondary")}
                 >
                   <Icon className="size-3.5" />
                   {label}

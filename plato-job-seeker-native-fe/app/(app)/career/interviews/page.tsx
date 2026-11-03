@@ -1,5 +1,6 @@
 "use client"
 
+import { PAGE, PageHeader } from "@/components/page-header"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { listInterviews, type InterviewSummary } from "@/lib/interviews/api"
@@ -16,11 +17,8 @@ export default function InterviewsPage() {
   const scored = (items ?? []).filter((i) => i.score !== null).reverse()
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-6 py-6 lg:pr-6 lg:pl-7">
-      <header className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-bold text-foreground">Mock interviews</h1>
-        <p className="text-sm text-text-secondary">Start one from the bot icon on any job in your results. Your scores are kept here.</p>
-      </header>
+    <div className={PAGE}>
+      <PageHeader crumbs={[{ label: "Career", href: "/career" }]} title="Mock interviews" description="Start one from the bot icon on any job in your results. Your scores are kept here." />
       {error && <p className="text-sm text-destructive">{error}</p>}
       {scored.length > 1 && (
         <div className="flex items-end gap-2 rounded-lg border bg-card p-4" aria-label="Scores over time">

@@ -1,5 +1,6 @@
 "use client"
 
+import { PAGE, PageHeader } from "@/components/page-header"
 import { useState } from "react"
 import Link from "next/link"
 import { ArrowRight, BellOff } from "lucide-react"
@@ -30,16 +31,18 @@ export default function NotificationsPage() {
   const count = (key: FilterKey) => (key === "unread" ? unread : items.filter((n) => FILTERS.find((f) => f.key === key)?.test?.(n) ?? true).length)
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-6 py-6 lg:pr-6 lg:pl-7">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
-          <p className="text-sm text-text-secondary">Searches that finished, applications that moved and new jobs from your alerts. Updates arrive live.</p>
-        </div>
-        <button type="button" data-ai="notifications.mark-all-read" disabled={!unread} onClick={markAllRead} className="h-9 rounded-md border bg-card px-3.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50">
-          Mark all read
-        </button>
-      </header>
+    <div className={PAGE}>
+      <PageHeader
+        section="Account"
+        title="Notifications"
+        description="Searches that finished, applications that moved and new jobs from your alerts. Updates arrive live."
+        bell={false}
+        actions={
+          <button type="button" data-ai="notifications.mark-all-read" disabled={!unread} onClick={markAllRead} className="h-9 rounded-full border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50">
+            Mark all read
+          </button>
+        }
+      />
 
       <PillTabs id="notifications-filter" tabs={FILTERS.map((f) => ({ key: f.key, label: f.label, count: count(f.key) }))} value={filter} onChange={setFilter} label="Filter notifications" dataAi="notifications.filter" />
 

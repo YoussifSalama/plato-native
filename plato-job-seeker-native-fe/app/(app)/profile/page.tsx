@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+import { PAGE, PageHeader } from "@/components/page-header"
 import { useCallback, useEffect, useState, type ReactNode } from "react"
 import { Loader2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -76,11 +78,17 @@ export default function ProfilePage() {
   const remove = (kind: "projects" | "achievements" | "skills", id: string) => run(() => removeResumeFact(kind, id), () => undefined)
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-6 py-6 lg:px-10">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Profile</h1>
-        <p className="text-sm text-text-secondary">What Plato uses to write your resumes and applications.</p>
-      </div>
+    <div className={PAGE}>
+      <PageHeader
+        section="Account"
+        title="Profile"
+        description="What Plato uses to write your resumes and fill your applications. The more it knows, the fewer questions it asks."
+        actions={
+          <Link href="/onboarding?step=3" data-ai="profile.edit-details" className="flex h-9 items-center rounded-full border bg-card px-4 text-sm font-medium hover:bg-muted">
+            Edit my details
+          </Link>
+        }
+      />
       {error && <p className="text-sm text-destructive">{error}</p>}
       {!facts && !error && <p className="text-sm text-muted-foreground">Loading…</p>}
 

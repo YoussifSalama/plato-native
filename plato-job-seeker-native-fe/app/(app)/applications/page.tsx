@@ -1,10 +1,11 @@
 "use client"
 
+import { PAGE, PageHeader } from "@/components/page-header"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowLeft, ChevronDown, CircleCheck, Clock, ExternalLink, FlaskConical, PauseCircle, Radio, RotateCcw, Sparkles } from "lucide-react"
+import { ChevronDown, CircleCheck, Clock, ExternalLink, FlaskConical, PauseCircle, Radio, RotateCcw, Sparkles } from "lucide-react"
 import { cn } from "cn"
 import {
   applicationEventsUrl,
@@ -161,15 +162,13 @@ function ApplicationsContent() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-6 py-6 lg:pr-6 lg:pl-7">
-      <header className="flex flex-col gap-2">
-        <Link href={threadId ? threadHref(threadId) : JOBS_HOME} className="flex w-fit items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-primary">
-          <ArrowLeft className="size-4" />
-          {threadId ? "Back to search" : "Jobs"}
-        </Link>
-        <h1 className="text-2xl font-bold text-foreground">Applications</h1>
-        <p className="text-sm text-text-secondary">Plato applies for you, one at a time: it fills each form from your profile, answers the employer&apos;s questions itself, and keeps a screenshot as proof. Every step shows up here live.</p>
-      </header>
+    <div className={PAGE}>
+      <PageHeader
+        section="Find & apply"
+        crumbs={threadId ? [{ label: "Jobs", href: JOBS_HOME }, { label: "Search", href: threadHref(threadId) }] : undefined}
+        title="Applications"
+        description="Every job Plato applied to or is working on, live. Anything that needs you is at the top."
+      />
 
       {readiness && !readiness.ready && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/25 bg-warning-soft/60 p-4 text-sm">

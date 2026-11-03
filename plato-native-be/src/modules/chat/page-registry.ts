@@ -37,6 +37,8 @@ export const PAGES: Record<string, PageEntry> = {
       nav('notifications', '/notifications'),
       nav('profile', '/profile'),
       { id: 'nav.logo', label: 'Plato logo', does: 'Goes to / (Home)' },
+      { id: 'crumb.<page>', label: 'Breadcrumb above the title (e.g. JOBS, CAREER)', does: 'Goes back up to that parent page; on a search it is crumb.jobs', tpl: 'crumb.' },
+      { id: 'tour.start', label: 'Tour this page (compass, bottom right)', does: 'Starts a guided tour of the page the seeker is on' },
     ],
   },
   home: {
@@ -45,6 +47,7 @@ export const PAGES: Record<string, PageEntry> = {
       "Home dashboard: the seeker's job hunt in numbers. KPIs (jobs ready, applications, searches, postings analyzed), pipeline, match quality, last 14 days, sources, work setup, seniority, salary, top locations and companies, and the latest searches. Questions about how the hunt is going are answered here.",
     controls: [
       { id: 'home.new-search', label: 'New search', does: 'Starts a new search conversation' },
+      { id: 'home.next-step', label: 'Your next steps button', does: 'Does the next setup step: complete details, link the extension, first search, apply, or set an alert' },
       { id: 'home.first-search', label: 'Start your first search', does: 'Same, shown when there are no searches' },
       { id: 'home.needs-you', label: 'Answer now', does: 'Opens /applications, shown when applications need answers' },
       { id: 'home.all-searches', label: 'All searches', does: 'Goes to /jobs' },
@@ -74,11 +77,6 @@ export const PAGES: Record<string, PageEntry> = {
     purpose:
       'One search: its results list with tabs, filters, sorting and applying. If the search is still running it shows live progress instead.',
     controls: [
-      {
-        id: 'results.all-searches',
-        label: 'All searches',
-        does: 'Back to /jobs',
-      },
       {
         id: 'results.tab.<tab>',
         label: 'Discover | Saved | Applied | Recommended',

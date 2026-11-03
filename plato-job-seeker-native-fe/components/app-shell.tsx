@@ -5,7 +5,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Bell, BellRing, Briefcase, FileText, GraduationCap, HelpCircle, Home, MessageCircle, PanelLeftClose, PanelLeftOpen, Puzzle, User } from "lucide-react"
+import { Bell, BellRing, Briefcase, FileText, GraduationCap, HelpCircle, Home, MessageCircle, PanelLeftClose, PanelLeftOpen, Puzzle, User, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { getMe, type AuthUser } from "@/lib/auth/api"
 import { NotificationsProvider, useNotifications } from "@/components/notifications-provider"
@@ -14,17 +14,31 @@ import { VerifyEmailBanner } from "@/components/verify-email-banner"
 import { PlatoMark } from "@/components/plato-orb"
 import { SpatialBackdrop } from "@/components/spatial-backdrop"
 
-const NAV = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/jobs", label: "Jobs", icon: Briefcase },
-  { href: "/applications", label: "Applications", icon: FileText },
-  { href: "/insights", label: "Job alerts", icon: BellRing },
-  { href: "/career", label: "Career", icon: GraduationCap },
-  { href: "/messages", label: "Messages", icon: MessageCircle },
-  { href: "/notifications", label: "Notifications", icon: Bell },
-  { href: "/extension", label: "Extension", icon: Puzzle },
-  { href: "/profile", label: "Profile", icon: User },
-] as const
+type NavItem = { href: string; label: string; icon: LucideIcon; soon?: boolean }
+// Grouped the way the job hunt goes: see where you stand, find and apply,
+// grow, then the account. Page headers use the same section names.
+const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
+  { label: null, items: [{ href: "/", label: "Home", icon: Home }] },
+  {
+    label: "Find & apply",
+    items: [
+      { href: "/jobs", label: "Jobs", icon: Briefcase },
+      { href: "/applications", label: "Applications", icon: FileText },
+      { href: "/insights", label: "Job alerts", icon: BellRing },
+    ],
+  },
+  { label: "Grow", items: [{ href: "/career", label: "Career", icon: GraduationCap }] },
+  {
+    label: "Account",
+    items: [
+      { href: "/notifications", label: "Notifications", icon: Bell },
+      { href: "/extension", label: "Extension", icon: Puzzle },
+      { href: "/profile", label: "Profile", icon: User },
+      { href: "/messages", label: "Messages", icon: MessageCircle, soon: true },
+    ],
+  },
+]
+const NAV = NAV_GROUPS.flatMap((g) => g.items)
 
 function initials(fullName: string) {
   return fullName
@@ -103,7 +117,7 @@ function Frame({ children }: { children: ReactNode }) {
       <SpatialBackdrop />
       {/* Floating glass sidebar: brand, navigation, a status card, the account. */}
       <div className="hidden lg:sticky lg:top-0 lg:block lg:h-dvh lg:py-4 lg:pl-4">
-        <aside className={cn("glass-panel flex h-full flex-col justify-between rounded-[28px] py-5", collapsed ? "px-3" : "px-3.5")}>
+        <aside data-tour="sidebar" className={cn("glass-panel flex h-full flex-col justify-between rounded-[28px] py-5", collapsed ? "px-3" : "px-3.5")}>
           <div className="flex min-h-0 flex-col gap-6">
             <div className={cn("flex items-center", collapsed ? "flex-col gap-3" : "justify-between gap-2 pr-0.5 pl-1.5")}>
               <Link href="/" data-ai="nav.logo" className="flex min-w-0 items-center gap-3" title="Plato">
@@ -127,22 +141,35 @@ function Frame({ children }: { children: ReactNode }) {
               </button>
             </div>
 
-            <nav className={cn("scroll-thin -mr-1 flex min-h-0 flex-col gap-1 overflow-y-auto pr-1", collapsed && "items-center")}>
-              {NAV.map(({ href, label, icon: Icon }) => {
-                const active = href === "/" ? pathname === "/" : pathname.startsWith(href)
-                return (
-                  <Link key={href} href={href} data-ai={`nav.${label.toLowerCase()}`} aria-current={active ? "page" : undefined} title={collapsed ? label : undefined} className={item(active)}>
-                    <span className="relative shrink-0">
-                      <Icon className="size-[18px]" />
-                      {collapsed && badge[href] > 0 && <span className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive" />}
-                    </span>
-                    {!collapsed && <span className="flex-1 truncate">{label}</span>}
-                    {!collapsed && badge[href] > 0 && (
-                      <span className={cn("flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold", href === "/applications" ? "bg-warning-soft text-warning" : "bg-destructive text-white")}>{badge[href] > 9 ? "9+" : badge[href]}</span>
-                    )}
-                  </Link>
-                )
-              })}
+            <nav data-tour="sidebar-nav" className={cn("scroll-thin -mr-1 flex min-h-0 flex-col gap-4 overflow-y-auto pr-1", collapsed && "items-center")}>
+              {NAV_GROUPS.map((g) => (
+                <div key={g.label ?? "top"} className={cn("flex flex-col gap-1", collapsed && "items-center")}>
+                  {g.label &&
+                    (collapsed ? (
+                      <span className="mx-auto mb-1 h-px w-6 bg-foreground/10" aria-hidden />
+                    ) : (
+                      <span className="px-3.5 pb-1 font-mono text-[10.5px] font-medium tracking-[0.08em] text-text-tertiary uppercase">{g.label}</span>
+                    ))}
+                  {g.items.map((it) => {
+                    const { href, label, icon: Icon } = it
+                    const soon = !!it.soon
+                    const active = href === "/" ? pathname === "/" : pathname.startsWith(href)
+                    return (
+                      <Link key={href} href={href} data-ai={`nav.${label.toLowerCase()}`} data-tour={`nav-${label.toLowerCase().replace(/\s+/g, "-")}`} aria-current={active ? "page" : undefined} title={collapsed ? (soon ? `${label} (coming soon)` : label) : undefined} className={cn(item(active), soon && !active && "opacity-70")}>
+                        <span className="relative shrink-0">
+                          <Icon className="size-[18px]" />
+                          {collapsed && badge[href] > 0 && <span className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive" />}
+                        </span>
+                        {!collapsed && <span className="flex-1 truncate">{label}</span>}
+                        {!collapsed && soon && <span className="rounded-full bg-foreground/6 px-2 py-0.5 text-[10px] font-semibold text-text-tertiary">Soon</span>}
+                        {!collapsed && badge[href] > 0 && (
+                          <span className={cn("flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold", href === "/applications" ? "bg-warning-soft text-warning" : "bg-destructive text-white")}>{badge[href] > 9 ? "9+" : badge[href]}</span>
+                        )}
+                      </Link>
+                    )
+                  })}
+                </div>
+              ))}
             </nav>
           </div>
 
@@ -154,7 +181,7 @@ function Frame({ children }: { children: ReactNode }) {
                 <TokensNav collapsed itemClass={item(pathname.startsWith("/tokens"))} />
               </div>
             ) : (
-              <div className="flex flex-col gap-0.5 rounded-2xl border border-white/80 bg-white/70 p-1.5 shadow-[0_8px_24px_-16px_rgb(0_58_110/0.35)]">
+              <div data-tour="status-card" className="flex flex-col gap-0.5 rounded-2xl border border-white/80 bg-white/70 p-1.5 shadow-[0_8px_24px_-16px_rgb(0_58_110/0.35)]">
                 <ExtensionProgressNav collapsed={false} variant="row" itemClass="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] transition-colors hover:bg-primary-tint" />
                 <TokensNav collapsed={false} variant="row" itemClass={cn("flex rounded-xl px-2.5 py-2 text-[13px] transition-colors hover:bg-primary-tint", pathname.startsWith("/tokens") && "bg-primary-tint")} />
               </div>

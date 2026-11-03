@@ -1,5 +1,7 @@
 "use client"
 
+import { NextSteps } from "@/components/next-steps"
+import { PAGE, PageHeader } from "@/components/page-header"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -30,7 +32,7 @@ import { getMe } from "@/lib/auth/api"
 import { createThread, getDiscoveryStats, listThreads, SOURCE_LABEL, type DiscoveryStats, type JobSourceName, type ThreadSummary } from "@/lib/jobs/api"
 import { JOBS_HOME, runSummary, threadHref, timeAgo } from "@/lib/jobs/links"
 import { staggerContainer } from "@/lib/motion-variants"
-import { NotificationBell, RunStatusIcon } from "./jobs/components/notification-bell"
+import { RunStatusIcon } from "./jobs/components/notification-bell"
 import { Bar, BreakdownRows, Card, KpiCard, Ring, Sparkbars, TONES, type Tone } from "./jobs/components/dashboard-widgets"
 
 const REMOTE: Record<string, { label: string; tone: Tone }> = {
@@ -116,32 +118,35 @@ export default function Home() {
   const recent = threads?.slice(0, 4) ?? null
 
   return (
-    <div className="relative flex flex-1 flex-col gap-6 px-6 py-6 lg:pr-6 lg:pl-7">
-      <header className="relative flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <span className="eyebrow">Home</span>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-[28px]">
+    <div className={PAGE}>
+      <PageHeader
+        section="Home"
+        title={
+          <>
             {greeting()}
             {name && <span className="text-brand-gradient">, {name}</span>}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{headline}</p>
-        </div>
-        <div className="flex items-center gap-3.5">
-          {s?.applications.needsInput ? (
-            <Link href="/applications" data-ai="home.needs-you" className="flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-4 py-2 text-sm font-semibold text-warning transition-colors hover:border-warning/60">
-              Answer now
-              <ArrowRight className="size-4" />
-            </Link>
-          ) : null}
-          <Button data-ai="home.new-search" onClick={newSearch} disabled={creating} className="gap-2 rounded-full px-5">
-            <Plus className="size-4" />
-            New search
-          </Button>
-          <NotificationBell />
-        </div>
-      </header>
+          </>
+        }
+        description={headline}
+        actions={
+          <>
+            {s?.applications.needsInput ? (
+              <Link href="/applications" data-ai="home.needs-you" className="flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-4 py-2 text-sm font-semibold text-warning transition-colors hover:border-warning/60">
+                Answer now
+                <ArrowRight className="size-4" />
+              </Link>
+            ) : null}
+            <Button data-ai="home.new-search" onClick={newSearch} disabled={creating} className="gap-2 rounded-full px-5">
+              <Plus className="size-4" />
+              New search
+            </Button>
+          </>
+        }
+      />
 
       {error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
+
+      <NextSteps stats={s} onNewSearch={newSearch} />
 
       {!s && !error && (
         <div className="flex flex-col gap-4" aria-busy="true">
@@ -161,7 +166,7 @@ export default function Home() {
       {s && (
         <motion.div variants={staggerContainer} initial="hidden" animate="show" className="flex flex-col gap-4">
           {/* KPIs */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div data-tour="home-kpis" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard featured icon={Briefcase} tone="green" value={s.shortlisted} label="Jobs ready for you" hint={`${s.quality.excellent} excellent · ${s.quality.strong} strong`} />
             <KpiCard icon={ClipboardList} tone="amber" value={appsTotal} label="Applications" hint={s.applications.needsInput ? `${s.applications.needsInput} need you · ${s.applications.submitted} applied` : `${s.applications.queued} queued · ${s.applications.submitted} applied`} />
             <KpiCard icon={Search} tone="brand" value={s.threads} label="Searches" hint={`${s.runs.done} finished · ${running} running · ${s.runs.failed} failed`} />
@@ -169,7 +174,7 @@ export default function Home() {
           </div>
 
           {/* Pipeline · Quality · Activity */}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+          <div data-tour="home-charts" className="grid grid-cols-1 gap-4 xl:grid-cols-4">
             <Card title="Your pipeline" icon={Filter} tone="brand">
               <BreakdownRows rows={funnel} tone="brand" />
               <p className="mt-auto text-xs text-text-tertiary">{s.hidden ? `${s.hidden} hidden as “not interested”.` : "Nothing hidden yet."}</p>
@@ -272,6 +277,7 @@ export default function Home() {
 
           {/* Jump back in */}
           <Card
+            data-tour="home-recent"
             title="Pick up where you left off"
             icon={Search}
             tone="brand"

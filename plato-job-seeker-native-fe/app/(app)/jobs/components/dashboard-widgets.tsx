@@ -18,9 +18,9 @@ export const TONES = {
 } as const
 export type Tone = keyof typeof TONES
 
-export function Card({ title, icon: Icon, tone = "brand", action, className, children }: { title?: string; icon?: ComponentType<{ className?: string }>; tone?: Tone; action?: ReactNode; className?: string; children: ReactNode }) {
+export function Card({ title, icon: Icon, tone = "brand", action, className, children, "data-tour": tour }: { title?: string; icon?: ComponentType<{ className?: string }>; tone?: Tone; action?: ReactNode; className?: string; children: ReactNode; "data-tour"?: string }) {
   return (
-    <motion.section variants={fadeUpItem} className={cn("card-lift flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-5 shadow-card", className)}>
+    <motion.section data-tour={tour} variants={fadeUpItem} className={cn("card-lift flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-5 shadow-card", className)}>
       {title && (
         <header className="flex items-center gap-2.5">
           {Icon && (

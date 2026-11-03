@@ -1,9 +1,9 @@
 "use client"
 
+import { Breadcrumbs, PAGE, PageHeader } from "@/components/page-header"
 import { use, useEffect, useState } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { answerInterview, getInterview, startInterview, type Interview } from "@/lib/interviews/api"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -34,17 +34,16 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
   const retry = () => run(async () => router.push(`/career/interviews/${(await startInterview({ retryOf: id })).id}`))
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-6 py-6 lg:pr-6 lg:pl-7">
-      <Link href="/career/interviews" className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-foreground">
-        <ArrowLeft className="size-4" /> All interviews
-      </Link>
-      {!iv && !error && <Skeleton className="h-40 w-full" />}
+    <div className={PAGE}>
+      {!iv && !error && (
+        <>
+          <Breadcrumbs crumbs={[{ label: "Career", href: "/career" }, { label: "Interviews", href: "/career/interviews" }]} />
+          <Skeleton className="h-40 w-full" />
+        </>
+      )}
       {iv && (
         <>
-          <header>
-            <h1 className="text-2xl font-bold text-foreground">{iv.jobTitle}</h1>
-            <p className="text-sm text-text-secondary">{iv.company} · mock interview</p>
-          </header>
+          <PageHeader crumbs={[{ label: "Career", href: "/career" }, { label: "Interviews", href: "/career/interviews" }]} title={iv.jobTitle} description={`${iv.company} · mock interview`} bell={false} />
 
           {iv.turns.map((t, i) => (
             <div key={i} className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-sm">

@@ -1,9 +1,10 @@
 "use client"
 
+import { Breadcrumbs, PAGE } from "@/components/page-header"
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, ExternalLink, Loader2, MapPin, RotateCcw, Search, Trash2 } from "lucide-react"
+import { ExternalLink, Loader2, MapPin, RotateCcw, Search, Trash2 } from "lucide-react"
 import { cn } from "cn"
 import { applicationEventsUrl, getApplication, getApplicationResume, retryApplication, withdrawApplication, type AnswerValue, type ApplicationDetail, type ApplyEvent } from "@/lib/jobs/api"
 import { applicationReason, canRetry, failureLabel, isVerifySubmission, retryLabel, roughly, statusView, STATUS_STAGE, STEP_STAGE } from "@/lib/jobs/application-status"
@@ -78,9 +79,8 @@ export default function ApplicationPage() {
 
   if (!app)
     return (
-      <div className="flex flex-1 flex-col gap-6 px-6 py-6 lg:pl-7">
-        <Link href="/applications" data-ai="application.back" className="flex w-fit items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-primary">
-          <ArrowLeft className="size-4" />
+      <div className={PAGE}>
+        <Link href="/applications" data-ai="application.back" className="w-fit font-mono text-[11.5px] font-medium tracking-[0.06em] text-primary uppercase hover:underline">
           Applications
         </Link>
         {error ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p> : <Skeleton className="h-40 w-full rounded-lg" />}
@@ -96,11 +96,8 @@ export default function ApplicationPage() {
   const canWithdraw = app.status !== "IN_PROGRESS" && app.status !== "SUBMITTED"
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-6 py-6 lg:pr-6 lg:pl-7">
-      <Link href={app.thread_id ? `/applications?thread=${app.thread_id}` : "/applications"} className="flex w-fit items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-primary">
-        <ArrowLeft className="size-4" />
-        Applications
-      </Link>
+    <div className={PAGE}>
+      <Breadcrumbs crumbs={[{ label: "Applications", href: app.thread_id ? `/applications?thread=${app.thread_id}` : "/applications" }]} current={app.job.title} />
 
       <header className="flex flex-col gap-4 rounded-lg border bg-card p-5">
         <div className="flex flex-wrap items-start gap-4">

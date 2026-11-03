@@ -1,5 +1,6 @@
 "use client"
 
+import { PAGE, PageHeader } from "@/components/page-header"
 import { Fragment, useCallback, useEffect, useMemo, useState, type MouseEvent } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -13,7 +14,6 @@ import { ExtensionApplyModal } from "@/components/extension-apply-modal"
 import { createThread, getMatches, listThreads, setHidden, setSaved, type DiscoveryRun, type JobMatch, type ThreadSummary } from "@/lib/jobs/api"
 import { APPLICATION_STATUS } from "@/lib/jobs/application-status"
 import { runTitle, threadHref, timeAgo } from "@/lib/jobs/links"
-import { NotificationBell } from "./components/notification-bell"
 
 // Jobs: every search the seeker ran, as one table they can search, filter and
 // sort. A row opens its search; the chevron shows its best jobs right here,
@@ -126,27 +126,24 @@ export default function JobsPage() {
     })
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-6 py-6 lg:pr-6 lg:pl-7">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <span className="eyebrow">Job search</span>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground">Your searches</h1>
-          <p className="mt-1 text-sm text-text-secondary">Every search you ran. Open one for its full results, or expand it to see its best jobs here.</p>
-        </div>
-        <div className="flex items-center gap-3.5">
+    <div className={PAGE}>
+      <PageHeader
+        section="Find & apply"
+        title="Jobs"
+        description="Every search you ran. Open one for its full results, or expand it to see its best jobs here."
+        actions={
           <Button data-ai="jobs.new-search" onClick={newSearch} disabled={creating} className="gap-2 rounded-full px-5">
             {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
             New search
           </Button>
-          <NotificationBell />
-        </div>
-      </header>
+        }
+      />
 
       {error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
 
       <section className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-card">
         {/* Toolbar */}
-        <div className="flex flex-col gap-3 border-b p-4">
+        <div data-tour="jobs-toolbar" className="flex flex-col gap-3 border-b p-4">
           <div className="flex flex-wrap items-center gap-2.5">
             <label className="relative flex min-w-[220px] flex-1 items-center">
               <Search className="pointer-events-none absolute left-3.5 size-4 text-text-tertiary" />
@@ -186,7 +183,7 @@ export default function JobsPage() {
               <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-text-tertiary" />
             </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Status">
+          <div data-tour="jobs-status" className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Status">
             {(["all", "RUNNING", "DONE", "FAILED", "IDLE"] as Status[]).map((k) => (
               <button key={k} type="button" role="tab" aria-selected={status === k} data-ai={`jobs.status.${k.toLowerCase()}`} onClick={() => setStatus(k)} className={cn(PILL, "h-8 px-3", status === k && PILL_ON)}>
                 {k === "all" ? "All" : STATUS[k].label}
@@ -203,7 +200,7 @@ export default function JobsPage() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-sm">
+          <table data-tour="jobs-table" className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="border-b bg-primary-tint/60 text-left text-xs font-semibold text-text-tertiary">
                 <th className="w-12 py-3 pl-4" aria-label="Expand" />

@@ -1,5 +1,6 @@
 "use client"
 
+import { PAGE, PageHeader } from "@/components/page-header"
 import { useCallback, useEffect, useState } from "react"
 import { AxiosError } from "axios"
 import { Check, Copy, Puzzle } from "lucide-react"
@@ -106,11 +107,8 @@ export default function ExtensionPage() {
     })
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-6 py-6 lg:pr-6 lg:pl-7">
-      <header className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-bold text-foreground">Browser extension</h1>
-        <p className="text-sm text-text-secondary">Link the Plato extension to your account. It fills applications in your own browser, and you always press Submit yourself.</p>
-      </header>
+    <div className={PAGE}>
+      <PageHeader section="Account" title="Browser extension" description="Link the Plato extension to your account. It fills applications in your own browser, and you always press Submit yourself." />
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

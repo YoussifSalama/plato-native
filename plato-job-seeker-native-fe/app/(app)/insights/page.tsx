@@ -1,5 +1,6 @@
 "use client"
 
+import { PAGE, PageHeader } from "@/components/page-header"
 import { Suspense, useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
@@ -7,7 +8,7 @@ import { AlertCircle, X } from "lucide-react"
 import { AxiosError } from "axios"
 import { getPreferences } from "@/lib/preferences/api"
 import { createAlert, deleteAlert, getDigests, getInsights, saveAlertSettings, updateAlert, type AlertSettings, type Digest, type InsightsOverview, type JobAlert, type NewAlert } from "@/lib/insights/api"
-import { lineReveal, reducedVariants, spring } from "@/lib/motion-system"
+import { spring } from "@/lib/motion-system"
 import { CompanyFollows, FieldAlerts } from "./alert-lists"
 import { DigestSettings } from "./digest-settings"
 import { Digests, EmailNote } from "./digests"
@@ -69,11 +70,8 @@ function InsightsPage() {
   const actions = { add, toggle, remove }
 
   return (
-    <div className="flex flex-1 flex-col gap-8 px-6 py-6 lg:pr-6 lg:pl-7">
-      <motion.header variants={reduced ? reducedVariants(lineReveal) : lineReveal} initial="hidden" animate="show" className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-bold text-foreground">Job alerts</h1>
-        <p className="max-w-2xl text-sm text-text-secondary">New jobs in the roles you want and at the companies you follow, gathered into one digest on your schedule. Alerts are free; your plan sets how many you can keep.</p>
-      </motion.header>
+    <div className={PAGE}>
+      <PageHeader section="Find & apply" title="Job alerts" description="New jobs in the roles you want and at the companies you follow, in one digest on your schedule. Alerts are free; your plan sets how many you keep." />
 
       <AnimatePresence>
         {error && (

@@ -1,9 +1,9 @@
 "use client"
 
+import { PAGE_DOCK, PageHeader } from "@/components/page-header"
 import { use, useCallback, useEffect, useRef, useState } from "react"
-import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Plus, Search } from "lucide-react"
+import { Plus, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   createThread,
@@ -36,7 +36,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 const SearchingView = dynamic(() => import("../components/searching-view").then((m) => m.SearchingView), { loading: () => <Skeleton className="h-[560px] w-full rounded-xl" /> })
 import { useJourneyLog } from "../components/journey/use-journey-log"
 import { ResultsView } from "../components/results-view"
-import { NotificationBell } from "../components/notification-bell"
 import { PillTabs } from "@/components/pill-tabs"
 
 const RESULTS_PROMPTS = ["Which of these fit me best?", "Find remote jobs", "Show me more options"]
@@ -48,15 +47,6 @@ const TABS: { key: MatchTab; label: string }[] = [
   { key: "recommended", label: "Recommended for you" },
 ]
 const POLL_MS = 4000
-
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("")
-}
 
 export default function ThreadPage({ params }: { params: Promise<{ threadId: string }> }) {
   const { threadId } = use(params)
@@ -268,38 +258,32 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-6 pt-6 pb-28 lg:pr-6 lg:pl-7">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-2.5">
-          <Link href={JOBS_HOME} data-ai="results.all-searches" className="flex w-fit items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-primary">
-            <ArrowLeft className="size-4" />
-            All searches
-          </Link>
-          <h1 className="text-2xl font-bold text-foreground">{thread?.title ?? "Search"}</h1>
-          {view === "results" && (
+    <div className={PAGE_DOCK}>
+      <PageHeader
+        crumbs={[{ label: "Jobs", href: JOBS_HOME }]}
+        title={thread?.title ?? "Search"}
+        description={view === "results" ? "Ranked against your profile. Save the ones you like, then apply to the best in one go." : view === "searching" ? "Plato is searching every board. You can leave and come back; it keeps going." : "Tell Plato the role you want in your own words."}
+        actions={
+          <>
+            {view === "results" && (
+              <label data-tour="results-search" className="hidden h-10 w-72 items-center gap-2.5 rounded-full border bg-card px-3.5 md:flex">
+                <Search className="size-4 text-lavender" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by title, company, or keyword" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-lavender" />
+              </label>
+            )}
+            <Button variant="outline" onClick={newSearch} className="gap-1.5 rounded-full">
+              <Plus className="size-4" />
+              New search
+            </Button>
+          </>
+        }
+      >
+        {view === "results" && (
+          <div data-tour="results-tabs">
             <PillTabs id="results-tabs" tabs={TABS} value={tab} onChange={setTab} label="Results" dataAi="results.tab" />
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-3.5">
-          {view === "results" && (
-            <label className="hidden h-10 w-80 items-center gap-2.5 rounded-md border bg-card px-3.5 md:flex">
-              <Search className="size-4 text-lavender" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by title, company, or keyword" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-lavender" />
-            </label>
-          )}
-          <Button variant="outline" size="sm" onClick={newSearch} className="gap-1.5 rounded-md">
-            <Plus className="size-4" />
-            New search
-          </Button>
-          <NotificationBell />
-          {me && (
-            <span className="relative">
-              <span className="flex size-10 items-center justify-center rounded-full bg-navy text-sm font-bold text-white">{initials(me.full_name)}</span>
-              <span className="absolute -right-px -bottom-px size-[11px] rounded-full border-2 border-card bg-[#2ECC71]" aria-hidden />
-            </span>
-          )}
-        </div>
-      </header>
+          </div>
+        )}
+      </PageHeader>
 
       {loadError && <p className="rounded-sm border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{loadError}</p>}
       {!thread && !loadError && <Skeleton className="h-[calc(100dvh-220px)] min-h-[420px] w-full rounded-xl" />}

@@ -1,8 +1,9 @@
 "use client"
 
+import { PAGE_DOCK, PageHeader } from "@/components/page-header"
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Lightbulb, Mic, Plus } from "lucide-react"
+import { Lightbulb, Mic, Plus } from "lucide-react"
 import { getMe, type AuthUser } from "@/lib/auth/api"
 import { getPreferences } from "@/lib/preferences/api"
 import type { Preferences } from "@/lib/preferences/schema"
@@ -10,19 +11,10 @@ import { uploadDocument } from "@/lib/documents/api"
 import { listCareerResumes, createCareerThread, getCareerThread, listCareerThreads, streamCareerMessage, type CareerMessage, type CareerThread, type JobRef } from "@/lib/career/api"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { NotificationBell } from "../jobs/components/notification-bell"
 import { CareerHero } from "./career-hero"
 
 // Names typed IN CAPITALS at signup shouldn't shout.
 const titleCase = (s: string) => s.toLowerCase().replace(/^\S/, (c) => c.toUpperCase())
-
-const initials = (name: string) =>
-  name
-    .split(" ")
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase()
 
 export default function CareerPage() {
   const [me, setMe] = useState<AuthUser | null>(null)
@@ -118,37 +110,28 @@ export default function CareerPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-6 pt-6 pb-28 lg:pr-6 lg:pl-7">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-2.5">
-          <Link href="/" className="flex w-fit items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-primary">
-            <ArrowLeft className="size-4" />
-            Home
-          </Link>
-          <h1 className="text-2xl font-bold text-foreground">Career</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-3.5">
-          <Link href="/career/interviews" data-ai="career.interviews" className="flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted">
-            <Mic className="size-4" />
-            Interviews
-          </Link>
-          <Link href="/career/skills" data-ai="career.skills" className="flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted">
-            <Lightbulb className="size-4" />
-            Skills gap
-          </Link>
-          <Button data-ai="career.new-conversation" variant="outline" size="sm" onClick={() => void newConversation()} className="gap-1.5 rounded-md">
-            <Plus className="size-4" />
-            New conversation
-          </Button>
-          <NotificationBell />
-          {me && (
-            <span className="relative">
-              <span className="flex size-10 items-center justify-center rounded-full bg-navy text-sm font-bold text-white">{initials(me.full_name)}</span>
-              <span className="absolute -right-px -bottom-px size-[11px] rounded-full border-2 border-card bg-[#2ECC71]" aria-hidden />
-            </span>
-          )}
-        </div>
-      </header>
+    <div className={PAGE_DOCK}>
+      <PageHeader
+        section="Grow"
+        title="Career"
+        description="Your career coach: build or tailor a resume, practise interviews and close skill gaps."
+        actions={
+          <>
+            <Link href="/career/interviews" data-ai="career.interviews" data-tour="career-interviews" className="flex h-9 items-center gap-1.5 rounded-full border bg-card px-3.5 text-sm font-medium hover:bg-muted">
+              <Mic className="size-4" />
+              Interviews
+            </Link>
+            <Link href="/career/skills" data-ai="career.skills" data-tour="career-skills" className="flex h-9 items-center gap-1.5 rounded-full border bg-card px-3.5 text-sm font-medium hover:bg-muted">
+              <Lightbulb className="size-4" />
+              Skills gap
+            </Link>
+            <Button data-ai="career.new-conversation" variant="outline" size="sm" onClick={() => void newConversation()} className="gap-1.5 rounded-full">
+              <Plus className="size-4" />
+              New conversation
+            </Button>
+          </>
+        }
+      />
       {thread ? (
         // Keyed so a new conversation replays the intro.
         <CareerHero key={thread.id} hasResume={resumeCount > 0} steps={steps} threadId={thread.id} onVoiceFinished={() => void getCareerThread(thread.id).then(setThread).catch(() => undefined)} firstName={me ? titleCase(me.full_name.split(" ")[0]) : null} preferences={preferences} messages={thread.messages} onSend={send} busy={busy} error={error} pinned={pinned} onUnpin={() => setPinned(null)} />

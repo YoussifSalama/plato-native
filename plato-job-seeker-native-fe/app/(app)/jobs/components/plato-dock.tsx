@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { ArrowUp, Sparkles, X } from "lucide-react"
+import { ArrowUp, Sparkles, X, Compass } from "lucide-react"
 import { cn } from "cn"
 import type { ThreadMessage } from "@/lib/jobs/api"
 import { PlatoMark } from "@/components/plato-orb"
@@ -101,6 +101,18 @@ function PlatoDock({
                 </p>
                 <p className="truncate text-xs text-text-tertiary">{statusLine}</p>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  toggle()
+                  window.dispatchEvent(new Event("plato:start-tour"))
+                }}
+                aria-label="Tour this page"
+                title="Tour this page"
+                className="flex size-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+              >
+                <Compass className="size-4" />
+              </button>
               <button type="button" onClick={toggle} aria-label="Close" title="Close (Esc)" className="flex size-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
                 <X className="size-4" />
               </button>
@@ -158,6 +170,7 @@ function PlatoDock({
           <motion.button
             key="launcher"
             layoutId="plato-dock"
+            data-tour="plato-ai"
             type="button"
             onClick={toggle}
             aria-label="Open Plato AI"

@@ -1,5 +1,6 @@
 "use client"
 
+import { PAGE, PageHeader } from "@/components/page-header"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { BadgeCheck, ChevronDown, ExternalLink, GraduationCap, Loader2, PlayCircle, ShieldCheck, Trash2, Upload } from "lucide-react"
@@ -67,11 +68,8 @@ export default function SkillsPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-6 py-6 lg:pr-6 lg:pl-7">
-      <header className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-bold text-foreground">Skills gap</h1>
-        <p className="text-sm text-text-secondary">Skills your best-matching jobs ask for that your profile does not show yet, with ways to learn them. Finish one, add your public certificate link, and Plato checks it before adding it to your profile.</p>
-      </header>
+    <div className={PAGE}>
+      <PageHeader crumbs={[{ label: "Career", href: "/career" }]} title="Skills gap" description="Skills your best-matching jobs ask for that your profile does not show yet. Learn one, add the certificate link, and Plato checks it before adding it." />
       {error && <p className="text-sm text-destructive">Could not load your skills gap.</p>}
       {!data && !error && <Skeleton className="h-40 w-full" />}
       {data && (

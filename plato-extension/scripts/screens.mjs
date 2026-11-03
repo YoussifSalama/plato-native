@@ -52,7 +52,7 @@ const PAGE_CSS = `
   input:not([type=checkbox]):not([type=file]), select, textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 9px 11px; border: 1px solid #d9d8e3; border-radius: 8px; font: inherit; background: #fff; }
   textarea { min-height: 80px; }
   label:has(input[type=checkbox]) { display: flex; align-items: center; gap: 8px; font-weight: 500; color: #1e1d2b; }
-  button { justify-self: start; padding: 10px 18px; border: 0; border-radius: 10px; background: #4f3ff7; color: #fff; font: inherit; font-weight: 700; }
+  button { justify-self: start; padding: 10px 18px; border: 0; border-radius: 10px; background: #005ba7; color: #fff; font: inherit; font-weight: 700; }
   #cw, div[hidden] { display: none; } #cw:not([hidden]) { display: block; }
 `;
 const pageShot = async (name) => {

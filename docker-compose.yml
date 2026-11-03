@@ -1,4 +1,4 @@
-# Plato on one VPS: Mongo (single-node replica set, Prisma needs one), Redis, API, web app, Caddy (the only
+# Plato on one VPS: Mongo (single-node replica set, Prisma needs one), Redis, API, web app, landing site, Caddy (the only
 # public ports; TLS from Let's Encrypt). Settings and secrets come from ./.env next to this file (deploy/env.example).
 # Local smoke test: WEB_DOMAIN=localhost API_DOMAIN=api.localhost -> Caddy serves a self-signed cert.
 # Every container's logs rotate: 20 MB x 3 files, so logs can never fill the disk (the usual cause of a stuck VPS).
@@ -77,6 +77,12 @@ services:
     depends_on:
       - api
 
+  landing:
+    <<: *logging
+    image: ${LANDING_IMAGE:-ghcr.io/youssifsalama/plato-landing:latest}
+    build: ./plato-landing
+    restart: unless-stopped
+
   caddy:
     <<: *logging
     image: caddy:2-alpine
@@ -88,6 +94,7 @@ services:
     environment:
       WEB_DOMAIN: ${WEB_DOMAIN}
       API_DOMAIN: ${API_DOMAIN}
+      LANDING_DOMAIN: ${LANDING_DOMAIN:?set LANDING_DOMAIN in .env}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -95,6 +102,7 @@ services:
     depends_on:
       - api
       - web
+      - landing
 
 volumes:
   mongo-data:

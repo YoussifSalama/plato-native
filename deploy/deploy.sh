@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy on the VPS itself (no GitHub Actions): pull main, build the two images on the server, restart the stack.
+# Deploy on the VPS itself (no GitHub Actions): pull main, build the images on the server, restart the stack.
 #   bash /opt/plato/src/deploy/deploy.sh
 # Server layout: /opt/plato/.env (secrets, written by hand), /opt/plato/src (this repo at main).
 # Compose runs inside src so the build contexts resolve; .env is symlinked in so the API gets its settings.
@@ -16,10 +16,10 @@ git -C "$SRC" reset -q --hard origin/main
 ln -sfn "$ROOT/.env" "$SRC/.env"
 cd "$SRC"
 echo "== deploying $(git log --oneline -1)"
-export API_IMAGE=plato-api:local WEB_IMAGE=plato-web:local
-docker compose -p plato build --pull api web
+export API_IMAGE=plato-api:local WEB_IMAGE=plato-web:local LANDING_IMAGE=plato-landing:local
+docker compose -p plato build --pull api web landing
 docker compose -p plato up -d --remove-orphans
 docker image prune -f >/dev/null
 docker builder prune -f --filter until=72h >/dev/null 2>&1 || true   # build cache from older deploys; weekly job does the rest
 docker compose -p plato ps
-echo "== done: https://$(grep '^WEB_DOMAIN=' .env | cut -d= -f2)  api https://$(grep '^API_DOMAIN=' .env | cut -d= -f2)"
+echo "== done: https://$(grep '^LANDING_DOMAIN=' .env | cut -d= -f2)  app https://$(grep '^WEB_DOMAIN=' .env | cut -d= -f2)  api https://$(grep '^API_DOMAIN=' .env | cut -d= -f2)"

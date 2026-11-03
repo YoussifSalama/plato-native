@@ -39,7 +39,7 @@ export default function Home() {
           <div className="center"><span className="eyebrow">The whole product</span><h2 className="h2">Everything between the search and the interview.</h2><p className="lead">Plato is more than the extension. This is what lives in your account.</p></div>
           <div className="bento">
             <div className="tile w4"><h3>Your job hunt at a glance</h3><p>Searches, jobs ready, applications, postings analyzed. Match quality, where jobs come from, work setup and salary signal.</p><div className="ui"><DashboardMock /></div></div>
-            <div className="tile w2 violet"><h3>Ranked, with reasons</h3><p>Excellent, strong, or not for you, and exactly why.</p>
+            <div className="tile w2 brand"><h3>Ranked, with reasons</h3><p>Excellent, strong, or not for you, and exactly why.</p>
               <ul className="reasons">{[["Skills", "9 of 11 required", "✓"], ["Level", "Senior, as you want", "✓"], ["Location", "Remote, Europe", "✓"], ["Salary", "Not published", "~"]].map(([k, v, m]) => <li key={k}><i>{m}</i><span>{k}</span><em>{v}</em></li>)}</ul>
               <div className="ui row" style={{ alignItems: "end" }}><div style={{ fontSize: 76, fontWeight: 600, letterSpacing: "-0.05em", lineHeight: 1 }}>92<span style={{ fontSize: 30 }}>%</span></div><span className="pill" style={{ background: "rgba(255,255,255,.18)", color: "#fff" }}>Excellent match</span></div></div>
             <div className="tile w3"><h3>Career studio</h3><p>Build a resume from your profile, tailor it to a posting&apos;s keywords, then practice for the call.</p><div className="ui"><CareerMock /></div></div>

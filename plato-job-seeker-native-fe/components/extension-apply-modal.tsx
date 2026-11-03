@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Check, Copy, Loader2, Lock, MoreVertical, MousePointer2, Pin, Puzzle, Star, X } from "lucide-react"
@@ -169,12 +170,12 @@ function Content({ count, req, onClose }: { count: number; req: Req; onClose: ()
                     <Puzzle className="size-4 text-white" />
                     <MousePointer2 className="absolute -right-2 -bottom-3 size-5 fill-primary text-primary" />
                   </span>
-                  <span className="flex size-6 items-center justify-center rounded-md bg-primary text-[11px] font-bold text-primary-foreground">P</span>
+                  <Image src="/logo.png" alt="" width={24} height={24} className="size-6 rounded-md bg-white p-0.5" />
                 </div>
                 <div className="relative -mt-1 ml-auto mr-4 mb-4 w-[min(260px,85%)] rounded-lg border bg-card p-3 shadow-lg">
                   <div className="mb-2 flex items-center justify-between text-xs font-semibold">Extensions<X className="size-3.5 text-text-tertiary" /></div>
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="flex size-6 items-center justify-center rounded-md bg-primary text-[11px] font-bold text-primary-foreground">P</span>
+                    <Image src="/logo.png" alt="" width={24} height={24} className="size-6 rounded-md bg-white p-0.5" />
                     <span className="flex-1 font-medium">Plato</span>
                     <Pin className="size-4 fill-primary text-primary" />
                     <MoreVertical className="size-4 text-text-tertiary" />

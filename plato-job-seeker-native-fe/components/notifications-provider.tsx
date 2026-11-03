@@ -135,7 +135,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: reduced ? 0 : 24, transition: { duration: 0.18 } }}
                 transition={reduced ? { duration: 0.15 } : spring.enter}
-                className="pointer-events-auto flex items-start gap-3 rounded-lg border bg-card p-3.5 shadow-[0_18px_44px_-20px_rgba(79,63,247,0.4),0_2px_6px_-2px_rgba(30,29,43,0.08)]"
+                className="pointer-events-auto flex items-start gap-3 rounded-lg border bg-card p-3.5 shadow-[0_18px_44px_-20px_rgba(0,91,167,0.4),0_2px_6px_-2px_rgba(14,27,44,0.08)]"
               >
                 <NotificationIcon n={t} />
                 <Link

@@ -43,7 +43,7 @@ const REMOTE: Record<string, { label: string; tone: Tone }> = {
 const LEVEL: Record<string, { label: string; tone: Tone }> = {
   junior: { label: "Junior / Entry", tone: "teal" },
   mid: { label: "Mid level", tone: "blue" },
-  senior: { label: "Senior / Lead", tone: "violet" },
+  senior: { label: "Senior / Lead", tone: "brand" },
 }
 
 function entries<T extends string>(rec: Partial<Record<T, number>> | undefined) {
@@ -81,7 +81,7 @@ export default function JobsDashboard() {
   const appsTotal = s ? Object.values(s.applications).reduce((n, c) => n + (c ?? 0), 0) : 0
   const funnel = s
     ? [
-        { key: "found", label: "Jobs found", count: s.shortlisted, tone: "violet" as Tone },
+        { key: "found", label: "Jobs found", count: s.shortlisted, tone: "brand" as Tone },
         { key: "saved", label: "Saved", count: s.saved, tone: "teal" as Tone },
         { key: "queued", label: "Sent to Plato", count: appsTotal, tone: "amber" as Tone },
         { key: "applied", label: "Applied", count: s.applications.submitted, tone: "green" as Tone },
@@ -92,7 +92,8 @@ export default function JobsDashboard() {
     <div className="flex flex-1 flex-col gap-6 px-6 py-6 lg:pr-6 lg:pl-7">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Jobs</h1>
+          <span className="eyebrow">Dashboard</span>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground">Jobs</h1>
           <p className="text-sm text-text-secondary">Your search overview — what Plato found, where it came from, and what happens next.</p>
         </div>
         <div className="flex items-center gap-3.5">
@@ -118,16 +119,16 @@ export default function JobsDashboard() {
         <motion.div variants={staggerContainer} initial="hidden" animate="show" className="flex flex-col gap-4">
           {/* KPIs */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard icon={Search} tone="violet" value={s.threads} label="Searches" hint={`${s.runs.done} finished · ${running} running · ${s.runs.failed} failed`} />
-            <KpiCard icon={Briefcase} tone="green" value={s.shortlisted} label="Jobs ready for you" hint={`${s.quality.excellent} excellent · ${s.quality.strong} strong`} />
+            <KpiCard icon={Search} tone="brand" value={s.threads} label="Searches" hint={`${s.runs.done} finished · ${running} running · ${s.runs.failed} failed`} />
+            <KpiCard featured icon={Briefcase} tone="green" value={s.shortlisted} label="Jobs ready for you" hint={`${s.quality.excellent} excellent · ${s.quality.strong} strong`} />
             <KpiCard icon={ClipboardList} tone="amber" value={appsTotal} label="Applications" hint={s.applications.needsInput ? `${s.applications.needsInput} need you · ${s.applications.submitted} applied` : `${s.applications.queued} queued · ${s.applications.submitted} applied`} />
             <KpiCard icon={Layers} tone="blue" value={s.analyzed.toLocaleString()} label="Postings analyzed" hint="LinkedIn · Indeed · Google Jobs · Glassdoor · ATS boards · Plato index" />
           </div>
 
           {/* Funnel · Quality · Activity */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-            <Card title="Your pipeline" icon={Filter} tone="violet">
-              <BreakdownRows rows={funnel} tone="violet" />
+            <Card title="Your pipeline" icon={Filter} tone="brand">
+              <BreakdownRows rows={funnel} tone="brand" />
               <p className="text-xs text-text-tertiary">{s.hidden ? `${s.hidden} hidden as “not interested”.` : "Nothing hidden yet."}</p>
             </Card>
             <Card title="Match quality" icon={Target} tone="green">
@@ -148,9 +149,9 @@ export default function JobsDashboard() {
 
           {/* Sources · Work setup · Seniority · Salary */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card title="Where jobs come from" icon={Globe2} tone="violet">
+            <Card title="Where jobs come from" icon={Globe2} tone="brand">
               <BreakdownRows
-                tone="violet"
+                tone="brand"
                 rows={entries(s.bySource).map(([k, v]) => ({
                   key: k,
                   label: SOURCE_LABEL[k] ?? k,
@@ -197,7 +198,7 @@ export default function JobsDashboard() {
                 }))}
               />
             </Card>
-            <Card title="Roles you searched" icon={Sparkles} tone="violet">
+            <Card title="Roles you searched" icon={Sparkles} tone="brand">
               {s.topTitles.length ? (
                 <div className="flex flex-wrap gap-2">
                   {s.topTitles.map((t) => (
@@ -216,7 +217,7 @@ export default function JobsDashboard() {
 
           {/* Searches · Recent runs */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <Card title="Your searches" icon={Search} tone="violet" className="xl:col-span-2" action={<span className="text-xs text-text-tertiary">Newest first</span>}>
+            <Card title="Your searches" icon={Search} tone="brand" className="xl:col-span-2" action={<span className="text-xs text-text-tertiary">Newest first</span>}>
               <div className="-mx-5 -mb-5 border-t">
                 {threads === null && !error && (
                   <ul aria-busy="true" className="px-5">

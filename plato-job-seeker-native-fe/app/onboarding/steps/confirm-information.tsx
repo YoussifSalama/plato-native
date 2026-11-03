@@ -307,7 +307,7 @@ function extensionColor(name: string | null) {
   const ext = name?.split(".").pop()?.toLowerCase()
   if (ext === "pdf") return "rose" as const
   if (ext === "docx") return "sky" as const
-  return "violet" as const
+  return "brand" as const
 }
 
 function DocumentEvidenceRow({

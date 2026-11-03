@@ -8,7 +8,7 @@ import { fadeUpItem } from "@/lib/motion-variants"
 // Colour "tones" for icon tiles and bars. Each is a soft background + a
 // strong foreground from the Plato palette.
 export const TONES = {
-  violet: { tile: "bg-primary-soft text-primary", bar: "bg-primary", dot: "bg-primary" },
+  brand: { tile: "bg-primary-soft text-primary", bar: "bg-primary", dot: "bg-primary" },
   green: { tile: "bg-success-soft text-success", bar: "bg-success", dot: "bg-success" },
   blue: { tile: "bg-info-soft text-info", bar: "bg-info", dot: "bg-info" },
   amber: { tile: "bg-warning-soft text-warning", bar: "bg-warning", dot: "bg-warning" },
@@ -18,9 +18,9 @@ export const TONES = {
 } as const
 export type Tone = keyof typeof TONES
 
-export function Card({ title, icon: Icon, tone = "violet", action, className, children }: { title?: string; icon?: ComponentType<{ className?: string }>; tone?: Tone; action?: ReactNode; className?: string; children: ReactNode }) {
+export function Card({ title, icon: Icon, tone = "brand", action, className, children }: { title?: string; icon?: ComponentType<{ className?: string }>; tone?: Tone; action?: ReactNode; className?: string; children: ReactNode }) {
   return (
-    <motion.section variants={fadeUpItem} className={cn("flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-5", className)}>
+    <motion.section variants={fadeUpItem} className={cn("card-lift flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-5 shadow-card", className)}>
       {title && (
         <header className="flex items-center gap-2.5">
           {Icon && (
@@ -37,17 +37,25 @@ export function Card({ title, icon: Icon, tone = "violet", action, className, ch
   )
 }
 
-export function KpiCard({ icon: Icon, tone, value, label, hint }: { icon: ComponentType<{ className?: string }>; tone: Tone; value: string | number; label: string; hint?: string }) {
+// `featured` is the landing page's brand tile: the logo gradient, white type.
+// Use it for the one number that matters most on a screen.
+export function KpiCard({ icon: Icon, tone, value, label, hint, featured = false }: { icon: ComponentType<{ className?: string }>; tone: Tone; value: string | number; label: string; hint?: string; featured?: boolean }) {
   return (
-    <motion.div variants={fadeUpItem} className="relative flex items-center gap-4 overflow-hidden rounded-lg border bg-card p-5">
-      <span className={cn("pointer-events-none absolute -top-8 -right-8 size-28 rounded-full opacity-60", TONES[tone].tile)} aria-hidden />
-      <span className={cn("relative flex size-12 shrink-0 items-center justify-center rounded-md", TONES[tone].tile)}>
+    <motion.div
+      variants={fadeUpItem}
+      className={cn(
+        "card-lift relative flex items-center gap-4 overflow-hidden rounded-lg border p-5",
+        featured ? "border-transparent bg-brand-gradient text-white shadow-brand" : "bg-card shadow-card",
+      )}
+    >
+      <span className={cn("pointer-events-none absolute -top-8 -right-8 size-28 rounded-full", featured ? "bg-white/12" : cn("opacity-60", TONES[tone].tile))} aria-hidden />
+      <span className={cn("relative flex size-12 shrink-0 items-center justify-center rounded-md", featured ? "bg-white/18 text-white" : TONES[tone].tile)}>
         <Icon className="size-6" />
       </span>
       <div className="relative min-w-0">
-        <p className="text-[26px] leading-none font-bold text-foreground">{value}</p>
-        <p className="mt-1 text-sm font-medium text-text-secondary">{label}</p>
-        {hint && <p className="mt-0.5 truncate text-xs text-text-tertiary">{hint}</p>}
+        <p className={cn("text-[26px] leading-none font-bold tabular-nums", featured ? "text-white" : "text-foreground")}>{value}</p>
+        <p className={cn("mt-1 text-sm font-medium", featured ? "text-white/90" : "text-text-secondary")}>{label}</p>
+        {hint && <p className={cn("mt-0.5 truncate text-xs", featured ? "text-white/75" : "text-text-tertiary")}>{hint}</p>}
       </div>
     </motion.div>
   )
@@ -96,18 +104,18 @@ export function Ring({ slices, centerLabel, centerValue }: { slices: { label: st
     })
     .join(", ")
   return (
-    <div className="flex items-center gap-5">
+    <div className="flex flex-wrap items-center justify-center gap-5">
       <div className="relative size-28 shrink-0 rounded-full" style={{ background: total ? `conic-gradient(${stops})` : "var(--muted)" }} aria-hidden>
         <div className="absolute inset-3 flex flex-col items-center justify-center rounded-full bg-card">
           <span className="text-xl leading-none font-bold text-foreground">{centerValue}</span>
           <span className="mt-1 text-[10px] font-medium tracking-wide text-text-tertiary uppercase">{centerLabel}</span>
         </div>
       </div>
-      <ul className="flex flex-1 flex-col gap-2">
+      <ul className="flex min-w-[10rem] flex-1 flex-col gap-2">
         {slices.map((s) => (
           <li key={s.label} className="flex items-center gap-2 text-sm">
-            <span className={cn("size-2.5 rounded-full", TONES[s.tone].dot)} />
-            <span className="flex-1 text-text-secondary">{s.label}</span>
+            <span className={cn("size-2.5 shrink-0 rounded-full", TONES[s.tone].dot)} />
+            <span className="min-w-0 flex-1 text-text-secondary">{s.label}</span>
             <span className="font-semibold text-foreground tabular-nums">{s.value}</span>
             <span className="w-9 text-right text-xs text-text-tertiary tabular-nums">{total ? Math.round((s.value / total) * 100) : 0}%</span>
           </li>
@@ -117,14 +125,14 @@ export function Ring({ slices, centerLabel, centerValue }: { slices: { label: st
   )
 }
 
-export function Sparkbars({ points, tone = "violet" }: { points: { date: string; jobs: number; runs: number }[]; tone?: Tone }) {
+export function Sparkbars({ points, tone = "brand" }: { points: { date: string; jobs: number; runs: number }[]; tone?: Tone }) {
   const max = Math.max(1, ...points.map((p) => p.jobs))
   const fmt = (d: string) => new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" })
   return (
     <div className="flex flex-col gap-2">
       <div className="flex h-28 items-end gap-1.5">
         {points.map((p) => (
-          <div key={p.date} className="group relative flex flex-1 flex-col items-center justify-end" title={`${fmt(p.date)}: ${p.jobs} postings · ${p.runs} run${p.runs === 1 ? "" : "s"}`}>
+          <div key={p.date} className="group relative flex h-full flex-1 flex-col items-center justify-end" title={`${fmt(p.date)}: ${p.jobs} postings · ${p.runs} run${p.runs === 1 ? "" : "s"}`}>
             <motion.div
               initial={{ height: 0 }}
               animate={{ height: `${Math.max(p.jobs ? 8 : 3, (p.jobs / max) * 100)}%` }}

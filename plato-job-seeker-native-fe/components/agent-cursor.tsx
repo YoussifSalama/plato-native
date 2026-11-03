@@ -105,7 +105,7 @@ export function AgentCursor() {
     <div ref={box} aria-hidden className="pointer-events-none fixed top-0 left-0 z-[200]" style={{ opacity: shown ? 1 : 0, transition: "opacity 250ms" }}>
       {press > 0 && <span key={press} className="absolute -top-3 -left-3 size-6 animate-ping rounded-full bg-primary/40" />}
       <svg width="22" height="22" viewBox="0 0 24 24" className="drop-shadow-md" style={{ transform: press ? "scale(.85)" : undefined, transition: "transform 120ms" }}>
-        <path d="M3 2l7.5 19 2.6-7.9L21 10.5z" fill="var(--color-primary, #6D4AFF)" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M3 2l7.5 19 2.6-7.9L21 10.5z" fill="var(--color-primary, #005BA7)" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
       </svg>
       {label && <span className="absolute top-5 left-4 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-primary-foreground shadow-md">{label}</span>}
     </div>

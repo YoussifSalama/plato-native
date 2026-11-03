@@ -209,7 +209,7 @@ function ApplicationsContent() {
       )}
 
       {active && (
-        <motion.section layout className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-card p-4 shadow-[0_18px_44px_-28px_rgba(79,63,247,0.45)]">
+        <motion.section layout className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-card p-4 shadow-[0_18px_44px_-28px_rgba(0,91,167,0.45)]">
           <div className="flex items-center gap-3">
             <SourceTile source={active.job.source} size={36} />
             <div className="min-w-0 flex-1">

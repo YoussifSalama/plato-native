@@ -218,7 +218,7 @@ function CareerHero({ threadId, onVoiceFinished, hasResume, steps, firstName, pr
   return (
     <div className="relative flex h-[calc(100dvh-150px)] min-h-[560px] w-full gap-4">
       <section className="relative flex min-w-0 flex-1 overflow-hidden rounded-xl border bg-[radial-gradient(circle_at_1px_1px,var(--border)_1px,transparent_0)] bg-[size:22px_22px]">
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(ellipse_at_top,rgba(78,8,252,0.14),transparent_65%)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 glow-top" />
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-10 pb-6 sm:px-10">
         <AnimatePresence mode="wait" initial={false}>

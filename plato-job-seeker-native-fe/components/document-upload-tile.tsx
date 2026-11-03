@@ -14,7 +14,7 @@ function DocumentUploadTile({
   documents,
   onUpload,
   onDelete,
-  color = "violet",
+  color = "brand",
 }: {
   icon: LucideIcon
   title: string

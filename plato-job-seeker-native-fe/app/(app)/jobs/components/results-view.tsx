@@ -142,7 +142,7 @@ function RowMenu({ match, onSave, onHide }: { match: JobMatch; onSave: () => voi
       </IconButton>
       <AnimatePresence>
         {open && (
-          <motion.div initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }} className="absolute top-full right-0 z-20 mt-1 w-52 rounded-lg border bg-card p-1.5 shadow-[0_16px_40px_-20px_rgba(30,29,43,0.35)]">
+          <motion.div initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }} className="absolute top-full right-0 z-20 mt-1 w-52 rounded-lg border bg-card p-1.5 shadow-[0_16px_40px_-20px_rgba(14,27,44,0.35)]">
             {match.application_id && (
               <Link href={applicationHref(match.application_id)} className={item} onClick={() => setOpen(false)}>
                 <ClipboardList className="size-4 text-muted-foreground" />
@@ -211,7 +211,7 @@ function JobRow({ match, selected, highlight, position, searchId, onToggle, onSa
         onCheckedChange={onToggle}
         aria-label={locked ? `${job.title} is already with Plato` : `Select ${job.title}`}
         title={locked ? `Already ${app?.label.toLowerCase()} — can't be selected again` : undefined}
-        className="size-[18px] rounded-[5px] border-[1.5px] border-[#D8D6E4] disabled:opacity-40"
+        className="size-[18px] rounded-[5px] border-[1.5px] border-[#D5DEE8] disabled:opacity-40"
       />
       <CompanyAvatar name={job.company} domain={job.company_domain} />
       <div className="min-w-0 flex-1">

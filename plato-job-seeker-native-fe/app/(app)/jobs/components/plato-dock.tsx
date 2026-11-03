@@ -90,7 +90,7 @@ function PlatoDock({
             exit={{ opacity: 0, y: 12, scale: 0.98, transition: { duration: 0.18 } }}
             transition={transition}
             style={{ width: `min(${PANEL_W}px, calc(100vw - 3rem))`, transformOrigin: "bottom right" }}
-            className="pointer-events-auto flex h-[min(680px,calc(100dvh-3rem))] flex-col overflow-hidden rounded-lg border bg-card shadow-[0_28px_70px_-28px_rgba(79,63,247,0.35),0_2px_8px_-2px_rgba(30,29,43,0.08)]"
+            className="pointer-events-auto flex h-[min(680px,calc(100dvh-3rem))] flex-col overflow-hidden rounded-lg border bg-card shadow-[0_28px_70px_-28px_rgba(0,91,167,0.35),0_2px_8px_-2px_rgba(14,27,44,0.08)]"
           >
             <header className="flex items-center gap-3 border-b px-4 py-3">
               <PlatoMark size={32} live={busy || status === "searching"} />
@@ -167,7 +167,7 @@ function PlatoDock({
             transition={transition}
             whileHover={reduced ? undefined : { y: -2 }}
             whileTap={{ scale: 0.98 }}
-            className="pointer-events-auto flex h-14 items-center gap-3 rounded-lg border bg-card pr-5 pl-2 shadow-[0_16px_40px_-16px_rgba(79,63,247,0.45),0_2px_6px_-2px_rgba(30,29,43,0.1)]"
+            className="pointer-events-auto flex h-14 items-center gap-3 rounded-lg border bg-card pr-5 pl-2 shadow-[0_16px_40px_-16px_rgba(0,91,167,0.45),0_2px_6px_-2px_rgba(14,27,44,0.1)]"
           >
             <PlatoMark size={40} live={status === "searching"} />
             <span className="text-left">

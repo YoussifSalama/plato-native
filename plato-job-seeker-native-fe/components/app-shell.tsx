@@ -2,6 +2,7 @@
 
 import { ExtensionProgressNav } from "@/components/extension-progress"
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Bell, BellRing, Briefcase, ChevronRight, FileText, GraduationCap, HelpCircle, Home, MessageCircle, PanelLeftClose, PanelLeftOpen, Puzzle, User } from "lucide-react"
@@ -59,7 +60,7 @@ const writeCollapsed = (v: boolean) => {
   listeners.forEach((l) => l())
 }
 
-// Post-login frame: white sidebar, violet brand, lavender active state.
+// Post-login frame: white sidebar, cobalt brand from the logo, soft-blue active state.
 // Expanded shows icon + label; collapsed is an icon rail with tooltips.
 function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -99,7 +100,7 @@ function Frame({ children }: { children: ReactNode }) {
         <div className="flex flex-col gap-7">
           <div className={cn("flex items-center", collapsed ? "flex-col gap-3" : "justify-between px-1.5")}>
             <Link href="/jobs" data-ai="nav.logo" className="flex items-center gap-2.5" title="Plato">
-              <span className="flex size-[30px] shrink-0 items-center justify-center rounded-sm bg-primary text-base font-bold text-primary-foreground">P</span>
+              <Image src="/logo.png" alt="" width={30} height={30} priority className="size-[30px] shrink-0 drop-shadow-[0_2px_8px_rgba(0,161,226,0.35)]" />
               {!collapsed && <span className="text-xl font-bold text-foreground">Plato</span>}
             </Link>
             <button
@@ -161,7 +162,7 @@ function Frame({ children }: { children: ReactNode }) {
         {/* Compact nav for < lg, where the sidebar is hidden. */}
         <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-sidebar-border bg-sidebar/95 px-4 py-2.5 backdrop-blur lg:hidden">
           <Link href="/jobs" className="flex items-center gap-2">
-            <span className="flex size-7 items-center justify-center rounded-sm bg-primary text-sm font-bold text-primary-foreground">P</span>
+            <Image src="/logo.png" alt="Plato" width={28} height={28} className="size-7" />
           </Link>
           <nav className="scroll-thin flex min-w-0 flex-1 gap-1 overflow-x-auto">
             {NAV.map(({ href, label, icon: Icon }) => {

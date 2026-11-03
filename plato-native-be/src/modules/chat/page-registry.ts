@@ -36,36 +36,38 @@ export const PAGES: Record<string, PageEntry> = {
       nav('messages', '/messages'),
       nav('notifications', '/notifications'),
       nav('profile', '/profile'),
-      { id: 'nav.logo', label: 'Plato logo', does: 'Goes to /jobs' },
+      { id: 'nav.logo', label: 'Plato logo', does: 'Goes to / (Home)' },
+    ],
+  },
+  home: {
+    path: '/',
+    purpose:
+      "Home dashboard: the seeker's job hunt in numbers. KPIs (jobs ready, applications, searches, postings analyzed), pipeline, match quality, last 14 days, sources, work setup, seniority, salary, top locations and companies, and the latest searches. Questions about how the hunt is going are answered here.",
+    controls: [
+      { id: 'home.new-search', label: 'New search', does: 'Starts a new search conversation' },
+      { id: 'home.first-search', label: 'Start your first search', does: 'Same, shown when there are no searches' },
+      { id: 'home.needs-you', label: 'Answer now', does: 'Opens /applications, shown when applications need answers' },
+      { id: 'home.all-searches', label: 'All searches', does: 'Goes to /jobs' },
+      { id: 'home.search:<searchId>', label: 'A latest-search card', does: "Opens that search's results (/jobs/<searchId>)", tpl: 'home.search:' },
+      { id: 'home.glass-preview', label: 'Glass', does: 'Turns the frosted-glass look of this page on or off (a design preview)' },
     ],
   },
   jobs: {
     path: '/jobs',
     purpose:
-      'Home of job searching: a list of the seeker\'s past searches (newest first) and recent runs. This is where "my last search" is found.',
+      'Table of every search the seeker ran (one row per search), with a text search, status tabs, an active-since filter and sorting. A row opens that search; its chevron expands the top 5 ranked jobs of that search, each with save, not interested and apply. This is where "my last search" is found.',
     controls: [
-      {
-        id: 'jobs.new-search',
-        label: 'New search',
-        does: 'Starts a new search conversation',
-      },
-      {
-        id: 'jobs.first-search',
-        label: 'Start your first search',
-        does: 'Same, shown when there are no searches',
-      },
-      {
-        id: 'jobs.search:<searchId>',
-        label: 'A past search row',
-        does: "Opens that search's results (/jobs/<searchId>)",
-        tpl: 'jobs.search:',
-      },
-      {
-        id: 'jobs.run:<runId>',
-        label: 'A recent run',
-        does: 'Opens the search that run belongs to',
-        tpl: 'jobs.run:',
-      },
+      { id: 'jobs.new-search', label: 'New search', does: 'Starts a new search conversation' },
+      { id: 'jobs.first-search', label: 'Start your first search', does: 'Same, shown when there are no searches' },
+      { id: 'jobs.filter.q', label: 'Search by name, role or location', does: 'Filters the table as you type' },
+      { id: 'jobs.status.<status>', label: 'All | Searching | Ready | Failed | Not started', does: 'Filters by status (status = all, running, done, failed, idle)', tpl: 'jobs.status.' },
+      { id: 'jobs.filter.since', label: 'Active since', does: 'Any time, last 7, 30 or 90 days' },
+      { id: 'jobs.sort', label: 'Sort', does: 'Last activity, newest first, most jobs, name A-Z' },
+      { id: 'jobs.filter.clear', label: 'Clear filters', does: 'Resets search, status and date' },
+      { id: 'jobs.search:<searchId>', label: 'A search row (its name)', does: "Opens that search's results (/jobs/<searchId>)", tpl: 'jobs.search:' },
+      { id: 'jobs.expand:<searchId>', label: 'Chevron on a row', does: 'Shows or hides the top 5 jobs of that search', tpl: 'jobs.expand:' },
+      { id: 'jobs.top-job:<jobId>', label: 'A top job title', does: 'Opens the original posting in a new tab', tpl: 'jobs.top-job:' },
+      { id: 'jobs.top-apply:<jobId>', label: 'Apply on a top job', does: 'Opens the apply-with-the-extension dialog for that job', tpl: 'jobs.top-apply:' },
     ],
   },
   results: {

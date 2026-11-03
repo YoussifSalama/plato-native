@@ -244,7 +244,7 @@ function LoginForm() {
     try {
       await login(values)
       const me = await getMe()
-      router.push(me.onboarding_completed ? "/jobs" : "/onboarding")
+      router.push(me.onboarding_completed ? "/" : "/onboarding")
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Something went wrong")
     } finally {

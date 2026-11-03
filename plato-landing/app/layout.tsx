@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
 import { Footer } from "@/components/footer";
+import { Motion } from "@/components/motion";
 
 // Same faces as the web app (plato-job-seeker-native-fe/app/layout.tsx).
 const sans = Plus_Jakarta_Sans({ variable: "--font-sans", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body>
+        <Motion />
         <Nav />
         {children}
         <Footer />

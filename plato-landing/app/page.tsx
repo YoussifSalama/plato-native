@@ -39,12 +39,14 @@ export default function Home() {
           <div className="center"><span className="eyebrow">The whole product</span><h2 className="h2">Everything between the search and the interview.</h2><p className="lead">Plato is more than the extension. This is what lives in your account.</p></div>
           <div className="bento">
             <div className="tile w4"><h3>Your job hunt at a glance</h3><p>Searches, jobs ready, applications, postings analyzed. Match quality, where jobs come from, work setup and salary signal.</p><div className="ui"><DashboardMock /></div></div>
-            <div className="tile w2 violet"><h3>Ranked, with reasons</h3><p>Excellent, strong, or not for you, and exactly why.</p><div className="ui" style={{ fontSize: 76, fontWeight: 600, letterSpacing: "-0.05em", lineHeight: 1 }}>92<span style={{ fontSize: 30 }}>%</span></div></div>
+            <div className="tile w2 violet"><h3>Ranked, with reasons</h3><p>Excellent, strong, or not for you, and exactly why.</p>
+              <ul className="reasons">{[["Skills", "9 of 11 required", "✓"], ["Level", "Senior, as you want", "✓"], ["Location", "Remote, Europe", "✓"], ["Salary", "Not published", "~"]].map(([k, v, m]) => <li key={k}><i>{m}</i><span>{k}</span><em>{v}</em></li>)}</ul>
+              <div className="ui row" style={{ alignItems: "end" }}><div style={{ fontSize: 76, fontWeight: 600, letterSpacing: "-0.05em", lineHeight: 1 }}>92<span style={{ fontSize: 30 }}>%</span></div><span className="pill" style={{ background: "rgba(255,255,255,.18)", color: "#fff" }}>Excellent match</span></div></div>
             <div className="tile w3"><h3>Career studio</h3><p>Build a resume from your profile, tailor it to a posting&apos;s keywords, then practice for the call.</p><div className="ui"><CareerMock /></div></div>
             <div className="tile w3 dark"><h3>Voice interviews</h3><p>Talk to Plato out loud, like a real call. Feedback after every answer, then a scorecard.</p><div className="ui"><VoiceMock /></div></div>
             <div className="tile w3"><h3>Job alerts that never spam</h3><p>Roles you want and companies you follow. Daily, every three days or weekly. Never an empty digest.</p><div className="ui"><AlertsMock /></div></div>
             <div className="tile w3"><h3>Tokens you can see</h3><p>One balance for search, resumes and interviews. Applying is free. Top-ups never expire.</p><div className="ui"><TokensMock /></div></div>
-            <div className="tile w6" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 32, alignItems: "center" }}>
+            <div className="tile w6 two">
               <div><h3>Ask Plato anything, from anywhere</h3><p style={{ marginTop: 10 }}>Press <span className="kbd">⌘K</span> or <span className="kbd">Ctrl K</span> on any page. Jump to a page, start a search, or hand Plato a multi-step task in plain words.</p></div>
               <PaletteMock />
             </div>

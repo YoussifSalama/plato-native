@@ -93,7 +93,7 @@ export function AskMock() {
   return (
     <div className="win" style={{ maxWidth: 460, marginInline: "auto" }}>
       <div className="body">
-        <div className="row"><b style={{ display: "flex", alignItems: "center", gap: 8 }}>{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/logo.png" alt="" width={22} height={22} />Plato Apply</b><span className="pill a">Needs you</span></div>
+        <div className="row"><b style={{ display: "flex", alignItems: "center", gap: 8 }}><img src="/logo.png" alt="" width={22} height={22} />Plato Apply</b><span className="pill a">Needs you</span></div>
         <div className="mt2" style={{ border: "2px solid var(--violet-line)", borderRadius: 16, padding: 16 }}>
           <div className="row muted"><span>Question 1 of 2</span><span className="stepper" style={{ width: 60 }}><span className="on" /><span /></span></div>
           <b style={{ display: "block", marginTop: 8 }}>Are you willing to relocate to Berlin?</b>
@@ -128,12 +128,12 @@ export function ApplicationsMock() {
 export function DashboardMock() {
   return (
     <Win url="jobs.platohiring.com/jobs">
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+      <div className="kpis">
         {[["Searches", "6"], ["Jobs ready", "38"], ["Applications", "24"], ["Analyzed", "1,412"]].map(([l, v]) => (
           <div key={l} style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 10 }}><div className="muted" style={{ fontSize: 11 }}>{l}</div><b className="num" style={{ fontSize: 20 }}>{v}</b></div>
         ))}
       </div>
-      <div className="mt2" style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 20, alignItems: "center" }}>
+      <div className="mt2 ringrow">
         <div className="ring" style={{ ["--p" as string]: 72 } as React.CSSProperties}><div><span className="num">72%</span><small>strong+</small></div></div>
         <div className="bars">
           <b style={{ fontSize: 13 }}>Where jobs come from</b>

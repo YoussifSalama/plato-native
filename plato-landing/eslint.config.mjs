@@ -1,2 +1,3 @@
 import next from "eslint-config-next";
-export default [...next, { ignores: ["out/**", ".next/**"] }];
+const config = [...next, { ignores: ["out/**", ".next/**"] }];
+export default config;

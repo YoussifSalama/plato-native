@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
+import { createPortal } from "react-dom"
 import { Activity, X } from "lucide-react"
 import { cn } from "cn"
 import { getExtensionProgress, type ExtensionProgress } from "@/lib/extension/api"
@@ -41,7 +42,13 @@ function useProgress(open: boolean) {
   return data
 }
 
-export function ExtensionProgressNav({ collapsed, itemClass }: { collapsed: boolean; itemClass: string }) {
+// `row` is the sidebar status card's line: "Extension · ● Online · 2 applying".
+// The drawer is portalled to <body>: the sidebar is a backdrop-filtered glass panel, which
+// would otherwise become the containing block of this fixed drawer and trap it inside.
+const noop = () => () => {}
+const useMounted = () => useSyncExternalStore(noop, () => true, () => false)
+
+export function ExtensionProgressNav({ collapsed, itemClass, variant = "item" }: { collapsed: boolean; itemClass: string; variant?: "item" | "row" }) {
   const [open, setOpen] = useState(false)
   const data = useProgress(open)
   // The Plato AI opens it ("show me the progress").
@@ -50,10 +57,24 @@ export function ExtensionProgressNav({ collapsed, itemClass }: { collapsed: bool
     window.addEventListener("plato:open-extension-progress", on)
     return () => window.removeEventListener("plato:open-extension-progress", on)
   }, [])
+  const mounted = useMounted()
   const active = data?.active ?? 0
+  const state = !data ? null : !data.linked ? { text: "Not linked", dot: "bg-lavender" } : data.online ? { text: active ? `${active} applying` : "Online", dot: "bg-success" } : { text: "Offline", dot: "bg-lavender" }
 
   return (
     <>
+      {variant === "row" && !collapsed ? (
+        <button type="button" data-ai="nav.extension-progress" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={cn(itemClass, "w-full")}>
+          <Activity className="size-4 shrink-0 text-text-tertiary" />
+          <span className="flex-1 truncate text-left text-text-secondary">Extension</span>
+          {state && (
+            <span className={cn("flex items-center gap-1.5 text-xs font-semibold", data?.online ? "text-success" : "text-text-tertiary")}>
+              <span className={cn("size-1.5 rounded-full", state.dot, data?.online && "shadow-[0_0_0_3px_rgb(28_154_75/0.18)]")} />
+              {state.text}
+            </span>
+          )}
+        </button>
+      ) : (
       <button type="button" data-ai="nav.extension-progress" onClick={() => setOpen((o) => !o)} aria-expanded={open} title={collapsed ? "Extension progress" : undefined} className={cn(itemClass, "w-full", !collapsed && "pl-1.5")}>
         <span className="relative shrink-0">
           <Activity className="size-[17px]" />
@@ -62,8 +83,11 @@ export function ExtensionProgressNav({ collapsed, itemClass }: { collapsed: bool
         {!collapsed && <span className="flex-1 truncate text-left">Extension progress</span>}
         {!collapsed && active > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">{active}</span>}
       </button>
+      )}
 
-      <aside aria-hidden={!open} className={cn("fixed inset-y-0 right-0 z-40 flex w-[min(380px,100vw)] flex-col border-l bg-card shadow-xl transition-transform duration-300", open ? "translate-x-0" : "pointer-events-none translate-x-full")}>
+      {mounted &&
+        createPortal(
+      <aside aria-hidden={!open} className={cn("theme-app fixed inset-y-0 right-0 z-40 flex w-[min(380px,100vw)] flex-col border-l bg-card shadow-xl transition-transform duration-300", open ? "translate-x-0" : "pointer-events-none translate-x-full")}>
         <header className="flex items-start justify-between gap-3 border-b p-5">
           <div className="flex flex-col gap-1">
             <h2 className="font-bold">Extension progress</h2>
@@ -108,7 +132,9 @@ export function ExtensionProgressNav({ collapsed, itemClass }: { collapsed: bool
           })}
         </ul>
         <p className="border-t p-4 text-xs text-text-tertiary">Updates every few seconds. To change anything, open the Plato extension.</p>
-      </aside>
+      </aside>,
+          document.body,
+        )}
     </>
   )
 }

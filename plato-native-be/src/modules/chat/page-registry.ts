@@ -49,7 +49,6 @@ export const PAGES: Record<string, PageEntry> = {
       { id: 'home.needs-you', label: 'Answer now', does: 'Opens /applications, shown when applications need answers' },
       { id: 'home.all-searches', label: 'All searches', does: 'Goes to /jobs' },
       { id: 'home.search:<searchId>', label: 'A latest-search card', does: "Opens that search's results (/jobs/<searchId>)", tpl: 'home.search:' },
-      { id: 'home.glass-preview', label: 'Glass', does: 'Turns the frosted-glass look of this page on or off (a design preview)' },
     ],
   },
   jobs: {

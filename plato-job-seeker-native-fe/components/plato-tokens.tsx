@@ -49,12 +49,26 @@ export function useTokens() {
 export const resetLabel = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 
 // Sidebar: what is left this month, at a glance.
-export function TokensNav({ collapsed, itemClass }: { collapsed: boolean; itemClass: string }) {
+export function TokensNav({ collapsed, itemClass, variant = "item" }: { collapsed: boolean; itemClass: string; variant?: "item" | "row" }) {
   const acc = useTokens()
   if (!acc) return null
   const left = Math.max(0, acc.balance)
   const pct = acc.monthly ? Math.min(100, (left / acc.monthly) * 100) : 0
   const low = pct < 15
+  // The sidebar status card's line: label, what is left, a hairline bar.
+  if (variant === "row" && !collapsed)
+    return (
+      <Link href="/tokens" data-ai="nav.tokens" className={cn(itemClass, "flex-col items-stretch gap-1.5")}>
+        <span className="flex items-center gap-2.5">
+          <Coins className={cn("size-4 shrink-0", low ? "text-warning" : "text-text-tertiary")} />
+          <span className="flex-1 truncate text-text-secondary">Plato tokens</span>
+          <span className={cn("text-xs font-bold tabular-nums", low ? "text-warning" : "text-foreground")}>{formatTokens(left)}</span>
+        </span>
+        <span className="ml-[26px] block h-1 overflow-hidden rounded-full bg-primary/10" aria-hidden>
+          <span className={cn("block h-full rounded-full", low ? "bg-warning" : "bg-brand-gradient")} style={{ width: `${pct}%` }} />
+        </span>
+      </Link>
+    )
   return (
     <Link href="/tokens" data-ai="nav.tokens" title={collapsed ? `${formatTokens(left)} Plato tokens left` : undefined} className={cn(itemClass, !collapsed && "flex-col items-stretch gap-1.5 pl-1.5")}>
       <span className="flex items-center gap-3">

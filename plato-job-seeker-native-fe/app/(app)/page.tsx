@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
@@ -17,7 +17,6 @@ import {
   Globe2,
   Layers,
   MapPin,
-  Layers3,
   Plus,
   Search,
   Sparkles,
@@ -59,46 +58,6 @@ const firstName = (full?: string) => {
   return f ? f[0].toUpperCase() + f.slice(1).toLowerCase() : ""
 }
 
-// Glass prototype switch: remembered per browser, on by default while it is being evaluated.
-const GLASS_KEY = "plato:glass-preview"
-const glassListeners = new Set<() => void>()
-const readGlass = () => {
-  try {
-    return localStorage.getItem(GLASS_KEY) !== "off"
-  } catch {
-    return true
-  }
-}
-const subscribeGlass = (cb: () => void) => (glassListeners.add(cb), () => glassListeners.delete(cb))
-const writeGlass = (on: boolean) => {
-  try {
-    localStorage.setItem(GLASS_KEY, on ? "on" : "off")
-  } catch {}
-  glassListeners.forEach((l) => l())
-}
-
-// The light behind the glass; the orbs lean a few pixels toward the pointer.
-function GlassOrbs() {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const el = ref.current
-    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
-    const move = (e: PointerEvent) => {
-      el.style.setProperty("--mx", String(e.clientX / window.innerWidth - 0.5))
-      el.style.setProperty("--my", String(e.clientY / window.innerHeight - 0.5))
-    }
-    window.addEventListener("pointermove", move, { passive: true })
-    return () => window.removeEventListener("pointermove", move)
-  }, [])
-  return (
-    <div ref={ref} className="glass-orbs" aria-hidden>
-      <span />
-      <span />
-      <span />
-    </div>
-  )
-}
-
 // Home: the seeker's job hunt at a glance. Every number and chart about the
 // hunt lives here; /jobs is only for searching.
 export default function Home() {
@@ -108,7 +67,6 @@ export default function Home() {
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const glass = useSyncExternalStore(subscribeGlass, readGlass, () => false)
 
   useEffect(() => {
     // Signed out goes to /login from the app shell; a new account finishes onboarding first.
@@ -158,8 +116,7 @@ export default function Home() {
   const recent = threads?.slice(0, 4) ?? null
 
   return (
-    <div className={cn("relative flex flex-1 flex-col gap-6 px-6 py-6 lg:pr-6 lg:pl-7", glass && "glass-scope")}>
-      {glass && <GlassOrbs />}
+    <div className="relative flex flex-1 flex-col gap-6 px-6 py-6 lg:pr-6 lg:pl-7">
       <header className="relative flex flex-wrap items-end justify-between gap-4">
         <div>
           <span className="eyebrow">Home</span>
@@ -170,20 +127,6 @@ export default function Home() {
           <p className="mt-1 text-sm text-text-secondary">{headline}</p>
         </div>
         <div className="flex items-center gap-3.5">
-          <button
-            type="button"
-            onClick={() => writeGlass(!glass)}
-            aria-pressed={glass}
-            data-ai="home.glass-preview"
-            title="Prototype: frosted-glass look on this page only"
-            className={cn("flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition-colors", glass ? "border-white/80 bg-white/60 text-primary shadow-card backdrop-blur-xl" : "bg-card text-text-secondary hover:bg-muted")}
-          >
-            <Layers3 className="size-3.5" />
-            Glass
-            <span className={cn("relative h-4 w-7 rounded-full transition-colors", glass ? "bg-primary" : "bg-lavender/60")}>
-              <span className={cn("absolute top-0.5 size-3 rounded-full bg-white shadow transition-[left]", glass ? "left-3.5" : "left-0.5")} />
-            </span>
-          </button>
           {s?.applications.needsInput ? (
             <Link href="/applications" data-ai="home.needs-you" className="flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-4 py-2 text-sm font-semibold text-warning transition-colors hover:border-warning/60">
               Answer now

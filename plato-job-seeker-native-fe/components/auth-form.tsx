@@ -208,11 +208,11 @@ function SignupForm() {
           />
           <FieldLabel htmlFor="termsAccepted" className="font-normal">
             I accept the{" "}
-            <a href="/terms" target="_blank" className="underline">
+            <a href="https://platohiring.com/terms/" target="_blank" rel="noopener" className="underline">
               Terms of Service
             </a>{" "}
             and{" "}
-            <a href="/privacy" target="_blank" className="underline">
+            <a href="https://platohiring.com/privacy/" target="_blank" rel="noopener" className="underline">
               Privacy Policy
             </a>
           </FieldLabel>

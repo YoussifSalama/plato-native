@@ -106,7 +106,7 @@ export function Ring({ slices, centerLabel, centerValue }: { slices: { label: st
   return (
     <div className="flex flex-wrap items-center justify-center gap-5">
       <div className="relative size-28 shrink-0 rounded-full" style={{ background: total ? `conic-gradient(${stops})` : "var(--muted)" }} aria-hidden>
-        <div className="absolute inset-3 flex flex-col items-center justify-center rounded-full bg-card">
+        <div data-ring-hole className="absolute inset-3 flex flex-col items-center justify-center rounded-full bg-card">
           <span className="text-xl leading-none font-bold text-foreground">{centerValue}</span>
           <span className="mt-1 text-[10px] font-medium tracking-wide text-text-tertiary uppercase">{centerLabel}</span>
         </div>

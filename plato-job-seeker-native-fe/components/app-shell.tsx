@@ -99,7 +99,7 @@ function Frame({ children }: { children: ReactNode }) {
       <aside className={cn("hidden flex-col justify-between border-r border-sidebar-border bg-sidebar py-6 lg:sticky lg:top-0 lg:flex lg:h-dvh", collapsed ? "px-3" : "px-4")}>
         <div className="flex flex-col gap-7">
           <div className={cn("flex items-center", collapsed ? "flex-col gap-3" : "justify-between px-1.5")}>
-            <Link href="/jobs" data-ai="nav.logo" className="flex items-center gap-2.5" title="Plato">
+            <Link href="/" data-ai="nav.logo" className="flex items-center gap-2.5" title="Plato">
               <Image src="/logo.png" alt="" width={30} height={30} priority className="size-[30px] shrink-0 drop-shadow-[0_2px_8px_rgba(0,161,226,0.35)]" />
               {!collapsed && <span className="text-xl font-bold text-foreground">Plato</span>}
             </Link>
@@ -161,7 +161,7 @@ function Frame({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-col">
         {/* Compact nav for < lg, where the sidebar is hidden. */}
         <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-sidebar-border bg-sidebar/95 px-4 py-2.5 backdrop-blur lg:hidden">
-          <Link href="/jobs" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <Image src="/logo.png" alt="Plato" width={28} height={28} className="size-7" />
           </Link>
           <nav className="scroll-thin flex min-w-0 flex-1 gap-1 overflow-x-auto">

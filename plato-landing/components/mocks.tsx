@@ -12,9 +12,9 @@ function Win({ url, dark, children }: { url: string; dark?: boolean; children: R
 }
 
 const JOBS = [
-  { a: "N", c: "#4f3ff7", t: "Frontend Engineer", m: "Northwind · Lever · Remote, Europe", p: 92, l: "Excellent match" },
+  { a: "N", c: "#005ba7", t: "Frontend Engineer", m: "Northwind · Lever · Remote, Europe", p: 92, l: "Excellent match" },
   { a: "C", c: "#1c9a4b", t: "Full Stack Developer", m: "Contoso · Greenhouse · Cairo", p: 88, l: "Excellent match" },
-  { a: "F", c: "#2d6fe0", t: "Product Engineer", m: "Fabrikam · LinkedIn · Berlin, hybrid", p: 76, l: "Strong match" },
+  { a: "F", c: "#0d9488", t: "Product Engineer", m: "Fabrikam · LinkedIn · Berlin, hybrid", p: 76, l: "Strong match" },
   { a: "L", c: "#d97706", t: "React Developer", m: "Litware · Workable · Dubai", p: 71, l: "Strong match" },
 ];
 
@@ -23,8 +23,8 @@ export function ProfileMock() {
     <Win url="jobs.platohiring.com/onboarding">
       <div className="row"><b style={{ fontSize: 15 }}>Build your profile</b><span className="muted">Step 1 of 4</span></div>
       <div className="stepper mt"><span className="on" /><span /><span /><span /></div>
-      <div className="mt2" style={{ border: "2px dashed var(--violet-line)", borderRadius: 14, padding: 18, textAlign: "center", background: "var(--violet-tint)" }}>
-        <b style={{ color: "var(--violet)" }}>Resume_Youssif.pdf</b><div className="muted">Uploaded · read in 6 s</div>
+      <div className="mt2" style={{ border: "2px dashed var(--brand-line)", borderRadius: 14, padding: 18, textAlign: "center", background: "var(--brand-tint)" }}>
+        <b style={{ color: "var(--brand)" }}>Resume_Youssif.pdf</b><div className="muted">Uploaded · read in 6 s</div>
       </div>
       <div className="mt"><div className="row" style={{ padding: "8px 0", borderBottom: "1px solid var(--divider)", fontSize: 13.5 }}>Experience<span className="pill g">5 roles found</span></div>
         <div className="row" style={{ padding: "8px 0", borderBottom: "1px solid var(--divider)", fontSize: 13.5 }}>Education<span className="pill g">2 degrees</span></div>
@@ -94,12 +94,12 @@ export function AskMock() {
     <div className="win" style={{ maxWidth: 460, marginInline: "auto" }}>
       <div className="body">
         <div className="row"><b style={{ display: "flex", alignItems: "center", gap: 8 }}><img src="/logo.png" alt="" width={22} height={22} />Plato Apply</b><span className="pill a">Needs you</span></div>
-        <div className="mt2" style={{ border: "2px solid var(--violet-line)", borderRadius: 16, padding: 16 }}>
+        <div className="mt2" style={{ border: "2px solid var(--brand-line)", borderRadius: 16, padding: 16 }}>
           <div className="row muted"><span>Question 1 of 2</span><span className="stepper" style={{ width: 60 }}><span className="on" /><span /></span></div>
           <b style={{ display: "block", marginTop: 8 }}>Are you willing to relocate to Berlin?</b>
           <div className="why">The form requires &ldquo;Willing to relocate?&rdquo; and your profile does not say. Plato will not guess.</div>
           <div className="opts"><span className="opt">Yes</span><span className="opt on">No</span><span className="opt">Something else</span></div>
-          <div className="row mt2"><span className="muted">Kept for every later form</span><span className="btn violet sm" style={{ height: 34 }}>Next</span></div>
+          <div className="row mt2"><span className="muted">Kept for every later form</span><span className="btn brand sm" style={{ height: 34 }}>Next</span></div>
         </div>
       </div>
     </div>
@@ -150,7 +150,7 @@ export function CareerMock() {
       <b>Plato Career</b>
       <div className="mt" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {[["Build my resume", "From your profile, ready as a PDF"], ["Tailor to a job", "Match a posting's keywords"], ["Mock interview", "Text, on your posting"], ["Voice interview", "Talk out loud, like a real call"]].map(([t, d]) => (
-          <div key={t} style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 12, background: "var(--violet-tint)" }}><b style={{ fontSize: 13.5 }}>{t}</b><div className="muted" style={{ marginTop: 2 }}>{d}</div></div>
+          <div key={t} style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 12, background: "var(--brand-tint)" }}><b style={{ fontSize: 13.5 }}>{t}</b><div className="muted" style={{ marginTop: 2 }}>{d}</div></div>
         ))}
       </div>
       <div className="mt2" style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 12 }}>
@@ -164,9 +164,9 @@ export function CareerMock() {
 export function VoiceMock() {
   return (
     <Win url="jobs.platohiring.com/career/interviews" dark>
-      <div className="row"><b>Voice interview · Practice</b><span className="pill v" style={{ background: "rgba(140,125,255,.15)", color: "var(--glow-2)" }}>Live</span></div>
+      <div className="row"><b>Voice interview · Practice</b><span className="pill v" style={{ background: "rgba(63,180,238,.15)", color: "var(--glow-2)" }}>Live</span></div>
       <div style={{ display: "flex", gap: 4, alignItems: "end", height: 56, marginTop: 18 }}>
-        {[18, 30, 44, 26, 52, 38, 22, 46, 30, 16, 40, 54, 28, 20, 36, 48, 24].map((h, i) => <span key={i} style={{ flex: 1, height: h, borderRadius: 4, background: "linear-gradient(180deg, var(--glow-2), var(--violet))" }} />)}
+        {[18, 30, 44, 26, 52, 38, 22, 46, 30, 16, 40, 54, 28, 20, 36, 48, 24].map((h, i) => <span key={i} style={{ flex: 1, height: h, borderRadius: 4, background: "linear-gradient(180deg, var(--glow-2), var(--brand))" }} />)}
       </div>
       <p style={{ marginTop: 16, font: "400 13.5px/1.7 var(--mono)", color: "var(--night-ink-2)" }}>&ldquo;Tell me about a performance problem you fixed in a React app.&rdquo;</p>
       <div className="row mt2" style={{ fontSize: 13, color: "var(--night-ink-3)" }}><span>Feedback after every answer · Harder and harder questions</span><span className="btn white sm" style={{ height: 32 }}>Get my scorecard</span></div>
@@ -208,7 +208,7 @@ export function PaletteMock() {
         <div className="muted mt" style={{ fontSize: 11.5, textTransform: "uppercase", fontWeight: 700 }}>Go to</div>
         {["Applications", "Career", "Job alerts"].map((t) => <div key={t} style={{ padding: "8px 10px", fontSize: 14, borderRadius: 8 }}>{t}</div>)}
         <div className="muted" style={{ fontSize: 11.5, textTransform: "uppercase", fontWeight: 700, marginTop: 6 }}>Actions</div>
-        <div style={{ padding: "8px 10px", fontSize: 14, borderRadius: 8, background: "var(--violet-soft)", color: "var(--violet)", fontWeight: 600 }}>Ask Plato: find remote React jobs in Europe</div>
+        <div style={{ padding: "8px 10px", fontSize: 14, borderRadius: 8, background: "var(--brand-soft)", color: "var(--brand)", fontWeight: 600 }}>Ask Plato: find remote React jobs in Europe</div>
         <div style={{ padding: "8px 10px", fontSize: 14 }}>Start a mock interview</div>
       </div>
     </div>
@@ -220,7 +220,7 @@ export function PairMock() {
     <Win url="jobs.platohiring.com/extension">
       <b>Link your browser</b>
       <div className="muted" style={{ marginTop: 2 }}>Type this code in the Chrome extension&apos;s side panel.</div>
-      <div className="mt2" style={{ display: "flex", gap: 8 }}>{"K7QM-4XPA".split("").map((ch, i) => <span key={i} style={{ flex: 1, textAlign: "center", padding: "12px 0", borderRadius: 10, border: ch === "-" ? "0" : "1px solid var(--line)", background: ch === "-" ? "transparent" : "var(--violet-tint)", fontFamily: "var(--mono)", fontWeight: 600, fontSize: 18 }}>{ch}</span>)}</div>
+      <div className="mt2" style={{ display: "flex", gap: 8 }}>{"K7QM-4XPA".split("").map((ch, i) => <span key={i} style={{ flex: 1, textAlign: "center", padding: "12px 0", borderRadius: 10, border: ch === "-" ? "0" : "1px solid var(--line)", background: ch === "-" ? "transparent" : "var(--brand-tint)", fontFamily: "var(--mono)", fontWeight: 600, fontSize: 18 }}>{ch}</span>)}</div>
       <div className="muted mt">The code works once and expires in two minutes.</div>
       <div className="mt2"><b style={{ fontSize: 13 }}>Linked browsers</b><div className="row" style={{ padding: "10px 0", fontSize: 13.5 }}>Chrome on Linux<span className="pill g">Active</span></div></div>
     </Win>

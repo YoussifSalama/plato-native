@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   icons: { icon: "/logo.png", apple: "/logo.png" },
   openGraph: { title: "Plato · Your job hunt, on autopilot", description: "Search 32 sources, get every posting ranked against your profile, apply from your own browser.", url: "https://platohiring.com", siteName: "Plato", type: "website" },
 };
+
+// Browser chrome matches the night surfaces the page opens on.
+export const viewport: Viewport = { themeColor: "#050b16" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -5,21 +5,21 @@
 // Styles use a constructable stylesheet so a page's CSP cannot strip them.
 const CSS = `
 :host { all: initial; }
-.frame { position: fixed; inset: 0; pointer-events: none; z-index: 2147483646; box-shadow: inset 0 0 0 3px rgba(79,63,247,.55), inset 0 0 38px rgba(79,63,247,.28); animation: pulse 2.4s ease-in-out infinite; opacity: 0; transition: opacity .25s; }
+.frame { position: fixed; inset: 0; pointer-events: none; z-index: 2147483646; box-shadow: inset 0 0 0 3px rgba(0,91,167,.55), inset 0 0 38px rgba(0,91,167,.28); animation: pulse 2.4s ease-in-out infinite; opacity: 0; transition: opacity .25s; }
 .on .frame { opacity: 1; }
-.pill { position: fixed; top: 12px; left: 50%; transform: translate(-50%,-80px); display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; font: 600 13px/1 system-ui, sans-serif; white-space: nowrap; color: #fff; background: #4f3ff7; border-radius: 999px; box-shadow: 0 6px 20px rgba(79,63,247,.4); pointer-events: auto; z-index: 2147483647; transition: transform .3s cubic-bezier(.2,1.2,.4,1); }
+.pill { position: fixed; top: 12px; left: 50%; transform: translate(-50%,-80px); display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; font: 600 13px/1 system-ui, sans-serif; white-space: nowrap; color: #fff; background: linear-gradient(135deg, #005ba7, #0a7fd0 55%, #00a1e2); border-radius: 999px; box-shadow: 0 6px 20px rgba(0,91,167,.4); pointer-events: auto; z-index: 2147483647; transition: transform .3s cubic-bezier(.2,1.2,.4,1); }
 .on .pill { transform: translate(-50%,0); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: blink 1.2s infinite; }
-.stop { all: unset; cursor: pointer; padding: 5px 11px; font: 600 12px/1 system-ui, sans-serif; color: #4f3ff7; background: #fff; border-radius: 999px; }
+.stop { all: unset; cursor: pointer; padding: 5px 11px; font: 600 12px/1 system-ui, sans-serif; color: #005ba7; background: #fff; border-radius: 999px; }
 .cursor { position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none; opacity: 0; transition: transform .7s cubic-bezier(.25,.8,.25,1), opacity .25s; }
 .cursor svg { display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,.35)); }
-.cursor span { position: absolute; left: 18px; top: 16px; padding: 2px 7px; font: 600 11px/1.3 system-ui, sans-serif; color: #fff; background: #4f3ff7; border-radius: 6px; white-space: nowrap; }
-.ring { position: fixed; z-index: 2147483645; pointer-events: none; border: 2px solid #4f3ff7; border-radius: 6px; background: rgba(79,63,247,.1); opacity: 0; transition: opacity .25s, left .5s ease, top .5s ease, width .5s ease, height .5s ease; }
+.cursor span { position: absolute; left: 18px; top: 16px; padding: 2px 7px; font: 600 11px/1.3 system-ui, sans-serif; color: #fff; background: linear-gradient(135deg, #005ba7, #0a7fd0 55%, #00a1e2); border-radius: 6px; white-space: nowrap; }
+.ring { position: fixed; z-index: 2147483645; pointer-events: none; border: 2px solid #00a1e2; border-radius: 6px; background: rgba(0,91,167,.1); opacity: 0; transition: opacity .25s, left .5s ease, top .5s ease, width .5s ease, height .5s ease; }
 /* needs you: amber so it reads as a request, not progress */
 .alert .pill { background: #d97706; }
 .alert .frame { box-shadow: inset 0 0 0 3px rgba(217,119,6,.8), inset 0 0 44px rgba(217,119,6,.35); }
 .alert .stop { color: #d97706; }
-@keyframes pulse { 50% { box-shadow: inset 0 0 0 3px rgba(79,63,247,.85), inset 0 0 52px rgba(79,63,247,.4); } }
+@keyframes pulse { 50% { box-shadow: inset 0 0 0 3px rgba(0,91,167,.85), inset 0 0 52px rgba(0,91,167,.4); } }
 @keyframes blink { 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .frame, .dot { animation: none; } .cursor { transition: none; } }
 `;
@@ -76,7 +76,7 @@ export function createOverlay(doc: Document, onStop: () => void): Overlay {
     svg.setAttribute('viewBox', '0 0 24 24');
     const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', 'M4 2l16 9-7 2-3 7z');
-    path.setAttribute('fill', '#4f3ff7');
+    path.setAttribute('fill', '#005ba7');
     path.setAttribute('stroke', '#fff');
     path.setAttribute('stroke-width', '1.5');
     svg.append(path);

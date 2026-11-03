@@ -28,7 +28,7 @@ Architecture, so you can answer reviewer questions truthfully:
 
 - File: `plato-extension/dist/plato-apply-0.1.0.zip` (built against the live API). Contents: `manifest.json`,
   `background.js`, `content.js`, `panel.html`, `panel.css`, `panel.js`, `icon16/32/48/128.png`. Nothing else.
-- Manifest V3. Name "Plato Apply", version 0.1.0, description: "Fills job applications in your own browser from
+- Manifest V3. Name "Plato Apply", version 0.1.1, description: "Fills job applications in your own browser from
   your Plato profile, and asks you only when it needs you."
 - Permissions: `sidePanel`, `storage`, `tabGroups`, `debugger`. No host permissions. Content script declared for
   18 job-site URL patterns (Greenhouse, Lever, Ashby, Workable, SmartRecruiters, BambooHR, Recruitee, Teamtailor,

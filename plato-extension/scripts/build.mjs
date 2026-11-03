@@ -1,6 +1,6 @@
 // node scripts/build.mjs --flavor=production|fixtures
 import { build } from 'esbuild';
-import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -46,7 +46,8 @@ const common = { plugins: [swapExtra], bundle: true, format: 'iife', target: 'ch
 // The manifest comes from the same registry the panel uses.
 const m = await build({ entryPoints: [join(root, 'src/manifest.entry.ts')], bundle: true, platform: 'node', format: 'esm', write: false, plugins: [swapExtra], define: common.define, logLevel: 'warning' });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(m.outputFiles[0].text).toString('base64'));
-const manifest = mod.buildManifest({ flavor, apiOrigin, registry: mod.registry, store });
+const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')); // one version: package.json
+const manifest = mod.buildManifest({ flavor, apiOrigin, registry: mod.registry, store, version });
 
 // No enabled provider = no content script file at all.
 const entries = { 'background.js': 'src/background.ts', 'panel.js': 'src/panel/main.ts' };

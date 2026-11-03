@@ -66,7 +66,7 @@ function Shell({ state, prominent, children }: { state: NodeState; prominent?: b
       style={{ transformStyle: "preserve-3d", width: STAGE_W, minHeight: STAGE_H }}
       className={cn(
         "relative rounded-lg border bg-card px-5 py-4 text-left shadow-sm",
-        state === "working" && "border-primary/40 shadow-[0_18px_50px_-24px_rgba(78,8,252,0.45)]",
+        state === "working" && "border-primary/40 shadow-[0_18px_50px_-24px_rgba(0,91,167,0.45)]",
         state === "done" && "border-success/30",
         state === "failed" && "border-destructive/40",
         prominent && "bg-gradient-to-b from-success-soft/60 to-card",
@@ -151,8 +151,8 @@ function AdapterNodeView({ data }: NodeProps<AdapterNode>) {
       <motion.div
         animate={
           state === "working" && !reduced
-            ? { boxShadow: ["0 0 0 0 rgba(78,8,252,0.28)", "0 0 0 10px rgba(78,8,252,0)"] }
-            : { boxShadow: "0 0 0 0 rgba(78,8,252,0)" }
+            ? { boxShadow: ["0 0 0 0 rgba(0,91,167,0.28)", "0 0 0 10px rgba(0,91,167,0)"] }
+            : { boxShadow: "0 0 0 0 rgba(0,91,167,0)" }
         }
         transition={{ duration: 1.6, repeat: state === "working" && !reduced ? Infinity : 0, ease: "easeOut" }}
         style={{ height: ADAPTER_H }}

@@ -105,7 +105,7 @@ export function OutOfTokensDialog() {
       ]
     : []
   return (
-    <dialog ref={ref} data-ai-skip onCancel={(e) => (e.preventDefault(), close())} onClick={(e) => e.target === ref.current && close()} className="m-auto w-[min(460px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-card p-0 text-foreground shadow-[0_28px_70px_-28px_rgba(79,63,247,0.45)] backdrop:bg-foreground/30 backdrop:backdrop-blur-sm">
+    <dialog ref={ref} data-ai-skip onCancel={(e) => (e.preventDefault(), close())} onClick={(e) => e.target === ref.current && close()} className="m-auto w-[min(460px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-card p-0 text-foreground shadow-[0_28px_70px_-28px_rgba(0,91,167,0.45)] backdrop:bg-foreground/30 backdrop:backdrop-blur-sm">
       {info && (
         <div className="relative flex flex-col gap-5 p-6">
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(ellipse_at_top,rgba(217,119,6,0.14),transparent_70%)]" />

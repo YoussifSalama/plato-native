@@ -55,7 +55,7 @@ export function BalanceRing({ share, size = 176, low }: { share: number; size?: 
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
       <defs>
         <linearGradient id="plato-ring" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor={low ? "var(--warning)" : "#7a6dff"} />
+          <stop offset="0%" stopColor={low ? "var(--warning)" : "var(--azure)"} />
           <stop offset="100%" stopColor={low ? "#f59e0b" : "var(--primary)"} />
         </linearGradient>
       </defs>

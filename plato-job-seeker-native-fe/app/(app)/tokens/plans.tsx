@@ -43,10 +43,10 @@ function PaymentSoonDialog({ picked, onClose }: { picked: Picked | null; onClose
     if (!picked && el.open) el.close()
   }, [picked])
   return (
-    <dialog ref={ref} data-ai-skip onCancel={(e) => (e.preventDefault(), onClose())} onClick={(e) => e.target === ref.current && onClose()} className="m-auto w-[min(460px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-card p-0 text-foreground shadow-[0_28px_70px_-28px_rgba(79,63,247,0.45)] backdrop:bg-foreground/30 backdrop:backdrop-blur-sm">
+    <dialog ref={ref} data-ai-skip onCancel={(e) => (e.preventDefault(), onClose())} onClick={(e) => e.target === ref.current && onClose()} className="m-auto w-[min(460px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-card p-0 text-foreground shadow-[0_28px_70px_-28px_rgba(0,91,167,0.45)] backdrop:bg-foreground/30 backdrop:backdrop-blur-sm">
       {picked && (
         <div className="relative flex flex-col items-center gap-4 px-7 pt-8 pb-6 text-center">
-          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(ellipse_at_top,rgba(78,8,252,0.16),transparent_70%)]" />
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-32 glow-top" />
           <PlatoMark size={48} live />
           <div className="relative flex flex-col gap-2">
             <h2 className="text-lg font-bold">Online checkout opens soon</h2>
@@ -110,7 +110,7 @@ export function Plans({ plans, current, estimates }: { plans: TokenPrices["plans
               data-ai={`tokens.plan.${k}`}
               className={cn(
                 "relative flex flex-col gap-4 rounded-xl border bg-card p-6 transition-shadow",
-                featured ? "border-primary/40 shadow-[0_24px_60px_-30px_rgba(79,63,247,0.55)]" : "hover:shadow-[0_18px_44px_-28px_rgba(79,63,247,0.4)]",
+                featured ? "border-primary/40 shadow-[0_24px_60px_-30px_rgba(0,91,167,0.55)]" : "hover:shadow-[0_18px_44px_-28px_rgba(0,91,167,0.4)]",
                 mine && !featured && "border-primary/30",
               )}
             >
@@ -162,7 +162,7 @@ export function Plans({ plans, current, estimates }: { plans: TokenPrices["plans
                   variant={featured ? "default" : "outline"}
                   onClick={() => void go(k, { plan: k as "pro" | "max" }, { what: `the ${p.label} plan`, detail: `$${p.priceUsd} a month, ${formatTokens(p.monthly)} tokens` })}
                   disabled={!!busy}
-                  className={cn(featured && "shadow-[0_12px_30px_-14px_rgba(79,63,247,0.8)]")}
+                  className={cn(featured && "shadow-[0_12px_30px_-14px_rgba(0,91,167,0.8)]")}
                 >
                   {busy === k && <Loader2 className="size-4 animate-spin" />}
                   Upgrade to {p.label}
@@ -207,7 +207,7 @@ export function TopUps({ packs, monthlyPricePer1k }: { packs: TokenPrices["topup
               disabled={!!busy}
               onClick={() => void go(key, { pack: key }, { what: `${formatTokens(p.tokens)} tokens`, detail: `$${p.priceUsd}, one time, never expire` })}
               data-ai={`tokens.topup.${key}`}
-              className="group relative flex items-center gap-4 rounded-xl border bg-card p-4 text-left transition-shadow hover:border-primary/30 hover:shadow-[0_18px_44px_-28px_rgba(79,63,247,0.45)] disabled:opacity-60"
+              className="group relative flex items-center gap-4 rounded-xl border bg-card p-4 text-left transition-shadow hover:border-primary/30 hover:shadow-[0_18px_44px_-28px_rgba(0,91,167,0.45)] disabled:opacity-60"
             >
               <span className="relative flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
                 {busy === key ? <Loader2 className="size-5 animate-spin" /> : <Coins className="size-5 transition-transform group-hover:-rotate-12" />}

@@ -28,7 +28,7 @@ export function DigestSettings({ data, onChange }: { data: InsightsOverview | nu
 
   return (
     <section className="relative overflow-hidden rounded-xl border bg-[radial-gradient(circle_at_1px_1px,var(--border)_1px,transparent_0)] bg-[size:22px_22px]">
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_top,rgba(78,8,252,0.14),transparent_65%)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-64 glow-top" />
       <motion.div variants={reduced ? reducedVariants(nodeContent) : nodeContent} initial="hidden" animate="show" className="relative grid gap-7 p-6 md:p-8 lg:grid-cols-[1fr_auto] lg:items-center lg:gap-10">
         <div className="flex min-w-0 flex-col gap-4">
           <motion.div variants={v(lineReveal)} className="flex flex-wrap items-center gap-2">
@@ -59,7 +59,7 @@ export function DigestSettings({ data, onChange }: { data: InsightsOverview | nu
           </motion.div>
         </div>
 
-        <motion.div variants={v(lineReveal)} className="flex flex-col gap-2.5 rounded-xl border bg-card/90 p-4 shadow-[0_18px_40px_-28px_rgba(79,63,247,0.55)] backdrop-blur lg:w-80">
+        <motion.div variants={v(lineReveal)} className="flex flex-col gap-2.5 rounded-xl border bg-card/90 p-4 shadow-[0_18px_40px_-28px_rgba(0,91,167,0.55)] backdrop-blur lg:w-80">
           <span className="flex items-center gap-2 text-xs font-semibold tracking-wide text-text-tertiary uppercase">
             <CalendarClock className="size-3.5 text-primary" />
             How often

@@ -62,7 +62,7 @@ function DigestCard({ d, open, focused, onToggle, index }: { d: Digest; open: bo
   }, [focused, reduced])
   const companies = [...new Set(d.jobs.map((j) => j.company))].slice(0, 4)
   return (
-    <motion.li ref={ref} initial={reduced ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring.settle, delay: reduced ? 0 : Math.min(index, 6) * 0.04 }} className={cn("scroll-mt-6 overflow-hidden rounded-lg border transition-shadow", open && "shadow-[0_18px_40px_-30px_rgba(79,63,247,0.6)]", focused && "border-primary/40")}>
+    <motion.li ref={ref} initial={reduced ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring.settle, delay: reduced ? 0 : Math.min(index, 6) * 0.04 }} className={cn("scroll-mt-6 overflow-hidden rounded-lg border transition-shadow", open && "shadow-[0_18px_40px_-30px_rgba(0,91,167,0.6)]", focused && "border-primary/40")}>
       <button type="button" onClick={onToggle} aria-expanded={open} data-ai={`insights.digest:${d.id}`} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-primary-tint">
         <span className="flex -space-x-2">
           {companies.map((c) => (

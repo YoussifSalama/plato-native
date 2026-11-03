@@ -25,8 +25,8 @@ export function UnsubscribeCard() {
   }
 
   return (
-    <motion.section initial={reduced ? false : { opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={spring.enter} className="relative flex w-full max-w-md flex-col items-center gap-5 overflow-hidden rounded-xl border bg-card p-8 text-center shadow-[0_30px_60px_-40px_rgba(79,63,247,0.6)]">
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(ellipse_at_top,rgba(78,8,252,0.14),transparent_65%)]" />
+    <motion.section initial={reduced ? false : { opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={spring.enter} className="relative flex w-full max-w-md flex-col items-center gap-5 overflow-hidden rounded-xl border bg-card p-8 text-center shadow-[0_30px_60px_-40px_rgba(0,91,167,0.6)]">
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-40 glow-top" />
       <PlatoMark size={44} />
       {state === "done" ? (
         <>

@@ -16,7 +16,7 @@ const STEPS = [
     title: "Extracting text",
     description: "Pulling readable text out of your PDF or DOCX files.",
     icon: FileSearch,
-    color: "violet",
+    color: "brand",
   },
   {
     title: "Analyzing with AI",
@@ -34,7 +34,7 @@ const STEPS = [
 
 const COLOR_CLASSES = {
   sky: { solid: "bg-sky-500", ring: "bg-sky-500/30" },
-  violet: { solid: "bg-violet-500", ring: "bg-violet-500/30" },
+  brand: { solid: "bg-primary", ring: "bg-primary/30" },
   amber: { solid: "bg-amber-500", ring: "bg-amber-500/30" },
   emerald: { solid: "bg-emerald-500", ring: "bg-emerald-500/30" },
 } as const
@@ -72,7 +72,7 @@ function AnalyzingModalContent() {
             {/* animated gradient sheen */}
             <motion.div
               aria-hidden
-              className="pointer-events-none absolute inset-0 bg-linear-to-br from-sky-500/10 via-violet-500/10 to-amber-500/10"
+              className="pointer-events-none absolute inset-0 bg-linear-to-br from-primary/10 via-azure/10 to-sky/20"
               animate={{ opacity: [0.4, 0.9, 0.4] }}
               transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
             />
@@ -80,12 +80,12 @@ function AnalyzingModalContent() {
             <div className="relative flex flex-col items-center gap-3 text-center">
               <div className="relative flex size-16 items-center justify-center">
                 <motion.span
-                  className="absolute inset-0 rounded-full bg-linear-to-br from-sky-500/40 via-violet-500/40 to-amber-500/40"
+                  className="absolute inset-0 rounded-full bg-linear-to-br from-primary/40 via-azure/40 to-sky/40"
                   animate={{ scale: [1, 1.7, 1], opacity: [0.6, 0, 0.6] }}
                   transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 />
                 <motion.span
-                  className="relative flex size-14 items-center justify-center rounded-full bg-linear-to-br from-sky-500 via-violet-500 to-amber-500 text-white shadow-lg"
+                  className="relative flex size-14 items-center justify-center rounded-full bg-linear-to-br from-primary via-[#0a7fd0] to-azure text-white shadow-lg"
                   animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.1, 1] }}
                   transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
                 >
@@ -101,7 +101,7 @@ function AnalyzingModalContent() {
             <div className="relative flex items-center gap-3">
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                 <motion.div
-                  className="h-full rounded-full bg-linear-to-r from-sky-500 via-violet-500 to-amber-500"
+                  className="h-full rounded-full bg-linear-to-r from-primary via-[#0a7fd0] to-azure"
                   animate={{ width: `${progress}%` }}
                   transition={{ duration: 0.5, ease: "easeOut" }}
                 />

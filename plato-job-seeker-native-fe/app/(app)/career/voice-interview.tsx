@@ -292,7 +292,7 @@ function VoiceInterviewPanel({ threadId, firstName, roles, onClose, onFinished, 
 
   return (
     <motion.aside initial={{ opacity: 0, x: 32 }} animate={{ opacity: 1, x: 0 }} aria-label="Voice interview" className="relative z-20 flex w-full shrink-0 flex-col overflow-hidden rounded-xl border bg-card shadow-lg shadow-primary/10 max-lg:absolute max-lg:inset-0 lg:w-[46%] lg:max-w-[560px]">
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-[radial-gradient(ellipse_at_top,rgba(78,8,252,0.14),transparent_70%)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-56 glow-top" />
       <header className="relative flex items-center gap-2 px-4 py-3">
         <Mic className="size-4 text-primary" />
         <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">Voice interview</p>

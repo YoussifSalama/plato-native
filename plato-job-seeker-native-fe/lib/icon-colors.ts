@@ -1,10 +1,10 @@
 export const ICON_COLORS = {
-  violet: "bg-violet-100 text-violet-600",
+  brand: "bg-primary-soft text-primary",
   sky: "bg-sky-100 text-sky-600",
   emerald: "bg-emerald-100 text-emerald-600",
   amber: "bg-amber-100 text-amber-600",
   rose: "bg-rose-100 text-rose-600",
-  indigo: "bg-indigo-100 text-indigo-600",
+  cyan: "bg-cyan-100 text-cyan-700",
   teal: "bg-teal-100 text-teal-600",
   orange: "bg-orange-100 text-orange-600",
 } as const

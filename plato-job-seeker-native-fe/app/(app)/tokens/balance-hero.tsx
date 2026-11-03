@@ -44,7 +44,7 @@ export function BalanceHero({ acc, estimates }: { acc: TokenAccount | null; esti
 
   return (
     <section className="relative overflow-hidden rounded-xl border bg-[radial-gradient(circle_at_1px_1px,var(--border)_1px,transparent_0)] bg-[size:22px_22px]">
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(ellipse_at_top,rgba(78,8,252,0.14),transparent_65%)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-72 glow-top" />
       <div className="relative grid gap-8 p-6 md:p-8 lg:grid-cols-[auto_1fr] lg:items-center lg:gap-12">
         {/* The ring: the share of this month's tokens still left, the total in the middle. */}
         <motion.div initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={spring.enter} className="relative mx-auto size-44 shrink-0 lg:mx-0">
@@ -91,7 +91,7 @@ export function BalanceHero({ acc, estimates }: { acc: TokenAccount | null; esti
                     initial={reduced ? false : { opacity: 0, y: 8, scale: 0.97 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ ...spring.settle, delay: reduced ? 0 : 0.35 + i * 0.06 }}
-                    className="flex items-center gap-2 rounded-lg border bg-card/90 py-2 pr-3.5 pl-2 shadow-[0_10px_30px_-22px_rgba(79,63,247,0.5)] backdrop-blur"
+                    className="flex items-center gap-2 rounded-lg border bg-card/90 py-2 pr-3.5 pl-2 shadow-[0_10px_30px_-22px_rgba(0,91,167,0.5)] backdrop-blur"
                   >
                     <span className="flex size-7 items-center justify-center rounded-md bg-primary-soft text-primary">
                       <Icon className="size-3.5" />

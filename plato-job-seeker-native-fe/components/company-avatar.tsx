@@ -4,7 +4,7 @@ import { useState } from "react"
 import { cn } from "cn"
 
 // Warm, readable background per company (same name, same colour).
-const TONES = ["bg-[#4E08FC]", "bg-[#0B5FFF]", "bg-[#0E9F6E]", "bg-[#D97706]", "bg-[#DB2777]", "bg-[#0891B2]", "bg-[#7C3AED]", "bg-[#475569]"]
+const TONES = ["bg-[#005BA7]", "bg-[#0B5FFF]", "bg-[#0E9F6E]", "bg-[#D97706]", "bg-[#DB2777]", "bg-[#0891B2]", "bg-[#C2410C]", "bg-[#475569]"]
 const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
 const initials = (name: string) =>
   name

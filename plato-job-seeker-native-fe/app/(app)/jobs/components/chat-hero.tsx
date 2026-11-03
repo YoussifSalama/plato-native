@@ -49,7 +49,7 @@ function Composer({ onSend, busy, autoFocus, placeholder = "Tell Plato what you'
         e.preventDefault()
         submit()
       }}
-      className="group flex flex-wrap items-end gap-2 rounded-lg border bg-card p-2 pl-4 shadow-[0_12px_40px_-16px_rgba(78,8,252,0.35)] transition-shadow focus-within:border-primary/50 focus-within:shadow-[0_16px_50px_-16px_rgba(78,8,252,0.5)]"
+      className="group flex flex-wrap items-end gap-2 rounded-lg border bg-card p-2 pl-4 shadow-[0_12px_40px_-16px_rgba(0,91,167,0.35)] transition-shadow focus-within:border-primary/50 focus-within:shadow-[0_16px_50px_-16px_rgba(0,91,167,0.5)]"
     >
       {chip && (
         // A pinned reference (a job): sent with the next message so Plato knows exactly what it is about.
@@ -205,7 +205,7 @@ function ChatHero({
 
   return (
     <section className="relative flex h-[calc(100dvh-150px)] min-h-[560px] w-full flex-col overflow-hidden rounded-xl border bg-[radial-gradient(circle_at_1px_1px,var(--border)_1px,transparent_0)] bg-[size:22px_22px]">
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(ellipse_at_top,rgba(78,8,252,0.14),transparent_65%)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 glow-top" />
 
       <div className="relative flex min-h-0 flex-1 flex-col px-6 pt-10 pb-6 sm:px-10">
         <AnimatePresence mode="wait" initial={false}>

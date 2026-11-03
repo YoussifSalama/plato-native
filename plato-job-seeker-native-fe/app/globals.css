@@ -43,6 +43,11 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-primary-soft: var(--primary-soft);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-line: var(--primary-line);
+  --color-azure: var(--azure);
+  --color-sky: var(--sky);
+  --color-brand-deep: var(--brand-deep);
   --color-primary-tint: var(--primary-tint);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
@@ -77,113 +82,81 @@
      (input/textarea/select) with their own dark-mode chrome under OS dark
      preference, fighting our explicit light backgrounds. */
   color-scheme: light;
-  /* Palette rooted in #005ca9 */
+  /* Plato palette, taken from the logo: deep cobalt #005ba7 brightening to
+     azure #00a1e2. Cobalt is the action colour (6.9:1 on white); azure and
+     sky are for gradients, glows and fills, never small text on white.
+     Neutrals are cool navy-greys. Shared with plato-landing (globals.css)
+     and the extension panel (panel.css): change all three together. */
   --background: #ffffff;
-  --foreground: #0c1b2a;
+  --foreground: #0e1b2c;
   --card: #ffffff;
-  --card-foreground: #0c1b2a;
+  --card-foreground: #0e1b2c;
   --popover: #ffffff;
-  --popover-foreground: #0c1b2a;
-  --primary: #005ca9;
+  --popover-foreground: #0e1b2c;
+  --primary: #005ba7;
   --primary-foreground: #ffffff;
-  --secondary: #eef3f8;
-  --secondary-foreground: #0c1b2a;
-  --muted: #eef3f8;
-  --muted-foreground: #5b7186;
-  --accent: #e3eef8;
-  --accent-foreground: #00385f;
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: #dbe4ed;
-  --input: #dbe4ed;
-  --ring: #005ca9;
-  --chart-1: #005ca9;
-  --chart-2: #3d84c4;
-  --chart-3: #7aacd9;
-  --chart-4: #b7d3ec;
-  --chart-5: #00385f;
-  --radius: 0.625rem;
-  --sidebar: #f6f9fc;
-  --sidebar-foreground: #0c1b2a;
-  --sidebar-primary: #005ca9;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e3eef8;
-  --sidebar-accent-foreground: #00385f;
-  --sidebar-border: #dbe4ed;
-  --sidebar-ring: #005ca9;
-  /* Extended tokens (neutral defaults so pre-login pages are unaffected). */
-  --primary-soft: #e3eef8;
-  --primary-tint: #f3f7fb;
-  --success: #1fad6d;
-  --success-soft: #e4f9ec;
-  --info: #2f7df6;
-  --info-soft: #d8e8fe;
-  --lavender: #7aacd9;
-  --navy: #0c1b2a;
-  --text-secondary: #0c1b2a;
-  --text-tertiary: #5b7186;
-  --divider: #eef3f8;
-  --warning: #d97706;
-  --warning-soft: #fef3c7;
-  --rose: #db2777;
-  --rose-soft: #fce7f3;
-  --teal: #0d9488;
-  --teal-soft: #ccfbf1;
-}
-
-/* Post-login product palette, sampled from the Jobs mockup. Scoped to the
-   app shell so auth + onboarding keep their own look. */
-.theme-app {
-  /* Values from the "Jobs — Discover" reference (Main.dc.html). */
-  --background: #f7f7fb;
-  --foreground: #1e1d2b;
-  --card: #ffffff;
-  --card-foreground: #1e1d2b;
-  --popover: #ffffff;
-  --popover-foreground: #1e1d2b;
-  --primary: #4f3ff7;
-  --primary-foreground: #ffffff;
-  --primary-soft: #efedfe;
-  --primary-tint: #fbfaff;
-  --secondary: #f1effe;
-  --secondary-foreground: #5b4cf0;
-  --muted: #f2f1f8;
-  --muted-foreground: #8b899e;
-  --accent: #efedfe;
-  --accent-foreground: #4f3ff7;
+  --primary-hover: #004c8c;
+  --primary-soft: #e8f2fc;
+  --primary-tint: #f5f9fe;
+  --primary-line: #c9e0f5;
+  --azure: #00a1e2;
+  --sky: #a9dcf7;
+  --brand-deep: #003a6e;
+  --secondary: #eef4fb;
+  --secondary-foreground: #0a6fc2;
+  --muted: #eff3f8;
+  --muted-foreground: #7a889c;
+  --accent: #e8f2fc;
+  --accent-foreground: #005ba7;
   --destructive: #f04438;
-  --border: #e7e6f0;
-  --input: #e4e3ee;
-  --ring: #4f3ff7;
+  --border: #e2e8f0;
+  --input: #dce4ee;
+  --ring: #005ba7;
+  --chart-1: #005ba7;
+  --chart-2: #00a1e2;
+  --chart-3: #1c9a4b;
+  --chart-4: #d97706;
+  --chart-5: #0e1b2c;
+  --radius: 0.625rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0e1b2c;
+  --sidebar-primary: #005ba7;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e8f2fc;
+  --sidebar-accent-foreground: #005ba7;
+  --sidebar-border: #e8edf3;
+  --sidebar-ring: #005ba7;
   --success: #1c9a4b;
   --success-soft: #e3f9ea;
-  --info: #2d6fe0;
-  --info-soft: #e7f0fe;
-  --lavender: #a9a7bc;
-  --navy: #1e1d2b;
-  --chart-1: #4f3ff7;
-  --chart-2: #5b4cf0;
-  --chart-3: #1c9a4b;
-  --chart-4: #2d6fe0;
-  --chart-5: #1e1d2b;
-  --radius: 1rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #1e1d2b;
-  --sidebar-primary: #4f3ff7;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #efedfe;
-  --sidebar-accent-foreground: #4f3ff7;
-  --sidebar-border: #ecebf3;
-  --sidebar-ring: #4f3ff7;
-  /* Reference-only shades with no shadcn counterpart. */
-  --text-secondary: #55536b;
-  --text-tertiary: #9997ac;
-  --divider: #f0eff6;
+  --info: #0b7fab;
+  --info-soft: #e1f3fa;
+  --lavender: #a3b0c2;
+  --navy: #0e1b2c;
+  /* Pre-login pages (auth, onboarding) keep secondary text at full ink. */
+  --text-secondary: #0e1b2c;
+  --text-tertiary: #5b6b80;
+  --divider: #eef2f7;
   --warning: #d97706;
   --warning-soft: #fef3c7;
   --rose: #db2777;
   --rose-soft: #fce7f3;
   --teal: #0d9488;
   --teal-soft: #ccfbf1;
+  /* Surfaces borrowed from the landing page's cards. */
+  --brand-gradient: linear-gradient(135deg, #005ba7 0%, #0a7fd0 55%, #00a1e2 100%);
+  --brand-glow: rgba(0, 161, 226, 0.14);
+  --shadow-brand: 0 12px 30px -12px rgba(0, 91, 167, 0.45);
+  --shadow-card: 0 1px 2px rgba(14, 27, 44, 0.04), 0 8px 24px -16px rgba(14, 27, 44, 0.14);
+  --shadow-lift: 0 20px 50px -20px rgba(14, 27, 44, 0.22);
+}
+
+/* Post-login product shell: the same palette on cool paper, softer
+   secondary text, and the larger radius the landing page's tiles use. */
+.theme-app {
+  --background: #f5f8fc;
+  --radius: 1rem;
+  --text-secondary: #4a5a70;
+  --text-tertiary: #8593a6;
   color: var(--foreground);
   background: var(--background);
 }
@@ -206,8 +179,7 @@
    the standard properties (Firefox) and the WebKit pseudo-elements
    (Chrome / Safari / Edge) are set so every browser matches. */
 /* Written inline (not via an intermediate --scrollbar-* var) so the mix
-   picks up whichever --primary is in scope: blue pre-login, purple inside
-   .theme-app. A var defined on :root would freeze the root blue. */
+   picks up whichever --primary is in scope. */
 @layer base {
   * {
     scrollbar-width: thin;
@@ -246,5 +218,55 @@
 @keyframes shimmer {
   to {
     background-position: -200% 0;
+  }
+}
+
+/* ---------- Brand surfaces (the landing page's card language) ---------- */
+
+/* Cobalt-to-azure fill, the logo's own gradient. */
+@utility bg-brand-gradient {
+  background-image: var(--brand-gradient);
+}
+
+/* Soft azure wash at the top of a hero card. Put it on an absolutely
+   positioned, aria-hidden div at the top of a relative container. */
+@utility glow-top {
+  background-image: radial-gradient(ellipse at top, var(--brand-glow), transparent 65%);
+}
+
+/* Text in the logo's gradient (headlines, the big numbers). */
+@utility text-brand-gradient {
+  background-image: linear-gradient(90deg, #005ba7, #0a7fd0 50%, #00a1e2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Small uppercase mono label above a heading, as on the landing page. */
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+/* Resting card shadow, and the hover lift the landing tiles use. */
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
+}
+@utility shadow-brand {
+  box-shadow: var(--shadow-brand);
+}
+@utility card-lift {
+  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s, border-color 0.25s;
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lift);
+    border-color: var(--primary-line);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &:hover { transform: none; }
   }
 }

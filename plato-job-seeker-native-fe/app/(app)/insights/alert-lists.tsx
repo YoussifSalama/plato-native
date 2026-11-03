@@ -241,7 +241,7 @@ export function CompanyFollows({ data, actions }: { data: InsightsOverview | nul
               </label>
               <AnimatePresence>
                 {term.length >= 2 && (
-                  <motion.ul initial={reduced ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15, ease: ease.out }} className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-[0_18px_40px_-28px_rgba(79,63,247,0.55)]">
+                  <motion.ul initial={reduced ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15, ease: ease.out }} className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-[0_18px_40px_-28px_rgba(0,91,167,0.55)]">
                     {suggestions.map((s) => (
                       <li key={s.key}>
                         <button type="button" onClick={() => follow(s.name)} data-ai={`insights.company.pick:${s.name}`} className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-primary-tint">

@@ -151,8 +151,8 @@ function AuthShowcase() {
         </ReactFlowProvider>
       </motion.div>
 
-      <motion.div variants={fadeUpItem} className="grid shrink-0 gap-3 sm:grid-cols-[auto_1fr_1fr]">
-        <div className="flex flex-col gap-1.5 rounded-lg border bg-card p-3">
+      <motion.div variants={fadeUpItem} className="grid shrink-0 items-start gap-3 sm:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border bg-card p-3">
           <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Live sources</span>
           <span className="flex items-center gap-1.5">
             <SourceTile source="LINKEDIN" size={24} />

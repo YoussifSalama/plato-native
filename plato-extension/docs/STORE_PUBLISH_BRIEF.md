@@ -57,7 +57,7 @@ Architecture, so you can answer reviewer questions truthfully:
 - Single purpose description: "Fills and submits job applications the user selected in Plato, in the user's own
   browser, from the user's Plato profile."
 
-**Privacy policy URL**: required. If `https://jobs.platohiring.com/privacy` does not exist yet, STOP and tell
+**Privacy policy URL**: required. If `https://platohiring.com/privacy/` does not exist yet, STOP and tell
 the owner; the submission cannot be completed without a live page.
 
 **Store listing**: category "Productivity"; language English; store icon `plato-extension/store/store-icon-128.png`;

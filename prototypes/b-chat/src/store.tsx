@@ -275,8 +275,10 @@ function useValue() {
           const j = jobOf(n, working.jobId)!
           const step = working.step + 1
           if (step === 3 && !n.facts.notice && !working.events.some((e) => e.startsWith("You answered"))) {
-            n = { ...n, apps: n.apps.map((a) => (a === working ? { ...a, step, status: "needs", ask: { key: "notice", question: "notice period", options: ["Immediately", "2 weeks", "1 month", "2 months"] }, events: [...a.events, "Stopped: the form asks your notice period"] } : a)) }
-            n = commit(n, working.threadId, [pm(`Quick question while I apply to ${j.company}: their form asks for your notice period. What should I tell them? I'll remember it for every application.`, { type: "choices", key: `ask:${j.id}:notice`, options: ["Immediately", "2 weeks", "1 month", "2 months"] })], n.threads.find((t) => t.id === working.threadId)!.flow)
+            // Ask once: later jobs that hit the same question wait quietly for the same answer.
+            const asked = n.apps.some((a) => a !== working && a.status === "needs" && a.ask?.key === "notice")
+            n = { ...n, apps: n.apps.map((a) => (a === working ? { ...a, step, status: "needs", ask: { key: "notice", question: "notice period", options: ["Immediately", "2 weeks", "1 month", "2 months"] }, events: [...a.events, asked ? "Waiting for your notice-period answer (asked once in the chat)" : "Stopped: the form asks your notice period"] } : a)) }
+            if (!asked) n = commit(n, working.threadId, [pm(`Quick question while I apply to ${j.company}: their form asks for your notice period. What should I tell them? I'll remember it for every application.`, { type: "choices", key: `ask:${j.id}:notice`, options: ["Immediately", "2 weeks", "1 month", "2 months"] })], n.threads.find((t) => t.id === working.threadId)!.flow)
           } else if (step >= 5) {
             n = { ...n, apps: n.apps.map((a) => (a === working ? { ...a, step: 5, status: "submitted", appliedAt: now(), events: [...a.events, `${j.source} confirmed the application`] } : a)) }
           } else n = { ...n, apps: n.apps.map((a) => (a === working ? { ...a, step, events: [...a.events, STEPS[step]] } : a)) }

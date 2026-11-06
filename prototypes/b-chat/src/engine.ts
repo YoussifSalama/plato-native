@@ -187,8 +187,10 @@ export function respond(s: State, tid: string, input: Input): State {
       say(`Saved: ${field === "notice" ? "notice period" : field} “${answer}”. I'll use it on every application.`)
       return commit(next, tid, out, flow)
     }
-    next = { ...next, facts: field === "notice" ? { ...next.facts, notice: answer } : next.facts, apps: next.apps.map((a) => (a.jobId === jobId ? { ...a, status: "queued", ask: undefined, events: [...a.events, `You answered: ${answer}`] } : a)) }
-    say(`Thanks. I told ${j.company} “${answer}” and saved it to your profile, so I won't ask again. Carrying on.`)
+    // One answer unblocks every application waiting on the same question.
+    const waiting = next.apps.filter((a) => a.jobId !== jobId && a.status === "needs" && a.ask?.key === field)
+    next = { ...next, facts: field === "notice" ? { ...next.facts, notice: answer } : next.facts, apps: next.apps.map((a) => (a.jobId === jobId || waiting.includes(a) ? { ...a, status: "queued", ask: undefined, events: [...a.events, `You answered: ${answer}`] } : a)) }
+    say(`Thanks. I told ${j.company} “${answer}”${waiting.length ? ` and used the same answer for the ${waiting.length} other job${waiting.length > 1 ? "s" : ""} that asked` : ""}. It's saved to your profile, so I won't ask again. Carrying on.`)
     return commit(next, tid, out, flow)
   }
   if (key === "feedback") {

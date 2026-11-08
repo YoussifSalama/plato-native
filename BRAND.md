@@ -42,7 +42,7 @@ Brand gradient: `linear-gradient(135deg, #005BA7 0%, #0A7FD0 55%, #00A1E2 100%)`
 
 ## Status
 
-Success `#1C9A4B` / `#E3F9EA`, warning `#D97706` / `#FEF3C7`, danger `#F04438`, info `#0B7FAB` / `#E1F3FA`
+Success `#1C9A4B` / `#E3F9EA` (text `#15803D`), warning `#D97706` / `#FEF3C7` (text `#B45309`: the fill colour is too light for text), danger `#D92D20` / `#FEE4E2`, info `#0B7FAB` / `#E1F3FA`
 (kept off the cobalt so it reads as a different thing), rose `#DB2777`, teal `#0D9488`.
 
 Third-party marks (job-board tiles such as Ashby, LinkedIn) keep their own colors.

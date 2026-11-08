@@ -85,8 +85,13 @@ export function ExtensionProgressNav({ collapsed, itemClass, variant = "item" }:
       </button>
       )}
 
-      {mounted &&
-        createPortal(
+      {mounted && createPortal(<ProgressDrawer open={open} onClose={() => setOpen(false)} data={data} />, document.body)}
+    </>
+  )
+}
+
+function ProgressDrawer({ open, onClose, data }: { open: boolean; onClose: () => void; data: ExtensionProgress | null }) {
+  return (
       <aside aria-hidden={!open} className={cn("theme-app fixed inset-y-0 right-0 z-40 flex w-[min(380px,100vw)] flex-col border-l bg-card shadow-xl transition-transform duration-300", open ? "translate-x-0" : "pointer-events-none translate-x-full")}>
         <header className="flex items-start justify-between gap-3 border-b p-5">
           <div className="flex flex-col gap-1">
@@ -96,7 +101,7 @@ export function ExtensionProgressNav({ collapsed, itemClass, variant = "item" }:
               {!data ? "Loading…" : !data.linked ? "No browser linked yet" : data.online ? "Extension is online" : "Extension is not running right now"}
             </p>
           </div>
-          <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="rounded-md p-1.5 text-text-secondary hover:bg-muted">
+          <button type="button" aria-label="Close" onClick={onClose} className="rounded-md p-1.5 text-text-secondary hover:bg-muted">
             <X className="size-4" />
           </button>
         </header>
@@ -132,9 +137,31 @@ export function ExtensionProgressNav({ collapsed, itemClass, variant = "item" }:
           })}
         </ul>
         <p className="border-t p-4 text-xs text-text-tertiary">Updates every few seconds. To change anything, open the Plato extension.</p>
-      </aside>,
-          document.body,
-        )}
+      </aside>
+  )
+}
+
+// Top bar pill: "● Plato · applying 2" / "● Plato · ready". Opens the same drawer.
+export function PlatoStatusPill() {
+  const [open, setOpen] = useState(false)
+  const data = useProgress(open)
+  const mounted = useMounted()
+  useEffect(() => {
+    const on = () => setOpen(true)
+    window.addEventListener("plato:open-extension-progress", on)
+    return () => window.removeEventListener("plato:open-extension-progress", on)
+  }, [])
+  const active = data?.active ?? 0
+  const needs = data?.counts.needsYou ?? 0
+  const label = !data ? "Plato" : !data.linked ? "Plato · not linked" : active ? `Plato · applying ${active}` : needs ? `Plato · ${needs} need you` : data.online ? "Plato · ready" : "Plato · offline"
+  const dot = !data || !data.linked || (!data.online && !active) ? "bg-lavender" : active ? "bg-azure animate-pulse" : needs ? "bg-warning" : "bg-success"
+  return (
+    <>
+      <button type="button" data-ai="nav.extension-progress" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="glass-panel flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold text-foreground transition-colors hover:border-primary-line">
+        <span className={cn("size-2 rounded-full", dot)} aria-hidden />
+        <span className="hidden sm:inline">{label}</span>
+      </button>
+      {mounted && createPortal(<ProgressDrawer open={open} onClose={() => setOpen(false)} data={data} />, document.body)}
     </>
   )
 }

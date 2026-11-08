@@ -26,8 +26,17 @@ function CommandPalette() {
         setOpen((o) => !o)
       }
     }
+    // The top bar's command bar on pages that have their own assistant.
+    const onOpen = (e: Event) => {
+      setText((e as CustomEvent<{ text?: string }>).detail?.text ?? "")
+      setOpen(true)
+    }
     window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
+    window.addEventListener("plato:palette", onOpen)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      window.removeEventListener("plato:palette", onOpen)
+    }
   }, [])
 
   useEffect(() => {
@@ -61,8 +70,8 @@ function CommandPalette() {
       { id: "messages", label: "Messages", hint: "Go to", icon: MessageCircle, run: go(PAGE_PATH.messages) },
       { id: "notifications", label: "Notifications", hint: "Go to", icon: Bell, run: go(PAGE_PATH.notifications) },
       { id: "profile", label: "Profile", hint: "Go to", icon: User, run: go(PAGE_PATH.profile) },
-      { id: "tokens", label: "Plato tokens", hint: "Go to", icon: Coins, run: go("/tokens") },
-      { id: "insights", label: "Job alerts", hint: "Go to", icon: BellRing, run: go("/insights") },
+      { id: "tokens", label: "Plan & credits", hint: "Go to", icon: Coins, run: go("/tokens") },
+      { id: "following", label: "Following", hint: "Go to", icon: BellRing, run: go("/following") },
       { id: "new-search", label: "New job search", hint: "Action", icon: Plus, run: () => void createThread().then((t) => router.push(threadHref(t.id))) },
       { id: "practice", label: "Practice an interview", hint: "Action", icon: MessagesSquare, run: go("/career?prompt=" + encodeURIComponent("Practice an interview with me")) },
       { id: "mock", label: "Mock interview", hint: "Action", icon: Mic, run: go("/career?prompt=" + encodeURIComponent("Give me a mock interview")) },

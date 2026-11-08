@@ -60,6 +60,10 @@
   --color-divider: var(--divider);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-line: var(--warning-line);
+  --color-success-ink: var(--success-ink);
+  --color-danger-soft: var(--danger-soft);
   --color-rose: var(--rose);
   --color-rose-soft: var(--rose-soft);
   --color-teal: var(--teal);
@@ -108,7 +112,8 @@
   --muted-foreground: #7a889c;
   --accent: #e8f2fc;
   --accent-foreground: #005ba7;
-  --destructive: #f04438;
+  --destructive: #d92d20;
+  --danger-soft: #fee4e2;
   --border: #e2e8f0;
   --input: #dce4ee;
   --ring: #005ba7;
@@ -132,12 +137,15 @@
   --info-soft: #e1f3fa;
   --lavender: #a3b0c2;
   --navy: #0e1b2c;
-  /* Pre-login pages (auth, onboarding) keep secondary text at full ink. */
-  --text-secondary: #0e1b2c;
+  --text-secondary: #4a5a70;
   --text-tertiary: #5b6b80;
   --divider: #eef2f7;
   --warning: #d97706;
   --warning-soft: #fef3c7;
+  /* Amber text: #d97706 on its soft fill is only ~2.6:1, so text uses the darker ink. */
+  --warning-ink: #b45309;
+  --warning-line: #f5d98b;
+  --success-ink: #15803d;
   --rose: #db2777;
   --rose-soft: #fce7f3;
   --teal: #0d9488;
@@ -247,9 +255,10 @@
   font-family: var(--font-mono);
   font-size: 11.5px;
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--primary);
+  /* Metadata, dates and counters (SPEC U4); a Plato note's own label is primary. */
+  color: var(--text-tertiary);
 }
 
 /* Resting card shadow, and the hover lift the landing tiles use. */

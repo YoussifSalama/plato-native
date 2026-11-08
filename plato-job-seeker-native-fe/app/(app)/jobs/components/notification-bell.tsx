@@ -28,16 +28,16 @@ function NotificationBell() {
 
   return (
     <div className="relative">
-      <button type="button" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open} onClick={() => setOpen((o) => !o)} className="relative flex size-10 items-center justify-center rounded-md border bg-card text-text-secondary hover:bg-muted">
+      <button type="button" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open} onClick={() => setOpen((o) => !o)} className="glass-panel relative flex size-11 items-center justify-center rounded-full text-text-secondary transition-colors hover:text-foreground">
         <Bell className="size-5" />
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span>
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span>
         )}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute right-0 z-30 mt-2 w-[min(380px,calc(100vw-2rem))] rounded-lg border bg-card shadow-lg">
+          <div className="absolute right-0 z-30 mt-2 w-[min(380px,calc(100vw-2rem))] rounded-2xl border bg-card shadow-lg">
             <div className="flex items-center justify-between border-b px-4 py-2.5">
               <p className="text-sm font-semibold text-foreground">Notifications</p>
               <button type="button" disabled={!unread} onClick={markAllRead} className="text-xs font-medium text-primary hover:underline disabled:text-text-tertiary disabled:no-underline">

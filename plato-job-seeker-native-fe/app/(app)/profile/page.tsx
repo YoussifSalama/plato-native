@@ -3,16 +3,15 @@
 import { Suspense, useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowUp, Check, FileText, Puzzle } from "lucide-react"
+import { Check, FileText, Puzzle, Upload } from "lucide-react"
 import { cn } from "cn"
 import { PAGE } from "@/components/page-header"
-import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { MatchRing, PlatoNote, StatusPill } from "@/components/plato-ui"
-import { openPlato } from "@/components/app-shell"
+import { openPlato, useProfileStrength } from "@/components/app-shell"
 import { getMe, type AuthUser } from "@/lib/auth/api"
 import { getCareerResume, listCareerResumes } from "@/lib/career/api"
-import { getProfile, listDocuments } from "@/lib/documents/api"
+import { getDocumentFile, getProfile, listDocuments } from "@/lib/documents/api"
 import type { JobSeekerDocument, JobSeekerProfile } from "@/lib/documents/schema"
 import { getExtensionProgress } from "@/lib/extension/api"
 import { getApplyReadiness, getIntake, type ApplyReadiness, type IntakeItem } from "@/lib/jobs/api"
@@ -22,13 +21,13 @@ import { formatPreferenceSummary } from "@/lib/preference-format"
 import { ResumeFactsPanel } from "./resume-facts"
 
 // Profile (screen 12): everything Plato knows and uses on every application, in one place.
-// The onboarding answers are edited here; "tell Plato" changes anything in plain words.
+// The onboarding answers are edited here; the command bar changes anything in plain words.
 const TABS = [
   { key: "resumes", label: "Resumes" },
   { key: "experience", label: "Experience & skills" },
   { key: "looking", label: "What I'm looking for" },
   { key: "answers", label: "Application answers" },
-  { key: "documents", label: "Documents & browser" },
+  { key: "documents", label: "Documents" },
 ] as const
 type Tab = (typeof TABS)[number]["key"]
 type Resume = Awaited<ReturnType<typeof listCareerResumes>>[number]
@@ -52,7 +51,7 @@ function ProfileContent() {
   const [prefs, setPrefs] = useState<Preferences | null>(null)
   const [readiness, setReadiness] = useState<ApplyReadiness | null>(null)
   const [linked, setLinked] = useState<boolean | null>(null)
-  const [tell, setTell] = useState("")
+  const strength = useProfileStrength()
 
   useEffect(() => {
     getMe().then(setUser).catch(() => undefined)
@@ -66,8 +65,9 @@ function ProfileContent() {
 
   const current = profile?.experiences?.[0]
   const location = [profile?.location?.city, profile?.location?.country].filter(Boolean).join(", ")
-  const setup = [readiness?.ready, prefs?.source === "USER_CONFIRMED", linked]
-  const done = setup.filter(Boolean).length
+  // The same score as the sidebar's "Profile strength", so the two never disagree.
+  const pct = strength ? Math.round((strength.done / strength.total) * 100) : 0
+  const years = prefs ? (formatPreferenceSummary(prefs).experience.split(" · ").at(-1) ?? "") : ""
   const links = [
     ["LinkedIn", prefs?.linkedin_url],
     ["GitHub", prefs?.github_url],
@@ -82,13 +82,6 @@ function ProfileContent() {
     { title: "Make your bullets stronger", body: "A bullet with a number (sites, users, time saved) gets more replies.", action: <button type="button" onClick={() => openPlato("Add numbers to my weakest resume bullets")}>Fix with Plato</button> },
   ].slice(0, 3)
 
-  function sendTell(e: React.FormEvent) {
-    e.preventDefault()
-    if (!tell.trim()) return
-    openPlato(tell.trim())
-    setTell("")
-  }
-
   return (
     <div className={PAGE}>
       {/* Who you are to Plato, and how ready it is to apply for you. */}
@@ -96,7 +89,7 @@ function ProfileContent() {
         <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-foreground text-2xl font-bold text-white">{user ? initials(user.full_name) : ""}</span>
         <div className="min-w-[220px] flex-1">
           <h1 className="text-[26px] leading-tight font-extrabold tracking-tight">{user ? titleCase(user.full_name) : <Skeleton className="h-7 w-48" />}</h1>
-          <p className="text-text-secondary">{current ? `${current.title} · ${current.company}` : "Your CV details appear here once Plato reads it."}</p>
+          <p className="text-text-secondary">{current ? [current.title, years && !/not set/i.test(years) ? years : current.company].filter(Boolean).join(" · ") : "Your CV details appear here once Plato reads it."}</p>
           <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {location && <span>{location}</span>}
             {user && <span className="text-text-secondary">{user.email}</span>}
@@ -113,34 +106,29 @@ function ProfileContent() {
           </p>
         </div>
         <div className="flex items-center gap-3 rounded-2xl border bg-card px-4 py-3">
-          <MatchRing value={(done / 3) * 100} size={56} label={`${done}/3`} />
+          <MatchRing value={pct} size={56} label={strength ? `${pct}%` : ""} />
           <span>
-            <b className="block">{done === 3 ? "Ready to apply" : "Almost there"}</b>
-            <span className="text-sm text-text-secondary">{readiness?.missing[0] ? `Add ${readiness.missing[0].label.toLowerCase()}` : linked === false ? <Link href="/profile?tab=documents" className="text-primary hover:underline">Link your browser</Link> : "Nothing missing"}</span>
+            <b className="block">{strength && !strength.next ? "Ready to apply" : "Almost there"}</b>
+            {strength?.next ? (
+              <Link href={strength.next.href} className="text-sm font-semibold text-primary hover:underline">
+                {strength.next.short}
+              </Link>
+            ) : (
+              <span className="text-sm text-text-secondary">Nothing missing</span>
+            )}
           </span>
         </div>
       </section>
 
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="flex min-w-0 flex-col gap-4">
-          <nav role="tablist" aria-label="Profile" className="scroll-thin flex gap-6 overflow-x-auto border-b border-foreground/10">
+          <nav role="tablist" aria-label="Profile" className="scroll-thin flex gap-3 overflow-x-auto border-b border-foreground/10">
             {TABS.map((t) => (
-              <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} data-ai={`profile.tab.${t.key}`} onClick={() => router.replace(t.key === "resumes" ? "/profile" : `/profile?tab=${t.key}`, { scroll: false })} className={cn("-mb-px border-b-2 py-3 text-[15px] whitespace-nowrap transition-colors", tab === t.key ? "border-primary font-semibold text-primary" : "border-transparent font-medium text-text-secondary hover:text-foreground")}>
+              <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} data-ai={`profile.tab.${t.key}`} onClick={() => router.replace(t.key === "resumes" ? "/profile" : `/profile?tab=${t.key}`, { scroll: false })} className={cn("-mb-px border-b-2 px-0.5 py-3 text-[14px] whitespace-nowrap transition-colors", tab === t.key ? "border-primary font-semibold text-primary" : "border-transparent font-medium text-text-secondary hover:text-foreground")}>
                 {t.label}
               </button>
             ))}
           </nav>
-
-          {/* Change anything in plain words; the Plato chat does the edit. */}
-          <form onSubmit={sendTell} className="surface-panel flex items-center gap-2 rounded-2xl py-1.5 pr-1.5 pl-3">
-            <label htmlFor="profile-tell" className="sr-only">
-              Tell Plato what to change
-            </label>
-            <input id="profile-tell" data-ai="profile.tell" value={tell} onChange={(e) => setTell(e.target.value)} placeholder="Change anything by telling Plato, e.g. “my notice period is 2 months”" className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-text-tertiary" />
-            <Button type="submit" size="icon" aria-label="Send to Plato" className="rounded-xl">
-              <ArrowUp className="size-4" />
-            </Button>
-          </form>
 
           {tab === "resumes" && <ResumesTab />}
           {tab === "experience" && (
@@ -222,46 +210,80 @@ function Card({ title, action, children }: { title: string; action?: ReactNode; 
   )
 }
 
+// Screen 12: the master resume (the CV they uploaded, the base for everything) and the
+// versions Plato tailored from it, newest first.
 function ResumesTab() {
   const [resumes, setResumes] = useState<Resume[] | null>(null)
+  const [cv, setCv] = useState<JobSeekerDocument | null | undefined>(undefined)
+  const [all, setAll] = useState(false)
   useEffect(() => {
     listCareerResumes()
       .then(setResumes)
       .catch(() => setResumes([]))
+    listDocuments()
+      .then((d) => setCv(d.find((x) => x.type === "CV_RESUME") ?? null))
+      .catch(() => setCv(null))
   }, [])
-  async function pdf(id: string) {
-    const blob = await getCareerResume(id)
-    window.open(URL.createObjectURL(blob), "_blank", "noopener")
+  async function open(get: () => Promise<Blob>, download?: string) {
+    const url = URL.createObjectURL(await get())
+    if (!download) return void window.open(url, "_blank", "noopener")
+    const a = Object.assign(document.createElement("a"), { href: url, download })
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
+  const shown = all ? resumes : resumes?.slice(0, 4)
   return (
-    <Card title="Resumes" action={<Link href="/career">Build one with Plato</Link>}>
+    <Card title="Resumes" action={<Link href="/onboarding?step=1" className="flex items-center gap-1.5"><Upload className="size-4" />Upload</Link>}>
+      {cv === undefined && <Skeleton className="h-16 rounded-xl" />}
+      {cv && (
+        <div className="flex items-center gap-3 rounded-xl border border-primary-line bg-primary-tint px-4 py-3">
+          <FileText className="size-[18px] shrink-0 text-text-secondary" />
+          <span className="min-w-0 flex-1">
+            <b className="block truncate">Master resume{cv.name ? ` · ${cv.name}` : ""}</b>
+            <span className="text-xs text-text-secondary">{[cv.updated_at && `Updated ${shortDate(cv.updated_at)}`, "used as the base for every tailored version"].filter(Boolean).join(" · ")}</span>
+          </span>
+          <StatusPill tone="primary">Master</StatusPill>
+          <button type="button" onClick={() => void open(() => getDocumentFile(cv.id))} className="text-sm font-semibold text-primary hover:underline">
+            Preview
+          </button>
+        </div>
+      )}
+      {cv === null && <PlatoNote variant="inline">Upload your CV and Plato tailors a version of it for every job.</PlatoNote>}
       {resumes === null && <Skeleton className="h-32 rounded-xl" />}
-      {resumes?.length === 0 && <PlatoNote variant="inline">No resumes yet. Plato writes one for each job it applies to, and you can build one in Career.</PlatoNote>}
+      {resumes?.length === 0 && cv && <p className="text-sm text-text-secondary">No tailored versions yet. Plato writes one when you use Tailor &amp; apply on Jobs.</p>}
       {!!resumes?.length && (
         <>
-          <p className="eyebrow">Written by Plato · {resumes.length}</p>
+          <p className="eyebrow pt-1">Tailored by Plato · {resumes.length}</p>
           <ul className="flex flex-col gap-2">
-            {resumes.map((r) => (
+            {shown?.map((r) => (
               <li key={r.id} className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
                 <FileText className="size-[18px] shrink-0 text-text-secondary" />
                 <span className="min-w-0 flex-1">
                   <b className="block truncate">{r.title}</b>
-                  <span className="text-xs text-text-secondary">
-                    {r.target_role ?? "General"} · version {r.version}
-                  </span>
+                  <span className="text-xs text-text-secondary">{[r.created_at && shortDate(r.created_at), r.job_id ? "for one job" : (r.target_role ?? "General"), r.version > 1 && `version ${r.version}`].filter(Boolean).join(" · ")}</span>
                 </span>
                 {r.approved && <StatusPill tone="success">Approved</StatusPill>}
-                <button type="button" onClick={() => void pdf(r.id)} className="text-sm font-semibold text-primary hover:underline">
+                <button type="button" onClick={() => void open(() => getCareerResume(r.id))} className="text-sm font-semibold text-primary hover:underline">
+                  Preview
+                </button>
+                <button type="button" onClick={() => void open(() => getCareerResume(r.id), `${r.title}.pdf`)} className="text-sm font-semibold text-primary hover:underline">
                   PDF
                 </button>
               </li>
             ))}
           </ul>
+          {resumes.length > 4 && (
+            <button type="button" onClick={() => setAll((a) => !a)} className="self-start text-sm font-semibold text-primary hover:underline">
+              {all ? "Show fewer" : `See all ${resumes.length} tailored resumes`}
+            </button>
+          )}
         </>
       )}
     </Card>
   )
 }
+
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 
 function AnswersTab({ prefs }: { prefs: Preferences | null }) {
   const [intake, setIntake] = useState<IntakeItem[] | null>(null)

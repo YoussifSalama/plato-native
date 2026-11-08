@@ -58,4 +58,9 @@ function saveProfile(
   return request(apiClient.patch("/job-seeker/profile", profile))
 }
 
-export { uploadDocument, listDocuments, deleteDocument, replaceDocument, analyzeProfile, getProfile, saveProfile }
+// The file as uploaded, for a preview in a new tab.
+function getDocumentFile(id: string): Promise<Blob> {
+  return request(apiClient.get(`/job-seeker/documents/${id}/file`, { responseType: "blob" }))
+}
+
+export { getDocumentFile, uploadDocument, listDocuments, deleteDocument, replaceDocument, analyzeProfile, getProfile, saveProfile }

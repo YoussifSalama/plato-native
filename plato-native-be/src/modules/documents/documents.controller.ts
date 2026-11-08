@@ -10,11 +10,13 @@ import {
   Post,
   Put,
   Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { JobSeekerDocumentType } from '@prisma/client';
 import { extname } from 'path';
 import { z } from 'zod';
@@ -205,6 +207,29 @@ export class DocumentsController {
       ...updated,
       remaining_replacements: MAX_REPLACEMENTS_PER_VERSION - newCount,
     };
+  }
+
+  // The file as uploaded (Profile → Resumes → Preview). Private: owner only.
+  @Get(':id/file')
+  async file(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const document = await this.ownDocument(req.userId, id);
+    const body = await this.storageService.getObjectBuffer(
+      document.storage_key,
+    );
+    const pdf = extname(document.storage_key).toLowerCase() === '.pdf';
+    res
+      .setHeader(
+        'Content-Type',
+        pdf
+          ? 'application/pdf'
+          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      )
+      .setHeader('Cache-Control', 'private, max-age=600')
+      .send(body);
   }
 
   @Delete(':id')

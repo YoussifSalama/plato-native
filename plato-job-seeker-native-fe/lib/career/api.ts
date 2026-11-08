@@ -108,5 +108,5 @@ const startVoiceSession = (threadId: string, req: { mode: VoiceMode; skill?: str
 const saveVoiceTranscript = (threadId: string, body: { mode: VoiceMode; seconds: number; turns: { role: "user" | "assistant"; text: string }[]; usage?: VoiceUsage }) =>
   request<{ saved: number }>(apiClient.post(`/job-seeker/career/threads/${threadId}/voice/transcript`, body))
 
-const listCareerResumes = () => request<{ id: string; title: string; target_role: string | null; version: number; approved: boolean }[]>(apiClient.get("/job-seeker/career/resumes"))
+const listCareerResumes = () => request<{ id: string; title: string; target_role: string | null; version: number; approved: boolean; job_id?: string | null; created_at?: string }[]>(apiClient.get("/job-seeker/career/resumes"))
 export { listCareerResumes, startVoiceSession, saveVoiceTranscript, getResumeDoc, saveResumeEdits, suggestResumeText, approveResume, streamCareerMessage, createCareerThread, listCareerThreads, getCareerThread, sendCareerMessage, getCareerResume }

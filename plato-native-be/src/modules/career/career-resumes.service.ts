@@ -70,6 +70,7 @@ export class CareerResumesService {
         version: true,
         approved: true,
         edited: true,
+        job_id: true,
         created_at: true,
       },
     });

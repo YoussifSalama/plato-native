@@ -80,19 +80,19 @@ function AppShell({ children }: { children: ReactNode }) {
 // "Profile strength" in the owner's screens: the share of five checks that let Plato apply
 // without stopping (the server's readiness check, a portfolio link, a second document,
 // a linked browser, something followed). The next missing one is the hint.
-function useSetup() {
-  const [s, setS] = useState<{ done: number; total: number; next: { label: string; href: string } | null } | null>(null)
+export function useProfileStrength() {
+  const [s, setS] = useState<{ done: number; total: number; next: { label: string; short: string; href: string } | null } | null>(null)
   useEffect(() => {
     Promise.allSettled([getApplyReadiness(), getExtensionProgress(), getInsights(), getPreferences(), listDocuments()]).then(([r, e, i, p, d]) => {
       const steps = [
-        { ok: r.status === "fulfilled" && r.value.ready, label: r.status === "fulfilled" && r.value.missing[0] ? `Add ${r.value.missing[0].label.toLowerCase()} so Plato never stops to ask.` : "Finish your details.", href: "/profile?tab=answers" },
-        { ok: p.status === "fulfilled" && !!p.value.portfolio_url, label: "Add a portfolio link so Plato can paste it into forms.", href: "/onboarding?step=2" },
-        { ok: d.status === "fulfilled" && d.value.length > 1, label: "Add a second document, like a certificate.", href: "/onboarding?step=1" },
-        { ok: e.status === "fulfilled" && e.value.linked, label: "Link the browser extension.", href: "/extension" },
-        { ok: i.status === "fulfilled" && i.value.alerts.length > 0, label: "Follow a company you'd like to work for.", href: "/following" },
+        { ok: r.status === "fulfilled" && r.value.ready, short: r.status === "fulfilled" && r.value.missing[0] ? `Add ${r.value.missing[0].label.toLowerCase()}` : "Finish your details", label: r.status === "fulfilled" && r.value.missing[0] ? `Add ${r.value.missing[0].label.toLowerCase()} so Plato never stops to ask.` : "Finish your details.", href: "/profile?tab=answers" },
+        { ok: p.status === "fulfilled" && !!p.value.portfolio_url, short: "Add a portfolio link", label: "Add a portfolio link so Plato can paste it into forms.", href: "/onboarding?step=2" },
+        { ok: d.status === "fulfilled" && d.value.length > 1, short: "Add a second document", label: "Add a second document, like a certificate.", href: "/onboarding?step=1" },
+        { ok: e.status === "fulfilled" && e.value.linked, short: "Link the extension", label: "Link the browser extension.", href: "/extension" },
+        { ok: i.status === "fulfilled" && i.value.alerts.length > 0, short: "Follow a company", label: "Follow a company you'd like to work for.", href: "/following" },
       ]
       const open = steps.find((x) => !x.ok)
-      setS({ done: steps.filter((x) => x.ok).length, total: steps.length, next: open ? { label: open.label, href: open.href } : null })
+      setS({ done: steps.filter((x) => x.ok).length, total: steps.length, next: open ? { label: open.label, short: open.short, href: open.href } : null })
     })
   }, [])
   return s
@@ -103,7 +103,7 @@ function Frame({ children }: { children: ReactNode }) {
   const router = useRouter()
   const { needsYou } = useNotifications()
   const [user, setUser] = useState<AuthUser | null>(null)
-  const setup = useSetup()
+  const setup = useProfileStrength()
 
   useEffect(() => {
     getMe()

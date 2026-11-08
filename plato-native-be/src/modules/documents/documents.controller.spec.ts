@@ -23,6 +23,7 @@ describe('DocumentsController: a seeker touches only their own documents', () =>
     const storage = {
       upload: jest.fn(async () => 'k2'),
       delete: jest.fn(async () => undefined),
+      getObjectBuffer: jest.fn(async () => Buffer.from('%PDF')),
     };
     const documents = {
       findById: jest.fn(async () => doc),
@@ -43,6 +44,20 @@ describe('DocumentsController: a seeker touches only their own documents', () =>
     return { ctrl, storage, documents };
   }
   const req = { userId: 'u' } as never;
+
+  it("someone else's file can't be read; your own comes back as a PDF", async () => {
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+    res.setHeader.mockReturnValue(res);
+    const other = setup('attacker');
+    await expect(
+      other.ctrl.file(req, 'd1', res as never),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(other.storage.getObjectBuffer).not.toHaveBeenCalled();
+    const own = setup('victim');
+    await own.ctrl.file(req, 'd1', res as never);
+    expect(own.storage.getObjectBuffer).toHaveBeenCalledWith('k1');
+    expect(res.send).toHaveBeenCalled();
+  });
 
   it("someone else's document: replace and delete answer 404 and change nothing", async () => {
     const { ctrl, storage, documents } = setup('attacker');

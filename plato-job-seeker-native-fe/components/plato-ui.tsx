@@ -79,11 +79,12 @@ export function StatTile({ value, label, tone, className }: { value: ReactNode; 
 }
 
 // Segmented filter for a list (U1: the only tab style besides Profile's underline tabs).
-export function Segmented<T extends string>({ value, onChange, options, className }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode }[]; className?: string }) {
+// `dataAi` names each option for the Plato agent: dataAi="applications.tab" gives applications.tab.<value>.
+export function Segmented<T extends string>({ value, onChange, options, className, dataAi }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode }[]; className?: string; dataAi?: string }) {
   return (
     <div role="tablist" className={cn("inline-flex flex-wrap gap-0.5 rounded-xl bg-foreground/[0.05] p-1", className)}>
       {options.map((o) => (
-        <button key={o.value} type="button" role="tab" aria-selected={value === o.value} onClick={() => onChange(o.value)} className={cn("rounded-[9px] px-3 py-1.5 text-sm whitespace-nowrap transition-colors", value === o.value ? "bg-card font-semibold text-foreground shadow-sm" : "font-medium text-text-secondary hover:text-foreground")}>
+        <button key={o.value} type="button" role="tab" aria-selected={value === o.value} data-ai={dataAi ? `${dataAi}.${o.value}` : undefined} onClick={() => onChange(o.value)} className={cn("rounded-[9px] px-3 py-1.5 text-sm whitespace-nowrap transition-colors", value === o.value ? "bg-card font-semibold text-foreground shadow-sm" : "font-medium text-text-secondary hover:text-foreground")}>
           {o.label}
         </button>
       ))}

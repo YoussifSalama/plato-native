@@ -253,7 +253,7 @@ function ApplicationsContent() {
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold tracking-tight">All applications</h2>
-            <Segmented value={tab} onChange={(k) => setQuery({ tab: k })} options={TABS.map((t) => ({ value: t.key, label: `${t.label} · ${scoped.filter((a) => inTab(t.key, a)).length}` }))} />
+            <Segmented dataAi="applications.tab" value={tab} onChange={(k) => setQuery({ tab: k })} options={TABS.map((t) => ({ value: t.key, label: `${t.label} · ${scoped.filter((a) => inTab(t.key, a)).length}` }))} />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[13px] text-text-secondary">
             {worker?.enabled && (inLine > 0 || (!active && scoped.length > 0)) && (

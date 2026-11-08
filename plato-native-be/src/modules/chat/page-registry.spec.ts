@@ -26,7 +26,9 @@ it('every registry control exists in the frontend code', () => {
     .flatMap((p) => p.controls)
     .filter(
       (c) =>
-        !code.includes(c.tpl ? `data-ai={\`${c.tpl}` : `data-ai="${c.id}"`),
+        !code.includes(c.tpl ? `data-ai={\`${c.tpl}` : `data-ai="${c.id}"`) &&
+        // Shared tab components build the name from a prop: dataAi="results.tab".
+        !(c.tpl && code.includes(`dataAi="${c.tpl.replace(/\.$/, '')}"`)),
     )
     .map((c) => c.id);
   expect(missing).toEqual([]);

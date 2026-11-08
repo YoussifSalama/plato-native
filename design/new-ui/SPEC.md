@@ -346,7 +346,54 @@ spots and don't add new UI:
    preferences and estimates the job count (step 2). The current onboarding assistant panel
    becomes a small "Ask Plato" link in the step footer, so the owner's layout doesn't change.
 
-## 9. Open questions
+## 9. Merge: owner's screens + chat prototype → final prototype
+
+Inputs:
+- **A. Owner's screens** (`screens/01-12`): page-based app with flat cards. **This is the base and its layout stays.**
+- **B. Chat prototype** ("Plato Chat Prototype", claude.ai/artifact/5UybmszH4WWDh8QGsbwKFF,
+  screenshots in `prototype/`): chat-first. "One conversation runs everything", with slash commands
+  (`/job-search /build-resume /practice-interview /prove-skill /applications /profile`),
+  one question at a time with suggested-answer chips, results as cards in the chat, and a side panel
+  (Jobs / Applications / Resume / Profile) for the full lists.
+
+Principle: **A is the body, B is the brain.** We keep A's pages, layout and look, and bring in B's
+conversation behavior through the hooks A already has: the command bar, the status pill, Plato
+notes and the Jobs searches column. We don't take B's layout (chat as the whole screen) or its
+glass styling.
+
+### What each screen takes from B
+| Owner screen | Kept from A | Added from B |
+|---|---|---|
+| **Shell** | Sidebar, top bar, Profile strength | Command bar opens the **Plato chat panel** (right side, 440-500px, like B's side panel but reversed: page stays main). Typing `/` shows B's 6 skills. The status pill opens the live apply queue (B's progress card) |
+| **Home** 05 | Greeting card, stats, Top matches, Applications, Following | B's summary line in the greeting ("Since yesterday I applied to 2 jobs and I'm applying to Talabat right now, with 1 more in line"), plus B's **Waiting for you** strip (amber row with Answer) above Top matches |
+| **Jobs** 06 | Searches column, list, filters, bulk bar | `New search` opens a **chat thread in the main area**: one question at a time with chips, and Plato skips anything already said ("accounting jobs in Riyadh from home" fills 3 answers). When it's done, the thread shows A's results list. Each search in the column = one thread (`/jobs/[threadId]`, already exists) |
+| **Review resumes** 07 | Whole screen | B's rule, "Nothing is sent until you confirm", becomes the copy on `Approve all & apply`. After confirming, the live queue shows in the status pill and in Applications |
+| **Applications** 08/09 | Stats, table, Needs you | Needs-you answers say "I'll remember it for every application" and save to Profile → Application answers. B's chip answers (Immediately / 2 weeks / 1 month / 2 months) replace free text where options are known |
+| **Following** 10 | Whole screen | "Follow companies hiring presales in Dubai" works from the command bar |
+| **Career** 11 | Whole screen | B's **Learn & prove a skill** ("Kafka · 7 jobs ask for it"): skills your matches ask for that aren't on your CV. A new "Skills you're missing" block in the right column, and the Skills tab. Practice interview opens in the chat panel with scoring |
+| **Profile** 12 | Header, tabs, Plato suggests | B's "Just tell me" input at the top of each tab ("my notice period is one month", "I moved to Jeddah"). B's "Not yet: I'll ask when a form needs it" as the empty state for answers |
+| **Onboarding** 01-03 | All 3 steps | No change. B has no onboarding, and A's onboarding is already AI-filled |
+| **Extension** 04 | Whole screen | No change |
+
+### Rules taken from B, applied everywhere
+1. **Ask once, remember forever.** Every answer the user gives (chat, Needs you, onboarding) goes to Profile and is never asked again.
+2. **One question at a time, with suggested answers.** Free text is always allowed.
+3. **Nothing is sent without confirmation.** Every bulk action shows what will happen first.
+4. **Plato reports in the first person** in the chat ("I applied", "I'm applying"). Plato notes on the page stay in the third person, as in A ("Plato read your CV").
+5. **Works for any job.** Copy and examples must work for an accountant or HR person, not only engineers (B ships a second persona, Mona, a senior accountant, for this).
+
+### Style conflicts: A wins
+| Topic | A (owner) | B (prototype) | Final |
+|---|---|---|---|
+| Surfaces | Flat white cards, paper background | Glass, radial gradient background | **A** |
+| Page background | `#F5F8FC`-ish | `#EEF4FB` | **A** |
+| Warning text | amber `#D97706` | `#B45309` | **B's `#B45309`** for text/pill text (`#D97706` on `#FEF3C7` is only ~2.6:1); keep `#D97706` for fills and dots |
+| Danger | `#F04438` | `#D92D20` / soft `#FEE4E2` | **B's** for text (better contrast); update `BRAND.md` |
+| Violet | none | design notes only | Drop (prototype-only) |
+| Fonts | Plus Jakarta Sans + Geist Mono | same | Same |
+| Company avatar | Grey monogram tile | Colored circle with initial | **A** |
+
+## 10. Open questions
 1. Does the onboarding AI assistant/FAQ panel stay, or is it gone?
 2. "Following" (companies + roles): how much backend exists (`insights.prisma`)?
 6. Applications "Needs you": inline rows (08) or side column (09)?

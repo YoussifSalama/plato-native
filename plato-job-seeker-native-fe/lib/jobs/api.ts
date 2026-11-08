@@ -169,7 +169,8 @@ export type JobMatch = {
   }
 }
 
-export type MatchTab = "discover" | "saved" | "applied" | "recommended"
+// hidden: jobs marked "not interested" (newer servers).
+export type MatchTab = "discover" | "saved" | "applied" | "recommended" | "hidden"
 export type MatchSort = "best" | "newest" | "salary" | "company"
 export type MatchLevel = "junior" | "mid" | "senior"
 

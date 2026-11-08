@@ -66,7 +66,18 @@ export const PAGES: Record<string, PageEntry> = {
       { id: 'jobs.top-ten', label: 'Select my top 10', does: 'Ticks the 10 best jobs that are not applied to yet' },
       { id: 'jobs.job:<jobId>', label: 'A job title', does: 'Opens the original posting in a new tab', tpl: 'jobs.job:' },
       { id: 'jobs.apply:<jobId>', label: 'Apply on a job', does: 'Opens the apply-with-the-extension dialog for that job', tpl: 'jobs.apply:' },
-      { id: 'jobs.apply-selected', label: 'Apply to N (bottom bar)', does: 'Opens the apply dialog for every ticked job' },
+      { id: 'jobs.tab.<tab>', label: 'For you | Saved | Applied | Hidden', does: 'Switches the list (tab = discover, saved, applied, hidden)', tpl: 'jobs.tab.' },
+      { id: 'jobs.apply-selected', label: 'Apply (bottom bar)', does: 'Opens the apply dialog for every ticked job, with their own CV' },
+      { id: 'jobs.tailor-selected', label: 'Tailor & apply (bottom bar)', does: 'Opens /jobs/review for the ticked jobs: Plato writes one resume per job to review before applying' },
+    ],
+  },
+  review: {
+    path: '/jobs/review',
+    purpose:
+      'Review your tailored resumes: Plato writes one resume per ticked job, one at a time, and shows only what changed from the profile (summary, experience order, keywords). Each job can be approved or set to use the original CV; nothing is sent until Approve all & apply.',
+    controls: [
+      { id: 'review.approve', label: 'Approve', does: 'Approves the resume shown for this job and moves to the next one' },
+      { id: 'review.approve-all', label: 'Approve all & apply (N)', does: 'Approves every written resume and opens the apply dialog with them' },
     ],
   },
   results: {

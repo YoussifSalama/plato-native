@@ -59,7 +59,9 @@ export class ExtensionBatchService {
 
   // ---- web (cookie): create a batch ---------------------------------
 
-  async createBatch(jobSeekerId: string, jobIds: string[], searchId?: string) {
+  // `resumes`: the seeker already chose per job on the web's review screen (their own
+  // CV, or the resume Plato made and they approved), so the extension won't ask again.
+  async createBatch(jobSeekerId: string, jobIds: string[], searchId?: string, resumes?: Record<string, 'profile' | 'tailored'>) {
     const ids = [...new Set(jobIds)];
     if (
       !ids.length ||
@@ -118,7 +120,7 @@ export class ExtensionBatchService {
     for (const a of accepted)
       items.push(
         await this.prisma.applyBatchItem.create({
-          data: { batch_id: batch.id, job_seeker_id: jobSeekerId, ...a },
+          data: { batch_id: batch.id, job_seeker_id: jobSeekerId, ...a, ...(resumes?.[a.job_id] && { resume_choice: resumes[a.job_id] }) },
         }),
       );
     return { batch_id: batch.id, items: items.map(dto), rejected };

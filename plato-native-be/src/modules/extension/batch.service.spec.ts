@@ -427,3 +427,16 @@ describe('a job held by an unlinked browser', () => {
     expect(after.find((x: any) => x.id === it.id)).toMatchObject({ state: 'PENDING', mine: true });
   });
 });
+
+describe('createBatch: resume choices from the web review screen', () => {
+  it('each item starts with the choice made per job, so the extension does not ask again', async () => {
+    const { prisma, svc } = setup();
+    const a = await addJob(prisma, 21);
+    const b = await addJob(prisma, 22);
+    await svc.createBatch('seeker1', [a.id, b.id], undefined, { [a.id]: 'tailored', [b.id]: 'profile' });
+    const rows = await prisma.applyBatchItem.findMany({ where: {} });
+    const choice = (id: string) => rows.find((r: any) => r.job_id === id)?.resume_choice;
+    expect(choice(a.id)).toBe('tailored');
+    expect(choice(b.id)).toBe('profile');
+  });
+});

@@ -75,7 +75,9 @@ import {
   type LevelKey,
 } from './match-facets';
 
-export type MatchTab = 'discover' | 'saved' | 'applied' | 'recommended';
+// hidden: jobs the seeker marked "not interested" (the Jobs page's Hidden tab).
+export type MatchTab =
+  'discover' | 'saved' | 'applied' | 'recommended' | 'hidden';
 export type MatchSort = 'best' | 'newest' | 'salary' | 'company';
 export type MatchLevel = LevelKey;
 
@@ -1212,10 +1214,14 @@ export class DiscoveryService implements OnModuleInit {
 
     return {
       job_seeker_id: jobSeekerId,
-      ...(shortlistedOnly && tab !== 'saved' && tab !== 'applied'
+      ...(shortlistedOnly &&
+      tab !== 'saved' &&
+      tab !== 'applied' &&
+      tab !== 'hidden'
         ? { shortlisted: true }
         : {}),
       ...(tab === 'saved' ? { saved: true } : {}),
+      ...(tab === 'hidden' ? { hidden: true } : {}),
       ...(tab === 'discover' || tab === 'recommended' ? { hidden: false } : {}),
       // "Strong match" threshold (75% of the best score) across all searches.
       ...(tab === 'recommended' && maxScore

@@ -12,7 +12,7 @@ const QUICK_PROMPTS = ["Find remote jobs", "Show my saved jobs", "Take me to my 
 
 // Only a search thread carries its own dock (it also drives the result list). Every
 // other page, Jobs home and Career included, gets this one next to the page's own chat.
-export const hasOwnAssistant = (path: string) => path.startsWith("/jobs/")
+export const hasOwnAssistant = (path: string) => path.startsWith("/jobs/") && !path.startsWith("/jobs/review")
 
 // The same Plato AI as in a search, reachable from every other page.
 // The command palette (Ctrl/Cmd+K) can hand it a question. It continues your latest search conversation.

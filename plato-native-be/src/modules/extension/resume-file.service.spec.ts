@@ -37,4 +37,17 @@ describe('ResumeFileService', () => {
     expect(asked).toBe('docs/js1/abc-cv.pdf');
     expect(out).toEqual({ name: 'Youssif CV.pdf', mime: 'application/pdf', data: Buffer.from('%PDF-1.4 y').toString('base64') });
   });
+
+  it('file: tailored and approved on the review screen for this job: that exact file, no new build', async () => {
+    const prisma: any = {
+      job: { findUniqueOrThrow: async () => ({ title: 'Engineer', company: 'Acme', description: 'd', location: null }) },
+      careerResume: { findFirst: async (a: any) => (a.where.job_id === 'j1' && a.where.approved ? { storage_key: 'career-resumes/js1/r.pdf' } : null) },
+    };
+    const batches: any = { assertWorking: async () => ({ id: 'i1', job_id: 'j1', resume_choice: 'tailored' }) };
+    const engine: any = { build: jest.fn() };
+    const storage: any = { getObjectBuffer: async (k: string) => Buffer.from(k) };
+    const out = await new ResumeFileService(prisma, batches, engine, storage).file(p, 'i1');
+    expect(engine.build).not.toHaveBeenCalled();
+    expect(out).toEqual({ name: 'Resume - Acme - Engineer.pdf', mime: 'application/pdf', data: Buffer.from('career-resumes/js1/r.pdf').toString('base64') });
+  });
 });

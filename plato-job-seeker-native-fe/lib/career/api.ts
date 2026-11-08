@@ -90,6 +90,12 @@ const getResumeDoc = (id: string) => request<{ id: string; title: string; versio
 const saveResumeEdits = (id: string, edits: ResumeEdits) => request<{ card: ResumeCard }>(apiClient.put(`/job-seeker/career/resumes/${id}`, edits))
 // A fresh wording for one part; nothing is saved until the seeker keeps it.
 const suggestResumeText = (id: string, req: { section: "summary" | "experience" | "project"; index?: number; note?: string }) => request<{ summary?: string; bullets?: string[] }>(apiClient.post(`/job-seeker/career/resumes/${id}/suggest`, req))
+// Jobs → Tailor & apply: the resume for one job (built once, then returned as is).
+export type ResumeChange = { section: "summary" | "experience" | "keywords"; before: string | null; after: string }
+export type JobResume =
+  | { status: "built"; id: string; job_id: string; job: { title: string; company: string }; title: string; approved: boolean; version: number; changes: ResumeChange[] }
+  | { status: "gaps"; job_id: string; job: { title: string; company: string }; gaps: string[] }
+export const resumeForJob = (jobId: string, opts: { confirmedSkills?: string[]; ignoreGaps?: boolean } = {}) => request<JobResume>(apiClient.post(`/job-seeker/career/resumes/for-job/${jobId}`, opts))
 const approveResume = (id: string) => request<{ id: string; approved: boolean }>(apiClient.post(`/job-seeker/career/resumes/${id}/approve`))
 
 // Voice interview: a short-lived key + fixed prompt from our server, then the browser

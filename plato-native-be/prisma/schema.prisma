@@ -88,6 +88,9 @@ model CareerResume {
   doc             Json?
   // The posting it was tailored to, kept to regenerate a bullet for the same job.
   job_description String?
+  // Set when the resume was made for one job (Jobs → Tailor & apply). Approval is
+  // then per job, and applying to that job uploads this file.
+  job_id          String?  @db.ObjectId
   // Versions of the resume for one target role: 1, 2, 3... A new edit is a new version.
   version         Int      @default(1)
   parent_id       String?  @db.ObjectId

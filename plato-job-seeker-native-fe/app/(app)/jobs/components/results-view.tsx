@@ -57,6 +57,7 @@ const TAB_EMPTY: Record<MatchTab, string> = {
   saved: "Nothing saved yet — tap the bookmark on a job to keep it here.",
   applied: "You haven't asked Plato to apply to anything yet.",
   recommended: "No recommendations yet — run a search first.",
+  hidden: "Nothing hidden. Jobs you mark “not interested” go here.",
 }
 
 function timeAgo(iso: string | null) {

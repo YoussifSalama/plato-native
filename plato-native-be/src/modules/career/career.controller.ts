@@ -29,13 +29,27 @@ const sendSchema = z.object({
   // Documents already uploaded by this seeker (a CV to improve).
   attachmentIds: z.array(z.string().min(1).max(40)).max(3).optional(),
   // A job pinned to the message (job card -> mock interview); must be one of the seeker's matches.
-  reference: z.object({ jobId: z.string().regex(/^[0-9a-f]{24}$/), searchId: z.string().regex(/^[0-9a-f]{24}$/).optional() }).optional(),
+  reference: z
+    .object({
+      jobId: z.string().regex(/^[0-9a-f]{24}$/),
+      searchId: z
+        .string()
+        .regex(/^[0-9a-f]{24}$/)
+        .optional(),
+    })
+    .optional(),
 });
 
 const suggestSchema = z.object({
   section: z.enum(['summary', 'experience', 'project']),
   index: z.number().int().min(0).max(30).optional(),
   note: z.string().trim().max(200).optional(),
+});
+
+const forJobSchema = z.object({
+  confirmedSkills: z.array(z.string().max(80)).max(30).optional(),
+  ignoreGaps: z.boolean().optional(),
+  rebuild: z.boolean().optional(),
 });
 
 @Controller('job-seeker/career')
@@ -176,6 +190,21 @@ export class CareerController {
     const parsed = suggestSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
     return this.resumes.suggest(req.userId, id, parsed.data);
+  }
+
+  // Jobs → Tailor & apply: build (or return) the resume for one job.
+  @Post('resumes/for-job/:jobId')
+  @UseGuards(TokensGuard)
+  async resumeForJob(
+    @Req() req: AuthenticatedRequest,
+    @Param('jobId') jobId: string,
+    @Body() body: unknown,
+  ) {
+    if (!/^[0-9a-f]{24}$/.test(jobId))
+      throw new BadRequestException('Invalid job');
+    const p = forJobSchema.safeParse(body ?? {});
+    if (!p.success) throw new BadRequestException('Invalid request');
+    return this.resumes.forJob(req.userId, jobId, p.data);
   }
 
   @Post('resumes/:id/approve')

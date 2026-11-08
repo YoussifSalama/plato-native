@@ -1131,6 +1131,30 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
         'You chose to skip this job because it asks for skills your profile does not show.',
         'ineligible',
       );
+    // Made for this job and approved on the review screen: that file, not a new build.
+    const approved = await this.prisma.careerResume
+      .findFirst({
+        where: {
+          job_seeker_id: app.job_seeker_id,
+          job_id: app.job_id,
+          approved: true,
+        },
+        orderBy: { created_at: 'desc' },
+        select: { storage_key: true },
+      })
+      .catch(() => null);
+    if (approved) {
+      try {
+        const pdf = await this.storage.getObjectBuffer(approved.storage_key);
+        await this.prisma.jobApplication.update({
+          where: { id: app.id },
+          data: { resume_key: approved.storage_key },
+        });
+        return { pdf };
+      } catch {
+        // The stored file is gone: build one as usual.
+      }
+    }
     if (!this.env.applyTailorResume || !app.job.description) return {};
     try {
       emit('drafting', 'Writing a resume for this job');

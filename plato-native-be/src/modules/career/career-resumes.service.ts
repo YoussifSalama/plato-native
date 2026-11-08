@@ -10,6 +10,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ResumeEngine } from '../resume/resume-engine.service';
 import { applyEdits, DocEdits } from '../resume/resume-edit';
 import { ResumeDoc, ResumeStrategy } from '../resume/resume.types';
+import { ResumeProfileService } from '../resume/resume-profile.service';
+import { resolveCountry } from '../discovery/countries';
+import type { AtsReport } from '../resume/resume-ats';
+import { resumeChanges } from './resume-changes';
 import type { ResumeCard } from './career.service';
 
 // Review, edit and approve the resumes built in the Career chat. An edit never
@@ -20,6 +24,7 @@ export class CareerResumesService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly engine: ResumeEngine,
+    private readonly profiles: ResumeProfileService,
   ) {}
 
   private async owned(userId: string, id: string) {
@@ -150,11 +155,16 @@ export class CareerResumesService {
   async approve(userId: string, id: string) {
     const row = await this.owned(userId, id);
     await this.prisma.$transaction([
+      // One approved resume per job when it was made for a job, else one per role
+      // (among the role resumes only, so approving one never unapproves a job's).
       this.prisma.careerResume.updateMany({
-        where: {
-          job_seeker_id: row.job_seeker_id,
-          target_role: row.target_role,
-        },
+        where: row.job_id
+          ? { job_seeker_id: row.job_seeker_id, job_id: row.job_id }
+          : {
+              job_seeker_id: row.job_seeker_id,
+              target_role: row.target_role,
+              OR: [{ job_id: null }, { job_id: { isSet: false } }],
+            },
         data: { approved: false },
       }),
       this.prisma.careerResume.update({
@@ -163,5 +173,120 @@ export class CareerResumesService {
       }),
     ]);
     return { id, approved: true };
+  }
+
+  // Jobs → Tailor & apply (owner screen 07): the resume for one job, built once and
+  // kept, so applying to that job later uploads this exact file. `auto` mode never
+  // asks; skill gaps come back to the review screen to answer.
+  async forJob(
+    userId: string,
+    jobId: string,
+    opts: {
+      confirmedSkills?: string[];
+      ignoreGaps?: boolean;
+      rebuild?: boolean;
+    },
+  ) {
+    const seeker = await this.prisma.jobSeeker.findFirst({
+      where: { user_id: userId },
+      select: { id: true },
+    });
+    if (!seeker) throw new NotFoundException('Job seeker profile not found');
+    // Only a job Plato found for this seeker.
+    const match = await this.prisma.jobSeekerJobMatch.findFirst({
+      where: { job_seeker_id: seeker.id, job_id: jobId },
+      select: {
+        job: {
+          select: {
+            title: true,
+            company: true,
+            description: true,
+            location: true,
+          },
+        },
+      },
+    });
+    if (!match) throw new NotFoundException('Job not found');
+    const job = match.job;
+
+    const existing = await this.prisma.careerResume.findFirst({
+      where: { job_seeker_id: seeker.id, job_id: jobId },
+      orderBy: { created_at: 'desc' },
+    });
+    if (
+      existing &&
+      !opts.rebuild &&
+      !opts.confirmedSkills?.length &&
+      !opts.ignoreGaps
+    )
+      return this.jobView(seeker.id, existing, job);
+
+    const result = await this.engine.build({
+      jobSeekerId: seeker.id,
+      mode: 'auto',
+      targetRole: job.title,
+      jobDescription: job.description,
+      jobCountry: job.location ? resolveCountry(job.location) : null,
+      confirmedSkills: opts.confirmedSkills,
+      ignoreGaps: opts.ignoreGaps,
+    });
+    if (result.status === 'needs_input')
+      return {
+        status: 'gaps' as const,
+        job_id: jobId,
+        job: { title: job.title, company: job.company },
+        gaps: result.kind === 'skill_gaps' ? result.gaps : [],
+      };
+
+    const key = `career-resumes/${seeker.id}/${randomUUID()}.pdf`;
+    await this.storage.putBuffer(key, result.pdf, 'application/pdf');
+    const row = await this.prisma.careerResume.create({
+      data: {
+        job_seeker_id: seeker.id,
+        job_id: jobId,
+        title: `${job.title} · ${job.company}`,
+        target_role: job.title,
+        storage_key: key,
+        doc: result.doc as unknown as Prisma.InputJsonValue,
+        job_description: job.description?.slice(0, 8000) ?? null,
+        version: (existing?.version ?? 0) + 1,
+        parent_id: existing?.id ?? null,
+        strategy: {
+          ...result.strategy,
+          checks: result.checks,
+          ats: result.ats,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return this.jobView(seeker.id, row, job);
+  }
+
+  private async jobView(
+    jobSeekerId: string,
+    row: {
+      id: string;
+      job_id: string | null;
+      title: string;
+      approved: boolean;
+      version: number;
+      doc: Prisma.JsonValue;
+      strategy: Prisma.JsonValue;
+    },
+    job: { title: string; company: string },
+  ) {
+    const profile = await this.profiles.load(jobSeekerId);
+    const doc = row.doc as unknown as ResumeDoc | null;
+    const ats =
+      (row.strategy as { ats?: AtsReport | null } | null)?.ats ?? null;
+    return {
+      status: 'built' as const,
+      id: row.id,
+      job_id: row.job_id,
+      job: { title: job.title, company: job.company },
+      title: row.title,
+      approved: row.approved,
+      version: row.version,
+      changes: doc ? resumeChanges(profile, doc, ats) : [],
+    };
   }
 }

@@ -115,6 +115,8 @@ export class ExtensionWebController {
     return this.batches.createBatch(
       await this.seekerId(req),
       parsed.data.jobIds,
+      undefined,
+      parsed.data.resumes,
     );
   }
 
@@ -145,7 +147,12 @@ const consentSchema = z
     message: 'A reason is required when declining',
   });
 
-const batchSchema = z.object({ jobIds: z.array(z.string()).min(1).max(50), searchId: z.string().regex(/^[0-9a-f]{24}$/).optional() });
+const batchSchema = z.object({
+  jobIds: z.array(z.string()).min(1).max(50),
+  searchId: z.string().regex(/^[0-9a-f]{24}$/).optional(),
+  // Per job, from the web's review screen: 'profile' = their own CV, 'tailored' = the approved one.
+  resumes: z.record(z.string(), z.enum(['profile', 'tailored'])).optional(),
+});
 
 export const transitionSchema = z.object({
   attempt_id: z.string().min(1).max(64),

@@ -12,7 +12,8 @@ import { createApplyBatch } from "@/lib/extension/api"
 // "Apply with Plato": the jobs are only TAGGED here (nothing is applied from the web); the person
 // connects the browser extension with a one-time code and the extension does the applying.
 // Step 1 open the extension, step 2 enter the code, step 3 (connected) start applying there.
-type Req = { top?: number; jobIds?: string[]; threadId?: string }
+// `resumes`: per job, chosen on the review screen (their own CV, or the approved tailored one).
+type Req = { top?: number; jobIds?: string[]; threadId?: string; resumes?: Record<string, "profile" | "tailored"> }
 
 const STEPS = ["Open extension", "Enter code", "Start applying"]
 
@@ -75,10 +76,11 @@ function Content({ count, req, onClose }: { count: number; req: Req; onClose: ()
     let alive = true
     ;(async () => {
       try {
-        const r = await queueForExtension(JSON.parse(reqKey) as Req)
+        const { resumes, ...queueReq } = JSON.parse(reqKey) as Req
+        const r = await queueForExtension(queueReq)
         if (!alive) return
         // straight into the extension's queue: they show up in the panel as waiting jobs
-        const b = r.jobIds?.length ? await createApplyBatch(r.jobIds).catch(() => null) : null
+        const b = r.jobIds?.length ? await createApplyBatch(r.jobIds, resumes).catch(() => null) : null
         if (!alive) return
         const already = b?.rejected.filter((x) => x.reason === "duplicate").length ?? 0
         setQueued((b?.items.length ?? 0) + already)

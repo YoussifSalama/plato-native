@@ -40,16 +40,12 @@ export function StatusPill({ tone, children, className }: { tone: Tone; children
 }
 
 // Company monogram: first letters, uppercase, max 3.
-export const monogram = (name: string) =>
-  name
-    .replace(/[^\p{L}\p{N}\s&]/gu, "")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 3) || "?"
+export const monogram = (name: string) => {
+  const words = name.replace(/[^\p{L}\p{N}\s&]/gu, "").split(/\s+/).filter(Boolean)
+  // One word gets its first two letters (Mozn → MZ is the owner's style; MO is the honest version).
+  const m = words.length > 1 ? words.slice(0, 2).map((w) => w[0]).join("") : (words[0] ?? "").slice(0, words[0]?.length <= 3 ? 3 : 2)
+  return m.toUpperCase() || "?"
+}
 export function MonoTile({ name, size = "md", className }: { name: string; size?: "sm" | "md"; className?: string }) {
   return (
     <span aria-hidden className={cn("flex shrink-0 items-center justify-center border border-border bg-card font-bold tracking-wide text-text-secondary", size === "sm" ? "size-[34px] rounded-[9px] text-[11px]" : "size-10 rounded-[10px] text-[12.5px]", className)}>

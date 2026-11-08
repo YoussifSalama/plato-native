@@ -27,8 +27,7 @@ import {
 import { JOBS_HOME, threadHref, timeAgo } from "@/lib/jobs/links"
 import { applicationHref, applicationReason, canRetry, isVerifySubmission, needsAttention, retryLabel, roughly, statusView, STATUS_STAGE, STEP_STAGE } from "@/lib/jobs/application-status"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { SourceTile } from "@/components/source-tile"
-import { PillTabs } from "@/components/pill-tabs"
+import { MonoTile, PlatoNote, Segmented, StatTile, StatusPill } from "@/components/plato-ui"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StageStepper } from "../jobs/components/stage-stepper"
 import { ApplicationProof } from "./application-proof"
@@ -43,6 +42,7 @@ const TABS = [
 ] as const satisfies readonly { key: string; label: string; statuses: readonly ApplicationStatus[] | null }[]
 type TabKey = (typeof TABS)[number]["key"]
 
+const inLastWeek = (iso: string) => Date.now() - new Date(iso).getTime() < 7 * 864e5
 const showValue = (v: AnswerValue) => (typeof v === "boolean" ? (v ? "Yes" : "No") : Array.isArray(v) ? v.join(", ") : v)
 
 function ApplicationsContent() {
@@ -161,29 +161,49 @@ function ApplicationsContent() {
     }
   }
 
+  const needs = scoped.filter(needsAttention)
+  const appliedWeek = scoped.filter((a) => a.status === "SUBMITTED" && inLastWeek(a.submitted_at ?? a.updated_at)).length
+  const settled = scoped.filter((a) => ["SUBMITTED", "FAILED", "EXPIRED", "SKIPPED"].includes(a.status))
+  const wentThrough = settled.length ? Math.round((settled.filter((a) => a.status === "SUBMITTED").length / settled.length) * 100) : null
+  const focusNeed = (id: string) => {
+    const el = document.getElementById(`need-${id}`)
+    el?.scrollIntoView({ behavior: "smooth", block: "center" })
+    el?.animate([{ boxShadow: "0 0 0 4px rgb(217 119 6 / 0.35)" }, { boxShadow: "0 0 0 0 transparent" }], { duration: 1200 })
+  }
+  const dateOf = (a: JobApplication) => (a.status === "QUEUED" ? (queue?.positions[a.id] ? `#${queue.positions[a.id].position} in line` : "In queue") : timeAgo(a.submitted_at ?? a.updated_at))
+
   return (
     <div className={PAGE}>
       <PageHeader
-        section="Find & apply"
         crumbs={threadId ? [{ label: "Jobs", href: JOBS_HOME }, { label: "Search", href: threadHref(threadId) }] : undefined}
         title="Applications"
-        description="Every job Plato applied to or is working on, live. Anything that needs you is at the top."
+        description="Every application Plato sends for you, and anything it needs from you to finish one."
+        actions={
+          apps && (
+            <div className="flex flex-wrap gap-2.5">
+              <StatTile value={scoped.length} label={threadId ? "From this search" : "All applications"} />
+              <StatTile value={appliedWeek} label="Applied this week" />
+              {wentThrough !== null && <StatTile value={`${wentThrough}%`} label="Went through" />}
+              <StatTile value={needs.length} label="Need you" tone={needs.length ? "need" : undefined} />
+            </div>
+          )
+        }
       />
 
       {readiness && !readiness.ready && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/25 bg-warning-soft/60 p-4 text-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-warning-line bg-warning-soft/70 p-4 text-sm">
           <p className="min-w-0 flex-1 text-foreground">
             <span className="font-semibold">Plato can&apos;t apply for you yet.</span> It never asks per job, so it needs these once: {readiness.missing.map((m) => m.label).join("; ")}.
           </p>
-          <Link href="/onboarding?step=3" className="inline-flex h-9 shrink-0 items-center rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground">
+          <Link href="/onboarding?step=3" className="inline-flex h-9 shrink-0 items-center rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground">
             Complete my details
           </Link>
         </div>
       )}
 
       {worker?.paused?.map((p) => (
-        <div key={p.source} className="flex items-start gap-3 rounded-lg border border-warning/25 bg-warning-soft/60 p-4 text-sm">
-          <PauseCircle className="mt-0.5 size-4 shrink-0 text-warning" />
+        <div key={p.source} className="flex items-start gap-3 rounded-2xl border border-warning-line bg-warning-soft/70 p-4 text-sm">
+          <PauseCircle className="mt-0.5 size-4 shrink-0 text-warning-ink" />
           <p className="text-foreground">
             <span className="font-semibold">{p.source[0] + p.source.slice(1).toLowerCase()} applications are on hold</span> until {new Date(p.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. The site asks &quot;verify you are human&quot; on every application, and Plato doesn&apos;t bypass that. The ones it reached are under &quot;Needs you&quot; with a link to submit by hand.
           </p>
@@ -191,7 +211,7 @@ function ApplicationsContent() {
       ))}
 
       {worker && (!worker.enabled || worker.dryRun) && (
-        <div className="flex items-start gap-3 rounded-lg border border-info/20 bg-info-soft/60 p-4 text-sm">
+        <div className="flex items-start gap-3 rounded-2xl border border-info/20 bg-info-soft/70 p-4 text-sm">
           {worker.enabled ? <FlaskConical className="mt-0.5 size-4 shrink-0 text-info" /> : <PauseCircle className="mt-0.5 size-4 shrink-0 text-info" />}
           <p className="text-foreground">
             {worker.enabled ? (
@@ -207,220 +227,236 @@ function ApplicationsContent() {
         </div>
       )}
 
-      {active && (
-        <motion.section layout className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-card p-4 shadow-[0_18px_44px_-28px_rgba(0,91,167,0.45)]">
-          <div className="flex items-center gap-3">
-            <SourceTile source={active.job.source} size={36} />
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold tracking-[0.08em] text-primary uppercase">Applying now</p>
-              <p className="truncate text-sm font-semibold text-foreground">
-                {active.job.title} · {active.job.company}
-              </p>
-            </div>
-            <span className="relative flex size-2.5">
-              <span className="absolute inset-0 animate-ping rounded-full bg-primary/50" />
-              <span className="relative size-2.5 rounded-full bg-primary" />
-            </span>
-          </div>
-          <StageStepper current={activeStep ? (STEP_STAGE[activeStep.step] ?? 4) : 4} />
-          <p className="text-sm text-text-secondary">{activeStep?.message ?? "Plato is working on it"}</p>
-        </motion.section>
-      )}
+      {error && <p className="rounded-xl border border-destructive/30 bg-danger-soft p-3 text-sm text-destructive">{error}</p>}
 
-      {worker?.enabled && (inLine > 0 || (!active && scoped.length > 0)) && (
-        <p className="flex items-center gap-2 text-sm text-text-secondary">
-          {inLine > 0 ? <Clock className="size-4 text-primary" /> : <CircleCheck className="size-4 text-success" />}
-          {inLine > 0 ? (
-            <>
-              <span className="font-semibold text-foreground">
-                {inLine} waiting{active ? " behind this one" : ""}
-              </span>
-              · one at a time, {roughly(queue?.totalEtaSeconds ?? 0)} until the last one is done. You can leave this page; Plato will notify you.
-            </>
-          ) : (
-            "Queue is empty. Plato has nothing left to apply to."
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <section className="flex min-w-0 flex-col gap-3">
+          {active && (
+            <motion.div layout className="flex flex-col gap-3 rounded-[22px] border border-primary/20 bg-card p-4 shadow-card">
+              <div className="flex items-center gap-3">
+                <MonoTile name={active.job.company} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold tracking-[0.08em] text-primary uppercase">Applying now</p>
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {active.job.title} · {active.job.company}
+                  </p>
+                </div>
+                <span className="relative flex size-2.5">
+                  <span className="absolute inset-0 animate-ping rounded-full bg-primary/50" />
+                  <span className="relative size-2.5 rounded-full bg-primary" />
+                </span>
+              </div>
+              <StageStepper current={activeStep ? (STEP_STAGE[activeStep.step] ?? 4) : 4} />
+              <p className="text-sm text-text-secondary">{activeStep?.message ?? "Plato is working on it"}</p>
+            </motion.div>
           )}
-        </p>
-      )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <PillTabs id="applications-tabs" tabs={TABS.map((t) => ({ key: t.key, label: t.label, count: scoped.filter((a) => inTab(t.key, a)).length, attention: t.key === "needs" && scoped.some((a) => inTab("needs", a)) }))} value={tab} onChange={(k) => setQuery({ tab: k })} label="Applications" dataAi="applications.tab" />
-        <div className="ml-auto flex items-center gap-2 text-[13px] text-muted-foreground">
-          Platform:
-          <Select items={sourceOptions} value={source ?? ALL} onValueChange={(v) => setQuery({ source: v })}>
-            <SelectTrigger className="h-9 max-w-48 gap-1.5 rounded-full bg-card px-3.5 text-[13px] font-semibold text-foreground">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end" className="w-max max-w-80 min-w-(--anchor-width)">
-              {sourceOptions.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          Search:
-          <Select items={threadOptions} value={threadId ?? ALL} onValueChange={(v) => setQuery({ thread: v })}>
-            <SelectTrigger className="h-9 max-w-64 gap-1.5 rounded-full bg-card px-3.5 text-[13px] font-semibold text-foreground">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end" className="w-max max-w-80 min-w-(--anchor-width)">
-              {threadOptions.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
-
-      <div className="rounded-lg border bg-card px-5 py-1">
-        {apps === null && !error && (
-          <ul aria-busy="true">
-            {Array.from({ length: 4 }, (_, i) => (
-              <li key={i} className="flex items-center gap-4 border-b border-divider py-4 last:border-b-0">
-                <Skeleton className="size-11 rounded-sm" />
-                <div className="flex flex-1 flex-col gap-2">
-                  <Skeleton className="h-4 w-1/3" />
-                  <Skeleton className="h-3 w-1/4" />
-                </div>
-                <Skeleton className="h-6 w-20 rounded-full" />
-              </li>
-            ))}
-          </ul>
-        )}
-        {apps !== null && shown.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-12 text-center">
-            <span className="flex size-12 items-center justify-center rounded-full bg-primary-soft text-primary">
-              <Sparkles className="size-5" />
-            </span>
-            <p className="text-sm font-semibold text-foreground">{scoped.length ? "Nothing in this view" : "No applications yet"}</p>
-            <p className="max-w-sm text-sm text-text-secondary">{scoped.length ? "Pick another tab to see the rest." : "Pick jobs from a search and hit “Apply”. They’ll show up here."}</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-bold tracking-tight">All applications</h2>
+            <Segmented value={tab} onChange={(k) => setQuery({ tab: k })} options={TABS.map((t) => ({ value: t.key, label: `${t.label} · ${scoped.filter((a) => inTab(t.key, a)).length}` }))} />
           </div>
-        )}
-        <ul>
-          {shown.map((a) => {
-            const s = statusView(a)
-            const steps = timeline[a.id] ?? []
-            const last = steps.at(-1)
-            const verifying = isVerifySubmission(a)
-            const waitingOnYou = needsAttention(a)
-            const open = expanded === a.id || waitingOnYou
-            const atsSource = a.job.effective_ats_source ?? a.job.source
-            const supported = !worker || worker.sources.includes(atsSource)
-            const sent = a.evidence?.sent ?? []
-            const place = queue?.positions[a.id]
-            const hasProof = !!a.evidence?.screenshotKey
-            const hasDetails = waitingOnYou || steps.length > 0 || sent.length > 0 || hasProof
-            return (
-              <li key={a.id} ref={a.id === focus ? focusRef : undefined} className={cn("-mx-5 border-b border-divider px-5 py-4 transition-colors last:border-b-0", a.id === focus ? "bg-primary-tint" : "hover:bg-primary-tint")}>
-                <div className="flex items-center gap-4">
-                  <SourceTile source={a.job.source} />
-                  <div className="min-w-0 flex-1">
-                    <Link href={applicationHref(a.id)} data-ai={`applications.row:${a.id}`} className="block truncate text-base font-semibold text-foreground hover:underline">
-                      {a.job.title}
-                    </Link>
-                    <p className="truncate text-sm text-text-secondary">
-                      {a.job.company}
-                      {a.job.location ? ` · ${a.job.location}` : ""}
-                    </p>
-                    <p className="mt-0.5 text-xs text-text-tertiary">
-                      {a.status === "IN_PROGRESS" && last ? last.message : waitingOnYou || a.status === "EXPIRED" || a.status === "SKIPPED" ? applicationReason(a) : a.status === "QUEUED" && place ? worker?.paused?.some((p) => p.source === atsSource) ? "On hold: this site is asking for a human check" : `#${place.position} in line · done in ${roughly(place.etaSeconds)}` : a.status === "QUEUED" && worker && !worker.enabled ? "Waiting: auto-apply is paused" : s.hint}
-                      {" · "}
-                      {a.submitted_at ? `applied ${timeAgo(a.submitted_at)}` : `queued ${timeAgo(a.created_at)}`}
-                      {a.attempts > 1 ? ` · attempt ${a.attempts}` : ""}
-                      {a.status === "QUEUED" && a.next_attempt_at ? ` · next try ${new Date(a.next_attempt_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
-                      {a.thread_id && !threadId && (
-                        <>
-                          {" · "}
-                          <Link href={threadHref(a.thread_id)} className="text-primary hover:underline">
-                            from search
+          <div className="flex flex-wrap items-center gap-2 text-[13px] text-text-secondary">
+            {worker?.enabled && (inLine > 0 || (!active && scoped.length > 0)) && (
+              <span className="mr-auto flex items-center gap-2">
+                {inLine > 0 ? <Clock className="size-4 text-primary" /> : <CircleCheck className="size-4 text-success" />}
+                {inLine > 0 ? `${inLine} waiting, one at a time · ${roughly(queue?.totalEtaSeconds ?? 0)} left` : "Queue is empty."}
+              </span>
+            )}
+            <span className="ml-auto">Platform:</span>
+            <Select items={sourceOptions} value={source ?? ALL} onValueChange={(v) => setQuery({ source: v })}>
+              <SelectTrigger className="h-9 max-w-48 gap-1.5 rounded-full bg-card px-3.5 text-[13px] font-semibold text-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end" className="w-max max-w-80 min-w-(--anchor-width)">
+                {sourceOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            Search:
+            <Select items={threadOptions} value={threadId ?? ALL} onValueChange={(v) => setQuery({ thread: v })}>
+              <SelectTrigger className="h-9 max-w-64 gap-1.5 rounded-full bg-card px-3.5 text-[13px] font-semibold text-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end" className="w-max max-w-80 min-w-(--anchor-width)">
+                {threadOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="rounded-[22px] border bg-card shadow-card">
+            <div className="hidden grid-cols-[minmax(0,1fr)_150px_110px_auto] gap-4 border-b px-5 py-2.5 text-[13px] text-text-tertiary md:grid">
+              <span>Job</span>
+              <span>Status</span>
+              <span>Date</span>
+              <span className="w-[170px]" />
+            </div>
+            {apps === null && !error && (
+              <ul aria-busy="true" className="px-5">
+                {Array.from({ length: 4 }, (_, i) => (
+                  <li key={i} className="flex items-center gap-4 border-b border-divider py-4 last:border-b-0">
+                    <Skeleton className="size-10 rounded-[10px]" />
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Skeleton className="h-4 w-1/3" />
+                      <Skeleton className="h-3 w-1/4" />
+                    </div>
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {apps !== null && shown.length === 0 && (
+              <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-primary-soft text-primary">
+                  <Sparkles className="size-5" />
+                </span>
+                <p className="text-sm font-semibold text-foreground">{scoped.length ? "Nothing in this view" : "No applications yet"}</p>
+                <p className="max-w-sm text-sm text-text-secondary">{scoped.length ? "Pick another filter to see the rest." : "Pick jobs from a search and hit “Apply”. They’ll show up here."}</p>
+              </div>
+            )}
+            <ul>
+              {shown.map((a) => {
+                const s = statusView(a)
+                const steps = timeline[a.id] ?? []
+                const last = steps.at(-1)
+                const waitingOnYou = needsAttention(a)
+                const open = expanded === a.id && !waitingOnYou
+                const atsSource = a.job.effective_ats_source ?? a.job.source
+                const supported = !worker || worker.sources.includes(atsSource)
+                const sent = a.evidence?.sent ?? []
+                const hasProof = !!a.evidence?.screenshotKey
+                const hasDetails = !waitingOnYou && (steps.length > 0 || sent.length > 0 || hasProof)
+                return (
+                  <li key={a.id} ref={a.id === focus ? focusRef : undefined} className={cn("border-b border-divider px-5 py-3 transition-colors last:border-b-0", waitingOnYou ? "bg-warning-soft/40" : a.id === focus ? "bg-primary-tint" : "hover:bg-primary-tint/60")}>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_150px_110px_auto]">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <MonoTile name={a.job.company} size="sm" />
+                        <div className="min-w-0">
+                          <Link href={applicationHref(a.id)} data-ai={`applications.row:${a.id}`} className="block truncate font-semibold text-foreground hover:underline">
+                            {a.job.title}
                           </Link>
-                        </>
-                      )}
-                    </p>
-                    {a.error && a.status !== "SUBMITTED" && <p className="mt-1 line-clamp-2 text-xs text-destructive">{a.error}</p>}
-                  </div>
-                  <span className={cn("shrink-0 rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap", s.tone)}>{s.label}</span>
-                  {canRetry(a) && (
-                    <button type="button" data-ai={`applications.retry:${a.id}`} disabled={retrying === a.id} onClick={() => void retry(a)} title="Put it back in the queue" className="flex h-[30px] items-center gap-1.5 rounded-sm border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50">
-                      <RotateCcw className={cn("size-3.5", retrying === a.id && "animate-spin")} />
-                      {retryLabel(a)}
-                    </button>
-                  )}
-                  {(a.status === "IN_PROGRESS" || a.status === "NEEDS_USER_VERIFICATION") && (
-                    <button type="button" onClick={() => void focusApplicationBrowser(a.id).catch(() => setError("The browser window isn't open right now."))} className="flex h-[30px] items-center gap-1.5 rounded-sm border border-primary/30 bg-primary-soft px-2.5 text-xs font-medium text-primary hover:bg-primary/10">
-                      <Radio className="size-3.5" />
-                      Watch live
-                    </button>
-                  )}
-                  <Link href={applicationHref(a.id)} className="flex h-[30px] items-center rounded-sm border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-muted">
-                    Details
-                  </Link>
-                  <a href={a.job.apply_url ?? a.job.url} target="_blank" rel="noreferrer" aria-label="Open posting" className="flex size-[30px] items-center justify-center rounded-sm text-lavender hover:bg-muted hover:text-text-secondary">
-                    <ExternalLink className="size-4" />
-                  </a>
-                  <button
-                    type="button"
-                    disabled={!hasDetails}
-                    aria-expanded={open}
-                    aria-label={open ? "Hide details" : "Show details"}
-                    onClick={() => setExpanded(open ? null : a.id)}
-                    className="flex size-[30px] items-center justify-center rounded-sm text-lavender hover:bg-muted hover:text-text-secondary disabled:opacity-30"
-                  >
-                    <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
-                  </button>
-                </div>
-
-                <AnimatePresence initial={false}>
-                  {open && hasDetails && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-                      <div className="flex flex-col gap-4 pt-4 pl-[60px]">
-                        {a.status !== "SUBMITTED" && a.status !== "EXPIRED" && supported && <StageStepper current={last ? (STEP_STAGE[last.step] ?? STATUS_STAGE[a.status]) : STATUS_STAGE[a.status]} />}
-
-                        {verifying && <p className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning">{applicationReason(a)}</p>}
-                        {waitingOnYou && !verifying && <ApplicationReview app={a} onDone={() => void load()} />}
-
-                        {steps.length > 0 && (
-                          <ol className="flex flex-col gap-1.5 border-l border-divider pl-4">
-                            {steps.map((e, i) => (
-                              <li key={`${e.at}-${i}`} className="relative text-[13px] text-text-secondary">
-                                <span className={cn("absolute top-1.5 -left-[21px] size-2 rounded-full", i === steps.length - 1 ? "bg-primary" : "bg-lavender/60")} />
-                                {e.message}
-                                <span className="ml-2 text-xs text-text-tertiary">{new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
-                              </li>
-                            ))}
-                          </ol>
-                        )}
-
-                        {hasProof && <ApplicationProof applicationId={a.id} kind={a.evidence?.failed ? "failed" : a.evidence?.dryRun ? "dryRun" : "submitted"} fileName={`plato-application-${a.job.company.replace(/\W+/g, "-").toLowerCase()}.png`} />}
-
-                        {sent.length > 0 && (
-                          <div className="flex flex-col gap-2">
-                            <p className="text-[11px] font-semibold tracking-[0.08em] text-text-tertiary uppercase">{a.evidence?.dryRun ? "What Plato would send" : "What Plato sent"}</p>
-                            <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                              {sent.map((row, i) => (
-                                <div key={i} className="min-w-0">
-                                  <dt className="truncate text-xs text-text-tertiary" title={row.label}>
-                                    {row.label}
-                                  </dt>
-                                  <dd className="text-sm whitespace-pre-line text-foreground">{showValue(row.value)}</dd>
-                                </div>
-                              ))}
-                            </dl>
-                          </div>
-                        )}
+                          <p className="truncate text-[13px] text-text-secondary">
+                            {a.job.company}
+                            {a.status === "IN_PROGRESS" && last ? ` · ${last.message}` : waitingOnYou || a.status === "EXPIRED" || a.status === "SKIPPED" ? ` · ${applicationReason(a)}` : ""}
+                          </p>
+                          {a.error && a.status !== "SUBMITTED" && !waitingOnYou && <p className="mt-0.5 line-clamp-1 text-xs text-destructive">{a.error}</p>}
+                        </div>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </li>
-            )
-          })}
-        </ul>
+                      <span>
+                        <span className={cn("rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold whitespace-nowrap", s.tone.replace("text-warning", "text-warning-ink").replace("text-success", "text-success-ink"))}>{s.label}</span>
+                      </span>
+                      <span className="hidden text-sm whitespace-nowrap text-text-secondary md:block">{dateOf(a)}</span>
+                      <span className="col-span-2 flex items-center justify-end gap-1 md:col-span-1 md:w-[170px]">
+                        {waitingOnYou ? (
+                          <button type="button" onClick={() => focusNeed(a.id)} className="text-sm font-semibold text-primary hover:underline xl:inline">
+                            Answer
+                          </button>
+                        ) : (
+                          <>
+                            {canRetry(a) && (
+                              <button type="button" data-ai={`applications.retry:${a.id}`} disabled={retrying === a.id} onClick={() => void retry(a)} title="Put it back in the queue" className="flex h-[30px] items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50">
+                                <RotateCcw className={cn("size-3.5", retrying === a.id && "animate-spin")} />
+                                {retryLabel(a)}
+                              </button>
+                            )}
+                            {a.status === "IN_PROGRESS" && (
+                              <button type="button" onClick={() => void focusApplicationBrowser(a.id).catch(() => setError("The browser window isn't open right now."))} className="flex h-[30px] items-center gap-1.5 rounded-lg border border-primary/30 bg-primary-soft px-2.5 text-xs font-medium whitespace-nowrap text-primary hover:bg-primary/10">
+                                <Radio className="size-3.5" />
+                                Watch live
+                              </button>
+                            )}
+                            {a.status === "SUBMITTED" && (
+                              <Link href={applicationHref(a.id)} className="text-sm font-semibold text-primary hover:underline">
+                                See what was sent
+                              </Link>
+                            )}
+                          </>
+                        )}
+                        <a href={a.job.apply_url ?? a.job.url} target="_blank" rel="noreferrer" aria-label="Open posting" className="flex size-[30px] items-center justify-center rounded-lg text-lavender hover:bg-muted hover:text-text-secondary">
+                          <ExternalLink className="size-4" />
+                        </a>
+                        <button type="button" disabled={!hasDetails} aria-expanded={open} aria-label={open ? "Hide details" : "Show details"} onClick={() => setExpanded(open ? null : a.id)} className="flex size-[30px] items-center justify-center rounded-lg text-lavender hover:bg-muted hover:text-text-secondary disabled:opacity-30">
+                          <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+                        </button>
+                      </span>
+                    </div>
+
+                    <AnimatePresence initial={false}>
+                      {open && hasDetails && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+                          <div className="flex flex-col gap-4 pt-4 pl-[46px]">
+                            {a.status !== "SUBMITTED" && a.status !== "EXPIRED" && supported && <StageStepper current={last ? (STEP_STAGE[last.step] ?? STATUS_STAGE[a.status]) : STATUS_STAGE[a.status]} />}
+                            {steps.length > 0 && (
+                              <ol className="flex flex-col gap-1.5 border-l border-divider pl-4">
+                                {steps.map((e, i) => (
+                                  <li key={`${e.at}-${i}`} className="relative text-[13px] text-text-secondary">
+                                    <span className={cn("absolute top-1.5 -left-[21px] size-2 rounded-full", i === steps.length - 1 ? "bg-primary" : "bg-lavender/60")} />
+                                    {e.message}
+                                    <span className="ml-2 text-xs text-text-tertiary">{new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+                                  </li>
+                                ))}
+                              </ol>
+                            )}
+                            {hasProof && <ApplicationProof applicationId={a.id} kind={a.evidence?.failed ? "failed" : a.evidence?.dryRun ? "dryRun" : "submitted"} fileName={`plato-application-${a.job.company.replace(/\W+/g, "-").toLowerCase()}.png`} />}
+                            {sent.length > 0 && (
+                              <div className="flex flex-col gap-2">
+                                <p className="text-[11px] font-semibold tracking-[0.08em] text-text-tertiary uppercase">{a.evidence?.dryRun ? "What Plato would send" : "What Plato sent"}</p>
+                                <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                                  {sent.map((row, i) => (
+                                    <div key={i} className="min-w-0">
+                                      <dt className="truncate text-xs text-text-tertiary" title={row.label}>
+                                        {row.label}
+                                      </dt>
+                                      <dd className="text-sm whitespace-pre-line text-foreground">{showValue(row.value)}</dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </section>
+
+        {/* Needs you: Plato Apply paused these until the seeker helps (screen 09). */}
+        <aside className="flex flex-col gap-3 xl:sticky xl:top-24">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight">Needs you</h2>
+            <p className="text-[13px] text-text-secondary">Plato paused these until you help. Every answer is saved for next time.</p>
+          </div>
+          {apps !== null && needs.length === 0 && (
+            <div className="rounded-2xl border bg-card p-4 shadow-card">
+              <PlatoNote variant="inline">Nothing needs you. Plato is applying on its own.</PlatoNote>
+            </div>
+          )}
+          {needs.map((a) => (
+            <div key={a.id} id={`need-${a.id}`} className="flex flex-col gap-3 rounded-2xl border border-warning-line bg-[#fffdf5] p-4 shadow-card">
+              <div className="flex items-center gap-3">
+                <MonoTile name={a.job.company} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <Link href={applicationHref(a.id)} className="block truncate text-sm font-semibold hover:underline">
+                    {a.job.title}
+                  </Link>
+                  <p className="truncate text-xs text-text-secondary">{a.job.company}</p>
+                </div>
+                <StatusPill tone="warning">{isVerifySubmission(a) ? "Please check" : a.status === "NEEDS_USER_VERIFICATION" ? "Human check" : a.needs_input?.reason === "questions" ? "Question" : "Needs you"}</StatusPill>
+              </div>
+              {isVerifySubmission(a) ? <p className="text-sm font-medium text-warning-ink">{applicationReason(a)}</p> : <ApplicationReview app={a} onDone={() => void load()} />}
+            </div>
+          ))}
+        </aside>
       </div>
     </div>
   )

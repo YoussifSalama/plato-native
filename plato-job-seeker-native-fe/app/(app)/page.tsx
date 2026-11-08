@@ -1,55 +1,26 @@
 "use client"
 
 import { NextSteps } from "@/components/next-steps"
-import { PAGE, PageHeader } from "@/components/page-header"
+import { PAGE } from "@/components/page-header"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import {
-  Activity,
-  ArrowRight,
-  Award,
-  Banknote,
-  Briefcase,
-  Building2,
-  ChevronRight,
-  ClipboardList,
-  Filter,
-  Globe2,
-  Layers,
-  MapPin,
-  Plus,
-  Search,
-  Sparkles,
-  Target,
-} from "lucide-react"
+import { ArrowRight, Bookmark, Plus } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { SourceTile } from "@/components/source-tile"
+import { ExtensionApplyModal } from "@/components/extension-apply-modal"
+import { MatchRing, MonoTile, PlatoNote, StatTile, StatusPill } from "@/components/plato-ui"
 import { getMe } from "@/lib/auth/api"
-import { createThread, getDiscoveryStats, listThreads, SOURCE_LABEL, type DiscoveryStats, type JobSourceName, type ThreadSummary } from "@/lib/jobs/api"
-import { JOBS_HOME, runSummary, threadHref, timeAgo } from "@/lib/jobs/links"
-import { staggerContainer } from "@/lib/motion-variants"
-import { RunStatusIcon } from "./jobs/components/notification-bell"
-import { Bar, BreakdownRows, Card, KpiCard, Ring, Sparkbars, TONES, type Tone } from "./jobs/components/dashboard-widgets"
+import { getDigests, type Digest } from "@/lib/insights/api"
+import { createThread, getDiscoveryStats, getMatches, listApplications, setSaved, type DiscoveryStats, type JobApplication, type JobMatch } from "@/lib/jobs/api"
+import { needsAttention, statusView } from "@/lib/jobs/application-status"
+import { threadHref, timeAgo } from "@/lib/jobs/links"
+import { staggerContainer, fadeUpItem } from "@/lib/motion-variants"
 
-const REMOTE: Record<string, { label: string; tone: Tone }> = {
-  REMOTE: { label: "Remote", tone: "green" },
-  HYBRID: { label: "Hybrid", tone: "blue" },
-  ONSITE: { label: "On-site", tone: "amber" },
-  UNKNOWN: { label: "Not specified", tone: "slate" },
-}
-const LEVEL: Record<string, { label: string; tone: Tone }> = {
-  junior: { label: "Junior / Entry", tone: "teal" },
-  mid: { label: "Mid level", tone: "blue" },
-  senior: { label: "Senior / Lead", tone: "brand" },
-}
-
-function entries<T extends string>(rec: Partial<Record<T, number>> | undefined) {
-  return Object.entries(rec ?? {}).map(([k, v]) => [k as T, v as number] as const)
-}
+const WEEK_GOAL = 10
+const REMOTE: Record<string, string> = { REMOTE: "Remote", HYBRID: "Hybrid", ONSITE: "On-site", UNKNOWN: "" }
 
 function greeting() {
   const h = new Date().getHours()
@@ -59,28 +30,40 @@ const firstName = (full?: string) => {
   const f = full?.trim().split(/\s+/)[0]
   return f ? f[0].toUpperCase() + f.slice(1).toLowerCase() : ""
 }
+const toneOf = (cls: string) => (cls.includes("warning") ? "warning" : cls.includes("success") ? "success" : cls.includes("info") ? "info" : cls.includes("destructive") ? "danger" : "neutral")
+const within = (iso: string | null, days: number) => !!iso && Date.now() - new Date(iso).getTime() < days * 864e5
+// Why Plato picked this job, in one line.
+const reason = (m: JobMatch) => (m.job.eligibility && m.job.eligibility.status !== "open" && m.job.eligibility.note ? m.job.eligibility.note : `${m.match_label} for your profile${m.job.posted_at && within(m.job.posted_at, 2) ? ", posted in the last 2 days" : ""}`)
 
-// Home: the seeker's job hunt at a glance. Every number and chart about the
-// hunt lives here; /jobs is only for searching.
+// Home: where the job hunt stands, what needs you, and the best next jobs (SPEC §5, screen 05).
 export default function Home() {
   const router = useRouter()
   const [name, setName] = useState("")
   const [stats, setStats] = useState<DiscoveryStats | null>(null)
-  const [threads, setThreads] = useState<ThreadSummary[] | null>(null)
+  const [apps, setApps] = useState<JobApplication[] | null>(null)
+  const [top, setTop] = useState<JobMatch[] | null>(null)
+  const [digest, setDigest] = useState<Digest | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [apply, setApply] = useState<string | null>(null)
 
   useEffect(() => {
     // Signed out goes to /login from the app shell; a new account finishes onboarding first.
     getMe()
       .then((me) => (me.onboarding_completed === false ? router.replace("/onboarding") : setName(firstName(me.full_name))))
       .catch(() => {})
-    Promise.all([getDiscoveryStats(), listThreads()])
-      .then(([s, t]) => {
+    Promise.all([getDiscoveryStats(), listApplications()])
+      .then(([s, a]) => {
         setStats(s)
-        setThreads(t)
+        setApps(a)
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load your dashboard"))
+    getMatches({ tab: "discover", sort: "best", take: 3 })
+      .then((r) => setTop(r.items))
+      .catch(() => setTop([]))
+    getDigests(1)
+      .then((d) => setDigest(d[0] ?? null))
+      .catch(() => setDigest(null))
   }, [router])
 
   async function newSearch() {
@@ -92,242 +75,236 @@ export default function Home() {
       setCreating(false)
     }
   }
+  async function toggleSave(m: JobMatch) {
+    setTop((cur) => cur?.map((x) => (x.id === m.id ? { ...x, saved: !x.saved } : x)) ?? cur)
+    await setSaved(m.job.id, !m.saved).catch(() => setTop((cur) => cur?.map((x) => (x.id === m.id ? { ...x, saved: m.saved } : x)) ?? cur))
+  }
 
-  const s = stats
-  const running = s?.runs.running ?? 0
-  const appsTotal = s ? Object.values(s.applications).reduce((n, c) => n + (c ?? 0), 0) : 0
-  const fit = s?.shortlisted ? Math.round(((s.quality.excellent + s.quality.strong) / s.shortlisted) * 100) : null
-  const funnel = s
-    ? [
-        { key: "found", label: "Jobs found", count: s.shortlisted, tone: "brand" as Tone },
-        { key: "saved", label: "Saved", count: s.saved, tone: "teal" as Tone },
-        { key: "queued", label: "Sent to Plato", count: appsTotal, tone: "amber" as Tone },
-        { key: "applied", label: "Applied", count: s.applications.submitted, tone: "green" as Tone },
-      ]
-    : []
-  // One line under the greeting: the thing most worth knowing right now.
-  const headline = !s
+  const needs = apps?.filter(needsAttention) ?? []
+  const working = apps?.find((a) => a.status === "IN_PROGRESS" || a.status === "EXTENSION_ACTIVE")
+  const sentWeek = apps?.filter((a) => a.status === "SUBMITTED" && within(a.submitted_at ?? a.updated_at, 7)).length ?? 0
+  const sent = apps?.filter((a) => a.status === "SUBMITTED").length ?? 0
+  const recent = [...(apps ?? [])].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)).slice(0, 3)
+  // The one line under the greeting: what changed and what Plato is doing.
+  const summary = !stats
     ? "Here is where your job hunt stands."
-    : s.applications.needsInput
-      ? `${s.applications.needsInput} application${s.applications.needsInput === 1 ? " needs" : "s need"} an answer from you.`
-      : running
-        ? `Plato is searching right now. ${s.shortlisted} jobs are ready so far.`
-        : s.shortlisted
-          ? `${s.shortlisted} jobs are ready for you, ${s.quality.excellent} of them excellent matches.`
-          : "Start a search and Plato will rank every posting against your profile."
-  const recent = threads?.slice(0, 4) ?? null
+    : [
+        sentWeek ? `Plato sent ${sentWeek} application${sentWeek === 1 ? "" : "s"} this week.` : null,
+        working ? `It's applying to ${working.job.company} right now.` : stats.runs.running ? "It's searching for jobs right now." : null,
+        !sentWeek && !working ? (stats.shortlisted ? `${stats.shortlisted} jobs are ready for you, ${stats.quality.excellent} of them excellent matches.` : "Start a search and Plato will rank every posting against your profile.") : null,
+      ]
+        .filter(Boolean)
+        .join(" ")
 
   return (
     <div className={PAGE}>
-      <PageHeader
-        section="Home"
-        title={
-          <>
+      {error && <p className="rounded-xl border border-destructive/30 bg-danger-soft p-3 text-sm text-destructive">{error}</p>}
+
+      {/* Greeting and the numbers that matter this week. */}
+      <section data-tour="page-header" className="flex flex-wrap items-center gap-6 rounded-[22px] border bg-card p-6 shadow-card">
+        <div className="min-w-[260px] flex-1">
+          <p className="eyebrow">{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</p>
+          <h1 className="mt-1.5 text-[30px] leading-tight font-extrabold tracking-tight">
             {greeting()}
             {name && <span className="text-brand-gradient">, {name}</span>}
-          </>
-        }
-        description={headline}
-        actions={
-          <>
-            {s?.applications.needsInput ? (
-              <Link href="/applications" data-ai="home.needs-you" className="flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-4 py-2 text-sm font-semibold text-warning transition-colors hover:border-warning/60">
-                Answer now
-                <ArrowRight className="size-4" />
+          </h1>
+          <p className="mt-1.5 max-w-[60ch] text-[15px] text-text-secondary">{summary}</p>
+        </div>
+        {stats ? (
+          <div data-tour="home-kpis" className="flex flex-wrap gap-2.5">
+            <Link href="/jobs" data-ai="home.matches">
+              <StatTile value={stats.shortlisted} label="Jobs for you" className="card-lift" />
+            </Link>
+            <Link href="/applications" data-ai="home.applied">
+              <StatTile value={sent} label="Applied" className="card-lift" />
+            </Link>
+            {needs.length > 0 && (
+              <Link href="/applications" data-ai="home.needs-you">
+                <StatTile value={needs.length} label="Need you" tone="need" className="card-lift" />
               </Link>
-            ) : null}
-            <Button data-ai="home.new-search" onClick={newSearch} disabled={creating} className="gap-2 rounded-full px-5">
-              <Plus className="size-4" />
-              New search
-            </Button>
-          </>
-        }
-      />
-
-      {error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
-
-      <NextSteps stats={s} onNewSearch={newSearch} />
-
-      {!s && !error && (
-        <div className="flex flex-col gap-4" aria-busy="true">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {Array.from({ length: 4 }, (_, i) => (
-              <Skeleton key={i} className="h-[104px] rounded-lg" />
+            )}
+            <div className="flex items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-card">
+              <MatchRing value={(Math.min(sentWeek, WEEK_GOAL) / WEEK_GOAL) * 100} size={46} label="" />
+              <span>
+                <b className="block text-lg leading-tight font-extrabold tabular-nums">
+                  {sentWeek} / {WEEK_GOAL}
+                </b>
+                <span className="text-[12.5px] text-text-secondary">This week’s goal</span>
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2.5">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-[74px] w-[118px] rounded-2xl" />
             ))}
           </div>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-            <Skeleton className="h-72 rounded-lg" />
-            <Skeleton className="h-72 rounded-lg" />
-            <Skeleton className="h-72 rounded-lg xl:col-span-2" />
+        )}
+      </section>
+
+      {/* Waiting for you: the first application Plato paused on. */}
+      {needs[0] && (
+        <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-warning-line bg-warning-soft/70 px-4 py-3">
+          <MonoTile name={needs[0].job.company} size="sm" />
+          <div className="min-w-[200px] flex-1">
+            <p className="eyebrow text-warning-ink">Waiting for you · {needs.length}</p>
+            <p className="mt-0.5 text-sm">
+              <b>{needs[0].job.company}</b> · {needs[0].needs_input?.message ?? statusView(needs[0]).hint}
+            </p>
           </div>
-        </div>
+          <Button variant="outline" className="rounded-xl bg-card" onClick={() => router.push(`/applications/${needs[0].id}`)}>
+            Answer
+          </Button>
+          <Link href="/applications" className="text-sm font-semibold text-primary hover:underline">
+            See all {needs.length}
+          </Link>
+        </section>
       )}
 
-      {s && (
-        <motion.div variants={staggerContainer} initial="hidden" animate="show" className="flex flex-col gap-4">
-          {/* KPIs */}
-          <div data-tour="home-kpis" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard featured icon={Briefcase} tone="green" value={s.shortlisted} label="Jobs ready for you" hint={`${s.quality.excellent} excellent · ${s.quality.strong} strong`} />
-            <KpiCard icon={ClipboardList} tone="amber" value={appsTotal} label="Applications" hint={s.applications.needsInput ? `${s.applications.needsInput} need you · ${s.applications.submitted} applied` : `${s.applications.queued} queued · ${s.applications.submitted} applied`} />
-            <KpiCard icon={Search} tone="brand" value={s.threads} label="Searches" hint={`${s.runs.done} finished · ${running} running · ${s.runs.failed} failed`} />
-            <KpiCard icon={Layers} tone="blue" value={s.analyzed.toLocaleString()} label="Postings analyzed" hint="LinkedIn · Indeed · Google Jobs · Glassdoor · ATS boards · Plato index" />
-          </div>
+      <NextSteps stats={stats} onNewSearch={newSearch} />
 
-          {/* Pipeline · Quality · Activity */}
-          <div data-tour="home-charts" className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-            <Card title="Your pipeline" icon={Filter} tone="brand">
-              <BreakdownRows rows={funnel} tone="brand" />
-              <p className="mt-auto text-xs text-text-tertiary">{s.hidden ? `${s.hidden} hidden as “not interested”.` : "Nothing hidden yet."}</p>
-            </Card>
-            <Card title="Match quality" icon={Target} tone="green">
-              <Ring
-                centerLabel="fit"
-                centerValue={fit === null ? "—" : `${fit}%`}
-                slices={[
-                  { label: "Excellent (≥90%)", value: s.quality.excellent, tone: "green", color: "var(--success)" },
-                  { label: "Strong (75–89%)", value: s.quality.strong, tone: "blue", color: "var(--info)" },
-                  { label: "Other", value: s.quality.other, tone: "slate", color: "var(--lavender)" },
-                ]}
-              />
-            </Card>
-            <Card title="Last 14 days" icon={Activity} tone="blue" className="xl:col-span-2" action={<span className="text-xs text-text-tertiary">bars = postings fetched · dots = searches</span>}>
-              <Sparkbars points={s.activity} tone="blue" />
-              <div className="mt-auto grid grid-cols-3 gap-3 border-t border-divider pt-4">
-                {[
-                  { label: "Postings fetched", value: s.activity.reduce((n, p) => n + p.jobs, 0).toLocaleString() },
-                  { label: "Searches run", value: s.activity.reduce((n, p) => n + p.runs, 0) },
-                  { label: "Busiest day", value: busiest(s.activity) },
-                ].map((m) => (
-                  <div key={m.label} className="min-w-0">
-                    <p className="text-lg leading-tight font-bold text-foreground tabular-nums">{m.value}</p>
-                    <p className="truncate text-xs text-text-tertiary">{m.label}</p>
-                  </div>
-                ))}
-              </div>
-            </Card>
+      {/* Top matches. */}
+      <section className="flex flex-col gap-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold tracking-tight">Top matches for you</h2>
+          {stats && stats.shortlisted > 0 && (
+            <Link href="/jobs" data-ai="home.all-jobs" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+              See all {stats.shortlisted}
+              <ArrowRight className="size-4" />
+            </Link>
+          )}
+        </div>
+        {top === null && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-60 rounded-[22px]" />
+            ))}
           </div>
-
-          {/* Sources · Work setup · Seniority · Salary */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card title="Where jobs come from" icon={Globe2} tone="brand">
-              <BreakdownRows
-                tone="brand"
-                rows={entries(s.bySource).map(([k, v]) => ({
-                  key: k,
-                  label: SOURCE_LABEL[k] ?? k,
-                  count: v,
-                  leading: <SourceTile source={k as JobSourceName} size={22} />,
-                }))}
-              />
-            </Card>
-            <Card title="Work setup" icon={MapPin} tone="green">
-              <BreakdownRows tone="green" rows={entries(s.byRemoteType).map(([k, v]) => ({ key: k, label: REMOTE[k]?.label ?? k, count: v, tone: REMOTE[k]?.tone }))} />
-            </Card>
-            <Card title="Seniority mix" icon={Award} tone="teal">
-              <BreakdownRows tone="teal" rows={entries(s.levels).map(([k, v]) => ({ key: k, label: LEVEL[k]?.label ?? k, count: v, tone: LEVEL[k]?.tone }))} />
-            </Card>
-            <Card title="Salary signal" icon={Banknote} tone="amber">
-              <div className="flex flex-col gap-3">
-                <div>
-                  <p className="text-[26px] leading-none font-bold text-foreground">{s.salary.medianUsdMax ? `$${Math.round(s.salary.medianUsdMax / 1000)}K` : "—"}</p>
-                  <p className="mt-1 text-sm text-text-secondary">Median top-of-range (USD postings)</p>
+        )}
+        {top?.length === 0 && (
+          <div className="flex flex-col items-start gap-3 rounded-[22px] border bg-card p-6 shadow-card sm:flex-row sm:items-center">
+            <PlatoNote variant="headline" className="flex-1">
+              No matches yet. Tell Plato what you are after and it searches every board for you.
+            </PlatoNote>
+            <Button data-ai="home.first-search" onClick={newSearch} disabled={creating} className="gap-2 rounded-xl">
+              <Plus className="size-4" />
+              Start a search
+            </Button>
+          </div>
+        )}
+        {!!top?.length && (
+          <motion.div variants={staggerContainer} initial="hidden" animate="show" className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {top.map((m) => (
+              <motion.article key={m.id} variants={fadeUpItem} className="card-lift flex flex-col gap-3 rounded-[22px] border bg-card p-5 shadow-card">
+                <div className="flex items-center justify-between">
+                  <MonoTile name={m.job.company} />
+                  <MatchRing value={m.match_percent} />
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-text-secondary">Postings with salary</span>
-                  <span className="font-semibold text-foreground tabular-nums">{s.salary.withSalary}</span>
+                <div className="min-w-0">
+                  <h3 className="line-clamp-2 text-[16.5px] font-bold tracking-tight">{m.job.title}</h3>
+                  <p className="truncate text-sm text-text-secondary">{m.job.company}</p>
                 </div>
-                <Bar value={s.salary.withSalary} max={Math.max(1, s.shortlisted)} tone="amber" />
-                <p className="text-xs text-text-tertiary">Most postings don’t publish pay; Plato reads it when they do.</p>
-              </div>
-            </Card>
-          </div>
-
-          {/* Locations · Companies · Roles */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <Card title="Top locations" icon={MapPin} tone="rose">
-              <BreakdownRows tone="rose" rows={s.topLocations.map((l) => ({ key: l.label, label: l.label, count: l.count }))} />
-            </Card>
-            <Card title="Companies hiring most" icon={Building2} tone="blue">
-              <BreakdownRows
-                tone="blue"
-                rows={s.topCompanies.map((c) => ({
-                  key: c.company,
-                  label: c.company,
-                  count: c.count,
-                  leading: <span className={cn("flex size-[22px] shrink-0 items-center justify-center rounded-sm text-[11px] font-bold", TONES.blue.tile)}>{c.company[0]?.toUpperCase()}</span>,
-                }))}
-              />
-            </Card>
-            <Card title="Roles you searched" icon={Sparkles} tone="brand">
-              {s.topTitles.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {s.topTitles.map((t) => (
-                    <span key={t.title} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground">
-                      {t.title}
-                      <span className="rounded-full bg-primary/10 px-1.5 text-[10px] text-primary tabular-nums">×{t.runs}</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[[m.job.location, REMOTE[m.job.remote_type]].filter(Boolean).join(" · "), m.job.posted_at && timeAgo(m.job.posted_at)].filter(Boolean).map((t) => (
+                    <span key={t as string} className="rounded-md bg-muted px-2 py-0.5 text-[12.5px] font-medium text-text-secondary">
+                      {t}
                     </span>
                   ))}
                 </div>
-              ) : (
-                <p className="text-sm text-text-tertiary">Nothing yet.</p>
-              )}
-              <p className="mt-auto text-xs text-text-tertiary">Titles Plato searched for, across all conversations.</p>
-            </Card>
-          </div>
+                <PlatoNote variant="inline">{reason(m)}</PlatoNote>
+                <div className="mt-auto flex gap-2 pt-1">
+                  <Button data-ai={`home.apply:${m.job.id}`} className="flex-1 rounded-xl" onClick={() => setApply(m.job.id)}>
+                    Apply
+                  </Button>
+                  <Button variant="outline" size="icon" aria-label={m.saved ? "Remove from saved" : "Save"} aria-pressed={m.saved} onClick={() => toggleSave(m)} className={cn("rounded-xl", m.saved && "border-primary-line text-primary")}>
+                    <Bookmark className={cn("size-4", m.saved && "fill-current")} />
+                  </Button>
+                </div>
+              </motion.article>
+            ))}
+          </motion.div>
+        )}
+      </section>
 
-          {/* Jump back in */}
-          <Card
-            data-tour="home-recent"
-            title="Pick up where you left off"
-            icon={Search}
-            tone="brand"
-            action={
-              <Link href={JOBS_HOME} data-ai="home.all-searches" className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-                All searches
-                <ArrowRight className="size-3.5" />
-              </Link>
-            }
-          >
-            {recent === null && <Skeleton className="h-16 rounded-md" />}
-            {recent?.length === 0 && (
-              <div className="flex flex-col items-start gap-3 rounded-md border border-dashed border-primary-line bg-primary-tint p-5 sm:flex-row sm:items-center">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
-                  <Sparkles className="size-5" />
-                </span>
-                <p className="flex-1 text-sm text-text-secondary">No searches yet. Tell Plato what you are after and it searches every board for you.</p>
-                <Button data-ai="home.first-search" onClick={newSearch} disabled={creating} className="gap-2 rounded-full">
-                  Start your first search
-                  <ArrowRight className="size-4" />
-                </Button>
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Applications: the funnel and the latest moves. */}
+        <div data-tour="home-recent" className="flex flex-col gap-3 rounded-[22px] border bg-card p-5 shadow-card">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold tracking-tight">Your applications</h2>
+            <Link href="/applications" className="text-sm font-semibold text-primary hover:underline">
+              Open
+            </Link>
+          </div>
+          {apps && (
+            <>
+              <div className="flex h-1.5 gap-1.5" aria-hidden>
+                <span className="rounded-full bg-primary-line" style={{ flex: Math.max(1, apps.length) }} />
+                <span className="rounded-full bg-primary/50" style={{ flex: Math.max(0.3, sent) }} />
+                <span className="rounded-full bg-warning" style={{ flex: Math.max(needs.length ? 0.3 : 0, needs.length) }} />
               </div>
-            )}
-            {!!recent?.length && (
-              <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {recent.map((t) => {
-                  const run = t.discovery_runs[0]
-                  return (
-                    <li key={t.id}>
-                      <Link href={threadHref(t.id)} data-ai={`home.search:${t.id}`} className="group flex h-full items-center gap-3 rounded-md border p-3 transition-colors hover:border-primary-line hover:bg-primary-tint">
-                        <span className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-muted">{run ? <RunStatusIcon status={run.status} /> : <Activity className="size-4 text-text-tertiary" />}</span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-foreground">{t.title ?? "New search"}</span>
-                          <span className="block truncate text-xs text-text-tertiary">{run ? runSummary(run) : "Not started"} · {timeAgo(t.updated_at)}</span>
-                        </span>
-                        <ChevronRight className="size-4 shrink-0 text-lavender transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-                      </Link>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </Card>
-        </motion.div>
-      )}
+              <p className="flex flex-wrap gap-x-5 text-sm">
+                <span>
+                  <b>{apps.length}</b> total
+                </span>
+                <span>
+                  <b>{sent}</b> applied
+                </span>
+                <span>
+                  <b>{needs.length}</b> need you
+                </span>
+              </p>
+            </>
+          )}
+          <ul className="flex flex-col divide-y divide-divider">
+            {apps === null && <Skeleton className="h-28 rounded-xl" />}
+            {apps?.length === 0 && <li className="py-3 text-sm text-text-secondary">Nothing sent yet. Pick jobs and Plato applies for you.</li>}
+            {recent.map((a) => {
+              const v = statusView(a)
+              return (
+                <li key={a.id}>
+                  <Link href={`/applications/${a.id}`} className="flex items-center gap-3 py-2.5 hover:text-primary">
+                    <MonoTile name={a.job.company} size="sm" />
+                    <span className="min-w-0 flex-1 truncate text-sm">
+                      <b>{a.job.company}</b> · {a.job.title}
+                    </span>
+                    <StatusPill tone={toneOf(v.tone)}>{v.label}</StatusPill>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+
+        {/* Companies you follow: the latest alert digest. */}
+        <div className="flex flex-col gap-3 rounded-[22px] border bg-card p-5 shadow-card">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold tracking-tight">Companies you follow are hiring</h2>
+            <Link href="/following" className="text-sm font-semibold text-primary hover:underline">
+              All
+            </Link>
+          </div>
+          {digest === null ? (
+            <PlatoNote variant="inline" className="py-2">
+              Follow companies and roles, and Plato tells you when they post a job that fits. <Link href="/following" className="font-semibold text-primary hover:underline">Follow one</Link>
+            </PlatoNote>
+          ) : (
+            <ul className="flex flex-col divide-y divide-divider">
+              {digest.jobs.slice(0, 3).map((j) => (
+                <li key={j.id} className="flex items-center gap-3 py-2.5">
+                  <MonoTile name={j.company} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <b className="block truncate text-sm">{j.title}</b>
+                    <span className="block truncate text-xs text-text-secondary">{[j.company, j.location, j.posted_at && timeAgo(j.posted_at)].filter(Boolean).join(" · ")}</span>
+                  </span>
+                  {j.closed ? <StatusPill tone="neutral">Closed</StatusPill> : <a href={j.url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary hover:underline">View</a>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <ExtensionApplyModal open={!!apply} count={1} req={{ jobIds: apply ? [apply] : [] }} onClose={() => setApply(null)} />
     </div>
   )
-}
-
-function busiest(points: { date: string; jobs: number }[]) {
-  const top = points.reduce<{ date: string; jobs: number } | null>((b, p) => (p.jobs > (b?.jobs ?? 0) ? p : b), null)
-  return top ? new Date(`${top.date.slice(0, 10)}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—"
 }

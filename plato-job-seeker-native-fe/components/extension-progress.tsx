@@ -157,7 +157,7 @@ export function PlatoStatusPill() {
   const dot = !data || !data.linked || (!data.online && !active) ? "bg-lavender" : active ? "bg-azure animate-pulse" : needs ? "bg-warning" : "bg-success"
   return (
     <>
-      <button type="button" data-ai="nav.extension-progress" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="glass-panel flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold text-foreground transition-colors hover:border-primary-line">
+      <button type="button" data-ai="nav.extension-progress" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="surface-panel flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold text-foreground transition-colors hover:border-primary-line">
         <span className={cn("size-2 rounded-full", dot)} aria-hidden />
         <span className="hidden sm:inline">{label}</span>
       </button>

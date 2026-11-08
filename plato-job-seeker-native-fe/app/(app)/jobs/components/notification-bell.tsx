@@ -28,7 +28,7 @@ function NotificationBell() {
 
   return (
     <div className="relative">
-      <button type="button" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open} onClick={() => setOpen((o) => !o)} className="glass-panel relative flex size-11 items-center justify-center rounded-full text-text-secondary transition-colors hover:text-foreground">
+      <button type="button" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open} onClick={() => setOpen((o) => !o)} className="surface-panel relative flex size-11 items-center justify-center rounded-full text-text-secondary transition-colors hover:text-foreground">
         <Bell className="size-5" />
         {unread > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span>

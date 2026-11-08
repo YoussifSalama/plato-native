@@ -62,7 +62,7 @@ export function MatchRing({ value, size = 48, label }: { value: number; size?: n
   const p = Math.max(0, Math.min(100, value))
   return (
     <span className="relative grid shrink-0 place-items-center rounded-full" style={{ width: size, height: size, background: `conic-gradient(var(--primary) ${p}%, var(--divider) 0)` }}>
-      <span data-ring-hole className="absolute rounded-full bg-card" style={{ inset: Math.max(4, size * 0.1) }} />
+      <span className="absolute rounded-full bg-card" style={{ inset: Math.max(4, size * 0.1) }} />
       <span className="relative text-[12.5px] font-bold text-primary tabular-nums">{label ?? `${Math.round(p)}%`}</span>
     </span>
   )

@@ -10,11 +10,12 @@ import { getMe, type AuthUser } from "@/lib/auth/api"
 import { getApplyReadiness } from "@/lib/jobs/api"
 import { getExtensionProgress } from "@/lib/extension/api"
 import { getInsights } from "@/lib/insights/api"
+import { getPreferences } from "@/lib/preferences/api"
+import { listDocuments } from "@/lib/documents/api"
 import { NotificationsProvider, useNotifications } from "@/components/notifications-provider"
 import { TokensChip } from "@/components/plato-tokens"
 import { VerifyEmailBanner } from "@/components/verify-email-banner"
 import { PlatoMark } from "@/components/plato-orb"
-import { SpatialBackdrop } from "@/components/spatial-backdrop"
 import { PlatoStatusPill } from "@/components/extension-progress"
 import { NotificationBell } from "@/app/(app)/jobs/components/notification-bell"
 
@@ -76,14 +77,19 @@ function AppShell({ children }: { children: ReactNode }) {
 
 // How far the seeker is from Plato applying on its own: profile details, a linked
 // browser, job alerts. Read from the same checks as the next-steps guide.
+// "Profile strength" in the owner's screens: the share of five checks that let Plato apply
+// without stopping (the server's readiness check, a portfolio link, a second document,
+// a linked browser, something followed). The next missing one is the hint.
 function useSetup() {
   const [s, setS] = useState<{ done: number; total: number; next: { label: string; href: string } | null } | null>(null)
   useEffect(() => {
-    Promise.allSettled([getApplyReadiness(), getExtensionProgress(), getInsights()]).then(([r, e, i]) => {
+    Promise.allSettled([getApplyReadiness(), getExtensionProgress(), getInsights(), getPreferences(), listDocuments()]).then(([r, e, i, p, d]) => {
       const steps = [
-        { ok: r.status === "fulfilled" && r.value.ready, label: r.status === "fulfilled" && r.value.missing[0] ? `Add ${r.value.missing[0].label.toLowerCase()}` : "Finish your details", href: "/profile" },
-        { ok: e.status === "fulfilled" && e.value.linked, label: "Link the browser extension", href: "/extension" },
-        { ok: i.status === "fulfilled" && i.value.alerts.length > 0, label: "Follow a company or role", href: "/following" },
+        { ok: r.status === "fulfilled" && r.value.ready, label: r.status === "fulfilled" && r.value.missing[0] ? `Add ${r.value.missing[0].label.toLowerCase()} so Plato never stops to ask.` : "Finish your details.", href: "/profile?tab=answers" },
+        { ok: p.status === "fulfilled" && !!p.value.portfolio_url, label: "Add a portfolio link so Plato can paste it into forms.", href: "/onboarding?step=2" },
+        { ok: d.status === "fulfilled" && d.value.length > 1, label: "Add a second document, like a certificate.", href: "/onboarding?step=1" },
+        { ok: e.status === "fulfilled" && e.value.linked, label: "Link the browser extension.", href: "/extension" },
+        { ok: i.status === "fulfilled" && i.value.alerts.length > 0, label: "Follow a company you'd like to work for.", href: "/following" },
       ]
       const open = steps.find((x) => !x.ok)
       setS({ done: steps.filter((x) => x.ok).length, total: steps.length, next: open ? { label: open.label, href: open.href } : null })
@@ -118,7 +124,7 @@ function Frame({ children }: { children: ReactNode }) {
         className={cn(
           "flex items-center gap-3 rounded-2xl border transition-all duration-200",
           size === "main" ? "px-3.5 py-2.5 text-[15px]" : "px-3.5 py-2 text-sm",
-          active ? "border-white/90 bg-white font-semibold text-primary shadow-[0_1px_2px_rgb(0_58_110/0.06),0_8px_22px_-10px_rgb(0_58_110/0.3)]" : "border-transparent font-medium text-foreground/85 hover:bg-white/55 hover:text-foreground",
+          active ? "border-border bg-card font-semibold text-primary shadow-[0_1px_2px_rgb(14_27_44/0.05)]" : "border-transparent font-medium text-foreground hover:bg-card",
         )}
       >
         <it.icon className="size-[18px] shrink-0" />
@@ -128,53 +134,50 @@ function Frame({ children }: { children: ReactNode }) {
     )
   }
 
+  const strength = setup ? Math.round((setup.done / setup.total) * 100) : null
+
   return (
-    <div className="theme-app glass-scope grid min-h-dvh grid-cols-1 text-foreground lg:grid-cols-[264px_1fr]">
-      <SpatialBackdrop />
-      {/* Floating glass sidebar: brand, the job hunt, the account, setup progress. */}
-      <div className="hidden lg:sticky lg:top-0 lg:block lg:h-dvh lg:py-4 lg:pl-4">
-        <aside data-tour="sidebar" className="glass-panel flex h-full flex-col gap-6 rounded-[28px] px-3.5 py-5">
-          <Link href="/" data-ai="nav.logo" className="flex items-center gap-3 px-2" title="Plato">
-            <PlatoMark size={36} />
-            <span className="text-[17px] font-extrabold tracking-[0.22em] text-primary">PLATO</span>
-          </Link>
-          <nav data-tour="sidebar-nav" aria-label="Main" className="flex flex-col gap-1">
-            {NAV.map((it) => link(it, "main"))}
+    <div className="theme-app grid min-h-dvh grid-cols-1 text-foreground lg:grid-cols-[248px_1fr]">
+      {/* Sidebar (owner screens 05-12): the job hunt, the account, profile strength. */}
+      <aside data-tour="sidebar" className="hidden border-r bg-[#f9fbfd] px-3.5 py-6 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:gap-7">
+        <Link href="/" data-ai="nav.logo" className="flex items-center gap-3 px-2" title="Plato">
+          <PlatoMark size={36} />
+          <span className="text-[17px] font-extrabold tracking-[0.22em] text-primary">PLATO</span>
+        </Link>
+        <nav data-tour="sidebar-nav" aria-label="Main" className="flex flex-col gap-1">
+          {NAV.map((it) => link(it, "main"))}
+        </nav>
+        <div className="mt-auto flex flex-col gap-3">
+          <nav aria-label="Account" className="flex flex-col gap-0.5">
+            {ACCOUNT.map((it) => link(it, "sub"))}
           </nav>
-          <div className="mt-auto flex flex-col gap-3">
-            <nav aria-label="Account" className="flex flex-col gap-0.5">
-              {ACCOUNT.map((it) => link(it, "sub"))}
-            </nav>
-            {setup && (
-              <Link href={setup.next?.href ?? "/profile"} data-tour="status-card" className="flex flex-col gap-2 rounded-2xl border border-white/80 bg-white/70 p-3.5 shadow-[0_8px_24px_-16px_rgb(0_58_110/0.35)] transition-colors hover:bg-white/90">
-                <span className="flex items-center justify-between text-sm">
-                  <b>Ready to apply</b>
-                  <b className="text-primary tabular-nums">
-                    {setup.done} of {setup.total}
-                  </b>
-                </span>
-                <span className="h-1.5 overflow-hidden rounded-full bg-foreground/[0.07]">
-                  <span className="block h-full rounded-full bg-primary transition-[width] duration-700" style={{ width: `${(setup.done / setup.total) * 100}%` }} />
-                </span>
-                <span className="text-xs text-text-secondary">{setup.next ? `Next: ${setup.next.label}` : "Plato has everything it needs to apply for you."}</span>
-              </Link>
-            )}
-          </div>
-        </aside>
-      </div>
+          {setup && (
+            <Link href={setup.next?.href ?? "/profile"} data-tour="status-card" className="flex flex-col gap-2 rounded-2xl border bg-card p-3.5 transition-colors hover:border-primary-line">
+              <span className="flex items-center justify-between text-sm">
+                <b>Profile strength</b>
+                <b className="text-primary tabular-nums">{strength}%</b>
+              </span>
+              <span className="h-1.5 overflow-hidden rounded-full bg-divider">
+                <span className="block h-full rounded-full bg-primary" style={{ width: `${strength}%` }} />
+              </span>
+              <span className="text-xs text-text-secondary">{setup.next ? setup.next.label : "Plato has everything it needs to apply for you."}</span>
+            </Link>
+          )}
+        </div>
+      </aside>
 
       <div className="flex min-w-0 flex-col">
-        {/* Top bar: tell Plato what to do, see what it is doing, tokens, notifications, you. */}
-        <header className="sticky top-0 z-30 flex flex-wrap items-center gap-2.5 px-3 pt-3 pb-2 sm:px-6 lg:px-8 lg:pt-4">
+        {/* Top bar: tell Plato what to do, what it is doing, tokens, notifications, you. */}
+        <header className="sticky top-0 z-30 flex flex-wrap items-center gap-2.5 border-b bg-background px-3 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="lg:hidden" aria-label="Plato home">
             <Image src="/logo.png" alt="" width={32} height={32} className="size-8" />
           </Link>
-          <button type="button" data-ai="nav.command-bar" onClick={() => openPlato()} className="glass-panel flex h-12 min-w-0 flex-1 items-center gap-3 rounded-2xl px-4 text-left text-sm text-text-secondary transition-colors hover:border-primary-line lg:max-w-[640px]">
+          <button type="button" data-ai="nav.command-bar" onClick={() => openPlato()} className="surface-panel flex h-12 min-w-0 flex-1 items-center gap-3 rounded-2xl px-4 text-left text-sm text-text-secondary transition-colors hover:border-primary-line lg:max-w-[640px]">
             <Sparkles className="size-[18px] shrink-0 text-primary" />
             <span className="truncate">
               Tell Plato what to do: <span className="text-text-tertiary">“{promptFor(pathname)}”</span>
             </span>
-            <kbd className="ml-auto hidden rounded-md border border-foreground/10 bg-white/60 px-1.5 py-0.5 font-mono text-[11px] text-text-secondary sm:block">Ctrl K</kbd>
+            <kbd className="ml-auto hidden rounded-md border px-1.5 py-0.5 font-mono text-[11px] text-text-secondary sm:block">Ctrl K</kbd>
           </button>
           <div className="ml-auto flex items-center gap-2">
             <PlatoStatusPill />
@@ -183,17 +186,17 @@ function Frame({ children }: { children: ReactNode }) {
             </span>
             <NotificationBell />
             {user && (
-              <Link href="/profile" title={titleCase(user.full_name)} aria-label="Your profile" className="flex size-11 items-center justify-center rounded-full bg-foreground text-sm font-bold text-white shadow-[0_6px_14px_-6px_rgb(14_27_44/0.6)]">
+              <Link href="/profile" title={titleCase(user.full_name)} aria-label="Your profile" className="flex size-11 items-center justify-center rounded-full bg-foreground text-sm font-bold text-white">
                 {initials(user.full_name)}
               </Link>
             )}
           </div>
           {/* Compact nav for < lg, where the sidebar is hidden. */}
-          <nav aria-label="Main" className="scroll-thin glass-panel flex w-full gap-1 overflow-x-auto rounded-2xl p-1 lg:hidden">
+          <nav aria-label="Main" className="scroll-thin surface-panel flex w-full gap-1 overflow-x-auto rounded-2xl p-1 lg:hidden">
             {[...NAV, ...ACCOUNT].map(({ href, label, icon: Icon }) => {
               const active = isActive(href, pathname)
               return (
-                <Link key={href} href={href} data-ai={`nav.${label.toLowerCase()}`} className={cn("flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium", active ? "bg-white font-semibold text-primary shadow-sm" : "text-text-secondary")}>
+                <Link key={href} href={href} data-ai={`nav.${label.toLowerCase()}`} className={cn("flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium", active ? "bg-primary-soft font-semibold text-primary" : "text-text-secondary")}>
                   <Icon className="size-3.5" />
                   {label}
                   {href === "/applications" && needsYou > 0 && <span className="size-1.5 rounded-full bg-warning" />}

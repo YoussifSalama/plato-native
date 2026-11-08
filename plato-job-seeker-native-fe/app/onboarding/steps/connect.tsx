@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Check, Copy, Loader2, Puzzle } from "lucide-react"
+import { Check, Copy, Loader2, Puzzle } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { getExtensionProgress, startPairing, type PairingCode } from "@/lib/extension/api"
-import { OnboardingFooter } from "@/app/onboarding/components/onboarding-layout"
 
 // Step 3 (screen 03): link the Plato Apply extension with a one-time code.
 // The extension does the applying, in the seeker's own browser.
@@ -68,7 +67,7 @@ function ConnectStep({ onBack, onDone }: { onBack: () => void; onDone: () => voi
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8 pt-6">
       <div>
         <h1 className="text-[34px] leading-tight font-extrabold tracking-tight sm:text-[40px]">Connect Plato Apply</h1>
         <p className="mt-3 text-[16.5px] leading-relaxed text-text-secondary">Plato applies to jobs through its free Chrome extension. Connect it once and you’re done. You always press Submit yourself.</p>
@@ -122,16 +121,20 @@ function ConnectStep({ onBack, onDone }: { onBack: () => void; onDone: () => voi
         </li>
       </ol>
 
-      <OnboardingFooter
-        back={onBack}
-        skip={linked ? undefined : onDone}
-        next={
-          <Button data-ai="onboarding.finish" onClick={onDone} className="h-12 gap-2 rounded-xl px-6 text-[15px]">
-            {linked ? "Go to Plato" : "Continue"}
-            <ArrowRight className="size-4" />
-          </Button>
-        }
-      />
+      {/* Screen 03: Continue then Back on the left, Skip for now on the right. */}
+      <div className="flex flex-wrap items-center gap-4">
+        <Button data-ai="onboarding.finish" onClick={onDone} className="h-14 rounded-xl px-8 text-[17px]">
+          Continue
+        </Button>
+        <Button variant="outline" onClick={onBack} className="h-14 rounded-xl bg-card px-6 text-[17px]">
+          Back
+        </Button>
+        {!linked && (
+          <button type="button" onClick={onDone} className="ml-auto text-[17px] font-semibold text-primary hover:underline">
+            Skip for now
+          </button>
+        )}
+      </div>
     </div>
   )
 }

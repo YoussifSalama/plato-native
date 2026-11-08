@@ -85,7 +85,7 @@ export function PageTour() {
               initial={{ opacity: 0, x: 8 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 8 }}
-              className="glass-panel pointer-events-auto rounded-full px-3.5 py-2 text-xs font-semibold text-foreground"
+              className="surface-panel pointer-events-auto rounded-full px-3.5 py-2 text-xs font-semibold text-foreground"
             >
               New here? Take a quick tour of {tour.name}
             </motion.button>
@@ -98,7 +98,7 @@ export function PageTour() {
           onClick={() => (steps ? close() : start())}
           aria-label={`Tour this page: ${tour.name}`}
           title="Tour this page"
-          className="glass-panel group pointer-events-auto relative flex size-11 items-center justify-center rounded-full text-primary transition-transform hover:scale-105"
+          className="surface-panel group pointer-events-auto relative flex size-11 items-center justify-center rounded-full text-primary transition-transform hover:scale-105"
         >
           <Compass className="size-5 transition-transform duration-500 group-hover:rotate-45" />
           {hint && !steps && <span className="absolute -top-0.5 -right-0.5 size-3 animate-pulse rounded-full border-2 border-white bg-azure" aria-hidden />}

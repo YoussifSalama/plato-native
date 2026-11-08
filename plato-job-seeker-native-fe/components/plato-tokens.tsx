@@ -207,7 +207,7 @@ export function TokensChip() {
   if (!acc) return null
   const low = acc.monthly > 0 && acc.balance / acc.monthly < 0.15
   return (
-    <Link href="/tokens" data-ai="nav.tokens-chip" className={cn("flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold tabular-nums", low ? "border border-warning-line bg-warning-soft text-warning-ink" : "glass-panel text-foreground")}>
+    <Link href="/tokens" data-ai="nav.tokens-chip" className={cn("flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold tabular-nums", low ? "border border-warning-line bg-warning-soft text-warning-ink" : "surface-panel text-foreground")}>
       <Coins className="size-4 text-primary" />
       {formatTokens(Math.max(0, acc.balance))}
     </Link>

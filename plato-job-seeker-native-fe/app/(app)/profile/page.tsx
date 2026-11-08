@@ -132,7 +132,7 @@ function ProfileContent() {
           </nav>
 
           {/* Change anything in plain words; the Plato chat does the edit. */}
-          <form onSubmit={sendTell} className="glass-panel flex items-center gap-2 rounded-2xl py-1.5 pr-1.5 pl-3">
+          <form onSubmit={sendTell} className="surface-panel flex items-center gap-2 rounded-2xl py-1.5 pr-1.5 pl-3">
             <label htmlFor="profile-tell" className="sr-only">
               Tell Plato what to change
             </label>

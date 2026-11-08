@@ -41,6 +41,18 @@ export default function ExtensionPage() {
       })
   }, [])
 
+  // The extension's "Get my code from Plato" opens /extension?pair=1: the code is made on arrival.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("pair") !== "1") return
+    window.history.replaceState(null, "", "/extension")
+    startPairing()
+      .then((p) => {
+        setLeft(Math.max(0, Math.round((new Date(p.expires_at).getTime() - Date.now()) / 1000)))
+        setPairing(p)
+      })
+      .catch((e) => setError(reason(e)))
+  }, [])
+
   useEffect(() => {
     listRuns().then(setRuns).catch(() => setRuns([]))
   }, [])

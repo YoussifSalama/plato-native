@@ -11,7 +11,7 @@ import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExtensionApplyModal } from "@/components/extension-apply-modal"
-import { MatchRing, MonoTile, PlatoNote, StatTile, StatusPill } from "@/components/plato-ui"
+import { MatchPill, MatchRing, MonoTile, PlatoNote, StatTile, StatusPill } from "@/components/plato-ui"
 import { getMe } from "@/lib/auth/api"
 import { getDigests, type Digest } from "@/lib/insights/api"
 import { createThread, getDiscoveryStats, getMatches, listApplications, setSaved, type DiscoveryStats, type JobApplication, type JobMatch } from "@/lib/jobs/api"
@@ -30,10 +30,33 @@ const firstName = (full?: string) => {
   const f = full?.trim().split(/\s+/)[0]
   return f ? f[0].toUpperCase() + f.slice(1).toLowerCase() : ""
 }
-const toneOf = (cls: string) => (cls.includes("warning") ? "warning" : cls.includes("success") ? "success" : cls.includes("info") ? "info" : cls.includes("destructive") ? "danger" : "neutral")
 const within = (iso: string | null, days: number) => !!iso && Date.now() - new Date(iso).getTime() < days * 864e5
 // Why Plato picked this job, in one line.
-const reason = (m: JobMatch) => (m.job.eligibility && m.job.eligibility.status !== "open" && m.job.eligibility.note ? m.job.eligibility.note : `${m.match_label} for your profile${m.job.posted_at && within(m.job.posted_at, 2) ? ", posted in the last 2 days" : ""}`)
+const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`)
+const reason = (m: JobMatch) =>
+  m.job.eligibility && m.job.eligibility.status !== "open" && m.job.eligibility.note
+    ? m.job.eligibility.note
+    : m.reasons?.length
+      ? `Matches your ${list(m.reasons)}.${m.job.posted_at && within(m.job.posted_at, 2) ? " Posted in the last 2 days." : ""}`
+      : `${m.match_label} for your profile${m.job.posted_at && within(m.job.posted_at, 2) ? ", posted in the last 2 days" : ""}.`
+// One line per application, the way the owner's Home reads ("Applied to EXCELerate").
+const event = (a: JobApplication) => {
+  const c = <b>{a.job.company}</b>
+  switch (a.status) {
+    case "SUBMITTED":
+      return <>Applied to {c}</>
+    case "IN_PROGRESS":
+    case "EXTENSION_ACTIVE":
+      return <>Plato is applying to {c}</>
+    case "QUEUED":
+      return <>{c} is in line</>
+    case "NEEDS_INPUT":
+    case "NEEDS_USER_VERIFICATION":
+      return <>{c} needs something from you</>
+    default:
+      return <>{c} didn&apos;t go through</>
+  }
+}
 
 // Home: where the job hunt stands, what needs you, and the best next jobs (SPEC §5, screen 05).
 export default function Home() {
@@ -113,16 +136,15 @@ export default function Home() {
         {stats ? (
           <div data-tour="home-kpis" className="flex flex-wrap gap-2.5">
             <Link href="/jobs" data-ai="home.matches">
-              <StatTile value={stats.shortlisted} label="Jobs for you" className="card-lift" />
+              <StatTile value={stats.newThisWeek ?? stats.shortlisted} label={stats.newThisWeek === undefined ? "Jobs for you" : "New matches"} className="card-lift" />
             </Link>
             <Link href="/applications" data-ai="home.applied">
-              <StatTile value={sent} label="Applied" className="card-lift" />
+              <StatTile value={sent} label="Applications sent" className="card-lift" />
             </Link>
-            {needs.length > 0 && (
-              <Link href="/applications" data-ai="home.needs-you">
-                <StatTile value={needs.length} label="Need you" tone="need" className="card-lift" />
-              </Link>
-            )}
+            {/* The owner's third tile is Interviews; Plato doesn't see employer replies yet, so it is what needs you. */}
+            <Link href="/applications" data-ai="home.needs-you">
+              <StatTile value={needs.length} label="Need you" tone={needs.length ? "need" : "hi"} className="card-lift" />
+            </Link>
             <div className="flex items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-card">
               <MatchRing value={(Math.min(sentWeek, WEEK_GOAL) / WEEK_GOAL) * 100} size={46} label="" />
               <span>
@@ -141,25 +163,6 @@ export default function Home() {
           </div>
         )}
       </section>
-
-      {/* Waiting for you: the first application Plato paused on. */}
-      {needs[0] && (
-        <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-warning-line bg-warning-soft/70 px-4 py-3">
-          <MonoTile name={needs[0].job.company} size="sm" />
-          <div className="min-w-[200px] flex-1">
-            <p className="eyebrow text-warning-ink">Waiting for you · {needs.length}</p>
-            <p className="mt-0.5 text-sm">
-              <b>{needs[0].job.company}</b> · {needs[0].needs_input?.message ?? statusView(needs[0]).hint}
-            </p>
-          </div>
-          <Button variant="outline" className="rounded-xl bg-card" onClick={() => router.push(`/applications/${needs[0].id}`)}>
-            Answer
-          </Button>
-          <Link href="/applications" className="text-sm font-semibold text-primary hover:underline">
-            See all {needs.length}
-          </Link>
-        </section>
-      )}
 
       <NextSteps stats={stats} onNewSearch={newSearch} />
 
@@ -194,7 +197,7 @@ export default function Home() {
         )}
         {!!top?.length && (
           <motion.div variants={staggerContainer} initial="hidden" animate="show" className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {top.map((m) => (
+            {top.slice(0, 3).map((m) => (
               <motion.article key={m.id} variants={fadeUpItem} className="card-lift flex flex-col gap-3 rounded-[22px] border bg-card p-5 shadow-card">
                 <div className="flex items-center justify-between">
                   <MonoTile name={m.job.company} />
@@ -262,12 +265,10 @@ export default function Home() {
               const v = statusView(a)
               return (
                 <li key={a.id}>
-                  <Link href={`/applications/${a.id}`} className="flex items-center gap-3 py-2.5 hover:text-primary">
+                  <Link href={`/applications/${a.id}`} title={v.label} className="flex items-center gap-3 py-2.5 hover:text-primary">
                     <MonoTile name={a.job.company} size="sm" />
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      <b>{a.job.company}</b> · {a.job.title}
-                    </span>
-                    <StatusPill tone={toneOf(v.tone)}>{v.label}</StatusPill>
+                    <span className={cn("min-w-0 flex-1 truncate text-[15px]", a.status === "SUBMITTED" ? "" : "text-foreground")}>{event(a)}</span>
+                    <span className="shrink-0 text-sm text-text-tertiary">{timeAgo(a.submitted_at ?? a.updated_at)}</span>
                   </Link>
                 </li>
               )
@@ -296,7 +297,7 @@ export default function Home() {
                     <b className="block truncate text-sm">{j.title}</b>
                     <span className="block truncate text-xs text-text-secondary">{[j.company, j.location, j.posted_at && timeAgo(j.posted_at)].filter(Boolean).join(" · ")}</span>
                   </span>
-                  {j.closed ? <StatusPill tone="neutral">Closed</StatusPill> : <a href={j.url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary hover:underline">View</a>}
+                  {j.closed ? <StatusPill tone="neutral">Closed</StatusPill> : j.match_percent ? <MatchPill value={j.match_percent} /> : <a href={j.url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary hover:underline">View</a>}
                 </li>
               ))}
             </ul>

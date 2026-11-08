@@ -15,7 +15,7 @@ export type InsightsOverview = {
   lastDigestAt: string | null
   nextDigestAt: string | null
 }
-export type DigestJob = { id: string; title: string; company: string; location: string | null; remote: boolean; posted_at: string | null; url: string; closed: boolean }
+export type DigestJob = { id: string; title: string; company: string; location: string | null; remote: boolean; posted_at: string | null; url: string; closed: boolean; match_percent?: number | null }
 export type Digest = { id: string; headline: string; at: string; emailed: boolean; jobs: DigestJob[] }
 export type CompanySuggestion = { name: string; key: string; jobs: number }
 export type NewAlert = { kind: "FIELD"; title: string; location?: string | null; remote_only?: boolean } | { kind: "COMPANY"; company: string }

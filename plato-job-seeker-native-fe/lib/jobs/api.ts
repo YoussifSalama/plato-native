@@ -136,6 +136,8 @@ export type JobMatch = {
   id: string
   match_percent: number
   match_label: "Excellent match" | "Strong match" | "Match"
+  // The seeker's skills and roles the posting mentions, title first (newer servers).
+  reasons?: string[]
   saved: boolean
   hidden: boolean
   application_status: ApplicationStatus | null
@@ -262,6 +264,8 @@ export type DiscoveryStats = {
   runs: { running: number; done: number; failed: number }
   applications: { queued: number; inProgress: number; submitted: number; failed: number; needsInput: number; expired: number; skipped: number }
   shortlisted: number
+  // Found in the last 7 days, not hidden (newer servers).
+  newThisWeek?: number
   saved: number
   hidden: number
   analyzed: number

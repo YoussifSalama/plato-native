@@ -1,3 +1,5 @@
+import { seekerReferenceScore } from '../discovery/match-reasons';
+import { toMatchPercent } from '../discovery/discovery-run.helpers';
 import {
   ForbiddenException,
   Injectable,
@@ -234,10 +236,18 @@ export class InsightsService {
       orderBy: { created_at: 'desc' },
       take: Math.min(Math.max(limit, 1), 30),
     });
-    const jobs = await this.prisma.job.findMany({
-      where: { id: { in: digests.flatMap((d) => d.job_ids) } },
-    });
+    const ids = digests.flatMap((d) => d.job_ids);
+    const [jobs, matches, reference] = await Promise.all([
+      this.prisma.job.findMany({ where: { id: { in: ids } } }),
+      // The seeker's own match for a digest job, when Plato ranked it for them.
+      this.prisma.jobSeekerJobMatch.findMany({
+        where: { job_seeker_id: id, job_id: { in: ids } },
+        select: { job_id: true, match_score: true },
+      }),
+      seekerReferenceScore(this.prisma, id),
+    ]);
     const byId = new Map(jobs.map((j) => [j.id, j]));
+    const scoreOf = new Map(matches.map((m) => [m.job_id, m.match_score]));
     return digests.map((d) => ({
       id: d.id,
       headline: d.headline,
@@ -255,6 +265,9 @@ export class InsightsService {
           posted_at: j.posted_at,
           url: j.apply_url || j.url,
           closed: !!j.expired_at,
+          match_percent: scoreOf.has(j.id)
+            ? toMatchPercent(scoreOf.get(j.id), reference)
+            : null,
         })),
     }));
   }

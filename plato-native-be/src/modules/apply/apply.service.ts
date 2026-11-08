@@ -1334,6 +1334,8 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
         yearsExperience: prefs?.years_experience ?? null,
         willingToRelocate: prefs?.willing_to_relocate ?? false,
         visaSponsorshipRequired: prefs?.visa_sponsorship_required ?? false,
+        relocationNote: prefs?.relocation_note ?? null,
+        sponsorshipNote: prefs?.sponsorship_note ?? null,
         workAuthorization: prefs?.work_authorization ?? [],
         autoApplyConsent: prefs?.auto_apply_consent ?? false,
       },

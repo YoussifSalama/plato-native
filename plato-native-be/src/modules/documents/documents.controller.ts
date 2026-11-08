@@ -83,7 +83,16 @@ export class DocumentsController {
     const type = parsedType.data as JobSeekerDocumentType;
 
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
-    const version = await this.versionService.getOrCreateCurrent(jobSeekerId);
+    // A new CV starts a new batch once the current one was analyzed. Supporting
+    // documents (a certificate, a cover letter, an ID…) join the current batch,
+    // so adding one after Plato read the CV never hides that CV from the list
+    // or from the next analysis.
+    const current =
+      type === 'CV_RESUME'
+        ? null
+        : await this.versionService.getCurrent(jobSeekerId);
+    const version =
+      current ?? (await this.versionService.getOrCreateCurrent(jobSeekerId));
 
     const storageKey = await this.storageService.upload(
       file,

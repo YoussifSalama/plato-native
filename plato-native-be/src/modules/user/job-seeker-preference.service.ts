@@ -23,6 +23,8 @@ const DEFAULT_PREFERENCES: PreferenceInput = {
   employment_status: null,
   willing_to_relocate: false,
   visa_sponsorship_required: false,
+  relocation_note: null,
+  sponsorship_note: null,
   linkedin_url: null,
   github_url: null,
   portfolio_url: null,

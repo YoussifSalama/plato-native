@@ -256,3 +256,58 @@ describe('mapAnswers by field type', () => {
     expect(answers).toEqual({ p: candidate.phone, e: candidate.email });
   });
 });
+
+describe('onboarding intake facts reach the right form questions', () => {
+  const seeker: Candidate = {
+    ...candidate,
+    preferences: { ...candidate.preferences, availability: 'one_month' },
+    facts: {
+      salary_negotiable: 'Yes',
+      travel: 'Up to 25%',
+      earliest_start_date: '2026-12-01',
+    },
+  };
+  const form = (
+    fields: { id: string; label: string; type: string; options?: string[] }[],
+  ) =>
+    mapAnswers(
+      {
+        source: 'ASHBY',
+        applyUrl: 'https://x',
+        fields: fields.map((f) => ({ required: true, ...f })),
+      } as never,
+      seeker,
+    ).answers;
+
+  it('negotiation and travel answer with the form’s own options', () => {
+    expect(
+      form([
+        {
+          id: 'n',
+          label: 'Is your salary negotiable?',
+          type: 'choice',
+          options: ['Yes', 'No'],
+        },
+      ]).n,
+    ).toBe('Yes');
+    expect(
+      form([
+        {
+          id: 't',
+          label: 'Are you willing to travel for this role?',
+          type: 'choice',
+          options: ['No travel', 'Up to 25%', 'Up to 50%'],
+        },
+      ]).t,
+    ).toBe('Up to 25%');
+  });
+
+  it('a start-date picker gets the date; a text question still gets the notice period', () => {
+    expect(
+      form([{ id: 'd', label: 'Earliest start date', type: 'date' }]).d,
+    ).toBe('2026-12-01');
+    expect(
+      form([{ id: 'w', label: 'When can you start?', type: 'text' }]).w,
+    ).toBe('1 month');
+  });
+});

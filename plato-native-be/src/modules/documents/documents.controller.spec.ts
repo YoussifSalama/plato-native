@@ -65,3 +65,58 @@ describe('DocumentsController: a seeker touches only their own documents', () =>
     expect(documents.remove).toHaveBeenCalledWith('d1');
   });
 });
+
+describe('DocumentsController: which batch an upload joins', () => {
+  const file = {
+    originalname: 'x.pdf',
+    mimetype: 'application/pdf',
+    buffer: Buffer.from('x'),
+  } as Express.Multer.File;
+  const req = { userId: 'u' } as never;
+
+  function setup() {
+    const documents = {
+      add: jest.fn(async (_id: string, d: { document_version_id: string }) => ({
+        id: 'd9',
+        ...d,
+      })),
+      update: jest.fn(async (id: string, d: object) => ({ id, ...d })),
+    };
+    const versions = {
+      // The current batch was already analyzed (Plato read the CV).
+      getCurrent: jest.fn(async () => ({ id: 'v1', analyzed_at: new Date() })),
+      getOrCreateCurrent: jest.fn(async () => ({ id: 'v2' })),
+    };
+    const ctrl = new DocumentsController(
+      { getByUserId: jest.fn(async () => ({ id: 'seeker' })) } as never,
+      documents as never,
+      versions as never,
+      { upload: jest.fn(async () => 'k'), delete: jest.fn() } as never,
+      { extract: jest.fn(async () => 'text') } as never,
+    );
+    return { ctrl, documents, versions };
+  }
+
+  it('a supporting document joins the analyzed batch, next to its CV', async () => {
+    const { ctrl, documents, versions } = setup();
+    await ctrl.upload(req, file, 'COVER_LETTER');
+    expect(versions.getOrCreateCurrent).not.toHaveBeenCalled();
+    expect(documents.add).toHaveBeenCalledWith(
+      'seeker',
+      expect.objectContaining({
+        type: 'COVER_LETTER',
+        document_version_id: 'v1',
+      }),
+    );
+  });
+
+  it('a new CV still starts a new batch', async () => {
+    const { ctrl, documents, versions } = setup();
+    await ctrl.upload(req, file, 'CV_RESUME');
+    expect(versions.getCurrent).not.toHaveBeenCalled();
+    expect(documents.add).toHaveBeenCalledWith(
+      'seeker',
+      expect.objectContaining({ document_version_id: 'v2' }),
+    );
+  });
+});

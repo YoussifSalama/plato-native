@@ -206,6 +206,13 @@ enum JobSeekerDocumentType {
     LICENSE
     DEGREE
     OTHER
+    // Onboarding's "other documents" (owner screen 01). Stored only; Plato attaches
+    // one when a form asks for it.
+    COVER_LETTER
+    PORTFOLIO
+    WORK_PERMIT
+    ID_DOCUMENT
+    REFERENCE_LETTER
 }
 
 enum JobSeekerDocumentStatus {
@@ -1091,6 +1098,10 @@ model JobSeekerPreference {
   employment_status         String?
   willing_to_relocate       Boolean @default(false)
   visa_sponsorship_required Boolean @default(false)
+  // Limits on the two flags above, in the seeker's words ("Gulf only",
+  // "only for jobs outside Egypt"). Read by the answer-drafting agent.
+  relocation_note           String?
+  sponsorship_note          String?
   linkedin_url              String?
   // Application snapshot: facts employers' forms ask for, collected once.
   // Countries the seeker may work in without sponsorship.

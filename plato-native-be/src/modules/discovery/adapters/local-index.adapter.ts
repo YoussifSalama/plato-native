@@ -27,32 +27,44 @@ export function titlePattern(title: string): string {
     .join('[\\s-]*');
 }
 
+type IndexQuery = Pick<
+  DiscoveryQuery,
+  'titles' | 'locations' | 'remoteTypes' | 'willingToRelocate'
+>;
+
+// The Mongo filter for fresh, open postings that fit a query. Shared by the
+// search itself and by onboarding's "Plato sees about N open jobs".
+export function indexFilter(query: IndexQuery): Record<string, unknown> {
+  const since = new Date(Date.now() - INDEX_FRESHNESS_DAYS * 86_400_000);
+  const wantsRemote = query.remoteTypes.includes('remote');
+  // Prisma's `contains` is a literal substring; regex needs the raw driver.
+  const filter: Record<string, unknown> = {
+    updated_at: { $gte: { $date: since.toISOString() } },
+    posted_at: { $gte: { $date: postedCutoff().toISOString() } },
+    // Found closed by the freshness check: not part of the index.
+    expired_at: null,
+    $or: query.titles.map((t) => ({
+      title: { $regex: titlePattern(t), $options: 'i' },
+    })),
+  };
+  if (query.locations.length && !query.willingToRelocate) {
+    const near: Record<string, unknown>[] = query.locations.map((l) => ({
+      location: { $regex: escape(l.split(',')[0].trim()), $options: 'i' },
+    }));
+    if (wantsRemote) near.push({ remote_type: JobRemoteType.REMOTE });
+    filter.$and = [{ $or: near }];
+  }
+  return filter;
+}
+
 @Injectable()
 export class LocalIndexAdapter implements DiscoveryAdapter {
   constructor(private readonly prisma: PrismaService) {}
 
   async discover(query: DiscoveryQuery): Promise<NormalizedJob[]> {
     if (!query.titles.length) return [];
-    const since = new Date(Date.now() - INDEX_FRESHNESS_DAYS * 86_400_000);
-
     const wantsRemote = query.remoteTypes.includes('remote');
-    // Prisma's `contains` is a literal substring; regex needs the raw driver.
-    const filter: Record<string, unknown> = {
-      updated_at: { $gte: { $date: since.toISOString() } },
-      posted_at: { $gte: { $date: postedCutoff().toISOString() } },
-      // Found closed by the freshness check: not part of the index.
-      expired_at: null,
-      $or: query.titles.map((t) => ({
-        title: { $regex: titlePattern(t), $options: 'i' },
-      })),
-    };
-    if (query.locations.length && !query.willingToRelocate) {
-      const near: Record<string, unknown>[] = query.locations.map((l) => ({
-        location: { $regex: escape(l.split(',')[0].trim()), $options: 'i' },
-      }));
-      if (wantsRemote) near.push({ remote_type: JobRemoteType.REMOTE });
-      filter.$and = [{ $or: near }];
-    }
+    const filter = indexFilter(query);
 
     const raw = (await this.prisma.job.findRaw({
       filter: filter as Prisma.InputJsonValue,

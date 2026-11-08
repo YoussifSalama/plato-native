@@ -19,9 +19,7 @@ updated as more screens arrive and nothing is implemented until it is approved.
 | 11 | Career | `/career` |
 | 12 | Profile | `/profile` |
 
-> Screens 06-12 are written up below but their image files are not in `screens/` yet.
-> They should be added as `06-jobs.png`, `07-review-resumes.png`, `08-applications-inline.png`,
-> `09-applications-side.png`, `10-following.png`, `11-career.png`, `12-profile.png`.
+Images: `screens/NN-<name>.jpg`, numbered as in this table.
 
 ## 1. Direction
 

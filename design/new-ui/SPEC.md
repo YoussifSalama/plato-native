@@ -283,7 +283,70 @@ this in its microcopy.
 | `/insights` | Probably split between Home stats and Following, needs confirming |
 | `/messages`, `/notifications` | Bell, needs confirming |
 
-## 7. Open questions
+## 7. Sync audit: where the screens disagree with each other
+
+Rule for the final prototype: **one user, one moment in time, one dataset.** Every number,
+status and label means the same thing on every screen. Fix these in the data, not the layout.
+
+### Data that contradicts itself
+| # | Issue | Screens | Fix |
+|---|---|---|---|
+| D1 | Profile strength is **92%** on Home, Jobs and Review, but **85%** on Applications, Following, Career and Profile (ring) | 05-12 | One value from the API everywhere. Use 85%, because the Profile page explains the gap (portfolio link) |
+| D2 | Applications sidebar badge shows **1**, **4** and **2**, while the "Need you" tile says 4 | 05, 08, 09 | Badge = number of items that need you (4) on every page |
+| D3 | "Jobs 18 new" badge only appears on Home | 05 vs 06+ | Show it on every page, or on none |
+| D4 | Token pill (10,128) appears on Home, Jobs and Review but not on Applications, Following, Career or Profile | all | One top bar with the same items on every page |
+| D5 | Home says **4** applications sent; its funnel says **12 sent / 5 viewed / 1 interview**; Applications says **14 in 30 days / 4 this week** | 05, 08 | Name the period: Home "4 sent this week" = Applications "4 this week". Funnel = last 30 days (14) |
+| D6 | Home: "**Mozn** invited you to interview". Applications: Mozn is **Queued**. Review: Mozn is **Approved** but not sent yet | 05, 07, 08 | Pick a company that's already Sent for the interview (e.g. Moniepoint). Mozn stays Queued |
+| D7 | Home: "Moniepoint **viewed** your application". There's no "Viewed" status in Applications | 05, 08 | Add a `Viewed` status pill (Sent → Viewed → Interview), or drop "viewed" from the funnel |
+| D8 | Applications 08: tabs **All 11** but Needs you 4 + Sent 4 + In progress 6 + Didn't 1 = 15. Screen 09 shows **All 9**, with Oracle and CI&T missing from the table | 08, 09 | States can't overlap: Needs you, In progress (Queued + Applying), Sent, Didn't go through. They add up to All, and every Needs-you card also has a table row |
+| D9 | Jobs "For you" shows **Apply** on jobs that are already Sent, Queued or Needs you (EXCELerate, Moniepoint, Odion, LTM, Mozn) | 06 vs 08 | Applied jobs leave "For you" (they're under Applied 6), or the button shows their status |
+| D10 | SDAIA is **To review** in Review resumes but already **Didn't go through (Nov 4)** in Applications | 07, 08 | Take SDAIA out of the review batch |
+| D11 | Jobs "Following **7 new**" vs Following page: 3+1+1 = **5** new across companies, and "**4** new roles from companies you follow" | 06, 10 | One count. Use the new-roles count, which is the same number everywhere |
+| D12 | Applications rows say "Applied to EXCELerate **1d**" (Home) but "Nov 5" (Applications), when today is Nov 7 | 05, 08 | Use relative dates from the same timestamp |
+| D13 | Agent status says "applying 3 of 10" on most pages but "ready" on Jobs/Review in the same session | 05-12 | Fine if it's a real state change. In the prototype, put Jobs/Review *before* the batch starts and everything else *after* |
+| D14 | Extension popup says **v0.2**, but the repo's extension is 0.1.1 | 04 | Read it from the extension's package.json |
+
+### UI patterns that drift
+| # | Issue | Fix |
+|---|---|---|
+| U1 | **Four tab styles**: solid ink pill (Jobs "For you"), white segmented (Applications), primary filled chip (Career "All"), underline (Profile) | Two only: **segmented** for filtering a list (Jobs, Applications, Career) and **underline** for switching sections of one object (Profile) |
+| U2 | Onboarding actions are in three different places: step 1 primary at bottom left; step 2 Back + Continue at top right; step 3 Continue then Back at bottom left with Skip on the right | One footer on every step: `Back` (outline) on the left, `Continue →` (primary) on the right, `Skip for now` link only where allowed. The step 2 top-right buttons can stay as a sticky copy |
+| U3 | The step indicator sits at a different height on each onboarding step (y ≈ 139 / 137 / 148) | One shared `OnboardingHeader` |
+| U4 | Labels mix three styles: mono eyebrows (`WHAT PLATO CHANGED · 3`, `TAILORED BY PLATO · 6`, `YOUR READINESS FOR`), sans uppercase primary (`PLATO READ YOUR CV`, `PLATO SUGGESTS`), and sans sentence case | Mono eyebrow = metadata/counters/dates. Sans uppercase primary = only for a label inside a **Plato note** |
+| U5 | The match % appears as a ring (Home), a primary-soft pill (Jobs, Following) and plain text (Home following list) | Ring on large job cards, pill in rows. Same color and rounding |
+| U6 | The Apply button is full width with a bookmark on Home, compact on Jobs, and compact with View on Following | Fine by size, but the label and order should match: `[View] [Apply]`, bookmark always as an icon button |
+| U7 | Company logos are a grey monogram tile (MZ, EX), except "PwC" which is mixed case | Monogram = first letters, uppercase, max 3 letters |
+| U8 | The Plato note has three forms: full panel (onboarding, Following, Profile), single line with a P badge (job cards), inline headline (preferences) | Keep all three. They're `PlatoNote` size variants (`panel`, `inline`, `headline`) |
+| U9 | Count chips: "18 new" primary-soft, "1" amber circle, "7 new" solid primary, "+18" plain primary text | Nav counts: amber = needs you, primary-soft = new. In-list counts: plain primary `+N` |
+| U10 | The Profile page has a bottom nav (Profile / Plan & credits / Settings) that the other pages don't | Show that bottom nav on every page above Profile strength, so Profile is always reachable |
+
+## 8. AI native layer: keep the native chat, change the owner's design as little as possible
+
+Today, `/jobs` *is* the chat (`chat-panel`, `jobs/[threadId]`, `stage-stepper`, `plato-dock`),
+and `GlobalAssistant`, `CommandPalette` and `AgentCursor` run on every page. The owner's
+screens don't show chat, but they already have the hooks for it. We plug the chat into those
+spots and don't add new UI:
+
+1. **Command bar = the chat's entry point.** "Tell Plato what to do…" (Ctrl K) opens the
+   native chat as a right-side panel over the current page, already holding that page's
+   context. The example prompt changes per page, as the screens show. This replaces the
+   floating assistant button, so there's one way in.
+2. **Jobs left column = chat threads.** `New search` starts a chat thread. TODAY/YESTERDAY/
+   PREVIOUS 7 DAYS/OLDER are the existing threads (`/jobs/[threadId]`), each with its
+   `+N` new matches. Opening a thread shows the chat on top and its results below in the
+   owner's list design. "All jobs" is every thread combined.
+3. **The agent status pill is live.** `● Plato · applying 3 of 10` comes from the extension
+   progress (`extension-progress.tsx`). Clicking it opens a popover with the queue.
+4. **Plato notes come from the AI**, not from fixed copy: job reasons, the salary range hint,
+   "Plato read your CV", Profile suggestions. Each one can have an "Ask Plato" action
+   that opens the chat about that item.
+5. **Actions go back through the agent.** "Select my top 10", "Tailor & apply", "Fix with
+   Plato" and "Use Plato's" all start agent tasks that show up in the status pill and the chat.
+6. **Onboarding stays a form, with the AI built in.** Plato reads the CV (step 1), prefills
+   preferences and estimates the job count (step 2). The current onboarding assistant panel
+   becomes a small "Ask Plato" link in the step footer, so the owner's layout doesn't change.
+
+## 9. Open questions
 1. Does the onboarding AI assistant/FAQ panel stay, or is it gone?
 2. "Following" (companies + roles): how much backend exists (`insights.prisma`)?
 6. Applications "Needs you": inline rows (08) or side column (09)?

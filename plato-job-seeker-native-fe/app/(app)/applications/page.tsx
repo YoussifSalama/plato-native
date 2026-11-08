@@ -26,7 +26,6 @@ import {
 } from "@/lib/jobs/api"
 import { JOBS_HOME, threadHref, timeAgo } from "@/lib/jobs/links"
 import { applicationHref, applicationReason, canRetry, isVerifySubmission, needsAttention, retryLabel, roughly, statusView, STATUS_STAGE, STEP_STAGE } from "@/lib/jobs/application-status"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MonoTile, PlatoNote, Segmented, StatTile, StatusPill } from "@/components/plato-ui"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StageStepper } from "../jobs/components/stage-stepper"
@@ -37,12 +36,21 @@ const TABS = [
   { key: "all", label: "All", statuses: null },
   { key: "needs", label: "Needs you", statuses: ["NEEDS_INPUT", "NEEDS_USER_VERIFICATION"] },
   { key: "active", label: "In progress", statuses: ["QUEUED", "IN_PROGRESS", "EXTENSION_ACTIVE"] },
-  { key: "applied", label: "Applied", statuses: ["SUBMITTED"] },
+  { key: "applied", label: "Sent", statuses: ["SUBMITTED"] },
   { key: "problems", label: "Didn't go through", statuses: ["FAILED", "EXPIRED", "SKIPPED"] },
 ] as const satisfies readonly { key: string; label: string; statuses: readonly ApplicationStatus[] | null }[]
 type TabKey = (typeof TABS)[number]["key"]
 
-const inLastWeek = (iso: string) => Date.now() - new Date(iso).getTime() < 7 * 864e5
+const inLastDays = (iso: string, days: number) => Date.now() - new Date(iso).getTime() < days * 864e5
+const inLastWeek = (iso: string) => inLastDays(iso, 7)
+// The owner's tags on a "Needs you" card: what kind of help Plato is waiting for.
+const needTag = (a: JobApplication) => {
+  if (isVerifySubmission(a)) return "Please check"
+  if (a.status === "NEEDS_USER_VERIFICATION" || a.needs_input?.reason === "captcha") return "Human check"
+  const r = a.needs_input?.reason
+  if (r === "questions") return a.needs_input?.questions.some((q) => /cover letter/i.test(q.label)) ? "Cover letter" : "Question"
+  return r === "resume" ? "Skills check" : r === "ready" ? "Submit" : r === "unsupported" ? "Apply yourself" : r === "profile" ? "Your details" : "Needs you"
+}
 const showValue = (v: AnswerValue) => (typeof v === "boolean" ? (v ? "Yes" : "No") : Array.isArray(v) ? v.join(", ") : v)
 
 function ApplicationsContent() {
@@ -133,9 +141,6 @@ function ApplicationsContent() {
   }, [focus, apps])
 
   const scoped = useMemo(() => (apps ?? []).filter((a) => !source || a.job.source === source), [apps, source])
-  const ALL = "all"
-  const sourceOptions = [{ value: ALL, label: "All platforms" }, ...Object.entries(SOURCE_LABEL).map(([value, label]) => ({ value, label }))]
-  const threadOptions = [{ value: ALL, label: "All searches" }, ...threads.map((t) => ({ value: t.id, label: t.title ?? "Untitled search" }))]
   const inTab = (key: TabKey, a: JobApplication) => {
     // "Needs you" also holds extension applications that wait on the person (VERIFY).
     if (key === "needs") return needsAttention(a)
@@ -147,7 +152,6 @@ function ApplicationsContent() {
   const inLine = scoped.filter((a) => queue?.positions[a.id]).length
   const shown = scoped.filter((a) => inTab(tab, a))
   const active = scoped.find((a) => a.status === "IN_PROGRESS")
-  const activeStep = active ? timeline[active.id]?.at(-1) : undefined
 
   async function retry(a: JobApplication) {
     setRetrying(a.id)
@@ -162,6 +166,7 @@ function ApplicationsContent() {
   }
 
   const needs = scoped.filter(needsAttention)
+  const sent30 = scoped.filter((a) => a.status === "SUBMITTED" && inLastDays(a.submitted_at ?? a.updated_at, 30)).length
   const appliedWeek = scoped.filter((a) => a.status === "SUBMITTED" && inLastWeek(a.submitted_at ?? a.updated_at)).length
   const settled = scoped.filter((a) => ["SUBMITTED", "FAILED", "EXPIRED", "SKIPPED"].includes(a.status))
   const wentThrough = settled.length ? Math.round((settled.filter((a) => a.status === "SUBMITTED").length / settled.length) * 100) : null
@@ -181,8 +186,8 @@ function ApplicationsContent() {
         actions={
           apps && (
             <div className="flex flex-wrap gap-2.5">
-              <StatTile value={scoped.length} label={threadId ? "From this search" : "All applications"} />
-              <StatTile value={appliedWeek} label="Applied this week" />
+              <StatTile value={sent30} label="Sent in 30 days" />
+              <StatTile value={appliedWeek} label="Sent this week" />
               {wentThrough !== null && <StatTile value={`${wentThrough}%`} label="Went through" />}
               <StatTile value={needs.length} label="Need you" tone={needs.length ? "need" : undefined} />
             </div>
@@ -231,29 +236,9 @@ function ApplicationsContent() {
 
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section className="flex min-w-0 flex-col gap-3">
-          {active && (
-            <motion.div layout className="flex flex-col gap-3 rounded-[22px] border border-primary/20 bg-card p-4 shadow-card">
-              <div className="flex items-center gap-3">
-                <MonoTile name={active.job.company} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-semibold tracking-[0.08em] text-primary uppercase">Applying now</p>
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {active.job.title} · {active.job.company}
-                  </p>
-                </div>
-                <span className="relative flex size-2.5">
-                  <span className="absolute inset-0 animate-ping rounded-full bg-primary/50" />
-                  <span className="relative size-2.5 rounded-full bg-primary" />
-                </span>
-              </div>
-              <StageStepper current={activeStep ? (STEP_STAGE[activeStep.step] ?? 4) : 4} />
-              <p className="text-sm text-text-secondary">{activeStep?.message ?? "Plato is working on it"}</p>
-            </motion.div>
-          )}
-
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold tracking-tight">All applications</h2>
-            <Segmented dataAi="applications.tab" value={tab} onChange={(k) => setQuery({ tab: k })} options={TABS.map((t) => ({ value: t.key, label: `${t.label} · ${scoped.filter((a) => inTab(t.key, a)).length}` }))} />
+            <Segmented dataAi="applications.tab" value={tab} onChange={(k) => setQuery({ tab: k })} options={TABS.filter((t) => t.key !== "needs").map((t) => ({ value: t.key, label: `${t.label} · ${scoped.filter((a) => inTab(t.key, a)).length}` }))} />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[13px] text-text-secondary">
             {worker?.enabled && (inLine > 0 || (!active && scoped.length > 0)) && (
@@ -262,40 +247,20 @@ function ApplicationsContent() {
                 {inLine > 0 ? `${inLine} waiting, one at a time · ${roughly(queue?.totalEtaSeconds ?? 0)} left` : "Queue is empty."}
               </span>
             )}
-            <span className="ml-auto">Platform:</span>
-            <Select items={sourceOptions} value={source ?? ALL} onValueChange={(v) => setQuery({ source: v })}>
-              <SelectTrigger className="h-9 max-w-48 gap-1.5 rounded-full bg-card px-3.5 text-[13px] font-semibold text-foreground">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="end" className="w-max max-w-80 min-w-(--anchor-width)">
-                {sourceOptions.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            Search:
-            <Select items={threadOptions} value={threadId ?? ALL} onValueChange={(v) => setQuery({ thread: v })}>
-              <SelectTrigger className="h-9 max-w-64 gap-1.5 rounded-full bg-card px-3.5 text-[13px] font-semibold text-foreground">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="end" className="w-max max-w-80 min-w-(--anchor-width)">
-                {threadOptions.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {threadId && (
+              <button type="button" onClick={() => setQuery({ thread: null })} className="ml-auto flex items-center gap-1.5 rounded-full border border-primary-line bg-primary-soft px-3 py-1 text-[13px] font-semibold text-primary">
+                From {threads.find((t) => t.id === threadId)?.title ?? "one search"} ✕
+              </button>
+            )}
           </div>
 
           <div className="rounded-[22px] border bg-card shadow-card">
-            <div className="hidden grid-cols-[minmax(0,1fr)_150px_110px_auto] gap-4 border-b px-5 py-2.5 text-[13px] text-text-tertiary md:grid">
+            <div className="hidden grid-cols-[minmax(0,1fr)_118px_84px_76px_172px] gap-3 border-b px-5 py-2.5 text-[13px] text-text-tertiary md:grid">
               <span>Job</span>
               <span>Status</span>
               <span>Date</span>
-              <span className="w-[170px]" />
+              <span className="whitespace-nowrap">Resume used</span>
+              <span />
             </div>
             {apps === null && !error && (
               <ul aria-busy="true" className="px-5">
@@ -334,7 +299,7 @@ function ApplicationsContent() {
                 const hasDetails = !waitingOnYou && (steps.length > 0 || sent.length > 0 || hasProof)
                 return (
                   <li key={a.id} ref={a.id === focus ? focusRef : undefined} className={cn("border-b border-divider px-5 py-3 transition-colors last:border-b-0", waitingOnYou ? "bg-warning-soft/40" : a.id === focus ? "bg-primary-tint" : "hover:bg-primary-tint/60")}>
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_150px_110px_auto]">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_118px_84px_76px_172px]">
                       <div className="flex min-w-0 items-center gap-3">
                         <MonoTile name={a.job.company} size="sm" />
                         <div className="min-w-0">
@@ -352,7 +317,8 @@ function ApplicationsContent() {
                         <span className={cn("rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold whitespace-nowrap", s.tone.replace("text-warning", "text-warning-ink").replace("text-success", "text-success-ink"))}>{s.label}</span>
                       </span>
                       <span className="hidden text-sm whitespace-nowrap text-text-secondary md:block">{dateOf(a)}</span>
-                      <span className="col-span-2 flex items-center justify-end gap-1 md:col-span-1 md:w-[170px]">
+                      <span className="hidden truncate text-sm text-text-secondary md:block" title={a.resume_strategy?.reasons?.join(" ")}>{a.resume_key ? "Tailored" : a.status === "SUBMITTED" ? "Your CV" : "—"}</span>
+                      <span className="col-span-2 flex items-center justify-end gap-1 md:col-span-1">
                         {waitingOnYou ? (
                           <button type="button" onClick={() => focusNeed(a.id)} className="text-sm font-semibold text-primary hover:underline xl:inline">
                             Answer
@@ -372,7 +338,7 @@ function ApplicationsContent() {
                               </button>
                             )}
                             {a.status === "SUBMITTED" && (
-                              <Link href={applicationHref(a.id)} className="text-sm font-semibold text-primary hover:underline">
+                              <Link href={applicationHref(a.id)} className="text-sm font-semibold whitespace-nowrap text-primary hover:underline">
                                 See what was sent
                               </Link>
                             )}
@@ -451,7 +417,7 @@ function ApplicationsContent() {
                   </Link>
                   <p className="truncate text-xs text-text-secondary">{a.job.company}</p>
                 </div>
-                <StatusPill tone="warning">{isVerifySubmission(a) ? "Please check" : a.status === "NEEDS_USER_VERIFICATION" ? "Human check" : a.needs_input?.reason === "questions" ? "Question" : "Needs you"}</StatusPill>
+                <StatusPill tone="warning">{needTag(a)}</StatusPill>
               </div>
               {isVerifySubmission(a) ? <p className="text-sm font-medium text-warning-ink">{applicationReason(a)}</p> : <ApplicationReview app={a} onDone={() => void load()} />}
             </div>

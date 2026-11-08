@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useCallback, useEffect, useState } from "react"
+import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Bell, BellOff, Plus, Search, SlidersHorizontal, X } from "lucide-react"
 import { cn } from "cn"
@@ -8,7 +9,7 @@ import { PAGE, PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExtensionApplyModal } from "@/components/extension-apply-modal"
-import { MonoTile, PlatoNote, StatusPill } from "@/components/plato-ui"
+import { MatchPill, MonoTile, PlatoNote, StatusPill } from "@/components/plato-ui"
 import { CADENCES, createAlert, deleteAlert, getDigests, getInsights, saveAlertSettings, searchCompanies, updateAlert, type AlertSettings, type CompanySuggestion, type Digest, type InsightsOverview, type JobAlert } from "@/lib/insights/api"
 import { timeAgo } from "@/lib/jobs/links"
 import { DigestSettings } from "../insights/digest-settings"
@@ -98,7 +99,7 @@ function FollowingContent() {
       )}
       {settingsOpen && <DigestSettings data={data} onChange={changeSettings} />}
 
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_350px]">
         <section className="flex min-w-0 flex-col gap-5">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold tracking-tight">Companies you follow</h2>
@@ -110,25 +111,28 @@ function FollowingContent() {
           </div>
           {!data && <Skeleton className="h-40 rounded-2xl" />}
           {data && companies.length === 0 && <PlatoNote variant="inline">You don&apos;t follow any company yet. Pick one on the right and Plato tells you when they post a role that fits.</PlatoNote>}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {companies.map((c) => {
               const n = newAt(c.company)
               return (
-                <div key={c.id} className={cn("flex flex-col gap-2 rounded-2xl border bg-card p-4", c.paused && "opacity-60")}>
-                  <div className="flex items-start justify-between">
+                <div key={c.id} className={cn("group relative flex min-w-0 flex-col gap-1.5 rounded-2xl border bg-card p-3", c.paused && "opacity-60")}>
+                  <div className="flex items-start justify-between gap-2">
                     <MonoTile name={c.company ?? "?"} />
-                    {n ? <StatusPill tone="primary">{n} new</StatusPill> : <span className="text-xs text-text-tertiary">No new roles</span>}
+                    {n ? <StatusPill tone="primary">{n} new</StatusPill> : <span className="text-[11px] whitespace-nowrap text-text-tertiary">No new roles</span>}
                   </div>
-                  <b className="truncate text-[15.5px]">{c.company}</b>
-                  <span className="text-[13px] text-text-secondary">{c.sent ? `${c.sent} sent to you so far` : "Nothing sent yet"}</span>
-                  <div className="mt-1 flex gap-2">
-                    <button type="button" onClick={() => void run(() => deleteAlert(c.id))} className="flex-1 rounded-lg border bg-card py-1.5 text-sm font-semibold hover:border-primary-line">
-                      Unfollow
-                    </button>
-                    <button type="button" aria-label={c.paused ? `Resume alerts for ${c.company}` : `Pause alerts for ${c.company}`} aria-pressed={!c.paused} onClick={() => togglePause(c)} className="flex size-9 items-center justify-center rounded-lg border bg-card text-text-secondary hover:border-primary-line">
+                  <b className="mt-1 truncate text-[15.5px]">{c.company}</b>
+                  <span className="text-[12.5px] leading-snug text-text-secondary">{c.open != null ? `${c.for_you ?? 0} for you · ${c.open} open` : c.sent ? `${c.sent} sent to you so far` : "Nothing sent yet"}</span>
+                  <div className="mt-1.5 flex gap-2">
+                    <Link href={`/jobs?company=${encodeURIComponent(c.company ?? "")}`} data-ai="following.see-roles" className="flex-1 rounded-lg border bg-card py-1.5 text-center text-sm font-semibold whitespace-nowrap hover:border-primary-line">
+                      See roles
+                    </Link>
+                    <button type="button" aria-label={c.paused ? `Resume alerts for ${c.company}` : `Pause alerts for ${c.company}`} aria-pressed={!c.paused} onClick={() => togglePause(c)} className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-card text-text-secondary hover:border-primary-line">
                       {c.paused ? <BellOff className="size-4" /> : <Bell className="size-4" />}
                     </button>
                   </div>
+                  <button type="button" onClick={() => void run(() => deleteAlert(c.id))} className="self-start text-xs text-text-tertiary hover:text-destructive hover:underline">
+                    Unfollow
+                  </button>
                 </div>
               )
             })}
@@ -152,6 +156,7 @@ function FollowingContent() {
                   <b className="block truncate text-[15px]">{j.title}</b>
                   <span className="block truncate text-xs text-text-secondary">{[j.company, j.location, j.posted_at && `posted ${timeAgo(j.posted_at)}`].filter(Boolean).join(" · ")}</span>
                 </span>
+                {j.match_percent != null && <MatchPill value={j.match_percent} />}
                 <a href={j.url} target="_blank" rel="noreferrer" className="rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold hover:border-primary-line">
                   View
                 </a>

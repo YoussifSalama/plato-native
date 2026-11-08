@@ -3,7 +3,7 @@ import { apiClient } from "@/lib/api-client"
 // Job alerts: new jobs in a field, or at companies the seeker follows, sent
 // together in one digest on their cadence. Free; how many depends on the plan.
 export type Cadence = "DAILY" | "EVERY_3_DAYS" | "WEEKLY"
-export type JobAlert = { id: string; kind: "FIELD" | "COMPANY"; title: string | null; location: string | null; remote_only: boolean; company: string | null; paused: boolean; sent: number; created_at: string }
+export type JobAlert = { id: string; kind: "FIELD" | "COMPANY"; title: string | null; location: string | null; remote_only: boolean; company: string | null; paused: boolean; sent: number; open?: number; for_you?: number; created_at: string }
 export type AlertSettings = { cadence: Cadence; email: boolean; in_app: boolean; emailAvailable: boolean }
 export type InsightsOverview = {
   plan: string

@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "motion/react"
-import { Bookmark, Briefcase, Check, ChevronDown, ChevronLeft, ChevronRight, EyeOff, Loader2, Plus, Sparkles } from "lucide-react"
+import { Bookmark, Briefcase, Check, X, ChevronDown, ChevronLeft, ChevronRight, EyeOff, Loader2, Plus, Sparkles } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -42,8 +42,10 @@ const jobsIn = (t: ThreadSummary) => {
 const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`)
 type Filters = { local: boolean; remote: boolean; senior: boolean; posted: number; salary: boolean }
 
-export default function JobsPage() {
+function JobsContent() {
   const router = useRouter()
+  // "See roles" on Following opens this page for one company.
+  const company = useSearchParams().get("company")?.trim() || null
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null)
   const [stats, setStats] = useState<DiscoveryStats | null>(null)
   const [following, setFollowing] = useState<string[]>([])
@@ -88,8 +90,9 @@ export default function JobsPage() {
       ...(filters.senior && { level: "senior" as const }),
       ...(filters.posted > 0 && { postedWithinDays: filters.posted }),
       ...(filters.salary && { hasSalary: true }),
+      ...(company && { q: company }),
     }),
-    [tab, filters, country],
+    [tab, filters, country, company],
   )
   useEffect(() => {
     let alive = true
@@ -213,7 +216,7 @@ export default function JobsPage() {
       <main className="flex min-w-0 flex-col gap-4 px-4 pt-4 pb-10 sm:px-6 lg:pr-8 lg:pl-6">
         <header data-tour="page-header" className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-[260px] flex-1">
-            <h1 className="text-[28px] leading-tight font-extrabold tracking-tight">All jobs</h1>
+            <h1 className="text-[28px] leading-tight font-extrabold tracking-tight">{company ? `Jobs at ${company}` : "All jobs"}</h1>
             <p className="mt-1.5 text-[15px] text-text-secondary">
               {tab === "discover" ? `${total} strong matches across all your searches, best first.` : tab === "hidden" ? "Jobs you marked not interested. Bring one back with the eye button." : `${total} jobs.`}
               {tab === "discover" && hidden > 0 && (
@@ -240,6 +243,12 @@ export default function JobsPage() {
               </button>
             ))}
           </div>
+          {company && (
+            <button type="button" onClick={() => change(() => router.replace("/jobs"))} className="flex h-9 items-center gap-1.5 rounded-full border border-primary-line bg-primary-soft px-3.5 text-[13.5px] font-medium text-primary">
+              At {company}
+              <X className="size-3.5" aria-label="Show all companies" />
+            </button>
+          )}
           {country && (
             <Chip on={filters.local} onClick={() => change(() => setFilters((f) => ({ ...f, local: !f.local })))}>
               Can apply from {country}
@@ -392,5 +401,13 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       {on && <Check className="size-3.5" />}
       {children}
     </button>
+  )
+}
+
+export default function JobsPage() {
+  return (
+    <Suspense>
+      <JobsContent />
+    </Suspense>
   )
 }

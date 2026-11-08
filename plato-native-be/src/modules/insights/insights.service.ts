@@ -86,6 +86,12 @@ export class InsightsService {
       }),
     ]);
     const sent = new Map(counts.map((c) => [c.alert_id, c._count._all]));
+    const reach = await this.companyReach(
+      id,
+      alerts.flatMap((a) =>
+        a.kind === 'COMPANY' && a.company ? [a.company] : [],
+      ),
+    );
     const limits = limitsFor(account.plan);
     const next = settings.last_digest_at
       ? new Date(
@@ -109,6 +115,7 @@ export class InsightsService {
         company: a.company,
         paused: a.paused,
         sent: sent.get(a.id) ?? 0,
+        ...(a.kind === 'COMPANY' && a.company && reach.get(a.company)),
         created_at: a.created_at,
       })),
       settings: {
@@ -270,6 +277,36 @@ export class InsightsService {
             : null,
         })),
     }));
+  }
+
+  /**
+   * For each followed company: open roles Plato knows of, and how many of them are in
+   * this seeker's matches ("14 for you · 212 open").
+   */
+  private async companyReach(seekerId: string, companies: string[]) {
+    const out = new Map<string, { open: number; for_you: number }>();
+    await Promise.all(
+      [...new Set(companies)].map(async (name) => {
+        const company = { equals: name, mode: 'insensitive' as const };
+        const live = {
+          OR: [{ expired_at: null }, { expired_at: { isSet: false } }],
+        };
+        const [open, forYou] = await Promise.all([
+          this.prisma.job.count({
+            where: { company, source: { not: 'MANUAL' }, ...live },
+          }),
+          this.prisma.jobSeekerJobMatch.count({
+            where: {
+              job_seeker_id: seekerId,
+              hidden: false,
+              job: { is: { company, ...live } },
+            },
+          }),
+        ]);
+        out.set(name, { open, for_you: forYou });
+      }),
+    );
+    return out;
   }
 
   /** Company names in the index, for the follow box. */

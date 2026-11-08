@@ -51,8 +51,8 @@ function OnboardingLayout({ step, faqs, children }: { step: Step; faqs: string[]
 
 // One footer on every step (SPEC U2): Back on the left, the next step on the right.
 function OnboardingFooter({ back, hint, skip, next }: { back?: () => void; hint?: ReactNode; skip?: () => void; next: ReactNode }) {
+  // Right padding keeps the primary button clear of the floating Plato launcher.
   return (
-    {/* Right padding keeps the primary button clear of the floating Plato launcher. */}
     <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-foreground/10 pt-6 sm:pr-[210px]">
       <div className="flex flex-wrap items-center gap-4">
         {back && (

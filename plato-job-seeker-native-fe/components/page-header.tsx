@@ -59,11 +59,9 @@ export function PageHeader({
     <header data-tour="page-header" className={cn("flex flex-col gap-4", className)}>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0 max-w-3xl">
-          {crumbs?.length ? (
-            <Breadcrumbs crumbs={crumbs} current={typeof title === "string" ? title : section} />
-          ) : (
-            section && <span className="eyebrow">{section}</span>
-          )}
+          {/* Sub-pages show the way back up. The old nav-group label (`section`) is no longer shown:
+              the sidebar has no groups now, so it named nothing the seeker could see. */}
+          {crumbs?.length ? <Breadcrumbs crumbs={crumbs} current={typeof title === "string" ? title : section} /> : null}
           <h1 className="mt-1 truncate text-[28px] leading-tight font-extrabold tracking-tight text-foreground">{title}</h1>
           {description && <p className="mt-1.5 text-[15px] leading-relaxed text-text-secondary">{description}</p>}
         </div>

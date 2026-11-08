@@ -71,7 +71,7 @@ function InsightsPage() {
 
   return (
     <div className={PAGE}>
-      <PageHeader section="Find & apply" title="Job alerts" description="New jobs in the roles you want and at the companies you follow, in one digest on your schedule. Alerts are free; your plan sets how many you keep." />
+      <PageHeader title="Following" description="New openings at companies you follow and in roles you care about, in one digest on your schedule." />
 
       <AnimatePresence>
         {error && (
@@ -86,12 +86,17 @@ function InsightsPage() {
       </AnimatePresence>
 
       <DigestSettings data={data} onChange={changeSettings} />
-      <div className="grid gap-6 xl:grid-cols-2">
-        <FieldAlerts data={data} roles={roles} actions={actions} />
-        <CompanyFollows data={data} actions={actions} />
+      {/* Screen 10: companies and their new roles on the left, the roles you follow on the right. */}
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <CompanyFollows data={data} actions={actions} />
+          <Digests digests={digests} focus={focus} />
+        </div>
+        <div className="flex flex-col gap-6">
+          <FieldAlerts data={data} roles={roles} actions={actions} />
+          <EmailNote />
+        </div>
       </div>
-      <Digests digests={digests} focus={focus} />
-      <EmailNote />
     </div>
   )
 }

@@ -41,7 +41,7 @@ const initials = (s: string) =>
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join("")
-const DOC_LABEL: Record<JobSeekerDocument["type"], string> = { CV_RESUME: "Resume / CV", CERTIFICATE: "Certificate", LICENSE: "License", DEGREE: "Degree", OTHER: "Other document" }
+const DOC_LABEL: Record<JobSeekerDocument["type"], string> = { CV_RESUME: "Resume / CV", CERTIFICATE: "Certificate", LICENSE: "License", DEGREE: "Degree", OTHER: "Other document", COVER_LETTER: "Cover letter", PORTFOLIO: "Portfolio", WORK_PERMIT: "Work visa or permit", ID_DOCUMENT: "Passport or ID", REFERENCE_LETTER: "Reference letter" }
 
 function ProfileContent() {
   const router = useRouter()

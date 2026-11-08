@@ -73,6 +73,7 @@ services:
       context: ./plato-job-seeker-native-fe
       args:
         NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
+        NEXT_PUBLIC_EXTENSION_STORE_URL: ${EXTENSION_STORE_URL:-}
     restart: unless-stopped
     depends_on:
       - api

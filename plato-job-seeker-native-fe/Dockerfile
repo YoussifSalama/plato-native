@@ -6,6 +6,9 @@ RUN npm ci
 COPY . .
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Chrome Web Store page of Plato Apply; empty until it is published (onboarding shows install help).
+ARG NEXT_PUBLIC_EXTENSION_STORE_URL=
+ENV NEXT_PUBLIC_EXTENSION_STORE_URL=$NEXT_PUBLIC_EXTENSION_STORE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

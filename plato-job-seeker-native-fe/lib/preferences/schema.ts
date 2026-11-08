@@ -19,7 +19,17 @@ export type Preferences = {
   portfolio_url: string | null
   // Application snapshot: asked once so Plato never asks per job.
   work_authorization: string[]
+  // Optional on older servers. Period of salary_min/max; limits on the two flags above.
+  salary_period?: "MONTHLY" | "YEARLY"
+  relocation_note?: string | null
+  sponsorship_note?: string | null
   source: "AI_SUGGESTED" | "USER_CONFIRMED"
 }
 
 export type PreferencesEditPayload = Omit<Preferences, "source">
+
+// POST /job-seeker/preferences/estimate: open jobs that fit draft preferences, and the salary check.
+export type PreferenceEstimate = {
+  openJobs: number
+  salary: { verdict: "ok" | "low" | "high"; monthlyUsd: number; typical: { min: number; max: number }; market: string; note: string } | null
+}

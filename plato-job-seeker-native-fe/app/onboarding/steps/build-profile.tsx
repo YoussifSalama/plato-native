@@ -10,22 +10,25 @@ import { analyzeProfile, getProfile, listDocuments, replaceDocument, uploadDocum
 import type { DocumentType, JobSeekerDocument, JobSeekerProfile } from "@/lib/documents/schema"
 
 // Step 1, screen 01: the CV (required) on the left, everything else an application might
-// ask for on the right. The backend knows five document types, so tiles without their own
-// type are stored as OTHER with the tile's name in front of the file name ("Portfolio · x.pdf").
+// ask for on the right. Each tile is its own document type; supporting documents join the
+// batch Plato read the CV from, so adding one never hides the CV.
 type Tile = { key: string; title: string; hint: string; icon: typeof FileText; type: DocumentType; also?: DocumentType[] }
 const TILES: Tile[] = [
-  { key: "cover", title: "Cover letter", hint: "Plato adapts it for each job", icon: FileText, type: "OTHER" },
-  { key: "portfolio", title: "Portfolio", hint: "A file or a link", icon: FileText, type: "OTHER" },
+  { key: "cover", title: "Cover letter", hint: "Plato adapts it for each job", icon: FileText, type: "COVER_LETTER" },
+  { key: "portfolio", title: "Portfolio", hint: "A file or a link", icon: FileText, type: "PORTFOLIO" },
   { key: "certs", title: "Certificates", hint: "Degrees, courses, licenses", icon: Award, type: "CERTIFICATE", also: ["DEGREE"] },
-  { key: "visa", title: "Work visa or permit", hint: "e.g. US visa, residence permit", icon: ScrollText, type: "OTHER" },
+  { key: "visa", title: "Work visa or permit", hint: "e.g. US visa, residence permit", icon: ScrollText, type: "WORK_PERMIT" },
   { key: "license", title: "Driver's license", hint: "Some jobs ask for it", icon: IdCard, type: "LICENSE" },
-  { key: "passport", title: "Passport or ID", hint: "Only if a job asks for it", icon: IdCard, type: "OTHER" },
-  { key: "refs", title: "Reference letters", hint: "From past managers", icon: FileText, type: "OTHER" },
+  { key: "passport", title: "Passport or ID", hint: "Only if a job asks for it", icon: IdCard, type: "ID_DOCUMENT" },
+  { key: "refs", title: "Reference letters", hint: "From past managers", icon: FileText, type: "REFERENCE_LETTER" },
   { key: "other", title: "Something else", hint: "Any file a job might need", icon: Plus, type: "OTHER" },
 ]
+// Documents saved before the tiles had their own types are OTHER, named "Portfolio · x.pdf".
 const prefix = (t: Tile) => `${t.title} · `
-const tileDocs = (t: Tile, docs: JobSeekerDocument[]) =>
-  docs.filter((d) => (t.type === "OTHER" ? d.type === "OTHER" && (t.key === "other" ? !TILES.some((x) => x.type === "OTHER" && x.key !== "other" && d.name?.startsWith(prefix(x))) : d.name?.startsWith(prefix(t))) : d.type === t.type || !!t.also?.includes(d.type)))
+const legacy = (d: JobSeekerDocument) => TILES.find((x) => x.type !== "OTHER" && d.type === "OTHER" && d.name?.startsWith(prefix(x)))
+const tileDocs = (t: Tile, docs: JobSeekerDocument[]) => docs.filter((d) => d.type === t.type || !!t.also?.includes(d.type) || legacy(d)?.key === t.key).filter((d) => t.type !== "OTHER" || !legacy(d))
+// What the profile analysis learns from; adding one after Plato read the CV means reading again.
+const EVIDENCE: DocumentType[] = ["CERTIFICATE", "DEGREE", "LICENSE"]
 
 // "Senior SCM & ERP Consultant, about 7 years, based in Cairo. Strongest areas: …"
 function cvSummary(p: JobSeekerProfile) {
@@ -51,6 +54,8 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
   const tileInput = useRef<HTMLInputElement>(null)
   const [tileFor, setTileFor] = useState<Tile | null>(null)
   const analyzedFor = useRef<string | null>(null)
+  // Documents Plato had when it last read the profile.
+  const [readDocs, setReadDocs] = useState<Set<string> | null>(null)
 
   useEffect(() => {
     listDocuments()
@@ -81,11 +86,29 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
     }
     analyzedFor.current = cv.id
     setReading(true)
+    const ids = new Set((docs ?? []).map((d) => d.id))
     analyzeProfile()
-      .then((r) => setProfile(r.profile))
+      .then((r) => (setProfile(r.profile), setReadDocs(ids)))
       .catch((e) => setError(e instanceof Error ? e.message : "Plato could not read the CV"))
       .finally(() => setReading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- docs are read for the snapshot only
   }, [cv, cvReady, profile, profileLoaded])
+
+  // New certificates, degrees or licenses since the last read: read again, then go on.
+  async function next() {
+    const fresh = readDocs && (docs ?? []).some((d) => EVIDENCE.includes(d.type) && d.status === "READY" && !readDocs.has(d.id))
+    if (!fresh) return onContinue()
+    setReading(true)
+    setError(null)
+    try {
+      await analyzeProfile()
+      onContinue()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Plato could not read your new documents")
+    } finally {
+      setReading(false)
+    }
+  }
 
   async function uploadCv(file: File) {
     setBusy("cv")
@@ -104,8 +127,7 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
     setBusy(t.key)
     setError(null)
     try {
-      const named = t.type === "OTHER" && t.key !== "other" ? new File([file], prefix(t) + file.name, { type: file.type }) : file
-      const doc = await uploadDocument(named, t.type)
+      const doc = await uploadDocument(file, t.type)
       setDocs((prev) => [...(prev ?? []), doc])
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed")
@@ -177,7 +199,7 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="mt-2 flex flex-wrap items-center gap-5">
-          <Button data-ai="onboarding.continue" onClick={onContinue} disabled={!cvReady || reading} className="h-14 gap-2 rounded-xl px-8 text-[17px]">
+          <Button data-ai="onboarding.continue" onClick={() => void next()} disabled={!cvReady || reading} className="h-14 gap-2 rounded-xl px-8 text-[17px]">
             Continue to preferences
             <ArrowRight className="size-5" />
           </Button>

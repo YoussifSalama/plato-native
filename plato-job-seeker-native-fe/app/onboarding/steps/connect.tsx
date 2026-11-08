@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Check, Copy, Loader2, Puzzle } from "lucide-react"
+import { Check, Copy, Loader2, Plus, Puzzle } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { getExtensionProgress, startPairing, type PairingCode } from "@/lib/extension/api"
+
+// The Chrome Web Store page, once the extension is published. Until then: install help.
+const STORE_URL = process.env.NEXT_PUBLIC_EXTENSION_STORE_URL
 
 // Step 3 (screen 03): link the Plato Apply extension with a one-time code.
 // The extension does the applying, in the seeker's own browser.
@@ -78,12 +81,19 @@ function ConnectStep({ onBack, onDone }: { onBack: () => void; onDone: () => voi
           <StepDot n={1} done={linked} />
           <div className="min-w-0 flex-1">
             <p className="text-base font-bold">Add Plato Apply to Chrome</p>
-            <p className="text-sm text-text-secondary">Free. It isn’t on the Chrome Web Store yet; the Extension page shows how to install it.</p>
+            <p className="text-sm text-text-secondary">{STORE_URL ? "Free. Takes about 10 seconds." : "Free. It isn’t on the Chrome Web Store yet; the Extension page shows how to install it."}</p>
           </div>
-          <Link href="/extension" className="flex h-11 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-semibold transition-colors hover:border-primary-line">
-            <Puzzle className="size-4" />
-            How to install
-          </Link>
+          {STORE_URL ? (
+            <a href={STORE_URL} target="_blank" rel="noreferrer" data-ai="onboarding.add-to-chrome" className="flex h-11 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-semibold transition-colors hover:border-primary-line">
+              <Plus className="size-4" />
+              Add to Chrome
+            </a>
+          ) : (
+            <Link href="/extension" className="flex h-11 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-semibold transition-colors hover:border-primary-line">
+              <Puzzle className="size-4" />
+              How to install
+            </Link>
+          )}
         </li>
         <li className="flex items-start gap-4 py-5">
           <StepDot n={2} done={linked} />

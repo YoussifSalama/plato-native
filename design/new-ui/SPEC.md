@@ -393,7 +393,16 @@ glass styling.
 | Fonts | Plus Jakarta Sans + Geist Mono | same | Same |
 | Company avatar | Grey monogram tile | Colored circle with initial | **A** |
 
-## 10. Open questions
+## 10. Final prototype
+
+`final-prototype.html` (published as a private artifact) is the merged result: the owner's screens with the
+sync fixes from §7 and the AI layer from §9, all running on one dataset. Decisions made while building it:
+- **Applications "Needs you" = right-hand column (screen 09)**, with the rows also in the table, highlighted.
+- Interview status is its own pill, and "Prepare with Plato" links an interview to Career practice.
+- Jobs → Tailor & apply → Review → confirm → Applications (Queued) is one connected flow, and the status pill updates.
+- The chat panel opens from the command bar, Ctrl K, the status pill, "Ask Plato" actions and Profile's "tell Plato" box.
+
+## 11. Open questions
 1. Does the onboarding AI assistant/FAQ panel stay, or is it gone?
 2. "Following" (companies + roles): how much backend exists (`insights.prisma`)?
 6. Applications "Needs you": inline rows (08) or side column (09)?

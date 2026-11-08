@@ -1,0 +1,1074 @@
+<title>Plato Final Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: owner's app shell (sidebar + top bar + page), Plato chat docks on the right.
+   Light-only on purpose: the job seeker app defines no dark palette (see globals.css). */
+:root{
+  color-scheme:light;
+  --paper:#F3F6FA; --card:#FFFFFF; --ink:#0E1B2C; --ink-2:#4A5A70; --ink-3:#7A889C; --mist:#A3B0C2;
+  --line:#E2E8F0; --divider:#EEF2F7;
+  --cobalt:#0A57B5; --cobalt-hover:#004C8C; --cobalt-deep:#003A6E; --azure:#00A1E2;
+  --soft:#E8F2FC; --tint:#F5F9FE; --brand-line:#C9E0F5;
+  --success:#1C9A4B; --success-ink:#15803D; --success-soft:#E3F9EA; --success-line:#B9E8C9;
+  --warning:#D97706; --warning-ink:#B45309; --warning-soft:#FEF3C7; --warning-line:#F5D98B;
+  --danger:#D92D20; --danger-soft:#FEE4E2;
+  --info:#0B7FAB; --info-soft:#E1F3FA;
+  --font-sans:"Plus Jakarta Sans",ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r-card:16px; --r-ctl:10px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-.02em}
+p{margin:0}
+a{color:var(--cobalt)}
+:focus-visible{outline:2px solid var(--cobalt);outline-offset:2px;border-radius:6px}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+svg.i.sm{width:15px;height:15px} svg.i.lg{width:22px;height:22px}
+.tab-nums{font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-weight:500}
+.muted{color:var(--ink-2)} .faint{color:var(--ink-3)} .small{font-size:12.5px}
+.row{display:flex;align-items:center;gap:10px} .col{display:flex;flex-direction:column}
+.grow{flex:1;min-width:0} .wrap{flex-wrap:wrap} .between{justify-content:space-between}
+.truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- Shell ---------- */
+.shell{display:grid;grid-template-columns:248px 1fr;min-height:100%}
+.side{background:var(--card);border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh}
+.logo{display:flex;align-items:center;gap:12px;padding:0 8px;color:var(--cobalt);font-weight:800;letter-spacing:.22em;font-size:17px}
+.logo-mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#00A1E2,#0A57B5 70%);color:#fff;display:grid;place-items:center;font-weight:800;letter-spacing:0;font-size:18px}
+.logo-mark.sm{width:22px;height:22px;border-radius:6px;font-size:11px}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav a{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;color:var(--ink);text-decoration:none;font-weight:500;font-size:15px;border:1px solid transparent}
+.nav a:hover{background:var(--tint)}
+.nav a.on{background:var(--card);border-color:var(--line);box-shadow:0 1px 2px rgba(14,27,44,.05);color:var(--cobalt);font-weight:600}
+.nav .count{margin-left:auto;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px}
+.count.new{background:var(--soft);color:var(--cobalt)}
+.count.need{background:var(--warning);color:#fff;min-width:22px;text-align:center}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:12px}
+.nav.sub a{font-size:14px;padding:9px 12px}
+.strength{border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px;text-decoration:none;color:var(--ink)}
+.bar{height:6px;border-radius:99px;background:var(--divider);overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--cobalt);border-radius:99px}
+.bar.green>i{background:var(--success)}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:12px;padding:14px 28px;border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0;z-index:20}
+.cmd{flex:1;min-width:0;max-width:640px;display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;color:var(--ink-2);text-align:left;box-shadow:0 1px 2px rgba(14,27,44,.04)}
+.cmd:hover{border-color:var(--brand-line)}
+.cmd .kbd{margin-left:auto;font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--ink-2)}
+.cmd svg{color:var(--cobalt)}
+.top-r{margin-left:auto;display:flex;align-items:center;gap:10px}
+.chip-btn{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:10px 16px;font-weight:600;white-space:nowrap}
+.chip-btn:hover{border-color:var(--brand-line)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--success);flex-shrink:0}
+.dot.busy{background:var(--azure);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.icon-btn{width:44px;height:44px;display:grid;place-items:center;border-radius:12px;background:var(--card);border:1px solid var(--line);position:relative}
+.icon-btn .badge{position:absolute;top:9px;right:11px;width:8px;height:8px;border-radius:50%;background:var(--danger);border:2px solid var(--card)}
+.avatar{width:44px;height:44px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:700}
+.page{padding:26px 28px 120px;display:flex;flex-direction:column;gap:22px;min-width:0}
+
+/* ---------- Primitives ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card)}
+.pad{padding:20px 22px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:var(--r-ctl);font-weight:600;padding:10px 16px;border:1px solid transparent;white-space:nowrap;line-height:1.2}
+.btn.primary{background:var(--cobalt);color:#fff}
+.btn.primary:hover{background:var(--cobalt-hover)}
+.btn.outline{background:var(--card);border-color:var(--line);color:var(--ink)}
+.btn.outline:hover{border-color:var(--brand-line);background:var(--tint)}
+.btn.soft{background:var(--card);border-color:var(--brand-line);color:var(--cobalt)}
+.btn.link{color:var(--cobalt);padding:6px 2px}
+.btn.link:hover{text-decoration:underline}
+.btn.lg{padding:14px 22px;font-size:16px;border-radius:12px}
+.btn.sm{padding:7px 12px;font-size:13px}
+.btn.block{width:100%}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.mono-tile{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);display:grid;place-items:center;font-weight:700;font-size:12.5px;color:var(--ink-2);flex-shrink:0;letter-spacing:.02em}
+.mono-tile.sm{width:34px;height:34px;font-size:11px;border-radius:9px}
+.icon-tile{width:40px;height:40px;border-radius:10px;background:var(--soft);color:var(--cobalt);display:grid;place-items:center;flex-shrink:0}
+.icon-tile.ok{background:var(--success-soft);color:var(--success)}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.pill.success{background:var(--success-soft);color:var(--success-ink)}
+.pill.warn{background:var(--warning-soft);color:var(--warning-ink)}
+.pill.info{background:var(--info-soft);color:var(--info)}
+.pill.neutral{background:var(--divider);color:var(--ink-2)}
+.pill.danger{background:var(--danger-soft);color:var(--danger)}
+.pill.primary{background:var(--soft);color:var(--cobalt)}
+.match{background:var(--soft);color:var(--cobalt);border-radius:999px;padding:4px 10px;font-weight:700;font-size:13px}
+.tag{background:var(--divider);color:var(--ink-2);border-radius:7px;padding:3px 9px;font-size:12.5px;font-weight:500}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;font-weight:500;color:var(--ink)}
+.chip:hover{border-color:var(--brand-line)}
+.chip.on{background:var(--cobalt);border-color:var(--cobalt);color:#fff}
+.chip.filter.on{background:var(--soft);border-color:var(--brand-line);color:var(--cobalt)}
+.chip.remove{background:var(--soft);border-color:var(--brand-line);color:var(--cobalt)}
+.chip.suggest{border-style:dashed;color:var(--ink-2)}
+.chip.avoid{background:var(--danger-soft);border-color:#F8C5C0;color:var(--danger)}
+.chip.answer{border-color:var(--brand-line);color:var(--cobalt);font-weight:600;background:var(--card)}
+.chip.answer:hover{background:var(--soft)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.seg{display:inline-flex;background:var(--divider);border-radius:12px;padding:4px;gap:2px;flex-wrap:wrap}
+.seg button{padding:7px 13px;border-radius:9px;font-weight:500;color:var(--ink-2);white-space:nowrap}
+.seg button.on{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(14,27,44,.08)}
+.utabs{display:flex;gap:26px;border-bottom:1px solid var(--line);overflow-x:auto}
+.utabs button{padding:12px 0;font-weight:500;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.utabs button.on{color:var(--cobalt);border-color:var(--cobalt);font-weight:600}
+.input{width:100%;border:1px solid var(--line);background:var(--card);border-radius:var(--r-ctl);padding:11px 14px;outline:none}
+.input:focus{border-color:var(--cobalt);box-shadow:0 0 0 3px rgba(10,87,181,.12)}
+.input::placeholder{color:var(--mist)}
+select.input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234A5A70' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
+.note{display:flex;gap:12px;align-items:flex-start;background:var(--tint);border:1px solid var(--brand-line);border-radius:14px;padding:16px 18px}
+.note .label{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--cobalt);margin-bottom:4px}
+.pline{display:flex;gap:8px;align-items:flex-start;color:var(--ink-2);font-size:13.5px}
+.pline .logo-mark{margin-top:1px}
+.warnchip{background:var(--warning-soft);color:var(--warning-ink);border-radius:6px;padding:1px 7px;font-weight:600;font-size:12.5px}
+.ring{--p:50;width:48px;height:48px;border-radius:50%;background:conic-gradient(var(--cobalt) calc(var(--p)*1%),var(--divider) 0);display:grid;place-items:center;flex-shrink:0}
+.ring::before{content:"";grid-area:1/1;width:38px;height:38px;border-radius:50%;background:var(--card)}
+.ring span{grid-area:1/1;font-weight:700;font-size:12.5px;color:var(--cobalt);z-index:1}
+.ring.lg{width:58px;height:58px}.ring.lg::before{width:46px;height:46px}
+.list>*+*{border-top:1px solid var(--divider)}
+.h-sec{font-size:20px;font-weight:700}
+.h-page{font-size:30px;font-weight:800}
+.page-head{display:flex;gap:20px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.page-head .grow p{margin-top:6px}
+.stats{display:flex;gap:10px;flex-wrap:wrap}
+.stat{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:12px 16px;min-width:118px;text-align:left;color:var(--ink)}
+.stat b{display:block;font-size:24px;font-weight:800;line-height:1.1;letter-spacing:-.02em}
+.stat span{font-size:12.5px;color:var(--ink-2)}
+.stat.hi{background:var(--soft);border-color:var(--brand-line)} .stat.hi b,.stat.hi span{color:var(--cobalt)}
+.stat.need{background:var(--warning-soft);border-color:var(--warning-line)} .stat.need b,.stat.need span{color:var(--warning-ink)}
+button.stat:hover{border-color:var(--brand-line)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:22px;align-items:start}
+.split.wide-r{grid-template-columns:minmax(0,1fr) 380px}
+.split.left-list{grid-template-columns:340px minmax(0,1fr)}
+#chat-root{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:55}
+#chat-root>*{pointer-events:auto}
+#chat-root .chat:not(.open){pointer-events:none;visibility:hidden}
+
+/* ---------- Jobs ---------- */
+.jobs-wrap{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:calc(100vh - 73px)}
+.searches{border-right:1px solid var(--line);padding:22px 16px;display:flex;flex-direction:column;gap:10px}
+.searches .item{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:9px 10px;border-radius:10px;text-align:left;width:100%;color:var(--ink)}
+.searches .item:hover{background:var(--card)}
+.searches .item.on{background:var(--card);border:1px solid var(--line)}
+.searches .plus{color:var(--cobalt);font-weight:700;font-size:13px}
+.jobrow{display:flex;align-items:center;gap:14px;padding:14px 16px}
+.jobrow input[type=checkbox]{width:20px;height:20px;accent-color:var(--cobalt);flex-shrink:0}
+.jobrow .meta{color:var(--ink-2);font-size:13.5px}
+.bulk{position:sticky;bottom:16px;display:flex;align-items:center;gap:12px;padding:12px 16px;box-shadow:0 18px 40px -20px rgba(0,58,110,.35);flex-wrap:wrap}
+.count-dot{width:30px;height:30px;border-radius:50%;background:var(--cobalt);color:#fff;display:grid;place-items:center;font-weight:700}
+
+/* ---------- Review ---------- */
+.rv-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;text-align:left;width:100%}
+.rv-item:hover{background:var(--tint)} .rv-item.on{background:var(--soft)}
+.diff{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.del{background:var(--danger-soft);color:var(--danger);text-decoration:line-through;border-radius:8px;padding:8px 12px}
+.add{background:var(--success-soft);color:var(--success-ink);border-radius:8px;padding:8px 12px}
+
+/* ---------- Applications ---------- */
+.table{width:100%;border-collapse:collapse}
+.table th{font-weight:500;color:var(--ink-3);text-align:left;font-size:13px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.table td{padding:10px 14px;border-bottom:1px solid var(--divider);vertical-align:middle}
+.table tr:last-child td{border-bottom:0}
+.table tr.hl td{background:#FFFBEB}
+.scroll-x{overflow-x:auto}
+.need-card{border:1px solid var(--warning-line);background:#FFFDF5;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.need-card.flash{animation:flash 1.2s ease}
+@keyframes flash{0%,60%{box-shadow:0 0 0 4px rgba(217,119,6,.35)}100%{box-shadow:none}}
+.drop{border:1.5px dashed var(--brand-line);background:var(--tint);border-radius:10px;padding:10px;color:var(--cobalt);font-weight:600;display:flex;justify-content:center;align-items:center;gap:8px;width:100%}
+
+/* ---------- Chat panel ---------- */
+.chat{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--card);border-left:1px solid var(--line);box-shadow:-24px 0 60px -30px rgba(0,58,110,.35);display:flex;flex-direction:column;z-index:60;transform:translateX(105%);transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.chat.open{transform:none}
+.chat-head{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line);padding-top:max(16px,env(safe-area-inset-top,0px))}
+.chat-body{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+.msg{display:flex;gap:10px;align-items:flex-start}
+.msg.me{justify-content:flex-end}
+.msg.me .bubble{background:var(--cobalt);color:#fff;border-radius:16px 16px 4px 16px;padding:10px 14px;max-width:85%}
+.msg .pbody{display:flex;flex-direction:column;gap:10px;min-width:0;flex:1}
+.ccard{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
+.ccard .r{display:flex;align-items:center;gap:10px;padding:10px 12px}
+.ccard .r+.r{border-top:1px solid var(--divider)}
+.composer{border-top:1px solid var(--line);padding:12px 14px;padding-bottom:max(12px,env(safe-area-inset-bottom,0px));position:relative}
+.composer form{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:14px;padding:6px 6px 6px 14px}
+.composer form:focus-within{border-color:var(--cobalt);box-shadow:0 0 0 3px rgba(10,87,181,.12)}
+.composer input{flex:1;border:0;outline:none;min-width:0;padding:8px 0;background:transparent}
+.send{width:38px;height:38px;border-radius:10px;background:var(--cobalt);color:#fff;display:grid;place-items:center}
+.slash{position:absolute;left:14px;right:14px;bottom:calc(100% - 4px);background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 40px -20px rgba(0,58,110,.4);padding:6px;max-height:320px;overflow-y:auto}
+.slash button{display:flex;gap:10px;align-items:center;width:100%;text-align:left;padding:8px 10px;border-radius:10px}
+.slash button:hover,.slash button.on{background:var(--tint)}
+.slash code{font-family:var(--font-mono);font-size:12px;color:var(--cobalt)}
+.skill{display:flex;gap:10px;align-items:flex-start;text-align:left;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card)}
+.skill:hover{border-color:var(--brand-line);background:var(--tint)}
+.skill code{font-family:var(--font-mono);font-size:11.5px;color:var(--cobalt)}
+.typing span{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--mist);margin-right:3px;animation:pulse 1s infinite}
+.typing span:nth-child(2){animation-delay:.15s}.typing span:nth-child(3){animation-delay:.3s}
+.scrim{position:fixed;inset:0;background:rgba(14,27,44,.25);z-index:55}
+
+/* ---------- Overlays ---------- */
+.modal-wrap{position:fixed;inset:0;background:rgba(14,27,44,.35);z-index:80;display:grid;place-items:center;padding:16px}
+.modal{width:min(520px,100%);background:var(--card);border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:16px;box-shadow:0 30px 80px -30px rgba(0,58,110,.5)}
+.toast{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:12px;padding:12px 18px;z-index:90;display:flex;gap:10px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 18px 40px -16px rgba(0,0,0,.4)}
+.pop{position:absolute;top:calc(100% + 8px);right:0;width:340px;max-width:calc(100vw - 32px);background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 60px -24px rgba(0,58,110,.45);z-index:40;overflow:hidden}
+.proto-btn{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));z-index:70;background:var(--ink);color:#fff;border-radius:999px;padding:9px 14px;font-weight:600;font-size:13px;display:flex;gap:8px;align-items:center;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)}
+.proto-menu{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:64px;z-index:70;width:280px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 60px -24px rgba(0,58,110,.45);padding:8px;max-height:70vh;overflow-y:auto}
+.proto-menu button{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:8px}
+.proto-menu button:hover{background:var(--tint)}
+
+/* ---------- Onboarding ---------- */
+.ob{min-height:100%;padding:28px max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px))}
+.ob-head{display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:1360px;margin:0 auto;flex-wrap:wrap}
+.steps{display:flex;align-items:center;gap:14px}
+.steps .segs{display:flex;gap:6px}
+.steps .segs i{width:32px;height:5px;border-radius:9px;background:var(--line)}
+.steps .segs i.on{background:var(--cobalt)}
+.ob-body{max-width:1240px;margin:40px auto 0;display:flex;flex-direction:column;gap:26px}
+.ob-foot{display:flex;align-items:center;gap:14px;justify-content:space-between;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:20px}
+.doc{display:flex;align-items:center;gap:12px;padding:16px;border-radius:14px;border:1px solid var(--line);background:var(--card)}
+.doc.added{background:#F3FCF6;border-color:var(--success-line)}
+.prefrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:center;padding:8px 0}
+.prefrow+.prefrow{border-top:1px solid var(--divider)}
+.codebox{display:flex;gap:8px;align-items:center;justify-content:center}
+.codebox input{width:46px;height:56px;border:1.5px solid var(--brand-line);background:var(--tint);border-radius:12px;text-align:center;font-size:22px;font-weight:700;outline:none;text-transform:uppercase}
+.codebox input:focus{border-color:var(--cobalt);background:#fff}
+.code-shown{font-family:var(--font-mono);font-size:26px;letter-spacing:.2em;font-weight:500;color:var(--ink)}
+
+/* ---------- Responsive ---------- */
+@media (max-width:1180px){
+  .split,.split.wide-r,.split.left-list{grid-template-columns:minmax(0,1fr)}
+  .grid3{grid-template-columns:1fr 1fr}
+}
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .side{position:static;height:auto;flex-direction:row;align-items:center;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));gap:12px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
+  .side .logo span:last-child{display:none}
+  .nav{flex-direction:row}
+  .nav a{padding:8px 10px;font-size:14px;white-space:nowrap}
+  .nav a .lbl-hide{display:none}
+  .side-foot{display:none}
+  .top{padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));flex-wrap:wrap}
+  .cmd{max-width:none;flex-basis:100%}
+  .cmd .kbd{display:none}
+  .top-r{margin-left:0}
+  .top-r .hide-sm{display:none}
+  .page{padding:18px max(16px,env(safe-area-inset-right,0px)) 100px max(16px,env(safe-area-inset-left,0px))}
+  .jobs-wrap{grid-template-columns:1fr}
+  .searches{border-right:0;border-bottom:1px solid var(--line);padding:14px max(16px,env(safe-area-inset-right,0px)) 14px max(16px,env(safe-area-inset-left,0px))}
+  .searches .group{display:none}
+  .grid2,.grid3{grid-template-columns:minmax(0,1fr)}
+  .h-page{font-size:24px}
+  .prefrow{grid-template-columns:1fr}
+  .jobrow{flex-wrap:wrap}
+}
+body.chat-on #proto{display:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div id="app"></div>
+<div id="chat-root"></div>
+<div id="overlay"></div>
+
+<script>
+/* ============================================================
+   One user, one moment, one dataset. Every count on every
+   screen is computed from the objects below (see SPEC.md §7).
+   Today is Saturday 7 November 2026.
+   ============================================================ */
+const ICONS={
+home:'<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
+brief:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+send:'<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
+building:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+cap:'<path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/>',
+user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+coins:'<circle cx="9" cy="9" r="6"/><path d="M15.5 9.6A6 6 0 1 1 9.6 15.5"/>',
+sliders:'<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+spark:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"/>',
+bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+bookmark:'<path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+plus:'<path d="M12 5v14M5 12h14"/>',
+check:'<path d="M20 6 9 17l-5-5"/>',
+x:'<path d="M18 6 6 18M6 6l12 12"/>',
+right:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+left:'<path d="M19 12H5M11 18l-6-6 6-6"/>',
+file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+mic:'<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5"/>',
+chart:'<path d="M3 3v18h18"/><path d="M8 17v-6M13 17V7M18 17v-4"/>',
+award:'<circle cx="12" cy="8" r="6"/><path d="M8.5 13 7 22l5-3 5 3-1.5-9"/>',
+idcard:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h4M6 16c1-1.6 5-1.6 6 0"/>',
+car:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h6M7 14h4"/>',
+passport:'<rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M9 17h6"/>',
+chevL:'<path d="m15 18-6-6 6-6"/>',chevR:'<path d="m9 18 6-6-6-6"/>',chev:'<path d="m6 9 6 6 6-6"/>',
+grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+layout:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+chrome:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 8.5h8.5M8.9 13.8 4.6 6.4M15.1 13.8 10.9 21"/>',
+msg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+};
+const ic=(n,c='')=>`<svg class="i ${c}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]||''}</svg>`;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const P=(cls='sm')=>`<span class="logo-mark ${cls}">P</span>`;
+
+const USER={name:'Raef Samir',first:'Raef',headline:'Senior SCM & ERP Consultant',years:'7 years',city:'Cairo, Egypt',email:'raefalwani06@gmail.com',init:'R'};
+
+const JOBS=[
+ {id:'mozn',m:'MZ',co:'Mozn',t:'Presales Consultant, Applied AI',loc:'Riyadh',mode:'Hybrid',age:'2d ago',type:'Full-time',match:94,why:'Presales plus ERP is a rare mix for this role',warn:'Hybrid in Riyadh: needs relocation',focus:'presales and solution design for applied AI',kw:'client demos, proof of concept, applied AI',top:1},
+ {id:'pwc-sap',m:'PWC',co:'PwC',t:'SAP Supply Chain Consultant',loc:'Cairo',mode:'On-site',age:'2h ago',type:'Full-time',match:91,why:'SAP and supply chain planning, in Cairo where you live',focus:'SAP supply chain planning',kw:'SAP IBP, S/4HANA, demand planning',follow:1,top:1},
+ {id:'ejada',m:'EJ',co:'Ejada',t:'Solutions Architect, ERP',loc:'Riyadh',mode:'Remote',age:'Yesterday',type:'Full-time',match:89,why:'Posted yesterday with under 30 applicants. Apply today',focus:'ERP solution architecture',kw:'solution architecture, Oracle Fusion, integrations',top:1},
+ {id:'pwc-erp',m:'PWC',co:'PwC',t:'ERP Senior Associate',loc:'Dubai',mode:'Hybrid',age:'Yesterday',type:'Full-time',match:87,why:'ERP rollouts across the Gulf, your strongest area',warn:'Hybrid in Dubai: needs relocation',focus:'ERP rollouts for Gulf clients',kw:'ERP rollout, change management, Gulf clients',follow:1},
+ {id:'careem',m:'CA',co:'Careem',t:'Supply Chain Systems Lead',loc:'Dubai',mode:'Hybrid',age:'3d ago',type:'Full-time',match:86,why:'Supply chain planning with a team to lead',warn:'Asks for 3 years managing people; your CV shows 2',focus:'supply chain systems and team leadership',kw:'team lead, planning systems, last-mile'},
+ {id:'vodafone',m:'VO',co:'Vodafone',t:'Supply Chain Planning Lead',loc:'Cairo',mode:'On-site',age:'2d ago',type:'Full-time',match:85,why:'Telecom supply chain, same planning tools as your CV',focus:'supply chain planning in telecom',kw:'S&OP, demand planning, telecom',follow:1},
+ {id:'ltm',m:'LTM',co:'LTM',t:'Salesforce Program Architect',loc:'Remote',mode:'Remote',age:'6d ago',type:'Full-time',match:84,why:'Program leadership on enterprise systems',warn:"Salesforce isn't on your CV",focus:'enterprise program leadership',kw:'program management, enterprise architecture'},
+ {id:'orange',m:'OR',co:'Orange',t:'Supply Chain Analyst',loc:'Cairo',mode:'On-site',age:'3d ago',type:'Full-time',match:82,why:'Same tools, one level below yours',focus:'supply chain analytics',kw:'Power BI, forecasting, SQL',follow:1},
+ {id:'valu',m:'VA',co:'valU',t:'ERP Consultant',loc:'Cairo',mode:'Hybrid',age:'4d ago',type:'Contract',match:81,why:'Odoo and finance processes, close to home',focus:'Odoo ERP for finance',kw:'Odoo, finance processes, integrations'},
+ {id:'almarai',m:'AL',co:'Almarai',t:'Demand Planning Manager',loc:'Riyadh',mode:'On-site',age:'5d ago',type:'Full-time',match:80,why:'Large-scale demand planning in food and dairy',warn:'On-site in Riyadh: needs relocation',focus:'demand planning at scale',kw:'demand planning, SAP APO, S&OP'},
+];
+
+const COMPANIES=[
+ {id:'pwc',m:'PWC',n:'PwC',ind:'Professional services',forYou:14,open:212,follow:1},
+ {id:'orange',m:'OR',n:'Orange',ind:'Telecom',forYou:5,open:64,follow:1},
+ {id:'vodafone',m:'VO',n:'Vodafone',ind:'Telecom',forYou:4,open:97,follow:1},
+ {id:'accenture',m:'AC',n:'Accenture',ind:'Consulting · Technology',forYou:9,open:340,follow:1},
+ {id:'deloitte',m:'DE',n:'Deloitte',ind:'Consulting roles at your level, often remote',follow:0},
+ {id:'sap',m:'SAP',n:'SAP',ind:'Presales and solution consultant roles',follow:0},
+ {id:'oracle',m:'OR',n:'Oracle',ind:'ERP implementation roles that match your CV',follow:0},
+ {id:'kpmg',m:'KP',n:'KPMG',ind:'Supply chain advisory team hiring in Cairo',follow:0},
+];
+
+const NEEDS={
+ cover:{tag:'Cover letter',text:'They require a cover letter. Plato wrote one.'},
+ file:{tag:'Upload',text:"They ask for a certificate file. You don't have one saved yet."},
+ question:{tag:'Question',text:'How many years of API integration experience do you have?'},
+ captcha:{tag:'Human check',text:'Tick “I’m not a robot”, then press Submit.'},
+};
+
+function freshState(){return{
+ route:'home',
+ apps:[
+  {id:'odion',m:'OD',co:'Odion',t:'(Senior) ERP Consultant Odoo',st:'needs',need:'cover',date:'Today',resume:'Odoo ERP'},
+  {id:'apex',m:'AI',co:'Apex IT',t:'Oracle ERP Finance Consultant',st:'needs',need:'file',date:'Today',resume:'Oracle finance'},
+  {id:'lean',m:'LE',co:'Lean Technologies',t:'Senior Presales Engineer',st:'needs',need:'question',date:'Nov 6',resume:'Presales'},
+  {id:'cit',m:'CI',co:'CI&T',t:'Senior Tech Business Analyst',st:'needs',need:'captcha',date:'Nov 6',resume:'Business analysis'},
+  {id:'eci',m:'EC',co:'ECI Software Solutions',t:'Implementation Consultant',st:'applying',date:'Today',resume:'Implementation'},
+  {id:'ventor',m:'VE',co:'Ventor',t:'Odoo Functional Consultant',st:'queued',date:'In queue',resume:'Odoo ERP'},
+  {id:'moniepoint',m:'MP',co:'Moniepoint',t:'Lead, Business Analysis',st:'interview',date:'Nov 6',resume:'Business analysis'},
+  {id:'excel',m:'EX',co:'EXCELerate',t:'Retail ERP Consultant',st:'viewed',date:'Nov 5',resume:'Retail ERP'},
+  {id:'kearney',m:'KE',co:'Kearney',t:'Supply Chain Consultant',st:'sent',date:'Nov 4',resume:'Original'},
+  {id:'jobgether',m:'JG',co:'Jobgether',t:'Business Systems Analyst',st:'sent',date:'Nov 2',resume:'Original'},
+  {id:'sdaia',m:'SD',co:'SDAIA',t:'Solutions Consultant, ERP',st:'closed',date:'Nov 4',resume:'ERP solutions'},
+ ],
+ applied:new Set(),saved:new Set(['pwc-erp','careem','vodafone','valu']),selected:new Set(),
+ jobTab:'for-you',filters:{egypt:1,remote:0,senior:1},
+ threads:[
+  {id:'t1',title:'Remote SCM / ERP consultant · Gulf',when:'Today',n:12},
+  {id:'t2',title:'Presales consultant · Remote',when:'Yesterday',n:6},
+  {id:'t3',title:'Data analytics consultant · Remote',when:'Previous 7 days',n:0},
+  {id:'t4',title:'ERP consultant · Cairo',when:'Previous 7 days',n:0},
+  {id:'t5',title:'SCM consultant · Anywhere',when:'Older',n:0},
+ ],
+ thread:null,
+ review:[],reviewIdx:0,approved:{},
+ appFilter:'all',
+ companies:COMPANIES.map(c=>({...c})),
+ roles:[{t:'Remote ERP consultant',s:'Senior · can apply from Egypt · 6 new this week',on:1},{t:'SCM consultant · Cairo',s:'On-site or hybrid · 2 new this week',on:1},{t:'Presales consultant · Gulf',s:'Hybrid OK · 3 new this week',on:0}],
+ careerCat:'All',
+ profileTab:'resumes',
+ answers:{notice:'1 month',visa:'Only outside Egypt',relocate:'Gulf only',travel:'Up to 25%',start:'1 December 2026'},
+ learned:[{q:'Years of SAP S/4HANA experience',a:'5'}],
+ docs:{cv:1,cover:0,portfolio:1,certs:0,visa:0,license:0,passport:0,refs:0,other:0},
+ portfolioLink:false,
+ prefs:{titles:['SCM Consultant','ERP Consultant','Data Analytics Consultant','Presales Consultant'],where:['Anywhere (remote)','Cairo'],level:'Senior',types:['Full-time','Contract'],styles:['Remote','Hybrid'],salary:'4,500',min:'4,000',neg:true,avoid:['Commission-only pay'],love:['PwC','Orange']},
+ ext:{added:false,code:null,connected:false},
+ chat:{open:false,msgs:[],flow:null,busy:false,slashIdx:0},
+ pop:null,proto:false,
+};}
+let S=freshState();
+
+/* ---------- Derived numbers (single source) ---------- */
+const needsApps=()=>S.apps.filter(a=>a.st==='needs');
+const inProgress=()=>S.apps.filter(a=>a.st==='applying'||a.st==='queued');
+const doneApps=()=>S.apps.filter(a=>['sent','viewed','interview'].includes(a.st));
+const interviews=()=>S.apps.filter(a=>a.st==='interview').length;
+const viewedOrBetter=()=>S.apps.filter(a=>a.st==='viewed'||a.st==='interview').length;
+const wentThrough=()=>{const d=doneApps().length,c=S.apps.filter(a=>a.st==='closed').length;return Math.round(d/((d+c)||1)*100)};
+const NEW_MATCHES=18, TOTAL_MATCHES=122, HIDDEN=14, TOKENS='10,128', WEEK_GOAL=10;
+const forYouJobs=()=>JOBS.filter(j=>!S.applied.has(j.id));
+const followNew=()=>JOBS.filter(j=>j.follow&&!S.applied.has(j.id));
+const strength=()=>S.portfolioLink?92:85;
+function agentStatus(){
+  const ip=inProgress();
+  if(!ip.length) return {busy:false,label:'Plato · ready'};
+  const total=ip.length, cur=ip.findIndex(a=>a.st==='applying')+1||1;
+  return {busy:true,label:`Plato · applying ${cur} of ${total}`};
+}
+const STATUS={needs:['warn','Needs you'],applying:['info','Applying now'],queued:['neutral','Queued'],sent:['success','Sent'],viewed:['success','Viewed'],interview:['primary','Interview'],closed:['danger',"Didn't go through"]};
+const statusPill=st=>`<span class="pill ${STATUS[st][0]}">${STATUS[st][1]}</span>`;
+const job=id=>JOBS.find(j=>j.id===id);
+
+/* ---------- Routing ---------- */
+const ROUTES=['home','jobs','review','applications','following','career','profile','plan','account','onboarding-documents','onboarding-preferences','onboarding-connect','extension'];
+function go(r){ if(location.hash!=='#'+r) location.hash=r; else {S.route=r;render();} }
+window.addEventListener('hashchange',()=>{const r=location.hash.slice(1);S.route=ROUTES.includes(r)?r:'home';S.pop=null;render();window.scrollTo(0,0)});
+
+/* ---------- Shell ---------- */
+const PLACEHOLDER={home:'Find remote ERP jobs in the Gulf',jobs:'Tailor my resume for the Mozn job',review:'Make the Mozn summary shorter',applications:'Follow up on applications older than 2 weeks',following:'Follow companies hiring presales in Dubai',career:'Practice an interview for SAP consultant',profile:'Make my resume bullets stronger',plan:'How many tokens does applying use?',account:'Email me a digest every 3 days'};
+function shell(page){
+  const r=S.route, st=agentStatus(), nNeed=needsApps().length;
+  const nav=[['home','Home','home'],['jobs','Jobs','brief',`<span class="count new">${NEW_MATCHES} new</span>`],['applications','Applications','send',nNeed?`<span class="count need">${nNeed}</span>`:''],['following','Following','building'],['career','Career','cap']];
+  const navOn=x=>x===r||(x==='jobs'&&r==='review');
+  return `<div class="shell">
+  <aside class="side">
+    <div class="logo"><span class="logo-mark">P</span><span>PLATO</span></div>
+    <nav class="nav" aria-label="Main">${nav.map(([id,l,i,extra=''])=>`<a href="#${id}" class="${navOn(id)?'on':''}">${ic(i)}<span>${l}</span>${extra}</a>`).join('')}</nav>
+    <div class="side-foot">
+      <nav class="nav sub" aria-label="Account">
+        <a href="#profile" class="${r==='profile'?'on':''}">${ic('user')}<span>Profile</span></a>
+        <a href="#plan" class="${r==='plan'?'on':''}">${ic('coins')}<span>Plan & credits</span></a>
+        <a href="#account" class="${r==='account'?'on':''}">${ic('sliders')}<span>Settings</span></a>
+      </nav>
+      <a class="strength" href="#profile"><div class="row between"><b>Profile strength</b><b class="tab-nums" style="color:var(--cobalt)">${strength()}%</b></div><div class="bar"><i style="width:${strength()}%"></i></div>${S.portfolioLink?'<span class="small muted">Plato has everything it needs to fill forms.</span>':'<span class="small muted">Add a portfolio link so Plato can paste it into forms.</span>'}</a>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <button class="cmd" data-act="openChat">${ic('spark')}<span class="truncate">Tell Plato what to do: "${esc(PLACEHOLDER[r]||PLACEHOLDER.home)}"</span><span class="kbd">Ctrl K</span></button>
+      <div class="top-r">
+        <button class="chip-btn" data-act="statusPill" title="See what Plato is doing"><span class="dot ${st.busy?'busy':''}"></span><span class="hide-sm">${st.label}</span></button>
+        <a class="chip-btn hide-sm" href="#plan" style="text-decoration:none;color:var(--ink)">${ic('coins','sm')}<span class="tab-nums">${TOKENS}</span></a>
+        <div style="position:relative"><button class="icon-btn" data-act="bell" aria-label="Notifications">${ic('bell')}<span class="badge"></span></button>${S.pop==='bell'?bellPop():''}</div>
+        <a class="avatar" href="#profile" aria-label="Profile" style="text-decoration:none">${USER.init}</a>
+      </div>
+    </header>
+    ${page}
+  </div></div>`;
+}
+function bellPop(){
+  const items=[['MP','Moniepoint invited you to interview','2h','applications'],['EX','EXCELerate viewed your application','5h','applications'],['PWC',`${followNew().length} new roles from companies you follow`,'2h','following'],['LE','Lean Technologies asks a question before Plato can apply','Yesterday','applications']];
+  return `<div class="pop"><div class="row between pad" style="padding:14px 16px"><b>Notifications</b><span class="eyebrow">4 new</span></div><div class="list">${items.map(([m,t,w,to])=>`<a href="#${to}" class="row" style="padding:12px 16px;color:var(--ink);text-decoration:none">${mono(m,'sm')}<span class="grow">${t}</span><span class="faint small">${w}</span></a>`).join('')}</div></div>`;
+}
+const mono=(m,c='')=>`<span class="mono-tile ${c}">${m}</span>`;
+const pline=t=>`<div class="pline">${P()}<span>${t}</span></div>`;
+
+/* ---------- Home ---------- */
+function vHome(){
+  const nd=needsApps(), first=nd[0];
+  const top=forYouJobs().filter(j=>j.top).slice(0,3);
+  const fill=forYouJobs().filter(j=>!j.top).slice(0,3-top.length);
+  const tops=[...top,...fill];
+  const sent=doneApps().length, wk=Math.min(sent,WEEK_GOAL);
+  const eci=S.apps.find(a=>a.st==='applying');
+  return `<main class="page">
+  <section class="card pad" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+    <div class="grow" style="min-width:260px">
+      <div class="eyebrow">Saturday, 7 November</div>
+      <h1 class="h-page" style="margin-top:6px">Good evening, ${USER.first}</h1>
+      <p class="muted" style="margin-top:6px;max-width:58ch">While you were away, Moniepoint invited you to an interview and EXCELerate viewed your application.${eci?` Plato is applying to ${eci.co} right now.`:''}</p>
+    </div>
+    <div class="stats">
+      <button class="stat" data-go="jobs"><b class="tab-nums">${NEW_MATCHES}</b><span>New matches</span></button>
+      <button class="stat" data-go="applications"><b class="tab-nums">${sent}</b><span>Sent this week</span></button>
+      <button class="stat hi" data-go="applications"><b class="tab-nums">${interviews()}</b><span>Interview</span></button>
+      <div class="stat row" style="gap:12px"><div class="ring" style="--p:${wk/WEEK_GOAL*100}"><span></span></div><div><b class="tab-nums" style="font-size:18px">${wk} / ${WEEK_GOAL}</b><span>This week's goal</span></div></div>
+    </div>
+  </section>
+  ${nd.length?`<section class="need-card" style="flex-direction:row;align-items:center;flex-wrap:wrap">
+    ${mono(first.m,'sm')}<div class="grow" style="min-width:200px"><div class="eyebrow" style="color:var(--warning-ink)">Waiting for you · ${nd.length}</div><div style="margin-top:2px"><b>${first.co}</b> · ${NEEDS[first.need].text}</div></div>
+    <button class="btn outline" data-act="answerFirst">Answer</button>
+    <a class="btn link" href="#applications">See all ${nd.length}</a>
+  </section>`:''}
+  <section class="col" style="gap:14px">
+    <div class="row between"><h2 class="h-sec">Top matches for you</h2><a class="btn link" href="#jobs">See all ${TOTAL_MATCHES} ${ic('right','sm')}</a></div>
+    <div class="grid3">${tops.map(j=>`<article class="card pad col" style="gap:12px">
+      <div class="row between">${mono(j.m)}<div class="ring" style="--p:${j.match}"><span>${j.match}%</span></div></div>
+      <div><h3 style="font-size:16.5px">${j.t}</h3><div class="muted">${j.co}</div></div>
+      <div class="row wrap" style="gap:6px"><span class="tag">${j.loc} · ${j.mode}</span><span class="tag">${j.age}</span></div>
+      ${pline(j.why)}
+      <div class="row" style="margin-top:auto"><button class="btn primary block" data-act="applyOne" data-arg="${j.id}">Apply</button><button class="icon-btn" style="width:42px;height:42px;${S.saved.has(j.id)?'color:var(--cobalt);border-color:var(--brand-line)':''}" data-act="save" data-arg="${j.id}" aria-label="Save">${ic('bookmark')}</button></div>
+    </article>`).join('')}</div>
+  </section>
+  <section class="grid2">
+    <div class="card pad col" style="gap:12px">
+      <div class="row between"><h2 class="h-sec">Your applications</h2><a class="btn link" href="#applications">Open</a></div>
+      <div class="row" style="gap:6px"><div class="bar grow" style="background:#C9E0F5"><i style="width:100%;background:#C9E0F5"></i></div><div class="bar" style="width:${viewedOrBetter()/sent*40}%;background:#6FA6E0"><i style="width:100%;background:#6FA6E0"></i></div><div class="bar" style="width:${interviews()/sent*20}%"><i style="width:100%"></i></div></div>
+      <div class="row" style="gap:18px"><span><b>${sent}</b> sent</span><span><b>${viewedOrBetter()}</b> viewed</span><span><b>${interviews()}</b> interview</span></div>
+      <div class="list">
+        <div class="row" style="padding:10px 0">${mono('MP','sm')}<span class="grow"><b>Moniepoint</b> invited you to interview</span><span class="faint small">2h</span></div>
+        <div class="row" style="padding:10px 0">${mono('EX','sm')}<span class="grow"><b>EXCELerate</b> viewed your application</span><span class="faint small">5h</span></div>
+        ${eci?`<div class="row" style="padding:10px 0">${mono(eci.m,'sm')}<span class="grow">Plato is applying to <b>${eci.co}</b></span>${statusPill('applying')}</div>`:''}
+      </div>
+    </div>
+    <div class="card pad col" style="gap:12px">
+      <div class="row between"><h2 class="h-sec">Companies you follow are hiring</h2><a class="btn link" href="#following">All</a></div>
+      <div class="list">${followNew().slice(0,3).map(j=>`<div class="row" style="padding:10px 0">${mono(j.m,'sm')}<div class="grow"><b>${j.t}</b><div class="small muted">${j.co} · ${j.loc} · ${j.age}</div></div><span class="match">${j.match}%</span></div>`).join('')||'<p class="muted" style="padding:10px 0">You applied to every new role. Plato checks again every 2 hours.</p>'}</div>
+    </div>
+  </section></main>`;
+}
+
+/* ---------- Jobs ---------- */
+function vJobs(){
+  const groups=['Today','Yesterday','Previous 7 days','Older'];
+  const th=S.threads.find(t=>t.id===S.thread);
+  let rows;
+  if(S.jobTab==='saved') rows=JOBS.filter(j=>S.saved.has(j.id)&&!S.applied.has(j.id));
+  else if(S.jobTab==='applied') rows=[];
+  else if(S.jobTab==='hidden') rows=[];
+  else rows=forYouJobs();
+  if(S.filters.remote) rows=rows.filter(j=>j.mode==='Remote');
+  if(th&&th.filter) rows=rows.filter(th.filter);
+  const sel=[...S.selected].filter(id=>!S.applied.has(id));
+  const appliedCount=S.apps.length;
+  return `<div class="jobs-wrap">
+  <aside class="searches">
+    <button class="btn outline block" data-act="newSearch" style="justify-content:flex-start;padding:12px 14px">${ic('plus')} New search</button>
+    <button class="item ${!S.thread?'on':''}" data-act="thread" data-arg=""><span class="row" style="gap:8px">${ic('brief','sm')}<b>All jobs</b></span><span class="plus">+${NEW_MATCHES}</span></button>
+    <a href="#following" class="card" style="padding:12px;text-decoration:none;color:var(--ink);background:var(--tint);border-color:var(--brand-line)"><div class="row between"><b>Following</b><span class="pill" style="background:var(--cobalt);color:#fff">${followNew().length} new</span></div><div class="row" style="gap:4px;margin-top:8px">${S.companies.filter(c=>c.follow).slice(0,4).map(c=>`<span class="mono-tile" style="width:26px;height:26px;font-size:9px;border-radius:7px">${c.m}</span>`).join('')}<span class="small muted">+${S.roles.filter(r=>r.on).length} roles</span></div></a>
+    ${groups.map(g=>{const ts=S.threads.filter(t=>t.when===g);return ts.length?`<div class="group col" style="gap:2px;margin-top:6px"><div class="eyebrow" style="padding:4px 10px">${g}</div>${ts.map(t=>`<button class="item ${S.thread===t.id?'on':''}" data-act="thread" data-arg="${t.id}"><span>${t.title}</span>${t.n?`<span class="plus">+${t.n}</span>`:''}</button>`).join('')}</div>`:''}).join('')}
+  </aside>
+  <main class="page" style="padding-bottom:40px">
+    <div class="page-head">
+      <div class="grow" style="min-width:260px">
+        <h1 class="h-page">${th?esc(th.title):'All jobs'}</h1>
+        <p class="muted">${th?`A search Plato keeps running for you. ${th.n?th.n+' new since you last looked.':''} <button class="btn link" data-act="continueThread">Continue in chat</button>`:`${TOTAL_MATCHES} strong matches across all your searches, best first. ${HIDDEN} hidden because they don't accept applicants from Egypt. <button class="btn link" data-act="jobTab" data-arg="hidden" style="padding:0">Show them</button>`}</p>
+      </div>
+      <button class="btn primary lg" data-act="topTen">${ic('spark')} Select my top 10</button>
+    </div>
+    <div class="row wrap" style="gap:10px">
+      <div class="seg" role="tablist">${[['for-you','For you'],['saved',`Saved · ${JOBS.filter(j=>S.saved.has(j.id)&&!S.applied.has(j.id)).length}`],['applied',`Applied · ${appliedCount}`],['hidden',`Hidden · ${HIDDEN}`]].map(([k,l])=>`<button class="${S.jobTab===k?'on':''}" data-act="jobTab" data-arg="${k}">${l}</button>`).join('')}</div>
+      <button class="chip filter ${S.filters.egypt?'on':''}" data-act="filter" data-arg="egypt">${S.filters.egypt?ic('check','sm'):''}Can apply from Egypt</button>
+      <button class="chip filter ${S.filters.remote?'on':''}" data-act="filter" data-arg="remote">Remote</button>
+      <button class="chip filter ${S.filters.senior?'on':''}" data-act="filter" data-arg="senior">Senior</button>
+      <button class="chip">Posted: any time ${ic('chev','sm')}</button>
+      <button class="chip">Salary ${ic('chev','sm')}</button>
+    </div>
+    ${S.jobTab==='applied'?`<div class="card pad row between wrap">${pline(`You've applied to ${appliedCount} jobs. ${needsApps().length} need something from you.`)}<a class="btn primary" href="#applications">Open Applications</a></div>`:''}
+    ${S.jobTab==='hidden'?`<div class="card pad">${pline(`${HIDDEN} jobs are hidden because the employer doesn't accept applicants from Egypt or asks for a visa you don't have. Turn off “Can apply from Egypt” to see them.`)}</div>`:''}
+    <div class="col" style="gap:10px">${rows.map(j=>`<article class="card jobrow">
+      <input type="checkbox" id="sel-${j.id}" data-act="sel" data-arg="${j.id}" ${S.selected.has(j.id)?'checked':''} aria-label="Select ${esc(j.t)}">
+      ${mono(j.m)}
+      <div class="grow">
+        <div class="row wrap" style="gap:8px"><b style="font-size:16px">${j.t}</b><span class="meta">${j.co} · ${j.loc} · ${j.mode} · ${j.age} · ${j.type}</span></div>
+        <div class="row wrap" style="gap:8px;margin-top:4px">${pline(j.why)}${j.warn?`<span class="warnchip">${j.warn}</span>`:''}</div>
+      </div>
+      <span class="match">${j.match}%</span>
+      <button class="btn primary" data-act="applyOne" data-arg="${j.id}">Apply</button>
+    </article>`).join('')||(S.jobTab==='for-you'||S.jobTab==='saved'?`<div class="card pad muted">No jobs here yet.</div>`:'')}</div>
+    ${sel.length?`<div class="card bulk"><span class="count-dot">${sel.length}</span><b>selected</b><button class="btn link" data-act="clearSel" style="text-decoration:underline;color:var(--ink-2)">Clear</button><button class="btn outline" data-act="applySel">Apply</button><button class="btn primary" data-act="tailorSel">Tailor & apply</button><span class="grow"></span><span class="faint small tab-nums">1–${rows.length} of ${TOTAL_MATCHES}</span></div>`:`<div class="row between faint small"><span>Plato ranks every job against your CV and preferences.</span><span class="tab-nums">1–${rows.length} of ${TOTAL_MATCHES}</span></div>`}
+  </main></div>`;
+}
+
+/* ---------- Review tailored resumes ---------- */
+function vReview(){
+  if(!S.review.length){return `<main class="page"><a class="btn link" href="#jobs" style="align-self:flex-start">${ic('left','sm')} Back to jobs</a><div class="card pad col" style="gap:12px;align-items:flex-start"><h1 class="h-page">Nothing to review</h1><p class="muted">Select jobs and press “Tailor & apply”. Plato writes one resume per job and shows you only what changed.</p><a class="btn primary" href="#jobs">Pick jobs</a></div></main>`;}
+  const n=S.review.length, ok=S.review.filter(id=>S.approved[id]).length;
+  const j=job(S.review[S.reviewIdx]);
+  return `<main class="page">
+  <div class="page-head">
+    <div class="grow" style="min-width:260px"><a class="btn link" href="#jobs" style="padding:0 0 6px">${ic('left','sm')} Back to jobs</a><h1 class="h-page">Review your tailored resumes</h1><p class="muted">Plato made one resume per job. You only see what changed from your master resume.</p></div>
+    <div class="col" style="gap:8px;min-width:280px">
+      <div class="row" style="justify-content:flex-end"><button class="btn outline" data-act="saveLater">Save for later</button><button class="btn primary" data-act="approveAll">Approve all & apply (${n})</button></div>
+      <div class="row"><div class="bar green grow"><i style="width:${ok/n*100}%"></i></div><b class="small tab-nums">${ok} of ${n} approved</b></div>
+    </div>
+  </div>
+  <div class="split left-list">
+    <div class="card" style="padding:8px">${S.review.map((id,i)=>{const x=job(id);return `<button class="rv-item ${i===S.reviewIdx?'on':''}" data-act="rvPick" data-arg="${i}">${mono(x.m,'sm')}<div class="grow"><b class="truncate" style="display:block">${x.t}</b><span class="small muted">${x.co}</span></div>${S.approved[id]?'<span class="pill success">Approved</span>':'<span class="pill warn">To review</span>'}</button>`}).join('')}</div>
+    <div class="card pad col" style="gap:14px">
+      <div class="row between wrap"><div class="row">${mono(j.m)}<div><h2 class="h-sec">${j.t}</h2><span class="muted">${j.co} · resume ${S.reviewIdx+1} of ${n}</span></div></div><button class="btn outline" data-act="toast" data-arg="Opens the full tailored resume">View full resume</button></div>
+      <div class="eyebrow">What Plato changed · 3</div>
+      <div class="diff"><b>Summary</b><div class="del">Senior SCM & ERP consultant with 7 years of experience.</div><div class="add">Senior consultant with 7 years in ${j.focus}, matching what ${j.co} asks for.</div></div>
+      <div class="diff"><b>Experience order</b><div class="add">Moved your most relevant work for this role to the top.</div></div>
+      <div class="diff"><b>Keywords from the job post</b><div class="add">Added: ${j.kw}.</div></div>
+      <div class="row wrap" style="border-top:1px solid var(--divider);padding-top:14px">
+        <button class="btn ${S.approved[j.id]?'primary':'outline'}" data-act="rvApprove" data-arg="${j.id}">${S.approved[j.id]?'Approved '+ic('check','sm'):'Approve'}</button>
+        <button class="btn outline" data-act="askPlato" data-arg="Edit the ${esc(j.co)} resume">Edit with Plato</button>
+        <button class="btn outline" data-act="rvOriginal" data-arg="${j.id}">Use my original resume</button>
+        <span class="grow"></span>
+        ${S.reviewIdx<n-1?`<button class="btn link" data-act="rvPick" data-arg="${S.reviewIdx+1}">Next resume ${ic('right','sm')}</button>`:''}
+      </div>
+    </div>
+  </div></main>`;
+}
+
+/* ---------- Applications ---------- */
+function vApps(){
+  const nd=needsApps();
+  const groups={all:()=>true,needs:a=>a.st==='needs',progress:a=>a.st==='applying'||a.st==='queued',sent:a=>['sent','viewed','interview'].includes(a.st),closed:a=>a.st==='closed'};
+  const cnt=k=>S.apps.filter(groups[k]).length;
+  const rows=S.apps.filter(groups[S.appFilter]);
+  const action=a=>a.st==='needs'?`<button class="btn link" data-act="focusNeed" data-arg="${a.id}">Open</button>`:a.st==='interview'?`<button class="btn link" data-act="practiceFor" data-arg="${a.co}">Prepare with Plato</button>`:['sent','viewed'].includes(a.st)?`<button class="btn link" data-act="toast" data-arg="Shows the resume and answers Plato sent to ${esc(a.co)}">See what was sent</button>`:a.st==='closed'?'<span class="faint">Job was closed</span>':'';
+  return `<main class="page">
+  <div class="page-head">
+    <div class="grow" style="min-width:260px"><h1 class="h-page">Applications</h1><p class="muted">Every application Plato sends for you, and anything it needs from you to finish one.</p></div>
+    <div class="stats"><div class="stat"><b class="tab-nums">${S.apps.length}</b><span>In the last 30 days</span></div><div class="stat"><b class="tab-nums">${doneApps().length}</b><span>Sent this week</span></div><div class="stat"><b class="tab-nums">${wentThrough()}%</b><span>Went through</span></div><div class="stat need"><b class="tab-nums">${nd.length}</b><span>Need you</span></div></div>
+  </div>
+  <div class="split wide-r">
+    <section class="col" style="gap:12px;min-width:0">
+      <div class="row between wrap"><h2 class="h-sec">All applications</h2><div class="seg">${[['all','All'],['needs','Needs you'],['progress','In progress'],['sent','Sent'],['closed',"Didn't go through"]].map(([k,l])=>`<button class="${S.appFilter===k?'on':''}" data-act="appFilter" data-arg="${k}">${l} · ${cnt(k)}</button>`).join('')}</div></div>
+      <div class="card scroll-x"><table class="table"><thead><tr><th>Job</th><th>Status</th><th>Date</th><th>Resume used</th><th></th></tr></thead><tbody>
+      ${rows.map(a=>`<tr class="${a.st==='needs'?'hl':''}"><td><div class="row">${mono(a.m,'sm')}<div style="min-width:0"><b class="truncate" style="display:block;max-width:240px">${a.t}</b><span class="small muted">${a.co}</span></div></div></td><td>${statusPill(a.st)}</td><td class="muted" style="white-space:nowrap">${a.date}</td><td class="muted">${a.resume}</td><td style="text-align:right;white-space:nowrap">${action(a)}</td></tr>`).join('')||`<tr><td colspan="5" class="muted" style="padding:20px">Nothing here.</td></tr>`}
+      </tbody></table></div>
+    </section>
+    <aside class="col" style="gap:12px">
+      <div><h2 class="h-sec">Needs you</h2><p class="small muted">Plato Apply paused these until you help. Every answer is saved for next time.</p></div>
+      ${nd.map(needCard).join('')||`<div class="card pad">${pline('Nothing needs you. Plato is applying on its own.')}</div>`}
+    </aside>
+  </div></main>`;
+}
+function needCard(a){
+  const n=NEEDS[a.need];
+  let body='';
+  if(a.need==='cover') body=`<div class="row wrap" style="gap:8px"><button class="btn primary sm" data-act="resolve" data-arg="${a.id}">Use Plato's</button><button class="btn outline sm" data-act="readCover" data-arg="${a.id}">Read it</button><button class="btn outline sm" data-act="resolve" data-arg="${a.id}|upload">Upload my own</button></div>`;
+  if(a.need==='file') body=`<button class="drop" data-act="resolve" data-arg="${a.id}|cert">${ic('upload','sm')} Upload certificate (PDF)</button><span class="small faint">Saved to your documents for next time.</span>`;
+  if(a.need==='question') body=`<form class="row" data-form="answerQ" data-arg="${a.id}"><input class="input" id="q-${a.id}" name="v" placeholder="e.g. 3" inputmode="numeric" required><button class="btn primary">Save</button></form><span class="small faint">Plato remembers your answer for future applications.</span>`;
+  if(a.need==='captcha') body=`<div><button class="btn primary sm" data-act="resolve" data-arg="${a.id}|captcha">${ic('chrome','sm')} Open in Chrome</button></div><span class="small faint">Everything else is already filled in.</span>`;
+  return `<div class="need-card" id="need-${a.id}"><div class="row">${mono(a.m,'sm')}<div class="grow"><b class="truncate" style="display:block">${a.t}</b><span class="small muted">${a.co}</span></div><span class="pill warn">${n.tag}</span></div><b style="font-size:14.5px">${n.text}</b>${body}</div>`;
+}
+
+/* ---------- Following ---------- */
+function vFollowing(){
+  const fol=S.companies.filter(c=>c.follow), sug=S.companies.filter(c=>!c.follow);
+  const nNew=c=>followNew().filter(j=>j.co===c.n).length;
+  return `<main class="page">
+  <div class="page-head"><div class="grow"><h1 class="h-page">Following</h1><p class="muted">New openings at companies you follow and in roles you care about.</p></div><button class="btn outline" data-act="toast" data-arg="Alert settings: digest every 3 days, in Plato and by email">${ic('sliders','sm')} Alert settings</button></div>
+  <div class="split">
+    <section class="col" style="gap:18px;min-width:0">
+      <div class="row between"><h2 class="h-sec">Companies you follow</h2><span class="small muted">${fol.length} of 5 on Free</span></div>
+      <div class="grid3" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">${fol.map(c=>`<div class="card col" style="padding:14px;gap:8px"><div class="row between">${mono(c.m)}${nNew(c)?`<span class="pill primary">${nNew(c)} new</span>`:'<span class="small faint">No new roles</span>'}</div><b>${c.n}</b><span class="small muted truncate">${c.ind}</span><span class="small"><b>${c.forYou}</b> for you · ${c.open} open</span><div class="row" style="gap:6px"><button class="btn outline sm grow" data-go="jobs">See roles</button><button class="icon-btn" style="width:34px;height:34px" data-act="unfollow" data-arg="${c.id}" aria-label="Stop following ${c.n}">${ic('bell','sm')}</button></div></div>`).join('')}</div>
+      <div class="card pad col" style="gap:10px;background:var(--tint);border-color:var(--brand-line)">
+        <div class="row between wrap">${pline(`<b style="color:var(--ink);font-size:16px">${followNew().length} new roles from companies you follow</b>`)}<span class="small muted">Plato checks them every 2 hours</span></div>
+        ${followNew().map(j=>`<div class="card row" style="padding:10px 12px">${mono(j.m,'sm')}<div class="grow"><b>${j.t}</b><div class="small muted">${j.co} · ${j.loc} · posted ${j.age.toLowerCase()}</div></div><span class="match">${j.match}%</span><button class="btn outline sm" data-go="jobs">View</button><button class="btn primary sm" data-act="applyOne" data-arg="${j.id}">Apply</button></div>`).join('')||'<p class="muted">You applied to all of them.</p>'}
+      </div>
+    </section>
+    <aside class="col" style="gap:18px">
+      <div class="col" style="gap:10px"><div class="row between"><h2 class="h-sec">Roles you follow</h2><button class="btn link" data-act="askPlato" data-arg="Follow a role: ">${ic('plus','sm')} Follow a role</button></div>
+      <div class="card list">${S.roles.map((r,i)=>`<label class="row" style="padding:12px 14px;cursor:pointer"><div class="grow"><b>${r.t}</b><div class="small muted">${r.s}</div></div><input type="checkbox" id="role-${i}" data-act="role" data-arg="${i}" ${r.on?'checked':''} style="width:40px;height:22px;accent-color:var(--cobalt)"></label>`).join('')}</div>
+      <span class="small muted">Digest every 3 days · in Plato and by email</span></div>
+      <div class="col" style="gap:10px"><h2 class="h-sec">More companies to follow</h2><span class="small muted" style="margin-top:-6px">Picked by Plato from your titles, level and locations</span>
+      <div class="input row" style="padding:9px 12px">${ic('search','sm')}<input id="co-search" placeholder="Search any company to follow" style="border:0;outline:0;flex:1;min-width:0;background:transparent"></div>
+      <div class="card list">${sug.map(c=>`<div class="row" style="padding:10px 12px">${mono(c.m,'sm')}<div class="grow"><b>${c.n}</b><div class="small muted truncate">${c.ind}</div></div><button class="btn soft sm" data-act="follow" data-arg="${c.id}">${ic('plus','sm')} Follow</button></div>`).join('')}</div></div>
+    </aside>
+  </div></main>`;
+}
+
+/* ---------- Career ---------- */
+const TESTS=[
+ ['Interviews','Behavioral interview (STAR)','Common “tell me about a time” questions, scored','20 min · All levels','mic'],
+ ['Interviews','Technical interview: ERP & SAP','Questions on implementations, data migration and go-live','25 min · Senior','mic'],
+ ['Interviews','Case interview: market sizing','Estimate a market out loud; Plato scores your structure','30 min · Medium','mic'],
+ ['Interviews','Presales demo pitch','Pitch a solution to a skeptical client','15 min · Senior','mic'],
+ ['Aptitude','Numerical reasoning','Timed, used by many consulting firms','18 min · Medium','chart'],
+ ['Skills','Oracle Fusion SCM basics','4 of your matches ask for it','12 min · Quick check','award'],
+ ['Skills','Applied AI for consultants','6 of your matches ask for it','15 min · Quick check','award'],
+ ['Language','Business English','Writing and speaking, scored','20 min · All levels','msg'],
+ ['Resume','Resume score','See what to fix before Plato applies','3 min','file'],
+];
+function vCareer(){
+  const cats=['All','Interviews','Aptitude','Personality','Skills','Language','Resume'];
+  const list=TESTS.filter(t=>S.careerCat==='All'||t[0]===S.careerCat).slice(0,6);
+  return `<main class="page">
+  <div class="page-head"><div class="grow"><h1 class="h-page">Career</h1><p class="muted">Tests, practice and new skills that get you ready for the jobs you're applying to.</p></div><span class="muted"><b style="color:var(--ink)">37</b> tests and practice sessions</span></div>
+  <div class="split">
+    <section class="col" style="gap:14px;min-width:0">
+      <div class="row between wrap"><h2 class="h-sec">All tests and practice</h2><div class="input row" style="padding:8px 12px;max-width:260px">${ic('search','sm')}<input id="test-search" placeholder="Search tests" style="border:0;outline:0;flex:1;min-width:0;background:transparent"></div></div>
+      <div class="seg">${cats.map(c=>`<button class="${S.careerCat===c?'on':''}" data-act="careerCat" data-arg="${c}">${c}</button>`).join('')}</div>
+      <div class="grid3">${list.map(t=>`<div class="card col" style="padding:16px;gap:8px"><div class="row between"><span class="icon-tile" style="width:34px;height:34px">${ic(t[4],'sm')}</span><span class="tag">${t[0]}</span></div><b style="font-size:15.5px">${t[1]}</b><span class="small muted">${t[2]}</span><div class="row between" style="margin-top:auto"><span class="small faint">${t[3]}</span><button class="btn outline sm" data-act="startTest" data-arg="${esc(t[1])}">Start</button></div></div>`).join('')||'<div class="card pad muted">No tests in this category yet.</div>'}</div>
+      <div class="row between faint small"><span>Showing 1–${list.length} of 37</span><div class="row"><button class="icon-btn" style="width:34px;height:34px" disabled>${ic('chevL','sm')}</button><span class="tab-nums">1 of 7</span><button class="icon-btn" style="width:34px;height:34px">${ic('chevR','sm')}</button></div></div>
+    </section>
+    <aside class="col" style="gap:18px">
+      <div class="card pad col" style="gap:10px"><div class="eyebrow">Your readiness for</div><b style="font-size:16px;margin-top:-6px">Presales Consultant roles</b><div class="chips"><span class="pill success">${ic('check','sm')} Resume 86/100</span><span class="pill primary">Interview practice 1 of 3</span><span class="pill neutral">Aptitude · not started</span><span class="pill neutral">English · not started</span></div></div>
+      <div class="col" style="gap:10px"><h2 class="h-sec">Prepare for Moniepoint</h2>
+        <div class="card row" style="padding:12px 14px;border-color:var(--brand-line);background:var(--tint)"><span class="icon-tile">${ic('mic','sm')}</span><div class="grow"><b>Mock interview: Lead, Business Analysis</b><div class="small muted">Voice · 20 min · built from the job post and your interview invite</div></div><button class="btn primary sm" data-act="practiceFor" data-arg="Moniepoint">Start</button></div></div>
+      <div class="col" style="gap:10px"><h2 class="h-sec">Skills your matches ask for</h2><span class="small muted" style="margin-top:-6px">Not on your CV yet. Learn it, pass a quick check, and Plato adds it.</span>
+        <div class="card list">${[['Applied AI basics',6],['Oracle Fusion SCM',4],['Power BI',3]].map(([s,n])=>`<div class="row" style="padding:10px 14px"><span class="icon-tile" style="width:34px;height:34px">${ic('award','sm')}</span><div class="grow"><b>${s}</b><div class="small muted">${n} jobs ask for it</div></div><button class="btn outline sm" data-act="proveSkill" data-arg="${s}">Learn</button></div>`).join('')}</div></div>
+      <div class="col" style="gap:10px"><h2 class="h-sec">Continue where you left off</h2>
+        <div class="card row" style="padding:12px 14px"><span class="icon-tile">${ic('layout','sm')}</span><div class="grow"><b>Case interview: market sizing</b><div class="bar" style="margin:6px 0"><i style="width:60%"></i></div><div class="small muted">3 of 5 questions · 12 min left</div></div><button class="btn outline sm" data-act="startTest" data-arg="Case interview: market sizing">Resume</button></div>
+        <div class="card row" style="padding:12px 14px"><span class="icon-tile">${ic('file','sm')}</span><div class="grow"><b>Resume score · 86/100</b><div class="small muted">3 quick fixes left: add numbers to 3 bullets</div></div><a class="btn outline sm" href="#profile">Fix</a></div></div>
+    </aside>
+  </div></main>`;
+}
+
+/* ---------- Profile ---------- */
+function vProfile(){
+  const tabs=[['resumes','Resumes'],['experience','Experience & skills'],['looking','What I\'m looking for'],['answers','Application answers'],['documents','Documents & browser']];
+  const t=S.profileTab;
+  let body='';
+  if(t==='resumes') body=`<div class="row between"><h2 class="h-sec">Resumes</h2><button class="btn outline sm" data-act="toast" data-arg="Upload a new master resume (PDF or Word)">${ic('upload','sm')} Upload</button></div>
+    <div class="row" style="border:1px solid var(--brand-line);background:var(--tint);border-radius:12px;padding:12px 14px">${ic('file')}<div class="grow"><b>Master resume · SCM & ERP</b><div class="small muted">Updated Nov 2 · the base for every tailored version</div></div><span class="pill primary">Master</span><button class="btn link" data-act="toast" data-arg="Opens your master resume">Preview</button></div>
+    <div class="eyebrow">Tailored by Plato · ${4+S.applied.size}</div>
+    ${[...[...S.applied].map(id=>[`${job(id).t} · ${job(id).co}`,'Today · 3 changes from master']),['Lead, Business Analysis · Moniepoint','Nov 6 · 3 changes from master'],['Retail ERP Consultant · EXCELerate','Nov 5 · 3 changes from master'],['(Senior) ERP Consultant Odoo · Odion','Today · 4 changes from master'],['Implementation Consultant · ECI Software','Today · 5 changes from master']].map(([a,b])=>`<div class="row card" style="padding:12px 14px">${ic('file')}<div class="grow"><b>${a}</b><div class="small muted">${b}</div></div><button class="btn link" data-act="toast" data-arg="Opens this tailored resume">Preview</button><button class="btn link" data-act="toast" data-arg="PDF ready">PDF</button></div>`).join('')}`;
+  if(t==='experience') body=`<h2 class="h-sec">Experience & skills</h2>
+    ${[['Senior SCM & ERP Consultant','Inspire Consulting · 2022 – now','Led 6 ERP rollouts across Egypt and the Gulf; cut order-to-cash time by 30%.'],['ERP Consultant','Raya Holding · 2019 – 2022','Ran supply chain planning on SAP for 4 business units.'],['Supply Chain Analyst','Unilever Egypt · 2017 – 2019','Built the demand forecast used for 120 products.']].map(([a,b,c])=>`<div class="card pad" style="padding:14px 16px"><b>${a}</b><div class="small muted">${b}</div><p style="margin-top:6px">${c}</p></div>`).join('')}
+    <div class="chips">${['SAP S/4HANA','Oracle Fusion','Odoo','Supply chain planning','ERP rollouts','Presales','Client workshops','Power BI','SQL'].map(s=>`<span class="tag">${s}</span>`).join('')}</div>`;
+  if(t==='looking') body=`<div class="row between"><h2 class="h-sec">What I'm looking for</h2><a class="btn outline sm" href="#onboarding-preferences">Edit</a></div>
+    ${[['Job titles',S.prefs.titles.join(', ')],['Where',S.prefs.where.join(', ')],['Level',S.prefs.level],['Job type',S.prefs.types.join(', ')],['Work style',S.prefs.styles.join(', ')],['Expected salary',`${S.prefs.salary} USD per month (minimum ${S.prefs.min}${S.prefs.neg?', open to negotiation':''})`],['Things to avoid',S.prefs.avoid.join(', ')||'None'],['Companies I\'d love',S.prefs.love.join(', ')]].map(([a,b])=>`<div class="prefrow"><span class="muted">${a}</span><b>${esc(b)}</b></div>`).join('')}`;
+  if(t==='answers') body=`<h2 class="h-sec">Application answers</h2><p class="small muted" style="margin-top:-8px">Plato puts these on every form that asks. You answered once.</p>
+    ${[['Notice period','notice'],['Need visa sponsorship?','visa'],['Willing to relocate?','relocate'],['Travel','travel'],['Earliest start date','start']].map(([a,k])=>`<div class="prefrow"><span class="muted">${a}</span><b>${esc(S.answers[k])}</b></div>`).join('')}
+    <div class="eyebrow" style="margin-top:6px">Learned from applications · ${S.learned.length}</div>
+    ${S.learned.map(x=>`<div class="prefrow"><span class="muted">${esc(x.q)}</span><b>${esc(x.a)}</b></div>`).join('')}`;
+  if(t==='documents') body=`<h2 class="h-sec">Documents & browser</h2>
+    <div class="card list">${[['cv','Resume / CV','Raef_Samir_CV.pdf'],['portfolio','Portfolio','File added'+(S.portfolioLink?' · link added':' · no link yet')],['certs','Certificates',S.docs.certs?'1 file':'Not added'],['cover','Cover letter','Plato writes one per job'],['passport','Passport or ID','Only if a job asks for it']].map(([k,a,b])=>`<div class="row" style="padding:12px 14px"><span class="icon-tile ${S.docs[k]?'ok':''}" style="width:34px;height:34px">${ic(S.docs[k]?'check':'file','sm')}</span><div class="grow"><b>${a}</b><div class="small muted">${b}</div></div>${k==='portfolio'&&!S.portfolioLink?'<button class="btn soft sm" data-act="addLink">Add link</button>':''}</div>`).join('')}</div>
+    <div class="card row" style="padding:14px 16px">${ic('chrome','lg')}<div class="grow"><b>Plato Apply in Chrome</b><div class="small muted">${S.ext.connected?'Connected on this browser':'Not connected yet'}</div></div><a class="btn outline sm" href="#onboarding-connect">${S.ext.connected?'Connect another browser':'Connect'}</a></div>`;
+  return `<main class="page">
+  <section class="card pad row wrap" style="gap:18px">
+    <span class="avatar" style="width:64px;height:64px;font-size:24px">${USER.init}</span>
+    <div class="grow" style="min-width:220px"><h1 style="font-size:26px;font-weight:800">${USER.name}</h1><div class="muted">${USER.headline} · ${USER.years}</div><div class="row wrap small" style="gap:14px;margin-top:4px"><span>${USER.city}</span><span>${USER.email}</span><a href="#profile">LinkedIn</a>${S.portfolioLink?'<a href="#profile">Portfolio</a>':'<button class="btn link" data-act="addLink" style="padding:0">+ Add portfolio</button>'}</div></div>
+    <div class="row" style="border:1px solid var(--line);border-radius:14px;padding:10px 14px"><div class="ring lg" style="--p:${strength()}"><span>${strength()}%</span></div><div><b>${S.portfolioLink?'Looking good':'Almost there'}</b><div>${S.portfolioLink?'<span class="small muted">Nothing missing</span>':'<button class="btn link" data-act="addLink" style="padding:0">Add a portfolio link</button>'}</div></div></div>
+  </section>
+  <div class="split">
+    <section class="col" style="gap:14px;min-width:0">
+      <div class="utabs" role="tablist">${tabs.map(([k,l])=>`<button class="${t===k?'on':''}" data-act="profileTab" data-arg="${k}">${l}</button>`).join('')}</div>
+      <form class="composer" data-form="tellPlato" style="border:0;padding:0"><div class="row" style="border:1px solid var(--line);border-radius:12px;padding:6px 6px 6px 12px;background:var(--card)">${P()}<input id="tell" name="v" placeholder="Change anything by telling Plato, e.g. “my notice period is 2 months”" style="flex:1;border:0;outline:0;min-width:0;background:transparent;padding:8px 0"><button class="send" aria-label="Send">${ic('right','sm')}</button></div></form>
+      <div class="card pad col" style="gap:12px">${body}</div>
+    </section>
+    <aside class="note" style="flex-direction:column;gap:12px">
+      <div class="row">${P('')}<div><div class="label" style="margin:0">Plato suggests</div><b style="font-size:16px">3 changes for more interviews</b></div></div>
+      ${[['Add numbers to 3 bullets','“Led ERP rollout” is stronger with how many sites, users or how much time saved.','Fix with Plato','askPlato','Add numbers to my 3 weakest bullets'],['Add “solution demos” to your headline','It appears in 7 of your 10 best matches.','Preview change','askPlato','Add solution demos to my headline'],['Add your portfolio link','You uploaded a portfolio file. A link lets Plato paste it into forms that only accept URLs.','Add link','addLink','']].filter((x,i)=>!(i===2&&S.portfolioLink)).map(([a,b,c,act,arg])=>`<div class="card" style="padding:14px"><b>${a}</b><p class="small muted" style="margin:4px 0 10px">${b}</p><button class="btn outline sm" data-act="${act}" data-arg="${esc(arg)}">${c}</button></div>`).join('')}
+    </aside>
+  </div></main>`;
+}
+function vPlan(){return `<main class="page"><div class="page-head"><div class="grow"><h1 class="h-page">Plan & credits</h1><p class="muted">What Plato can do for you each month.</p></div></div>
+ <div class="grid3"><div class="card pad"><div class="eyebrow">Plan</div><b style="font-size:22px">Free</b><p class="small muted">Follow up to 5 companies · 10 applications a week</p></div><div class="card pad"><div class="eyebrow">Tokens left</div><b style="font-size:22px" class="tab-nums">${TOKENS}</b><p class="small muted">A tailored application uses about 120 tokens</p></div><div class="card pad"><div class="eyebrow">This week</div><b style="font-size:22px" class="tab-nums">${doneApps().length} of ${WEEK_GOAL}</b><p class="small muted">Applications sent</p></div></div>
+ <div class="card pad row between wrap">${pline('Pro removes the weekly limit and lets you follow 25 companies.')}<button class="btn primary" data-act="toast" data-arg="Opens checkout">See Pro</button></div></main>`;}
+function vAccount(){return `<main class="page"><h1 class="h-page">Settings</h1><div class="card pad col" style="gap:4px">${[['Email','raefalwani06@gmail.com'],['Job alerts','Digest every 3 days, in Plato and by email'],['Ask before applying','Always: nothing is sent until you confirm'],['Language','English'],['Delete my data','Removes your profile, documents and applications']].map(([a,b])=>`<div class="prefrow"><span class="muted">${a}</span><b>${b}</b></div>`).join('')}</div></main>`;}
+
+/* ---------- Onboarding ---------- */
+function obHead(n,name){return `<div class="ob-head"><div class="logo"><span class="logo-mark">P</span><span>PLATO</span></div><div class="steps"><span class="eyebrow">Step ${n} of 3 · ${name}</span><div class="segs">${[1,2,3].map(i=>`<i class="${i<=n?'on':''}"></i>`).join('')}</div></div></div>`;}
+function obFoot({back,next,nextLabel,hint,skip}){return `<div class="ob-foot"><div class="row">${back?`<a class="btn outline lg" href="#${back}">Back</a>`:''}${hint?`<span class="muted">${hint}</span>`:''}</div><div class="row">${skip?`<a class="btn link" href="#${skip}">Skip for now</a>`:''}<button class="btn primary lg" data-go="${next}">${nextLabel} ${ic('right','sm')}</button></div></div>`;}
+function vObDocs(){
+  const D=[['cover','Cover letter','Plato adapts it for each job','file'],['portfolio','Portfolio','A file or a link','file'],['certs','Certificates','Degrees, courses, licenses','award'],['visa','Work visa or permit','e.g. US visa, residence permit','idcard'],['license',"Driver's license",'Some jobs ask for it','car'],['passport','Passport or ID','Only if a job asks for it','passport'],['refs','Reference letters','From past managers','file'],['other','Something else','Any file a job might need','plus']];
+  const added=D.filter(d=>S.docs[d[0]]).length;
+  return `<div class="ob">${obHead(1,'Documents')}<div class="ob-body">
+  <div class="grid2" style="gap:40px;align-items:start">
+    <div class="col" style="gap:20px">
+      <div><h1 style="font-size:38px;font-weight:800;line-height:1.1">Give Plato everything an application might ask for</h1><p class="muted" style="font-size:16.5px;margin-top:12px">Start with your CV. Add any other documents now, and Plato attaches the right one whenever a job asks for it, so you never stop mid-application to look for a file.</p></div>
+      <div class="col" style="gap:10px"><b>Resume / CV <span style="color:var(--danger)">*</span></b>
+        <div class="doc added">${`<span class="icon-tile ok">${ic('check')}</span>`}<div class="grow"><b style="font-size:16px">Raef_Samir_CV.pdf</b><div class="small" style="color:var(--success-ink)">Read · 2 pages · experience, education and skills added to your profile</div></div><button class="btn outline" data-act="toast" data-arg="Choose a new CV file">Replace</button></div>
+        <div class="note">${P('')}<div><div class="label">Plato read your CV</div><p><b>Senior SCM & ERP Consultant</b>, about 7 years, based in Cairo. Strongest areas: ERP rollouts, supply chain planning, client presales.</p><p class="small muted" style="margin-top:8px">Next you'll set your preferences, including expected salary and notice period, so Plato never has to stop and ask you mid-application.</p></div></div>
+      </div>
+    </div>
+    <div class="col" style="gap:12px">
+      <div class="row between"><b style="font-size:16px">Other documents <span class="faint" style="font-weight:400">(optional)</span></b><span class="muted small">${added} added</span></div>
+      <div class="grid2" style="gap:12px">${D.map(([k,a,b,i])=>`<div class="doc ${S.docs[k]?'added':''}"><span class="icon-tile ${S.docs[k]?'ok':''}">${ic(S.docs[k]?'check':i)}</span><div class="grow"><b>${a}</b><div class="small muted">${b}</div></div><button class="btn ${S.docs[k]?'outline':'soft'} sm" data-act="doc" data-arg="${k}">${S.docs[k]?'Added':'+ Add'}</button></div>`).join('')}</div>
+      <div class="doc" style="align-items:flex-start">${ic('lock')}<span class="muted small">Your documents are encrypted and private. Plato only attaches one when an application asks for it, and you can delete any of them from your profile.</span></div>
+    </div>
+  </div>
+  ${obFoot({next:'onboarding-preferences',nextLabel:'Continue to preferences',hint:'Only the CV is needed to continue.'})}
+  </div></div>`;
+}
+function prefEstimate(){const p=S.prefs;let n=180;n+=p.styles.includes('Remote')?90:0;n+=p.styles.includes('Hybrid')?40:0;n+=p.styles.includes('On-site')?60:0;n+=p.types.length*8;n+=p.where.length*6;n+=p.titles.length*4;return Math.round(n/5)*5;}
+function vObPrefs(){
+  const p=S.prefs, multi=(key,opts)=>opts.map(o=>`<button class="chip ${p[key].includes(o)?'on':''}" data-act="prefToggle" data-arg="${key}|${o}">${o}</button>`).join('');
+  return `<div class="ob">${obHead(2,'Preferences')}<div class="ob-body" style="margin-top:28px;max-width:1360px">
+  <div class="page-head"><div class="grow" style="min-width:280px"><h1 style="font-size:34px;font-weight:800">What kind of job should Plato find you?</h1><p class="muted" style="font-size:16px;margin-top:6px">We filled in what we could from your CV. Adjust anything, and Plato only brings you jobs that match.</p><div style="margin-top:8px">${pline(`With these settings Plato sees about <b style="color:var(--cobalt)">${prefEstimate()} open jobs</b> for you right now.${p.styles.includes('Hybrid')?'':' Adding Hybrid in the Gulf would add about 80.'}`)}</div></div></div>
+  <div class="grid3" style="align-items:start">
+    <div class="card pad col" style="gap:16px">
+      <div class="col" style="gap:10px"><b>Job titles you're interested in <span class="small" style="color:var(--success-ink);font-weight:500">· suggested from your CV</span></b><div class="chips">${p.titles.map(t=>`<button class="chip remove" data-act="prefRemove" data-arg="titles|${esc(t)}">${t} ${ic('x','sm')}</button>`).join('')}</div><form data-form="prefAdd" data-arg="titles"><input class="input" id="add-title" name="v" placeholder="Add a job title"></form></div>
+      <div class="col" style="gap:10px"><b>Experience level</b><div class="chips">${['Internship','Entry level','Mid level','Senior','Lead / Manager','Director and above'].map(o=>`<button class="chip ${p.level===o?'on':''}" data-act="prefLevel" data-arg="${o}">${o}</button>`).join('')}</div></div>
+      <div class="col" style="gap:10px"><div><b>Job type</b><div class="small muted">Pick all that work for you.</div></div><div class="chips">${multi('types',['Full-time','Part-time','Contract','Freelance','Internship'])}</div></div>
+      <div class="col" style="gap:10px"><b>Work style</b><div class="chips">${multi('styles',['Remote','Hybrid','On-site'])}</div></div>
+    </div>
+    <div class="card pad col" style="gap:16px">
+      <div class="col" style="gap:10px"><b>Where</b><div class="chips">${p.where.map(t=>`<button class="chip remove" data-act="prefRemove" data-arg="where|${esc(t)}">${t} ${ic('x','sm')}</button>`).join('')}</div><form data-form="prefAdd" data-arg="where"><input class="input" id="add-where" name="v" placeholder="Add a city or country, e.g. Dubai"></form></div>
+      <div class="col" style="gap:8px"><div><b>Salary</b><div class="small muted">Put on every application that asks. Jobs clearly below your minimum are skipped.</div></div>
+        <label class="small" for="sal"><b>Expected salary</b></label><div class="row"><input class="input" id="sal" value="${p.salary}" style="font-weight:600"><select class="input" id="cur" style="width:100px"><option>USD</option><option>EGP</option><option>SAR</option><option>AED</option></select><select class="input" id="per" style="width:130px"><option>per month</option><option>per year</option></select></div>
+        <label class="small" for="min"><b>Minimum you'd accept</b></label><div class="row"><input class="input" id="min" value="${p.min}"><label class="row" style="white-space:nowrap;gap:8px"><input type="checkbox" id="neg" ${p.neg?'checked':''} data-act="prefNeg" style="width:20px;height:20px;accent-color:var(--cobalt)">Open to negotiation</label></div>
+        <div class="note" style="padding:12px 14px">${P()}<span class="small">For a senior SCM / ERP consultant applying remotely, 4,000 to 5,500 USD a month is a common range. Your number sits in the middle.</span></div></div>
+      <div class="col" style="gap:10px"><div><b>Companies you'd love to work for</b><div class="small muted">Plato tells you when they post a role that fits.</div></div><div class="chips">${p.love.map(t=>`<button class="chip remove" data-act="prefRemove" data-arg="love|${esc(t)}">${t} ${ic('x','sm')}</button>`).join('')}</div><form data-form="prefAdd" data-arg="love"><input class="input" id="add-co" name="v" placeholder="Add a company"></form></div>
+    </div>
+    <div class="card pad col" style="gap:16px">
+      <div><b>Answers for your applications</b><div class="small muted">Set once, so Plato never stops to ask you.</div></div>
+      <div>${[['Notice period','notice',['Immediately','2 weeks','1 month','2 months','3 months']],['Need visa sponsorship?','visa',['No','Only outside Egypt','Yes']],['Willing to relocate?','relocate',['No','Gulf only','Anywhere']],['Travel','travel',['None','Up to 25%','Up to 50%','Over 50%']]].map(([l,k,o])=>`<div class="prefrow"><label for="a-${k}" class="muted">${l}</label><select class="input" id="a-${k}" data-change="answer" data-arg="${k}">${o.map(x=>`<option ${S.answers[k]===x?'selected':''}>${x}</option>`).join('')}</select></div>`).join('')}<div class="prefrow"><label class="muted" for="a-start">Earliest start date</label><input class="input" id="a-start" value="${S.answers.start}"></div></div>
+      <div class="col" style="gap:10px"><div><b>Things to avoid</b><div class="small muted">Jobs with any of these never reach you.</div></div><input class="input" id="avoid-co" placeholder="Companies, e.g. your current employer"><input class="input" id="avoid-ind" placeholder="Industries, e.g. gambling, tobacco">
+      <div class="chips">${['Commission-only pay','Night shifts','Travel over 50%','Unpaid test tasks','Agencies and recruiters'].map(o=>`<button class="chip ${p.avoid.includes(o)?'avoid':'suggest'}" data-act="prefToggle" data-arg="avoid|${o}">${p.avoid.includes(o)?'':'+ '}${o}</button>`).join('')}</div></div>
+    </div>
+  </div>
+  ${obFoot({back:'onboarding-documents',next:'onboarding-connect',nextLabel:'Continue',hint:'You can change these any time in your profile.'})}
+  </div></div>`;
+}
+function vObConnect(){
+  const e=S.ext;
+  return `<div class="ob">${obHead(3,'Connect')}<div class="ob-body" style="max-width:720px">
+  <div><h1 style="font-size:38px;font-weight:800">Connect Plato Apply</h1><p class="muted" style="font-size:16.5px;margin-top:10px">Plato applies to jobs through its free Chrome extension. Connect it once and you're done.</p></div>
+  <div class="card list" style="padding:4px 22px">
+    <div class="row wrap" style="padding:20px 0;gap:14px"><span class="icon-tile" style="border-radius:50%;width:34px;height:34px;font-weight:700">${e.added?ic('check','sm'):'1'}</span><div class="grow"><b style="font-size:16px">Add Plato Apply to Chrome</b><div class="muted">Free. Takes about 10 seconds.</div></div><button class="btn outline" data-act="extAdd" ${e.added?'disabled':''}>${e.added?ic('check','sm')+' Added':ic('plus','sm')+' Add to Chrome'}</button></div>
+    <div class="row" style="padding:20px 0;gap:14px;align-items:flex-start"><span class="icon-tile" style="border-radius:50%;width:34px;height:34px;font-weight:700">${e.connected?ic('check','sm'):'2'}</span><div class="grow col" style="gap:12px"><div><b style="font-size:16px">Open it and paste your code</b><div class="muted">Click the Plato icon in Chrome's toolbar and paste the code there.</div></div>
+      ${e.connected?`<div class="pill success" style="align-self:flex-start">${ic('check','sm')} Connected on this browser</div>`:e.code?`<div class="row wrap"><span class="code-shown">${e.code}</span><button class="btn outline sm" data-act="copyCode">${ic('copy','sm')} Copy</button><a class="btn link" href="#extension">Open the extension</a></div><span class="small faint">The code works for 10 minutes.</span>`:`<button class="btn primary" style="align-self:flex-start" data-act="getCode">Get my code</button>`}
+    </div></div>
+  </div>
+  ${obFoot({back:'onboarding-preferences',next:'home',nextLabel:'Continue',skip:'home'})}
+  </div></div>`;
+}
+function vExtension(){
+  const e=S.ext;
+  return `<div class="ob" style="display:grid;place-items:center"><div class="col" style="gap:12px;align-items:center;width:100%"><span class="eyebrow">Extension popup · 400 × 720</span>
+  <div class="card" style="width:min(400px,100%);overflow:hidden;display:flex;flex-direction:column;min-height:600px">
+    <div class="row between" style="padding:14px 16px;border-bottom:1px solid var(--line);background:var(--tint)"><div class="row">${P('')}<b style="font-size:16px">Plato Apply</b></div><span class="faint">v0.1.1</span></div>
+    ${e.connected?`<div class="col" style="padding:32px 24px;gap:14px;align-items:center;text-align:center;flex:1"><span class="icon-tile ok" style="width:64px;height:64px;border-radius:18px">${ic('check','lg')}</span><h2 style="font-size:22px;font-weight:800">Connected</h2><p class="muted">Signed in as ${USER.name}. Plato Apply fills applications for you on job pages and pauses when it needs you.</p><a class="btn primary lg block" href="#home">Back to Plato</a></div>`:
+    `<form class="col" data-form="extConnect" style="padding:32px 24px;gap:16px;align-items:center;text-align:center;flex:1"><span class="logo-mark" style="width:64px;height:64px;border-radius:18px;font-size:30px">P</span><h2 style="font-size:22px;font-weight:800">Connect to your Plato account</h2><p class="muted">Paste the 6-character code from Plato. You only do this once on this browser.</p>
+      <div class="codebox">${[0,1,2].map(i=>`<input id="c${i}" maxlength="1" aria-label="Character ${i+1}" value="${e.code?e.code.replace('-','')[i]:''}">`).join('')}<span class="faint">-</span>${[3,4,5].map(i=>`<input id="c${i}" maxlength="1" aria-label="Character ${i+1}" value="${e.code?e.code.replace('-','')[i]:''}">`).join('')}</div>
+      <button class="btn primary lg block">Connect</button>
+      <div class="row" style="width:100%"><span class="grow" style="height:1px;background:var(--line)"></span><span class="small faint">No code yet?</span><span class="grow" style="height:1px;background:var(--line)"></span></div>
+      <button type="button" class="btn outline lg block" data-act="extGetCode">Get my code from Plato ${ic('right','sm')}</button>
+      <span class="small muted">Opens jobs.platohiring.com in a new tab with your code ready to copy.</span></form>`}
+    <div style="padding:12px;border-top:1px solid var(--line);text-align:center" class="small muted">Plato Apply only runs on job application pages.</div>
+  </div></div></div>`;
+}
+
+/* ---------- Chat (native Plato chat, opened from the command bar) ---------- */
+const SKILLS=[
+ ['job-search','Search for jobs','I search every board and rank the jobs for you','search'],
+ ['build-resume','Build my resume','A resume written for one job, from your real experience','file'],
+ ['practice-interview','Practice an interview','I ask what that company is likely to ask, then score you','mic'],
+ ['prove-skill','Learn & prove a new skill','A skill your matches ask for, then a quick check','cap'],
+ ['applications','My applications','Where every application stands and what needs you','send'],
+ ['profile','What you know about me','Check or change your details by just telling me','user'],
+];
+const C=()=>S.chat;
+function chatOpen(prefill){C().open=true;if(!C().msgs.length) greet();renderChat();setTimeout(()=>{const i=document.getElementById('chat-in');if(i){i.focus();if(prefill){i.value=prefill;i.dispatchEvent(new Event('input'))}}},60);}
+function chatClose(){C().open=false;renderChat();}
+function greet(){
+  const nd=needsApps(), eci=S.apps.find(a=>a.st==='applying');
+  plato(`<p>Good evening, ${USER.first}. ${eci?`I'm applying to ${eci.co} right now, with ${inProgress().length-1} more in line.`:'Nothing is applying right now.'}</p>`+
+   (nd.length?`<div class="need-card" style="padding:10px 12px;flex-direction:row;align-items:center">${mono(nd[0].m,'sm')}<span class="grow"><b>${nd[0].co}</b> needs something from you</span><button class="btn link" data-act="chatNeeds">Answer</button></div>`:'')+
+   `<div class="eyebrow" style="margin-top:4px">What I can do · type / any time</div><div class="col" style="gap:6px">${SKILLS.map(s=>`<button class="skill" data-act="skill" data-arg="${s[0]}"><span class="icon-tile" style="width:32px;height:32px">${ic(s[3],'sm')}</span><span class="grow"><b>${s[1]}</b> <code>/${s[0]}</code><div class="small muted">${s[2]}</div></span></button>`).join('')}</div>`);
+}
+function plato(html,chips){C().msgs.push({who:'p',html,chips});}
+function me(text){C().msgs.push({who:'me',html:esc(text)});}
+function say(html,chips,delay=550){C().busy=true;renderChat();setTimeout(()=>{C().busy=false;plato(html,chips);renderChat();},delay);}
+function chipsHtml(chips){return chips&&chips.length?`<div class="chips">${chips.map((c,i)=>`<button class="chip answer" data-act="chip" data-arg="${i}">${c.l}</button>`).join('')}</div>`:'';}
+function renderChat(){
+  const c=C(), root=document.getElementById('chat-root');
+  const last=c.msgs.length-1;
+  root.innerHTML=`${c.open?'<div class="scrim" data-act="closeChat"></div>':''}<aside class="chat ${c.open?'open':''}" aria-label="Plato chat" ${c.open?'':'aria-hidden="true"'}>
+   <div class="chat-head">${P('')}<div class="grow"><b>Plato</b><div class="small muted row" style="gap:6px"><span class="dot ${agentStatus().busy?'busy':''}"></span>${agentStatus().label.replace('Plato · ','')}</div></div><button class="btn outline sm" data-act="newChat">New chat</button><button class="icon-btn" style="width:36px;height:36px" data-act="closeChat" aria-label="Close chat">${ic('x','sm')}</button></div>
+   <div class="chat-body" id="chat-body">${c.msgs.map((m,i)=>m.who==='me'?`<div class="msg me"><div class="bubble">${m.html}</div></div>`:`<div class="msg">${P('')}<div class="pbody">${m.html}${i===last&&!c.busy?chipsHtml(m.chips):''}</div></div>`).join('')}${c.busy?`<div class="msg">${P('')}<div class="typing"><span></span><span></span><span></span></div></div>`:''}</div>
+   <div class="composer">${slashMenu()}<form data-form="chat"><input id="chat-in" autocomplete="off" placeholder="${c.flow?'Answer, or type / for something else':'Message Plato, or type /'}" aria-label="Message Plato"><button class="send" aria-label="Send">${ic('right','sm')}</button></form></div>
+  </aside>`;
+  document.body.classList.toggle('chat-on',c.open);
+  const b=document.getElementById('chat-body'); if(b) b.scrollTop=b.scrollHeight;
+}
+let slashQ=null;
+function slashMenu(){if(slashQ===null) return '';const l=SKILLS.filter(s=>s[0].includes(slashQ)||s[1].toLowerCase().includes(slashQ));if(!l.length) return '';return `<div class="slash">${l.map(s=>`<button data-act="skill" data-arg="${s[0]}"><span class="icon-tile" style="width:30px;height:30px">${ic(s[3],'sm')}</span><span class="grow"><b>${s[1]}</b><div><code>/${s[0]}</code></div></span></button>`).join('')}</div>`;}
+
+/* Flows: one plain question at a time, suggested answers, skip what's known. */
+function runSkill(id,fromText){
+  slashQ=null; C().flow=null;
+  if(!fromText) me('/'+id);
+  const F=FLOWS[id]; if(F) F(); renderChat();
+}
+const FLOWS={
+ 'job-search'(pre={}){
+  const st={title:pre.title,where:pre.where};
+  C().flow={kind:'search',st};
+  if(!st.title) return say(`<p>Let's find you a job. What kind of job are you looking for? These fit your CV, or tell me in your own words.</p>`,['SCM Consultant','ERP Consultant','Presales Consultant','Something else'].map(l=>({l,f:()=>{if(l==='Something else'){me(l);say('<p>Tell me the job title in your own words.</p>');C().flow.await='title';return;}me(l);st.title=l;FLOWS['job-search'](st)}})));
+  if(!st.where) {C().flow.await=null;return say(`<p>Where would you like to work? Pick one, or tell me.</p>`,['Remote','Cairo','Riyadh','Dubai','Anywhere in the Gulf'].map(l=>({l,f:()=>{me(l);st.where=l;FLOWS['job-search'](st)}})));}
+  say(`<p>Here's what I'll look for. Change anything, or start.</p><div class="ccard"><div class="r"><span class="grow"><b>${esc(st.title)}</b> jobs · ${esc(st.where)} · ${S.prefs.level} · from ${S.prefs.min} USD a month</span></div><div class="r small muted">I'll skip jobs that don't accept applicants from Egypt, and rank every job against your CV.</div></div>`,[{l:'Start searching',f:()=>{me('Start searching');searchResults(st)}},{l:'Change the salary',f:()=>{me('Change the salary');say('<p>What monthly salary should I aim for, in USD?</p>');C().flow.await='salary'}}]);
+ },
+ 'build-resume'(){
+  const opts=forYouJobs().slice(0,3);
+  say(`<p>Which job is this resume for? A resume written for one job gets more replies than a general one.</p>`,[...opts.map(j=>({l:`${j.co} · ${j.t}`,f:()=>{me(`${j.co} · ${j.t}`);resumeFor(j)}})),{l:'A general resume',f:()=>{me('A general resume');say('<p>Your master resume is already general. I can tighten the bullets instead.</p>',[{l:'Tighten my bullets',f:()=>{me('Tighten my bullets');say('<p>Done. I added numbers to 3 bullets and shortened the summary. You can see it in Profile, Resumes.</p>',[{l:'Open my resumes',f:()=>{S.profileTab='resumes';go('profile');chatClose()}}])}}])}}]);
+ },
+ 'practice-interview'(co){
+  if(co&&typeof co==='string') return interviewQ(co);
+  say(`<p>Which interview should we practice? Moniepoint invited you to interview, so that's a good one to start with.</p>`,['Moniepoint · Lead, Business Analysis','Mozn · Presales Consultant','A general interview'].map(l=>({l,f:()=>{me(l);interviewQ(l.split(' · ')[0])}})));
+ },
+ 'prove-skill'(sk){
+  const go2=s=>{say(`<p>Here's a 5-minute primer on <b>${esc(s)}</b>, then one question.</p><div class="ccard"><div class="r small">In ERP projects, applied AI usually means forecasting demand, matching invoices and flagging unusual orders. You don't build the models; you decide where they save the most time.</div></div><p>Where does AI usually save the most time in an order-to-cash process?</p>`,['Matching payments to invoices','Designing the chart of accounts','Choosing the ERP vendor'].map((l,i)=>({l,f:()=>{me(l);if(i===0){say(`<p>Correct. You passed the quick check, so I added <b>${esc(s)}</b> to your profile. ${s==='Applied AI basics'?'6':'Several'} of your matches ask for it.</p>`,[{l:'See my matches',f:()=>{go('jobs');chatClose()}}]);}else say('<p>Not quite. Payment matching is repetitive and rule-based, which is where AI helps most. Want another try?</p>',[{l:'Try again',f:()=>{me('Try again');go2(s)}}]);}})));};
+  if(sk&&typeof sk==='string') return go2(sk);
+  say(`<p>Which skill do you want to learn and prove? These are the ones your matches ask for most that aren't on your CV yet.</p>`,[['Applied AI basics',6],['Oracle Fusion SCM',4],['Power BI',3]].map(([s,n])=>({l:`${s} · ${n} jobs ask for it`,f:()=>{me(s);go2(s)}})));
+ },
+ 'applications'(){
+  const nd=needsApps();
+  say(`<p>Here's where your ${S.apps.length} applications stand.</p><div class="ccard"><div class="r"><div class="stats" style="width:100%"><div class="stat" style="min-width:0;flex:1"><b>${doneApps().length}</b><span>Sent</span></div><div class="stat" style="min-width:0;flex:1"><b>${inProgress().length}</b><span>In progress</span></div><div class="stat need" style="min-width:0;flex:1"><b>${nd.length}</b><span>Need you</span></div></div></div>${nd.map(a=>`<div class="r">${mono(a.m,'sm')}<span class="grow small"><b>${a.co}</b> · ${NEEDS[a.need].tag}</span>${statusPill('needs')}</div>`).join('')}</div>`,[{l:'Open Applications',f:()=>{go('applications');chatClose()}},...(nd.length?[{l:'Answer them here',f:()=>{me('Answer them here');chatNeeds()}}]:[])]);
+ },
+ 'profile'(){
+  say(`<p>This is what I know about you and use on every application.</p><div class="ccard"><div class="r"><span class="avatar" style="width:36px;height:36px;font-size:14px">${USER.init}</span><div class="grow"><b>${USER.name}</b><div class="small muted">${USER.headline} · ${USER.years} · ${USER.city}</div></div></div>${[['Notice period',S.answers.notice],['Visa',S.answers.visa],['Relocate',S.answers.relocate],['Expected salary',S.prefs.salary+' USD a month']].map(([a,b])=>`<div class="r small"><span class="muted grow">${a}</span><b>${esc(b)}</b></div>`).join('')}</div><p>Want to change anything? Just tell me, like “my notice period is 2 months” or “I moved to Dubai”.</p>`,[{l:'Open my profile',f:()=>{go('profile');chatClose()}}]);
+ },
+};
+function searchResults(st){
+  const res=forYouJobs().slice(0,3);
+  const id='t'+Date.now(); const title=`${st.title} · ${st.where}`;
+  S.threads.unshift({id,title,when:'Today',n:res.length+9});
+  say(`<p>I checked 10 job boards and found ${res.length+9} jobs that fit. These are the best ${res.length}:</p><div class="ccard">${res.map(j=>`<div class="r">${mono(j.m,'sm')}<div class="grow"><b>${j.t}</b><div class="small muted">${j.co} · ${j.loc} · ${j.mode}</div><div class="small" style="color:var(--success-ink)">${ic('check','sm')} ${j.why}</div></div><span class="match">${j.match}%</span></div>`).join('')}</div>`,
+   [{l:`See all ${res.length+9} in Jobs`,f:()=>{S.thread=id;go('jobs');chatClose()}},{l:`Tailor & apply to the top ${res.length}`,f:()=>{me(`Tailor & apply to the top ${res.length}`);res.forEach(j=>S.selected.add(j.id));say(`<p>I wrote a resume for each. Nothing is sent until you approve them.</p>`,[{l:'Review the resumes',f:()=>{startReview(res.map(j=>j.id));chatClose()}}])}}],900);
+  C().flow=null;
+}
+function resumeFor(j){
+  say(`<p>Here's what I changed for <b>${j.co}</b>.</p><div class="ccard"><div class="r col" style="align-items:stretch;gap:6px"><b class="small">Summary</b><div class="del small">Senior SCM & ERP consultant with 7 years of experience.</div><div class="add small">Senior consultant with 7 years in ${j.focus}, matching what ${j.co} asks for.</div></div><div class="r small"><span class="add" style="flex:1">Added keywords: ${j.kw}.</span></div></div>`,[{l:`Use it when I apply to ${j.co}`,f:()=>{me(`Use it when I apply to ${j.co}`);say(`<p>Saved. It's in Profile, Resumes, and I'll send it to ${j.co} when you apply.</p>`,[{l:'Apply now',f:()=>{confirmApply([j.id])}}])}},{l:'Make it shorter',f:()=>{me('Make it shorter');say('<p>Done. The summary is now one line. Anything else?</p>')}}]);
+}
+function interviewQ(co){
+  const q=co==='Moniepoint'?'Tell me about a time you turned a messy business process into clear system requirements.':'Walk me through how you would demo an ERP solution to a skeptical finance director.';
+  C().flow={kind:'interview',co};
+  say(`<p>Practice for <b>${esc(co)}</b>. I'll ask 3 questions and score each one. Answer in writing here, or press the mic in the full session.</p><div class="ccard"><div class="r col" style="align-items:stretch;gap:4px"><span class="eyebrow">Question 1 of 3</span><b>${q}</b><span class="small muted">One real story. What you did, not the team.</span></div></div>`);
+  C().flow.await='interview';
+}
+function chatNeeds(){
+  const a=needsApps()[0]; if(!a){say('<p>Nothing needs you right now.</p>');return;}
+  if(a.need==='question') return say(`<p><b>${a.co}</b> asks: ${NEEDS.question.text} I'll remember it for every application.</p>`,['1','2','3','5+'].map(l=>({l,f:()=>{me(l);resolveApp(a.id,'q',l);say(`<p>Saved. I'm finishing the ${a.co} application now.</p>`,needsApps().length?[{l:'Next one',f:()=>{me('Next one');chatNeeds()}}]:[])}})));
+  if(a.need==='cover') return say(`<p><b>${a.co}</b> requires a cover letter. I wrote one from your CV and their job post.</p><div class="ccard"><div class="r small">Dear Odion team, I've led 6 ERP rollouts across Egypt and the Gulf, three of them on Odoo…</div></div>`,[{l:"Use Plato's",f:()=>{me("Use Plato's");resolveApp(a.id);say(`<p>Done. ${a.co} is back in line.</p>`,needsApps().length?[{l:'Next one',f:()=>{me('Next one');chatNeeds()}}]:[])}},{l:'Upload my own',f:()=>{me('Upload my own');resolveApp(a.id);say('<p>Got it. I attached your file.</p>',needsApps().length?[{l:'Next one',f:()=>{me('Next one');chatNeeds()}}]:[])}}]);
+  if(a.need==='file') return say(`<p><b>${a.co}</b> asks for a certificate file. You don't have one saved yet.</p>`,[{l:'Upload certificate (PDF)',f:()=>{me('Uploaded Oracle_Certificate.pdf');resolveApp(a.id,'cert');say('<p>Saved to your documents for next time, and attached.</p>',needsApps().length?[{l:'Next one',f:()=>{me('Next one');chatNeeds()}}]:[])}}]);
+  if(a.need==='captcha') return say(`<p><b>${a.co}</b> has a “not a robot” check. Everything else is filled in.</p>`,[{l:'Open in Chrome',f:()=>{me('Open in Chrome');resolveApp(a.id,'captcha');say('<p>Opened. Tick the box and press Submit, and I mark it sent.</p>')}}]);
+}
+function freeText(t){
+  const s=t.toLowerCase(), f=C().flow;
+  if(f&&f.await){
+    const k=f.await; f.await=null;
+    if(k==='title'){f.st.title=t.replace(/^\w/,c=>c.toUpperCase());return FLOWS['job-search'](f.st);}
+    if(k==='salary'){S.prefs.salary=t.replace(/[^\d,]/g,'')||S.prefs.salary;return FLOWS['job-search'](f.st);}
+    if(k==='interview'){C().flow=null;return say(`<p><b>Score: 7 / 10.</b> Clear story and you said what <i>you</i> did. To reach 9, add one number: how many hours, users or errors your change saved.</p>`,[{l:'Next question',f:()=>{me('Next question');say('<p><b>Question 2 of 3.</b> Why do you want to move from consulting into this role?</p>');C().flow={kind:'interview',await:'interview'}}},{l:'Open the full practice in Career',f:()=>{go('career');chatClose()}}],900);}
+  }
+  let m;
+  if((m=s.match(/notice period is (.+)/))){S.answers.notice=m[1].replace(/\.$/,'').replace(/^\w/,c=>c.toUpperCase());return say(`<p>Saved. Your notice period is now <b>${esc(S.answers.notice)}</b>. I'll use it on every form that asks.</p>`,[{l:'See my answers',f:()=>{S.profileTab='answers';go('profile');chatClose()}}]);}
+  if((m=s.match(/moved to ([a-z ]+)/))){const c=m[1].trim().replace(/\b\w/g,x=>x.toUpperCase());USER.city=c;return say(`<p>Updated. You're in <b>${esc(c)}</b> now, so I'll rank jobs there higher.</p>`);}
+  if(/follow/.test(s)){return say(`<p>I'll follow companies hiring presales in Dubai. I found 3: Deloitte, SAP and Oracle. Follow all 3?</p>`,[{l:'Follow all 3',f:()=>{me('Follow all 3');['deloitte','sap','oracle'].forEach(id=>{const c=S.companies.find(x=>x.id===id);if(c)c.follow=1});say('<p>Done. You follow 7 companies now. That is over the Free limit of 5, so 2 are paused until you upgrade.</p>',[{l:'Open Following',f:()=>{go('following');chatClose()}}]);}}]);}
+  if(/resume|cv|bullet|headline|summary/.test(s)) return FLOWS['build-resume']();
+  if(/interview|practice/.test(s)) return FLOWS['practice-interview']();
+  if(/skill|learn/.test(s)) return FLOWS['prove-skill']();
+  if(/application|follow up|status/.test(s)) return FLOWS['applications']();
+  if(/job|find|search|role|work/.test(s)){
+    const pre={};const t2=s;
+    if(/erp/.test(t2))pre.title='ERP Consultant';else if(/presales/.test(t2))pre.title='Presales Consultant';else if(/scm|supply/.test(t2))pre.title='SCM Consultant';
+    if(/gulf/.test(t2))pre.where=/remote/.test(t2)?'Remote · Gulf':'Anywhere in the Gulf';else if(/dubai/.test(t2))pre.where='Dubai';else if(/riyadh/.test(t2))pre.where='Riyadh';else if(/cairo/.test(t2))pre.where='Cairo';else if(/remote/.test(t2))pre.where='Remote';
+    return FLOWS['job-search'](pre);
+  }
+  say(`<p>I can do that. In this prototype I understand job searches, resumes, interviews, skills, applications and profile changes. Try “find remote ERP jobs in the Gulf”.</p>`);
+}
+
+/* ---------- Actions ---------- */
+function toast(t){const o=document.getElementById('overlay');const el=document.createElement('div');el.className='toast';el.innerHTML=`${ic('check','sm')}<span>${esc(t)}</span>`;o.appendChild(el);setTimeout(()=>el.remove(),2600);}
+function modal(html){document.getElementById('overlay').innerHTML=`<div class="modal-wrap" data-act="closeModal"><div class="modal" role="dialog" aria-modal="true" data-stop>${html}</div></div>`;}
+function closeModal(){document.getElementById('overlay').innerHTML='';}
+function confirmApply(ids,tailored){
+  const js=ids.map(job);
+  modal(`<h2 class="h-sec">Apply to ${js.length} job${js.length>1?'s':''}?</h2><p class="muted">Nothing is sent until you confirm. Plato applies one at a time and pauses if a form needs you.</p>
+  <div class="card list">${js.map(j=>`<div class="row" style="padding:10px 12px">${mono(j.m,'sm')}<div class="grow"><b>${j.t}</b><div class="small muted">${j.co}</div></div><span class="small muted">${tailored?'Tailored resume':'Master resume'}</span></div>`).join('')}</div>
+  <div class="row wrap" style="justify-content:flex-end"><button class="btn outline" data-act="closeModal">Cancel</button>${tailored?'':`<button class="btn outline" data-act="tailorIds" data-arg="${ids.join(',')}">Tailor first</button>`}<button class="btn primary" data-act="doApply" data-arg="${ids.join(',')}">Apply${js.length>1?' to '+js.length:''}</button></div>`);
+}
+function doApply(ids){
+  ids.forEach(id=>{const j=job(id);if(S.applied.has(id))return;S.applied.add(id);S.selected.delete(id);S.apps.splice(needsApps().length+inProgress().length,0,{id,m:j.m,co:j.co,t:j.t,st:'queued',date:'In queue',resume:S.approved[id]==='orig'?'Original':'Tailored'});});
+  S.review=[];S.approved={};closeModal();
+  toast(`Plato is applying to ${ids.length} job${ids.length>1?'s':''}. You'll see each one in Applications.`);
+  go('applications');
+}
+function startReview(ids){S.review=ids;S.reviewIdx=0;S.approved={};go('review');}
+function resolveApp(id,kind,val){
+  const a=S.apps.find(x=>x.id===id);if(!a)return;
+  if(kind==='q'){S.learned.push({q:'Years of API integration experience',a:val});}
+  if(kind==='cert'){S.docs.certs=1;}
+  if(kind==='captcha'){a.st='sent';a.date='Today';}else{a.st='queued';a.date='In queue';}
+  a.need=null; render();
+}
+
+const ACT={
+ openChat:()=>chatOpen(),closeChat:chatClose,
+ newChat:()=>{C().msgs=[];C().flow=null;greet();renderChat();},
+ askPlato:(a)=>chatOpen(a),
+ statusPill:()=>{chatOpen();const ip=inProgress();me('What are you doing right now?');say(ip.length?`<p>I apply one at a time and keep you posted here.</p><div class="ccard">${ip.map(a=>`<div class="r">${mono(a.m,'sm')}<div class="grow"><b>${a.co}</b><div class="small muted">${a.t}</div></div>${statusPill(a.st)}</div>`).join('')}${needsApps().map(a=>`<div class="r">${mono(a.m,'sm')}<div class="grow"><b>${a.co}</b><div class="small muted">${a.t}</div></div>${statusPill('needs')}</div>`).join('')}</div>`:'<p>Nothing is applying right now. Pick jobs in Jobs, or ask me to find some.</p>',[{l:'Open Applications',f:()=>{go('applications');chatClose()}}]);},
+ bell:()=>{S.pop=S.pop==='bell'?null:'bell';render();},
+ skill:(id)=>runSkill(id),
+ chip:(i)=>{const m=C().msgs[C().msgs.length-1];const ch=m&&m.chips&&m.chips[+i];if(ch){m.chips=null;ch.f();renderChat();}},
+ chatNeeds:()=>{me('Answer');chatNeeds();renderChat();},
+ answerFirst:()=>{chatOpen();me('Answer');chatNeeds();renderChat();},
+ save:(id)=>{S.saved.has(id)?S.saved.delete(id):S.saved.add(id);render();toast(S.saved.has(id)?'Saved':'Removed from saved');},
+ applyOne:(id)=>confirmApply([id]),
+ applySel:()=>confirmApply([...S.selected]),
+ tailorSel:()=>startReview([...S.selected]),
+ tailorIds:(a)=>{closeModal();startReview(a.split(','));},
+ doApply:(a)=>doApply(a.split(',')),
+ closeModal,
+ sel:(id)=>{S.selected.has(id)?S.selected.delete(id):S.selected.add(id);render();},
+ clearSel:()=>{S.selected.clear();render();},
+ topTen:()=>{forYouJobs().slice(0,10).forEach(j=>S.selected.add(j.id));render();toast(`Selected your top ${Math.min(10,forYouJobs().length)} by match`);},
+ jobTab:(k)=>{S.jobTab=k;render();},
+ filter:(k)=>{S.filters[k]=S.filters[k]?0:1;render();},
+ thread:(id)=>{S.thread=id||null;S.jobTab='for-you';const t=S.threads.find(x=>x.id===id);if(t)t.n=0;render();},
+ newSearch:()=>{chatOpen();runSkill('job-search');},
+ continueThread:()=>{const t=S.threads.find(x=>x.id===S.thread);chatOpen();me(`Continue: ${t.title}`);say(`<p>This search is still running. I found ${t.n||'no'} new jobs since you last looked. Want me to change anything, like the location or salary?</p>`,[{l:'Change the location',f:()=>{me('Change the location');FLOWS['job-search']({title:t.title.split(' · ')[0]})}}]);},
+ rvPick:(i)=>{S.reviewIdx=+i;render();},
+ rvApprove:(id)=>{S.approved[id]=S.approved[id]?0:1;const n=S.review.length;if(S.approved[id]&&S.reviewIdx<n-1)S.reviewIdx++;render();},
+ rvOriginal:(id)=>{S.approved[id]='orig';render();toast('Plato will send your original resume for this job');},
+ approveAll:()=>{S.review.forEach(id=>{if(!S.approved[id])S.approved[id]=1});render();confirmApply(S.review,true);},
+ saveLater:()=>{toast('Saved. Your tailored resumes wait in Jobs.');go('jobs');},
+ appFilter:(k)=>{S.appFilter=k;render();},
+ focusNeed:(id)=>{const el=document.getElementById('need-'+id);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');}},
+ resolve:(arg)=>{const [id,kind]=arg.split('|');const a=S.apps.find(x=>x.id===id);resolveApp(id,kind);toast(kind==='captcha'?`Opened ${a.co} in Chrome. Plato marks it sent when you submit.`:kind==='cert'?'Certificate saved to your documents and attached':`${a.co} is back in line`);},
+ readCover:(id)=>{const a=S.apps.find(x=>x.id===id);modal(`<h2 class="h-sec">Cover letter for ${a.co}</h2><div class="card pad" style="max-height:50vh;overflow:auto;line-height:1.6"><p>Dear ${a.co} team,</p><p style="margin-top:10px">I've led 6 ERP rollouts across Egypt and the Gulf, three of them on Odoo, and I'd like to bring that to your ${a.t} role. At Inspire Consulting I cut order-to-cash time by 30% for a retail client by redesigning their sales and inventory flows before we configured anything.</p><p style="margin-top:10px">I'm based in Cairo, available with one month's notice, and happy to work remotely or on-site.</p><p style="margin-top:10px">Raef Samir</p></div><div class="row" style="justify-content:flex-end"><button class="btn outline" data-act="closeModal">Close</button><button class="btn primary" data-act="useCover" data-arg="${id}">Use this letter</button></div>`);},
+ useCover:(id)=>{closeModal();ACT.resolve(id);},
+ practiceFor:(co)=>{chatOpen();me(`Practice my ${co} interview`);FLOWS['practice-interview'](co);renderChat();},
+ unfollow:(id)=>{const c=S.companies.find(x=>x.id===id);c.follow=0;render();toast(`Stopped following ${c.n}`);},
+ follow:(id)=>{const c=S.companies.find(x=>x.id===id);if(S.companies.filter(x=>x.follow).length>=5){toast('Free covers 5 companies. Upgrade in Plan & credits to follow more.');return;}c.follow=1;render();toast(`Following ${c.n}`);},
+ role:(i)=>{S.roles[+i].on=S.roles[+i].on?0:1;render();},
+ careerCat:(c)=>{S.careerCat=c;render();},
+ startTest:(t)=>{chatOpen();me(`Start: ${t}`);if(/interview|pitch/i.test(t))FLOWS['practice-interview']('Mozn');else say(`<p>Starting <b>${esc(t)}</b>. In the app this opens the full timed session; here's a preview of question 1.</p>`);renderChat();},
+ proveSkill:(s)=>{chatOpen();me(`Learn ${s}`);FLOWS['prove-skill'](s);renderChat();},
+ profileTab:(k)=>{S.profileTab=k;render();},
+ addLink:()=>{S.portfolioLink=true;render();toast('Portfolio link added. Profile strength is now 92%');},
+ doc:(k)=>{S.docs[k]=S.docs[k]?0:1;render();},
+ prefToggle:(a)=>{const [k,v]=a.split('|');const L=S.prefs[k];const i=L.indexOf(v);i>=0?L.splice(i,1):L.push(v);render();},
+ prefRemove:(a)=>{const [k,v]=a.split('|');S.prefs[k]=S.prefs[k].filter(x=>x!==v);render();},
+ prefLevel:(v)=>{S.prefs.level=v;render();},
+ prefNeg:()=>{S.prefs.neg=!S.prefs.neg;},
+ extAdd:()=>{S.ext.added=true;render();toast('Plato Apply added to Chrome');},
+ getCode:()=>{S.ext.code='K7P-4QX';render();},
+ extGetCode:()=>{S.ext.code='K7P-4QX';go('onboarding-connect');},
+ copyCode:()=>{try{navigator.clipboard.writeText(S.ext.code).then(()=>toast('Code copied'),()=>toast('Select the code to copy it'));}catch(e){toast('Select the code to copy it');}},
+ toast:(t)=>toast(t),
+ proto:()=>{S.proto=!S.proto;renderProto();},
+ protoGo:(r)=>{S.proto=false;renderProto();go(r);},
+ reset:()=>{S=freshState();S.route=location.hash.slice(1)||'home';closeModal();render();renderChat();toast('Demo data reset');},
+};
+
+document.addEventListener('click',e=>{
+  const g=e.target.closest('[data-go]'); if(g){e.preventDefault();go(g.dataset.go);return;}
+  const t=e.target.closest('[data-act]'); if(!t) { if(S.pop&&!e.target.closest('.pop')){S.pop=null;render();} return; }
+  if(t.dataset.act==='closeModal'&&e.target.closest('[data-stop]')&&!e.target.closest('button')) return;
+  const fn=ACT[t.dataset.act]; if(!fn) return;
+  if(t.tagName!=='INPUT') e.preventDefault();
+  fn(t.dataset.arg);
+});
+document.addEventListener('change',e=>{const t=e.target;if(t.dataset.change==='answer'){S.answers[t.dataset.arg]=t.value;}});
+document.addEventListener('input',e=>{if(e.target.id==='chat-in'){const v=e.target.value;const nq=v.startsWith('/')?v.slice(1).toLowerCase():null;if(nq!==slashQ){slashQ=nq;const keep=v;renderChat();const i=document.getElementById('chat-in');i.focus();i.value=keep;}}
+  if(/^c[0-5]$/.test(e.target.id)&&e.target.value){const n=document.getElementById('c'+(+e.target.id[1]+1));if(n)n.focus();}});
+document.addEventListener('submit',e=>{
+  e.preventDefault(); const f=e.target, k=f.dataset.form, v=(f.querySelector('input[name=v],#chat-in')||{}).value||'';
+  if(k==='chat'){const t=v.trim();if(!t)return;if(t.startsWith('/')){const id=SKILLS.find(s=>s[0].startsWith(t.slice(1).toLowerCase()));if(id){runSkill(id[0]);return;}}slashQ=null;me(t);freeText(t);renderChat();return;}
+  if(k==='tellPlato'){if(!v.trim())return;chatOpen();me(v);freeText(v);renderChat();return;}
+  if(k==='answerQ'){resolveApp(f.dataset.arg,'q',v);toast('Saved. Plato is finishing this application.');return;}
+  if(k==='prefAdd'){if(v.trim()){S.prefs[f.dataset.arg].push(v.trim());render();setTimeout(()=>{const i=f.id?document.getElementById(f.id):null;},0);}return;}
+  if(k==='extConnect'){S.ext.connected=true;S.ext.added=true;render();return;}
+});
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();C().open?chatClose():chatOpen();}
+  if(e.key==='Escape'){if(document.querySelector('.modal-wrap'))closeModal();else if(C().open)chatClose();}
+});
+
+function renderProto(){
+  const items=[['onboarding-documents','Onboarding 1 · Documents'],['onboarding-preferences','Onboarding 2 · Preferences'],['onboarding-connect','Onboarding 3 · Connect'],['extension','Extension popup'],['home','Home'],['jobs','Jobs'],['review','Review tailored resumes'],['applications','Applications'],['following','Following'],['career','Career'],['profile','Profile'],['plan','Plan & credits'],['account','Settings']];
+  let el=document.getElementById('proto');
+  if(!el){el=document.createElement('div');el.id='proto';document.body.appendChild(el);}
+  el.innerHTML=`<button class="proto-btn" data-act="proto">${ic('grid','sm')} Screens</button>${S.proto?`<div class="proto-menu"><div class="eyebrow" style="padding:6px 10px">Jump to a screen</div>${items.map(([r,l])=>`<button data-act="protoGo" data-arg="${r}">${l}</button>`).join('')}<div style="border-top:1px solid var(--divider);margin:6px 0"></div><button data-act="reset">Reset demo data</button></div>`:''}`;
+}
+function render(){
+  const r=S.route;
+  const V={home:vHome,jobs:vJobs,review:vReview,applications:vApps,following:vFollowing,career:vCareer,profile:vProfile,plan:vPlan,account:vAccount};
+  let html;
+  if(r==='onboarding-documents') html=vObDocs();
+  else if(r==='onboarding-preferences') html=vObPrefs();
+  else if(r==='onboarding-connect') html=vObConnect();
+  else if(r==='extension') html=vExtension();
+  else html=shell((V[r]||vHome)());
+  document.getElementById('app').innerHTML=html;
+  document.title='Plato Final Prototype';
+}
+(function boot(){const r=location.hash.slice(1);S.route=ROUTES.includes(r)?r:'home';render();renderChat();renderProto();})();
+</script>

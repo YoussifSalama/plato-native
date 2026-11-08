@@ -3,10 +3,11 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { BarChart3, Check, ChevronLeft, ChevronRight, FileText, Languages, LayoutTemplate, Lightbulb, Mic, Search, type LucideIcon } from "lucide-react"
+import { BarChart3, Check, ClipboardCheck, ChevronLeft, ChevronRight, FileText, Languages, LayoutTemplate, Lightbulb, Mic, Search, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { PAGE, PageHeader } from "@/components/page-header"
 import { StatusPill } from "@/components/plato-ui"
+import { getProfile } from "@/lib/documents/api"
 import { listCareerResumes, listCareerThreads, type CareerThreadSummary } from "@/lib/career/api"
 import { listInterviews, type InterviewSummary } from "@/lib/interviews/api"
 import { timeAgo } from "@/lib/jobs/links"
@@ -45,6 +46,8 @@ function CareerHome() {
   const [interviews, setInterviews] = useState<InterviewSummary[] | null>(null)
   const [gaps, setGaps] = useState<SkillGap[] | null>(null)
   const [threads, setThreads] = useState<CareerThreadSummary[] | null>(null)
+  // Profile sections the last review flagged: each is a quick fix.
+  const [fixes, setFixes] = useState<number | null>(null)
 
   useEffect(() => {
     getPreferences()
@@ -62,6 +65,12 @@ function CareerHome() {
     listCareerThreads()
       .then(setThreads)
       .catch(() => setThreads([]))
+    getProfile()
+      .then((p) => {
+        const e = p.profile_evaluation
+        setFixes(e ? (["experience", "education", "skills", "certifications", "languages", "location"] as const).filter((k) => e[k] === "NEEDS_ATTENTION").length : null)
+      })
+      .catch(() => setFixes(null))
   }, [])
 
   const list = useMemo(() => CATALOG.filter((p) => (cat === "All" || p.cat === cat) && (!q.trim() || `${p.title} ${p.body}`.toLowerCase().includes(q.trim().toLowerCase()))), [cat, q])
@@ -74,7 +83,7 @@ function CareerHome() {
     <div className={PAGE}>
       <PageHeader title="Career" description="Tests, practice and new skills that get you ready for the jobs you're applying to." actions={<span className="text-text-secondary"><b className="text-foreground">{CATALOG.length + (gaps?.length ?? 0)}</b> tests and practice sessions</span>} />
 
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_350px]">
         <section className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold tracking-tight">All tests and practice</h2>
@@ -91,20 +100,20 @@ function CareerHome() {
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((p) => (
-              <div key={p.title} className="flex flex-col gap-2 rounded-2xl border bg-card p-4">
+              <div key={p.title} className="flex min-w-0 flex-col gap-1.5 rounded-2xl border bg-card p-3.5">
                 <div className="flex items-center justify-between">
                   <span className="flex size-9 items-center justify-center rounded-[10px] bg-primary-soft text-primary">
                     <p.icon className="size-[18px]" />
                   </span>
                   <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-text-secondary">{p.cat}</span>
                 </div>
-                <b className="text-[15.5px] leading-snug">{p.title}</b>
+                <b className="line-clamp-2 min-h-[2.6em] text-[15px] leading-snug">{p.title}</b>
                 <span className="line-clamp-1 text-[13px] text-text-secondary">{p.body}</span>
-                <div className="mt-auto flex items-center justify-between pt-1">
-                  <span className="text-xs text-text-tertiary">{p.meta}</span>
-                  <Link href={startHref(p)} data-ai={`career.start:${p.title}`} className="rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold hover:border-primary-line">
+                <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+                  <span className="truncate text-xs text-text-tertiary">{p.meta}</span>
+                  <Link href={startHref(p)} data-ai={`career.start:${p.title}`} className="shrink-0 rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold hover:border-primary-line">
                     Start
                   </Link>
                 </div>
@@ -143,6 +152,7 @@ function CareerHome() {
               ) : (
                 <StatusPill tone="neutral">Resume · not built</StatusPill>
               )}
+              {fixes !== null && <StatusPill tone={fixes ? "warning" : "success"}>{fixes ? `Profile · ${fixes} to fix` : "Profile looks good"}</StatusPill>}
               {interviews !== null && <StatusPill tone={done ? "primary" : "neutral"}>{done ? `Interview practice ${Math.min(done, 3)} of 3` : "Interview practice · not started"}</StatusPill>}
               {gaps !== null && <StatusPill tone={gaps.length ? "warning" : "success"}>{gaps.length ? `${gaps.length} skill gap${gaps.length === 1 ? "" : "s"}` : "No skill gaps"}</StatusPill>}
             </div>
@@ -157,7 +167,7 @@ function CareerHome() {
             {!resumes?.length && <Row icon={FileText} title="Build my resume" sub="From your profile, ready as a PDF" href={`/career?prompt=${encodeURIComponent("Build my resume")}`} />}
           </div>
 
-          {(open.length > 0 || !!threads?.length) && (
+          {(open.length > 0 || !!threads?.length || !!fixes) && (
             <div className="flex flex-col gap-2.5">
               <h2 className="text-xl font-bold tracking-tight">Continue where you left off</h2>
               {open.slice(0, 1).map((i) => (
@@ -166,6 +176,7 @@ function CareerHome() {
               {threads?.slice(0, 2).map((t) => (
                 <Row key={t.id} icon={LayoutTemplate} title={t.title ?? "Career conversation"} sub={`Last active ${timeAgo(t.updated_at)}`} href={`/career?thread=${t.id}`} action="Resume" />
               ))}
+              {!!fixes && <Row icon={ClipboardCheck} title="Profile check" sub={`${fixes} quick fix${fixes === 1 ? "" : "es"} left before Plato applies`} href="/profile" action="Fix" />}
             </div>
           )}
         </aside>

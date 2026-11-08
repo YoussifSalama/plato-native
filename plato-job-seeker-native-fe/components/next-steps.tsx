@@ -45,7 +45,7 @@ export function NextSteps({ stats, onNewSearch }: { stats: DiscoveryStats | null
 
   const applied = stats ? Object.values(stats.applications).reduce((n, c) => n + (c ?? 0), 0) > 0 : null
   const steps: Step[] = [
-    { key: "profile", title: "Make your profile ready to apply", body: "Plato fills every form from it, so it needs your details once.", href: "/onboarding?step=3", cta: "Complete my details", icon: UserCheck, done: ready },
+    { key: "profile", title: "Make your profile ready to apply", body: "Plato fills every form from it, so it needs your details once.", href: "/onboarding?step=2", cta: "Complete my details", icon: UserCheck, done: ready },
     { key: "extension", title: "Link the browser extension", body: "It applies in your own browser. You always press Submit.", href: "/extension", cta: "Link my browser", icon: Puzzle, done: linked },
     { key: "search", title: "Run your first search", body: "Say the role in your own words. Plato searches every board and ranks the results.", href: "#new-search", cta: "Start a search", icon: Search, done: stats ? stats.threads > 0 : null },
     { key: "apply", title: "Apply to your best matches", body: "Open a search and send the top jobs to Plato in one go.", href: "/jobs", cta: "Pick jobs to apply", icon: FileText, done: applied },

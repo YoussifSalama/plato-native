@@ -2,22 +2,9 @@
 
 import { useEffect, useRef, useState } from "react"
 import { motion } from "motion/react"
-import {
-  Award,
-  Briefcase,
-  Building2,
-  Calendar,
-  Clock,
-  Globe2,
-  Link2,
-  Lock,
-  MapPin,
-  ShieldCheck,
-  Sparkles,
-  Stamp,
-  Wallet,
-} from "lucide-react"
+import { ArrowRight, Award, Briefcase, Building2, Calendar, Clock, Globe2, Link2, Lock, MapPin, ShieldCheck, Stamp, Wallet } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { OnboardingFooter } from "@/app/onboarding/components/onboarding-layout"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -67,7 +54,7 @@ const COUNTRY_SEEDS = [...new Set(LOCATION_SEEDS.map((l) => l.value.split(",").p
 
 const SUMMARY_COLORS = distributeColors(SUMMARY_DEFS.length)
 
-function PreferencesStep({ onContinue }: { onContinue: () => void }) {
+function PreferencesStep({ onContinue, onBack }: { onContinue: () => void; onBack?: () => void }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -203,18 +190,8 @@ function PreferencesStep({ onContinue }: { onContinue: () => void }) {
     <motion.div initial="hidden" animate="show" variants={staggerContainer} className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
       <div className="flex flex-col gap-6">
         <motion.div variants={fadeUpItem} className="flex flex-col gap-1">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
-            Tell Plato what you&apos;re looking for
-            <motion.span
-              animate={{ rotate: [0, 15, -10, 0], scale: [1, 1.15, 1] }}
-              transition={{ duration: 2.4, repeat: Infinity, repeatDelay: 1.5, ease: "easeInOut" as const }}
-            >
-              <Sparkles className="size-5 text-primary" />
-            </motion.span>
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Your preferences help me find and apply to the right opportunities for you. You can update these anytime.
-          </p>
+          <h1 className="text-[32px] leading-tight font-extrabold tracking-tight text-foreground sm:text-[36px]">What kind of job should Plato find you?</h1>
+          <p className="mt-1 text-[16px] text-text-secondary">We filled in what we could from your CV. Adjust anything, and Plato only brings you jobs that match.</p>
         </motion.div>
 
         <motion.div variants={fadeUpItem} ref={(el) => { fieldRefs.current.roles = el }} className="rounded-lg border bg-card p-4 shadow-sm">
@@ -444,13 +421,18 @@ function PreferencesStep({ onContinue }: { onContinue: () => void }) {
           </p>
         )}
 
-        <motion.div variants={fadeUpItem} className="flex items-center gap-4">
-          <Button onClick={handleContinue} disabled={saving} className="w-fit gap-2 shadow-md shadow-primary/30">
-            {saving ? "Saving…" : "Continue"}
-          </Button>
-          <button type="button" onClick={onContinue} className="text-sm text-muted-foreground hover:underline">
-            I&apos;ll do this later
-          </button>
+        <motion.div variants={fadeUpItem}>
+          <OnboardingFooter
+            back={onBack}
+            hint="You can change these any time in your profile."
+            skip={onContinue}
+            next={
+              <Button onClick={handleContinue} disabled={saving} className="h-12 gap-2 rounded-xl px-6 text-[15px]">
+                {saving ? "Saving…" : "Continue"}
+                <ArrowRight className="size-4" />
+              </Button>
+            }
+          />
         </motion.div>
       </div>
 

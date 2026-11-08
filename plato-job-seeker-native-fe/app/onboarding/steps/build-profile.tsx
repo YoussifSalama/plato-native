@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { Award, BrainCircuit, FileStack, GraduationCap, History, Lock, ShieldCheck, Sparkles } from "lucide-react"
+import { ArrowRight, Award, BrainCircuit, FileStack, GraduationCap, History, Lock, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { OnboardingFooter } from "@/app/onboarding/components/onboarding-layout"
 import { ResumeUploadCard } from "@/components/resume-upload-card"
 import { CareerEvidenceCard } from "@/components/career-evidence-card"
 import { DocumentUploadTile } from "@/components/document-upload-tile"
@@ -95,17 +96,9 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
     >
       <motion.div variants={fadeUpItem} className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
-            Build your career profile
-            <motion.span
-              animate={{ rotate: [0, 15, -10, 0], scale: [1, 1.15, 1] }}
-              transition={{ duration: 2.4, repeat: Infinity, repeatDelay: 1.5, ease: "easeInOut" as const }}
-            >
-              <Sparkles className="size-5 text-primary" />
-            </motion.span>
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Give Plato a clear picture of your experience so I can find and apply to better opportunities for you.
+          <h1 className="max-w-[18ch] text-[34px] leading-[1.1] font-extrabold tracking-tight text-foreground sm:text-[40px]">Give Plato everything an application might ask for</h1>
+          <p className="mt-2 max-w-[62ch] text-[16.5px] leading-relaxed text-text-secondary">
+            Start with your CV. Add any other documents now, and Plato attaches the right one whenever a job asks for it, so you never stop mid-application to look for a file.
           </p>
         </div>
         <SecureBadge />
@@ -182,19 +175,16 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
         )}
       </AnimatePresence>
 
-      <motion.div
-        variants={fadeUpItem}
-        className="w-fit"
-        whileHover={canContinue && !analyzing ? { scale: 1.03 } : undefined}
-        whileTap={canContinue && !analyzing ? { scale: 0.97 } : undefined}
-      >
-        <Button
-          onClick={handleContinue}
-          disabled={!canContinue || analyzing}
-          className="w-fit gap-2 shadow-md shadow-primary/30 transition-shadow hover:shadow-lg hover:shadow-primary/40"
-        >
-          Continue
-        </Button>
+      <motion.div variants={fadeUpItem}>
+        <OnboardingFooter
+          hint="Only the CV is needed to continue."
+          next={
+            <Button onClick={handleContinue} disabled={!canContinue || analyzing} className="h-12 gap-2 rounded-xl px-6 text-[15px]">
+              Continue to preferences
+              <ArrowRight className="size-4" />
+            </Button>
+          }
+        />
       </motion.div>
 
       <AnalyzingModal open={analyzing} />

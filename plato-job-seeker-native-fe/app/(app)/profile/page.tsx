@@ -84,7 +84,7 @@ export default function ProfilePage() {
         title="Profile"
         description="What Plato uses to write your resumes and fill your applications. The more it knows, the fewer questions it asks."
         actions={
-          <Link href="/onboarding?step=3" data-ai="profile.edit-details" className="flex h-9 items-center rounded-full border bg-card px-4 text-sm font-medium hover:bg-muted">
+          <Link href="/onboarding?step=2" data-ai="profile.edit-details" className="flex h-9 items-center rounded-full border bg-card px-4 text-sm font-medium hover:bg-muted">
             Edit my details
           </Link>
         }

@@ -86,7 +86,7 @@ function ApplicationReview({ app, live = false, onDone }: { app: JobApplication;
 
       {needs.reason === "profile" ? (
         // Asked once for every job, not per application: fix it at the source.
-        <Link href="/onboarding?step=3" className="inline-flex h-9 w-fit items-center rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground">
+        <Link href="/onboarding?step=2" className="inline-flex h-9 w-fit items-center rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground">
           Complete my application details
         </Link>
       ) : app.status === "NEEDS_USER_VERIFICATION" ? (

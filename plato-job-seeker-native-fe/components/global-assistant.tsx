@@ -8,7 +8,19 @@ import { buildPageMap, CONTINUE_TEXT, MAX_STEPS, needsMore, runPageEvent, settle
 import { cursorTo } from "@/components/agent-cursor"
 import { PlatoDock } from "@/app/(app)/jobs/components/plato-dock"
 
-const QUICK_PROMPTS = ["Find remote jobs", "Show my saved jobs", "Take me to my profile"]
+// Three suggestions that fit the page the seeker is on, and its name for the panel header.
+const PAGE_HELP: { match: (p: string) => boolean; name: string; prompts: string[] }[] = [
+  { match: (p) => p === "/", name: "Home", prompts: ["What should I do today?", "Apply to my top 3 matches", "How is my job hunt going?"] },
+  { match: (p) => p.startsWith("/jobs/review"), name: "Tailor & apply", prompts: ["Which resume needs my attention?", "Why is this one a weak fit?", "Take me back to jobs"] },
+  { match: (p) => p.startsWith("/jobs"), name: "Jobs", prompts: ["Only remote jobs I can apply to from Egypt", "Find new jobs that fit my CV", "Show my saved jobs"] },
+  { match: (p) => p.startsWith("/applications"), name: "Applications", prompts: ["What needs me right now?", "Why didn't some go through?", "Follow up on applications older than 2 weeks"] },
+  { match: (p) => p.startsWith("/following") || p.startsWith("/insights"), name: "Following", prompts: ["Follow companies hiring for my role", "What's new from companies I follow?", "Send my digest weekly"] },
+  { match: (p) => p.startsWith("/career"), name: "Career", prompts: ["Score my resume", "Practice an interview for my next application", "Which skill should I learn next?"] },
+  { match: (p) => p.startsWith("/profile"), name: "Profile", prompts: ["Make my resume bullets stronger", "What is missing from my profile?", "Open my application answers"] },
+  { match: (p) => p.startsWith("/tokens"), name: "Plan & credits", prompts: ["How many tokens does applying cost?", "When do my tokens refill?", "Take me to Home"] },
+  { match: (p) => p.startsWith("/extension"), name: "Extension", prompts: ["How do I link Chrome?", "Is my browser linked?", "Take me to Applications"] },
+]
+const helpFor = (p: string) => PAGE_HELP.find((h) => h.match(p)) ?? { name: "", prompts: ["Find jobs that fit my CV", "What needs me right now?", "Take me to my profile"] }
 
 // Only a search thread carries its own dock (it also drives the result list). Every
 // other page, Jobs home and Career included, gets this one next to the page's own chat.
@@ -116,7 +128,8 @@ function GlobalAssistant() {
   }, [])
 
   if (hidden) return null
-  return <PlatoDock key={openKey} defaultOpen={openKey > 0} messages={thread?.messages ?? []} onSend={(t) => void send(t)} busy={busy} error={error} quickPrompts={QUICK_PROMPTS} status="idle" />
+  const help = helpFor(path)
+  return <PlatoDock key={openKey} defaultOpen={openKey > 0} messages={thread?.messages ?? []} onSend={(t) => void send(t)} busy={busy} error={error} quickPrompts={help.prompts} context={help.name} status="idle" />
 }
 
 export { GlobalAssistant }

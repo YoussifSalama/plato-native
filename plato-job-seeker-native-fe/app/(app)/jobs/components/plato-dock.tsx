@@ -1,18 +1,35 @@
 "use client"
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { useRouter } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { ArrowUp, Sparkles, X, Compass } from "lucide-react"
+import { ArrowUp, BellRing, Briefcase, ClipboardCheck, Compass, FileText, Inbox, Mic, Search, Slash, Sparkles, Wand2, X, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import type { ThreadMessage } from "@/lib/jobs/api"
 import { PlatoMark } from "@/components/plato-orb"
 import { spring } from "@/lib/motion-system"
 import { MessageList, type InlineSteps } from "./chat-panel"
 
-const PANEL_W = 520
+// Width of the floating panel.
+const PANEL_W = 400
 
-// The one place Plato lives once a search exists: a launcher pinned bottom-
-// right that morphs into a panel. No page dimming, no slide-over.
+// What "/" offers. A prompt goes to Plato; an href just opens the page.
+type Command = { key: string; label: string; hint: string; icon: LucideIcon; prompt?: string; href?: string }
+const COMMANDS: Command[] = [
+  { key: "find", label: "Find jobs", hint: "A new search from what you want", icon: Search, prompt: "Find new jobs that fit my CV" },
+  { key: "saved", label: "Saved jobs", hint: "The jobs you bookmarked", icon: Briefcase, prompt: "Show my saved jobs" },
+  { key: "needs", label: "What needs me", hint: "Applications Plato paused on", icon: Inbox, href: "/applications?tab=needs" },
+  { key: "tailor", label: "Tailor & apply", hint: "Pick jobs, Plato writes a resume for each", icon: Wand2, href: "/jobs" },
+  { key: "score", label: "Resume score", hint: "Out of 100, with the quick fixes", icon: ClipboardCheck, href: `/career?prompt=${encodeURIComponent("Score my resume and help me fix the top issues")}` },
+  { key: "resume", label: "Build my resume", hint: "From your profile, as a PDF", icon: FileText, href: `/career?prompt=${encodeURIComponent("Build my resume")}` },
+  { key: "interview", label: "Practice an interview", hint: "One question at a time", icon: Mic, href: `/career?prompt=${encodeURIComponent("Practice an interview with me")}` },
+  { key: "follow", label: "Follow a company", hint: "Hear when they post a role that fits", icon: BellRing, href: "/following" },
+]
+
+// Plato AI: a floating panel fixed on the right, opened from the launcher, the top bar or
+// Ctrl K. The page stays as it is underneath. Layer z-45: above the page, its top bar (30),
+// the tour bubble and progress drawer (40); below modals (50), the tour (60) and the agent
+// cursor (200), so anything the assistant opens shows over it. Commands stay out of the way until "/" or the commands button.
 function PlatoDock({
   messages,
   onSend,
@@ -21,32 +38,49 @@ function PlatoDock({
   quickPrompts,
   steps,
   status,
+  context,
   defaultOpen = false,
 }: {
   messages: ThreadMessage[]
   onSend: (text: string) => void
   busy: boolean
   error: string | null
+  // Up to three suggestions for an empty conversation, fitting the page.
   quickPrompts: string[]
   steps?: InlineSteps
   status: "idle" | "searching" | "done"
+  // Where the seeker is, shown under the title ("On Applications").
+  context?: string
   defaultOpen?: boolean
 }) {
   const reduced = !!useReducedMotion()
+  const router = useRouter()
   const [open, setOpen] = useState(defaultOpen)
   const [input, setInput] = useState("")
+  const [menu, setMenu] = useState(false)
+  const [active, setActive] = useState(0)
   const [seenCount, setSeenCount] = useState(messages.length)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const unread = open ? 0 : Math.max(0, messages.length - seenCount)
+  // "/sco" filters the commands; the menu button shows them all.
+  const query = input.startsWith("/") ? input.slice(1).toLowerCase() : null
+  const shown = useMemo(() => (query === null ? COMMANDS : COMMANDS.filter((c) => c.key.startsWith(query) || c.label.toLowerCase().includes(query))), [query])
+  const menuOpen = (menu || query !== null) && shown.length > 0
 
   useEffect(() => {
     if (!open) return
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && setOpen(false)
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return
+      if (menuOpen) {
+        setMenu(false)
+        setInput((v) => (v.startsWith("/") ? "" : v))
+      } else setOpen(false)
+    }
     window.addEventListener("keydown", onKey)
     textareaRef.current?.focus()
     return () => window.removeEventListener("keydown", onKey)
-  }, [open])
+  }, [open, menuOpen])
 
   // Auto-grow the textarea between 1 and 5 lines.
   useEffect(() => {
@@ -66,36 +100,50 @@ function PlatoDock({
     setInput("")
     onSend(t)
   }
+  function run(c: Command) {
+    setMenu(false)
+    setInput("")
+    setActive(0)
+    if (c.href) router.push(c.href)
+    else if (c.prompt) onSend(c.prompt)
+  }
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (menuOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault()
+      setActive((i) => (i + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length)
+      return
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      submit(input)
+      if (menuOpen) run(shown[Math.min(active, shown.length - 1)])
+      else submit(input)
     }
   }
 
-  const statusLine = status === "searching" ? "Searching — ask me anything meanwhile" : status === "done" ? "Your results are in. What next?" : "What would you like me to do?"
+  const statusLine = status === "searching" ? "Searching. Ask me anything meanwhile." : context ? `On ${context}` : "Ask, or tell me what to do"
   const transition = reduced ? { duration: 0.15 } : spring.enter
+  const empty = messages.length === 0
 
   return (
-    <div data-ai-skip className="pointer-events-none fixed right-6 bottom-6 z-50 flex flex-col items-end">
-      <AnimatePresence mode="popLayout" initial={false}>
-        {open ? (
-          <motion.section
+    <>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.aside
             key="panel"
-            layoutId="plato-dock"
-            role="dialog"
+            data-ai-skip
+            role="complementary"
             aria-label="Plato AI"
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.98, transition: { duration: 0.18 } }}
+            initial={{ x: "calc(100% + 24px)", opacity: 0.6 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: "calc(100% + 24px)", opacity: 0.6, transition: { duration: 0.2 } }}
             transition={transition}
-            style={{ width: `min(${PANEL_W}px, calc(100vw - 3rem))`, transformOrigin: "bottom right" }}
-            className="pointer-events-auto flex h-[min(680px,calc(100dvh-3rem))] flex-col overflow-hidden rounded-lg border bg-card shadow-[0_28px_70px_-28px_rgba(0,91,167,0.35),0_2px_8px_-2px_rgba(14,27,44,0.08)]"
+            style={{ width: `min(${PANEL_W}px, calc(100vw - 24px))` }}
+            className="fixed top-3 right-3 bottom-3 z-[45] flex flex-col overflow-hidden rounded-2xl border bg-card shadow-[0_30px_80px_-24px_rgba(0,58,110,0.45),0_4px_14px_-4px_rgba(14,27,44,0.12)]"
           >
-            <header className="flex items-center gap-3 border-b px-4 py-3">
+            <header className="flex h-16 shrink-0 items-center gap-3 border-b px-4">
               <PlatoMark size={32} live={busy || status === "searching"} />
               <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-1.5 text-sm font-bold text-foreground">
+                <p className="flex items-center gap-1.5 text-[15px] font-bold text-foreground">
                   Plato AI
                   <Sparkles className="size-3 fill-primary text-primary" />
                 </p>
@@ -109,91 +157,153 @@ function PlatoDock({
                 }}
                 aria-label="Tour this page"
                 title="Tour this page"
-                className="flex size-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+                className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
               >
                 <Compass className="size-4" />
               </button>
-              <button type="button" onClick={toggle} aria-label="Close" title="Close (Esc)" className="flex size-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+              <button type="button" onClick={toggle} aria-label="Close" title="Close (Esc)" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
                 <X className="size-4" />
               </button>
             </header>
 
-            <MessageList messages={messages} busy={busy} error={error} steps={steps} onAnswer={submit} className="bg-background/60" />
-
-            <div className="flex flex-col gap-2.5 border-t p-3">
-              {quickPrompts.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {quickPrompts.map((q) => (
-                    <button
-                      key={q}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => submit(q)}
-                      className="rounded-sm bg-secondary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent disabled:opacity-50"
-                    >
-                      {q}
-                    </button>
-                  ))}
+            {empty && !busy ? (
+              <div className="flex flex-1 flex-col justify-end gap-4 overflow-y-auto bg-background/60 p-5">
+                <div>
+                  <p className="text-lg font-bold tracking-tight">What should we do?</p>
+                  <p className="text-sm text-text-secondary">Ask in your own words, Arabic or English. I can search, open pages, and work through your applications.</p>
                 </div>
-              )}
+                {quickPrompts.length > 0 && (
+                  <ul className="flex flex-col gap-1.5">
+                    {quickPrompts.slice(0, 3).map((q) => (
+                      <li key={q}>
+                        <button type="button" onClick={() => submit(q)} className="flex w-full items-center gap-2.5 rounded-xl border bg-card px-3.5 py-2.5 text-left text-sm font-medium transition-colors hover:border-primary-line hover:bg-primary-tint">
+                          <Sparkles className="size-3.5 shrink-0 text-primary" />
+                          {q}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : (
+              <MessageList messages={messages} busy={busy} error={error} steps={steps} onAnswer={submit} className="bg-background/60" />
+            )}
+
+            <div className="relative shrink-0 border-t p-3">
+              {/* Commands: only when asked for, as one short list above the box. */}
+              <AnimatePresence>
+                {menuOpen && (
+                  <motion.div
+                    role="listbox"
+                    aria-label="Commands"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6, transition: { duration: 0.12 } }}
+                    className="absolute right-3 bottom-[calc(100%-4px)] left-3 z-10 max-h-[320px] overflow-y-auto rounded-xl border bg-card p-1.5 shadow-[0_18px_40px_-20px_rgba(0,58,110,0.4)]"
+                  >
+                    <p className="px-2.5 pt-1 pb-1.5 text-[11px] font-semibold tracking-[0.06em] text-text-tertiary uppercase">Commands</p>
+                    {shown.map((c, i) => (
+                      <button
+                        key={c.key}
+                        type="button"
+                        role="option"
+                        aria-selected={i === active}
+                        data-ai={`dock.command.${c.key}`}
+                        onMouseEnter={() => setActive(i)}
+                        onClick={() => run(c)}
+                        className={cn("flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left", i === active ? "bg-primary-tint" : "")}
+                      >
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                          <c.icon className="size-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <b className="block text-sm">{c.label}</b>
+                          <span className="block truncate text-xs text-text-secondary">{c.hint}</span>
+                        </span>
+                        <code className="font-mono text-[11px] text-text-tertiary">/{c.key}</code>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <form
                 onSubmit={(e) => {
                   e.preventDefault()
-                  submit(input)
+                  if (menuOpen) run(shown[Math.min(active, shown.length - 1)])
+                  else submit(input)
                 }}
-                className="flex items-end gap-2 rounded-md border bg-background px-3 py-2 transition-colors focus-within:border-primary/50"
+                className="flex flex-col gap-2 rounded-xl border bg-background px-3 pt-2.5 pb-2 transition-colors focus-within:border-primary/50"
               >
                 <textarea
                   ref={textareaRef}
                   rows={1}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => {
+                    setInput(e.target.value)
+                    setActive(0)
+                  }}
                   onKeyDown={onKeyDown}
                   disabled={busy}
-                  placeholder="Ask Plato anything… (Enter to send, Shift+Enter for a new line)"
-                  className="scroll-thin min-h-6 flex-1 resize-none bg-transparent py-1 text-sm leading-6 text-foreground outline-none placeholder:text-lavender disabled:opacity-60"
+                  aria-label="Message Plato"
+                  placeholder="Ask Plato, or type / for commands"
+                  className="scroll-thin min-h-6 resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-text-tertiary disabled:opacity-60"
                 />
-                <motion.button
-                  type="submit"
-                  disabled={busy || !input.trim()}
-                  whileTap={{ scale: 0.94 }}
-                  transition={spring.micro}
-                  aria-label="Send"
-                  className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-sm bg-primary text-primary-foreground disabled:opacity-40"
-                >
-                  <ArrowUp className="size-4" />
-                </motion.button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenu((m) => !m)
+                      setActive(0)
+                      textareaRef.current?.focus()
+                    }}
+                    aria-expanded={menuOpen}
+                    data-ai="dock.commands"
+                    className={cn("flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors", menuOpen ? "border-primary-line bg-primary-soft text-primary" : "bg-card text-text-secondary hover:text-foreground")}
+                  >
+                    <Slash className="size-3.5" />
+                    Commands
+                  </button>
+                  <span className="hidden text-[11px] text-text-tertiary sm:inline">Enter to send · Shift+Enter new line</span>
+                  <motion.button
+                    type="submit"
+                    disabled={busy || (!input.trim() && !menuOpen)}
+                    whileTap={{ scale: 0.94 }}
+                    transition={spring.micro}
+                    aria-label="Send"
+                    className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40"
+                  >
+                    <ArrowUp className="size-4" />
+                  </motion.button>
+                </div>
               </form>
             </div>
-          </motion.section>
-        ) : (
-          <motion.button
-            key="launcher"
-            layoutId="plato-dock"
-            data-tour="plato-ai"
-            type="button"
-            onClick={toggle}
-            aria-label="Open Plato AI"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8, transition: { duration: 0.15 } }}
-            transition={transition}
-            whileHover={reduced ? undefined : { y: -2 }}
-            whileTap={{ scale: 0.98 }}
-            className="pointer-events-auto flex h-14 items-center gap-3 rounded-lg border bg-card pr-5 pl-2 shadow-[0_16px_40px_-16px_rgba(0,91,167,0.45),0_2px_6px_-2px_rgba(14,27,44,0.1)]"
-          >
-            <PlatoMark size={40} live={status === "searching"} />
-            <span className="text-left">
-              <span className="block text-sm font-bold text-foreground">Plato AI</span>
-              <span className="block text-xs text-text-tertiary">{status === "searching" ? "Searching…" : "Ask anything"}</span>
-            </span>
-            {unread > 0 && (
-              <span className={cn("ml-1 flex size-5 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground")}>{unread}</span>
-            )}
-          </motion.button>
+          </motion.aside>
         )}
       </AnimatePresence>
-    </div>
+
+      {!open && (
+        <motion.button
+          data-ai-skip
+          data-tour="plato-ai"
+          type="button"
+          onClick={toggle}
+          aria-label="Open Plato AI"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={transition}
+          whileHover={reduced ? undefined : { y: -2 }}
+          whileTap={{ scale: 0.98 }}
+          className="fixed right-6 bottom-6 z-50 flex h-14 items-center gap-3 rounded-2xl border bg-card pr-5 pl-2 shadow-[0_16px_40px_-16px_rgba(0,91,167,0.45),0_2px_6px_-2px_rgba(14,27,44,0.1)]"
+        >
+          <PlatoMark size={40} live={status === "searching"} />
+          <span className="text-left">
+            <span className="block text-sm font-bold text-foreground">Plato AI</span>
+            <span className="block text-xs text-text-tertiary">{status === "searching" ? "Searching…" : "Ask anything"}</span>
+          </span>
+          {unread > 0 && <span className="ml-1 flex size-5 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground">{unread}</span>}
+        </motion.button>
+      )}
+    </>
   )
 }
 

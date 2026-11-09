@@ -53,6 +53,9 @@ export interface ResumeScore {
   categories: ScoreCategory[];
   // The three changes worth the most points, biggest first.
   topFixes: string[];
+  // Quality score only: the seeker's own bullets that carry no number, to quote
+  // in a suggestion ("Led ERP rollout" becomes stronger with how many sites...).
+  bulletsWithoutNumbers?: { count: number; examples: string[] };
 }
 
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -306,7 +309,11 @@ export function scoreProfile(p: ResumeProfile): ResumeScore {
     },
   ]);
 
-  return finish([structure, impact, style, brevity, intro, skills, coherence]);
+  const plain = bullets.filter((b) => !QUANT.test(b));
+  return {
+    ...finish([structure, impact, style, brevity, intro, skills, coherence]),
+    bulletsWithoutNumbers: { count: plain.length, examples: plain.slice(0, 3) },
+  };
 }
 
 /**

@@ -65,12 +65,14 @@ export class CareerResumesService {
     };
   }
 
-  list(userId: string) {
-    return this.prisma.careerResume.findMany({
+  // Each resume with how many parts differ from the master (profile): "4 changes from master".
+  async list(userId: string) {
+    const rows = await this.prisma.careerResume.findMany({
       where: { job_seeker: { user_id: userId } },
       orderBy: { created_at: 'desc' },
       select: {
         id: true,
+        job_seeker_id: true,
         title: true,
         target_role: true,
         version: true,
@@ -78,7 +80,25 @@ export class CareerResumesService {
         edited: true,
         job_id: true,
         created_at: true,
+        doc: true,
+        strategy: true,
       },
+    });
+    const profile = rows.length
+      ? await this.profiles.load(rows[0].job_seeker_id).catch(() => null)
+      : null;
+    return rows.map((row) => {
+      const { doc, strategy, ...rest } = row;
+      const r = { ...rest, job_seeker_id: undefined };
+      const d = doc as unknown as ResumeDoc | null;
+      const ats = (strategy as { ats?: AtsReport | null } | null)?.ats ?? null;
+      let changes: number | null = null;
+      try {
+        changes = profile && d ? resumeChanges(profile, d, ats).length : null;
+      } catch {
+        changes = null;
+      }
+      return { ...r, changes };
     });
   }
 

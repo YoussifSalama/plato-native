@@ -109,6 +109,28 @@ describe('resume quality score (master resume)', () => {
     expect(s.topFixes[0]).toMatch(/number/i);
   });
 
+  it('quotes the bullets that have no number, for a concrete suggestion', () => {
+    const s = scoreProfile(base);
+    expect(s.bulletsWithoutNumbers?.count).toBe(0);
+    const plain = scoreProfile({
+      ...base,
+      experiences: [
+        {
+          ...base.experiences[0],
+          description:
+            'Led the ERP rollout for the retail group.\nRan client demos for new accounts.',
+        },
+      ],
+    });
+    expect(plain.bulletsWithoutNumbers).toEqual({
+      count: 2,
+      examples: [
+        'Led the ERP rollout for the retail group.',
+        'Ran client demos for new accounts.',
+      ],
+    });
+  });
+
   it('is the same every time for the same resume', () => {
     expect(scoreProfile(base)).toEqual(scoreProfile(base));
   });

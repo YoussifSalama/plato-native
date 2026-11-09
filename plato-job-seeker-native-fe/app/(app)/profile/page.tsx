@@ -8,9 +8,10 @@ import { cn } from "cn"
 import { PAGE } from "@/components/page-header"
 import { Skeleton } from "@/components/ui/skeleton"
 import { MatchRing, PlatoNote, StatusPill } from "@/components/plato-ui"
-import { openPlato, useProfileStrength } from "@/components/app-shell"
+import { useProfileStrength } from "@/components/app-shell"
 import { getMe, type AuthUser } from "@/lib/auth/api"
 import { getCareerResume, getResumeScore, listCareerResumes, type ResumeScore } from "@/lib/career/api"
+import { getSkillGap, type SkillGap } from "@/lib/skills/api"
 import { getDocumentFile, getProfile, listDocuments } from "@/lib/documents/api"
 import type { JobSeekerDocument, JobSeekerProfile } from "@/lib/documents/schema"
 import { getExtensionProgress } from "@/lib/extension/api"
@@ -27,7 +28,7 @@ const TABS = [
   { key: "experience", label: "Experience & skills" },
   { key: "looking", label: "What I'm looking for" },
   { key: "answers", label: "Application answers" },
-  { key: "documents", label: "Documents" },
+  { key: "documents", label: "Documents & browser" },
 ] as const
 type Tab = (typeof TABS)[number]["key"]
 type Resume = Awaited<ReturnType<typeof listCareerResumes>>[number]
@@ -52,9 +53,19 @@ function ProfileContent() {
   const [readiness, setReadiness] = useState<ApplyReadiness | null>(null)
   const [linked, setLinked] = useState<boolean | null>(null)
   const strength = useProfileStrength()
+  const [score, setScore] = useState<ResumeScore | null>(null)
+  const [gaps, setGaps] = useState<SkillGap[] | null>(null)
+  const [hasPortfolio, setHasPortfolio] = useState(false)
 
   useEffect(() => {
     getMe().then(setUser).catch(() => undefined)
+    getResumeScore().then(setScore).catch(() => undefined)
+    getSkillGap()
+      .then((g) => setGaps(g.skills))
+      .catch(() => setGaps([]))
+    listDocuments()
+      .then((d) => setHasPortfolio(d.some((x) => x.type === "PORTFOLIO" || /portfolio/i.test(x.name ?? ""))))
+      .catch(() => undefined)
     getProfile().then(setProfile).catch(() => undefined)
     getPreferences().then(setPrefs).catch(() => undefined)
     getApplyReadiness().then(setReadiness).catch(() => undefined)
@@ -75,20 +86,35 @@ function ProfileContent() {
   ].filter(([, u]) => u) as [string, string][]
 
   // What would get more interviews, from the server's own readiness check.
-  const suggestions: { title: string; body: string; action: ReactNode }[] = [
+  // Plato suggests (screen 12): specific, from the seeker's own data. Bullets without a
+  // number (quoted), a skill their matches keep asking for, the portfolio link, then
+  // anything the apply check still misses.
+  const career = (prompt: string) => `/career?prompt=${encodeURIComponent(prompt)}`
+  const weak = score?.bulletsWithoutNumbers
+  const quote = (t: string) => {
+    const w = t.replace(/[.;]$/, "").split(/\s+/)
+    return w.length > 6 ? `${w.slice(0, 6).join(" ")}…` : w.join(" ")
+  }
+  const gap = gaps?.[0]
+  const suggestions: { title: string; body: ReactNode; action: ReactNode }[] = [
+    ...(weak?.count
+      ? [{ title: `Add numbers to ${weak.count} bullet${weak.count === 1 ? "" : "s"}`, body: weak.examples[0] ? <>&ldquo;{quote(weak.examples[0])}&rdquo; becomes stronger with how many sites, users or how much time saved.</> : "A number (sites, users, time saved) makes a bullet stronger.", action: <Link href={career("Help me add numbers to my resume bullets that have none, one at a time")}>Fix with Plato</Link> }]
+      : []),
+    ...(gap
+      ? [{ title: `Add “${gap.skill}” to your resume`, body: `It appears in ${gap.missingIn} of your matches. Only if you have done it.`, action: <Link href={career(`I have experience with ${gap.skill}. Help me show it on my resume`)}>Preview change</Link> }]
+      : []),
+    ...(prefs && !prefs.portfolio_url ? [{ title: "Add your portfolio link", body: hasPortfolio ? "You uploaded a portfolio file. A link lets Plato paste it into forms that only accept URLs." : "A link lets Plato paste it into forms that only accept URLs.", action: <Link href="/onboarding?step=2">Add link</Link> }] : []),
     ...(readiness?.missing ?? []).map((m) => ({ title: `Add ${m.label.toLowerCase()}`, body: m.why, action: <Link href="/onboarding?step=2">Add it</Link> })),
-    ...(prefs && !prefs.portfolio_url ? [{ title: "Add your portfolio link", body: "A link lets Plato paste it into forms that only accept URLs.", action: <Link href="/onboarding?step=2">Add link</Link> }] : []),
     ...(readiness?.recommended ?? []).slice(0, 2).map((r) => ({ title: "Answer once, never again", body: r.question, action: <Link href="/profile?tab=answers">Answer</Link> })),
-    { title: "Make your bullets stronger", body: "A bullet with a number (sites, users, time saved) gets more replies.", action: <button type="button" onClick={() => openPlato("Add numbers to my weakest resume bullets")}>Fix with Plato</button> },
   ].slice(0, 3)
 
   return (
     <div className={PAGE}>
       {/* Who you are to Plato, and how ready it is to apply for you. */}
-      <section data-tour="page-header" className="flex flex-wrap items-center gap-5 rounded-2xl border bg-card p-6 shadow-card">
-        <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-foreground text-2xl font-bold text-white">{user ? initials(user.full_name) : ""}</span>
+      <section data-tour="page-header" className="flex flex-wrap items-center gap-4 rounded-2xl border bg-card px-5 py-4 shadow-card">
+        <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-foreground text-xl font-bold text-white">{user ? initials(user.full_name).slice(0, 1) : ""}</span>
         <div className="min-w-[220px] flex-1">
-          <h1 className="text-[26px] leading-tight font-extrabold tracking-tight">{user ? titleCase(user.full_name) : <Skeleton className="h-7 w-48" />}</h1>
+          <h1 className="text-[24px] leading-tight font-extrabold tracking-tight">{user ? titleCase(user.full_name) : <Skeleton className="h-7 w-48" />}</h1>
           <p className="text-text-secondary">{current ? [current.title, years && !/not set/i.test(years) ? years : current.company].filter(Boolean).join(" · ") : "Your CV details appear here once Plato reads it."}</p>
           <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {location && <span>{location}</span>}
@@ -105,8 +131,8 @@ function ProfileContent() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border bg-card px-4 py-3">
-          <MatchRing value={pct} size={56} label={strength ? `${pct}%` : ""} />
+        <div className="flex items-center gap-3 rounded-2xl border bg-primary-tint px-4 py-2.5">
+          <MatchRing value={pct} size={48} label={strength ? `${pct}%` : ""} />
           <span>
             <b className="block">{strength && !strength.next ? "Ready to apply" : "Almost there"}</b>
             {strength?.next ? (
@@ -124,13 +150,13 @@ function ProfileContent() {
         <section className="flex min-w-0 flex-col gap-4">
           <nav role="tablist" aria-label="Profile" className="scroll-thin flex gap-3 overflow-x-auto border-b border-foreground/10">
             {TABS.map((t) => (
-              <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} data-ai={`profile.tab.${t.key}`} onClick={() => router.replace(t.key === "resumes" ? "/profile" : `/profile?tab=${t.key}`, { scroll: false })} className={cn("-mb-px border-b-2 px-0.5 py-3 text-[14px] whitespace-nowrap transition-colors", tab === t.key ? "border-primary font-semibold text-primary" : "border-transparent font-medium text-text-secondary hover:text-foreground")}>
+              <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} data-ai={`profile.tab.${t.key}`} onClick={() => router.replace(t.key === "resumes" ? "/profile" : `/profile?tab=${t.key}`, { scroll: false })} className={cn("-mb-px border-b-2 py-3 text-[14px] whitespace-nowrap transition-colors", tab === t.key ? "border-primary font-semibold text-primary" : "border-transparent font-medium text-text-secondary hover:text-foreground")}>
                 {t.label}
               </button>
             ))}
           </nav>
 
-          {tab === "resumes" && <ResumesTab />}
+          {tab === "resumes" && <ResumesTab role={prefs?.roles?.[0] ?? null} />}
           {tab === "experience" && (
             <div className="flex flex-col gap-4">
               {!!profile?.experiences?.length && (
@@ -186,9 +212,9 @@ function ProfileContent() {
             </b>
           </PlatoNote>
           {suggestions.map((s) => (
-            <div key={s.title} className="flex flex-col items-start gap-2 rounded-2xl border bg-card p-4">
+            <div key={s.title} className="flex flex-col items-start gap-1.5 rounded-2xl border bg-card p-3.5">
               <b>{s.title}</b>
-              <p className="text-sm text-text-secondary">{s.body}</p>
+              <p className="text-[13.5px] leading-snug text-text-secondary">{s.body}</p>
               <span className="rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:border-primary-line [&>*]:outline-none">{s.action}</span>
             </div>
           ))}
@@ -212,7 +238,7 @@ function Card({ title, action, children }: { title: string; action?: ReactNode; 
 
 // Screen 12: the master resume (the CV they uploaded, the base for everything) and the
 // versions Plato tailored from it, newest first.
-function ResumesTab() {
+function ResumesTab({ role }: { role: string | null }) {
   const [resumes, setResumes] = useState<Resume[] | null>(null)
   const [cv, setCv] = useState<JobSeekerDocument | null | undefined>(undefined)
   const [all, setAll] = useState(false)
@@ -243,7 +269,7 @@ function ResumesTab() {
         <div className="flex items-center gap-3 rounded-xl border border-primary-line bg-primary-tint px-4 py-3">
           <FileText className="size-[18px] shrink-0 text-text-secondary" />
           <span className="min-w-0 flex-1">
-            <b className="block truncate">Master resume{cv.name ? ` · ${cv.name}` : ""}</b>
+            <b className="block truncate" title={cv.name ?? undefined}>Master resume{role ? ` · ${role}` : cv.name ? ` · ${cv.name}` : ""}</b>
             <span className="text-xs text-text-secondary">{[cv.updated_at && `Updated ${shortDate(cv.updated_at)}`, "used as the base for every tailored version"].filter(Boolean).join(" · ")}</span>
           </span>
           {score && (
@@ -269,9 +295,8 @@ function ResumesTab() {
                 <FileText className="size-[18px] shrink-0 text-text-secondary" />
                 <span className="min-w-0 flex-1">
                   <b className="block truncate">{r.title}</b>
-                  <span className="text-xs text-text-secondary">{[r.created_at && shortDate(r.created_at), r.job_id ? "for one job" : (r.target_role ?? "General"), r.version > 1 && `version ${r.version}`].filter(Boolean).join(" · ")}</span>
+                  <span className="text-xs text-text-secondary">{[r.created_at && (new Date(r.created_at).toDateString() === new Date().toDateString() ? "Today" : shortDate(r.created_at)), r.changes != null ? `${r.changes} change${r.changes === 1 ? "" : "s"} from master` : (r.target_role ?? "General")].filter(Boolean).join(" · ")}</span>
                 </span>
-                {r.approved && <StatusPill tone="success">Approved</StatusPill>}
                 <button type="button" onClick={() => void open(() => getCareerResume(r.id))} className="text-sm font-semibold text-primary hover:underline">
                   Preview
                 </button>

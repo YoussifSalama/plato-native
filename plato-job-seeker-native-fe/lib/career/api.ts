@@ -94,7 +94,7 @@ const suggestResumeText = (id: string, req: { section: "summary" | "experience" 
 export type ResumeChange = { section: "summary" | "experience" | "keywords"; before: string | null; after: string }
 // Resume scores by fixed rules on the server (resume/resume-score.ts): 85+ strong, 75+ good, 60+ fair.
 export type ScoreBand = "strong" | "good" | "fair" | "needs_work"
-export type ResumeScore = { score: number; band: ScoreBand; categories: { key: string; label: string; score: number; max: number; tips: string[] }[]; topFixes: string[] }
+export type ResumeScore = { score: number; band: ScoreBand; categories: { key: string; label: string; score: number; max: number; tips: string[] }[]; topFixes: string[]; bulletsWithoutNumbers?: { count: number; examples: string[] } }
 export type MatchScore = ResumeScore & { decision: "send" | "confirm" | "hold" }
 export const getResumeScore = () => request<ResumeScore & { warn: boolean; thresholds: { autoApply: number; confirm: number; masterWarn: number } }>(apiClient.get("/job-seeker/career/resume-score"))
 export const BAND_LABEL: Record<ScoreBand, string> = { strong: "Strong", good: "Good", fair: "Fair", needs_work: "Needs work" }
@@ -114,5 +114,5 @@ const startVoiceSession = (threadId: string, req: { mode: VoiceMode; skill?: str
 const saveVoiceTranscript = (threadId: string, body: { mode: VoiceMode; seconds: number; turns: { role: "user" | "assistant"; text: string }[]; usage?: VoiceUsage }) =>
   request<{ saved: number }>(apiClient.post(`/job-seeker/career/threads/${threadId}/voice/transcript`, body))
 
-const listCareerResumes = () => request<{ id: string; title: string; target_role: string | null; version: number; approved: boolean; job_id?: string | null; created_at?: string }[]>(apiClient.get("/job-seeker/career/resumes"))
+const listCareerResumes = () => request<{ id: string; title: string; target_role: string | null; version: number; approved: boolean; job_id?: string | null; created_at?: string; changes?: number | null }[]>(apiClient.get("/job-seeker/career/resumes"))
 export { listCareerResumes, startVoiceSession, saveVoiceTranscript, getResumeDoc, saveResumeEdits, suggestResumeText, approveResume, streamCareerMessage, createCareerThread, listCareerThreads, getCareerThread, sendCareerMessage, getCareerResume }

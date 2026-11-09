@@ -227,7 +227,7 @@ function connect(doc: Document, s: PanelState, a: Actions) {
       s.error ? banner(doc, 'err', 'alert', null, s.error) : null,
       h(doc, 'span', { class: 'mark big', text: 'P' }),
       h(doc, 'h2', { text: 'Connect to your Plato account' }),
-      h(doc, 'p', { text: 'Paste the code from Plato. You only do this once on this browser.' }),
+      h(doc, 'p', { text: 'Logged in to Plato in this browser? Open Plato and this links itself. Or paste the code from Plato.' }),
       h(doc, 'div', { class: 'boxes', attrs: { role: 'group', 'aria-label': 'Pairing code' } }, ...boxes.slice(0, 4), h(doc, 'span', { class: 'dash', text: '-' }), ...boxes.slice(4)),
       btn(doc, 'Connect', submit, 'btn primary block', { disabled: s.busy, id: 'link' }),
       h(doc, 'div', { class: 'or', text: 'No code yet?' }),

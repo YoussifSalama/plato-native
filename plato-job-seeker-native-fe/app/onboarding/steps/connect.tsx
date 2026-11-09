@@ -6,6 +6,7 @@ import { Check, Copy, Loader2, Plus, Puzzle } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { getExtensionProgress, startPairing, type PairingCode } from "@/lib/extension/api"
+import { ExtensionAutoLink } from "@/components/extension-auto-link"
 
 // The Chrome Web Store page, once the extension is published. Until then: install help.
 const STORE_URL = process.env.NEXT_PUBLIC_EXTENSION_STORE_URL
@@ -34,6 +35,13 @@ function ConnectStep({ onBack, onDone }: { onBack: () => void; onDone: () => voi
       if (id) clearInterval(id)
     }
   }, [pairing, linked])
+
+  // Linked by itself (logged in here with Plato Apply installed: components/extension-auto-link).
+  useEffect(() => {
+    const on = () => setLinked(true)
+    window.addEventListener("plato:extension-linked", on)
+    return () => window.removeEventListener("plato:extension-linked", on)
+  }, [])
 
   useEffect(() => {
     if (!pairing) return
@@ -71,6 +79,7 @@ function ConnectStep({ onBack, onDone }: { onBack: () => void; onDone: () => voi
 
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8 pt-6">
+      <ExtensionAutoLink />
       <div>
         <h1 className="text-[34px] leading-tight font-extrabold tracking-tight sm:text-[40px]">Connect Plato Apply</h1>
         <p className="mt-3 text-[16.5px] leading-relaxed text-text-secondary">Plato applies to jobs through its free Chrome extension. Connect it once and you’re done.</p>
@@ -100,7 +109,7 @@ function ConnectStep({ onBack, onDone }: { onBack: () => void; onDone: () => voi
           <div className="flex min-w-0 flex-1 flex-col gap-3">
             <div>
               <p className="text-base font-bold">Open it and paste your code</p>
-              <p className="text-sm text-text-secondary">Click the Plato icon in Chrome’s toolbar and paste the code there.</p>
+              <p className="text-sm text-text-secondary">Logged in here? Plato Apply links itself as soon as it’s installed. Otherwise click the Plato icon in Chrome’s toolbar and paste the code there.</p>
             </div>
             {linked ? (
               <span className="flex w-fit items-center gap-1.5 rounded-full bg-success-soft px-3 py-1 text-sm font-semibold text-success-ink">

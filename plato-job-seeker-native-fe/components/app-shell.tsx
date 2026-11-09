@@ -17,6 +17,7 @@ import { TokensChip } from "@/components/plato-tokens"
 import { VerifyEmailBanner } from "@/components/verify-email-banner"
 import { PlatoMark } from "@/components/plato-orb"
 import { PlatoStatusPill } from "@/components/extension-progress"
+import { ExtensionAutoLink } from "@/components/extension-auto-link"
 import { NotificationBell } from "@/app/(app)/jobs/components/notification-bell"
 
 type NavItem = { href: string; label: string; icon: LucideIcon }
@@ -70,6 +71,7 @@ export function openPlato(text = "") {
 function AppShell({ children }: { children: ReactNode }) {
   return (
     <NotificationsProvider>
+      <ExtensionAutoLink />
       <Frame>{children}</Frame>
     </NotificationsProvider>
   )

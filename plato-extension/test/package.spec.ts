@@ -67,6 +67,9 @@ describe('packaging guard', () => {
     refuses(edit((m) => m.permissions.push('tabs')), /permissions/);
     refuses(edit((m) => (m.host_permissions = ['https://*/*'])), /host_permissions/);
     refuses(edit((m) => (m.externally_connectable = { matches: ['https://*/*'] })), /externally_connectable/);
+    refuses(edit((m) => (m.externally_connectable = { matches: ['https://jobs.plato.test/*'], ids: ['*'] })), /externally_connectable/);
+    refuses(edit((m) => (m.externally_connectable = { matches: ['https://jobs.plato.test/*', 'https://other.test/*'] })), /externally_connectable/);
+    refuses(edit((m) => (m.externally_connectable = { matches: ['http://localhost/*'] })), /externally_connectable/);
     refuses(edit((m) => (m.content_security_policy.extension_pages += " 'unsafe-eval'")), /unsafe|connect-src/);
     refuses(edit((m) => (m.content_security_policy.extension_pages = m.content_security_policy.extension_pages.replace(API, 'http://localhost:3000'))), /https, non-local/);
     refuses(edit((m) => (m.content_security_policy.extension_pages = m.content_security_policy.extension_pages.replace(API, 'http://api.plato.test'))), /https, non-local/);

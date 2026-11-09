@@ -47,7 +47,7 @@ const common = { plugins: [swapExtra], bundle: true, format: 'iife', target: 'ch
 const m = await build({ entryPoints: [join(root, 'src/manifest.entry.ts')], bundle: true, platform: 'node', format: 'esm', write: false, plugins: [swapExtra], define: common.define, logLevel: 'warning' });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(m.outputFiles[0].text).toString('base64'));
 const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')); // one version: package.json
-const manifest = mod.buildManifest({ flavor, apiOrigin, registry: mod.registry, store, version });
+const manifest = mod.buildManifest({ flavor, apiOrigin, webOrigin, registry: mod.registry, store, version });
 
 // No enabled provider = no content script file at all.
 const entries = { 'background.js': 'src/background.ts', 'panel.js': 'src/panel/main.ts' };

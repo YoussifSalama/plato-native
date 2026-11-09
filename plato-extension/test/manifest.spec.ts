@@ -9,9 +9,9 @@ const CSP = (api: string) =>
   `default-src 'none'; script-src 'self'; connect-src ${api}; img-src 'self' data:; style-src 'self'; frame-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'`;
 
 describe('production manifest (pinned exactly)', () => {
-  const m = buildManifest({ flavor: 'production', apiOrigin: 'https://api.plato.test', registry: createRegistry(DEFINITIONS) });
+  const m = buildManifest({ flavor: 'production', apiOrigin: 'https://api.plato.test', webOrigin: 'https://jobs.plato.test', registry: createRegistry(DEFINITIONS) });
 
-  it('equals the approved shape: four permissions, no hosts, one content script for the enabled platforms only', () => {
+  it('equals the approved shape: four permissions, no hosts, only the Plato web app may message it, one content script for the enabled platforms only', () => {
     expect(m).toEqual({
       manifest_version: 3,
       name: 'Plato Apply',
@@ -23,6 +23,7 @@ describe('production manifest (pinned exactly)', () => {
       permissions: ['sidePanel', 'storage', 'tabGroups', 'debugger'],
       action: { default_title: 'Plato Apply', default_icon: { '16': 'icon16.png', '32': 'icon32.png', '48': 'icon48.png', '128': 'icon128.png' } },
       side_panel: { default_path: 'panel.html' },
+      externally_connectable: { matches: ['https://jobs.plato.test/*'] },
       background: { service_worker: 'background.js' },
       content_security_policy: { extension_pages: CSP('https://api.plato.test') },
       content_scripts: [
@@ -37,7 +38,7 @@ describe('production manifest (pinned exactly)', () => {
   });
 
   it('has none of the privileges we promised not to take', () => {
-    for (const k of ['host_permissions', 'optional_host_permissions', 'optional_permissions', 'externally_connectable', 'web_accessible_resources', 'declarative_net_request', 'sandbox'])
+    for (const k of ['host_permissions', 'optional_host_permissions', 'optional_permissions', 'web_accessible_resources', 'declarative_net_request', 'sandbox'])
       expect(m).not.toHaveProperty(k);
     // debugger is taken on purpose (owner, 2026-10-21): trusted mouse / key events for custom dropdowns, boxes and Submit
     for (const p of ['tabs', 'scripting', 'cookies', 'webRequest', 'activeTab', 'history', 'identity', 'nativeMessaging', 'downloads'])

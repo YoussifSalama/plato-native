@@ -6,7 +6,7 @@ export type Flavor = 'production' | 'fixtures';
 const ICONS = { '16': 'icon16.png', '32': 'icon32.png', '48': 'icon48.png', '128': 'icon128.png' };
 
 /** The ONLY description of what the extension may do. Tests pin it exactly. */
-export function buildManifest(o: { flavor: Flavor; apiOrigin: string; registry: Registry; version?: string; store?: boolean }) {
+export function buildManifest(o: { flavor: Flavor; apiOrigin: string; webOrigin?: string; registry: Registry; version?: string; store?: boolean }) {
   // The fixtures build matches only its local fixture page, never a real site.
   const matches = o.flavor === 'fixtures' ? o.registry.all.filter((d) => d.policy === 'FILL_ONLY' && d.id === 'fixture').flatMap((d) => d.urlPatterns) : o.registry.enabledMatches();
   return {
@@ -19,12 +19,16 @@ export function buildManifest(o: { flavor: Flavor; apiOrigin: string; registry: 
     // package ("key field is not allowed in manifest") and assigns its own id: the store build leaves it out, and the
     // backend's EXTENSION_ORIGIN lists both ids.
     ...(o.store ? {} : { key: key.key }),
-    // tabGroups only labels the tabs Plato opens ("Plato" group). No host_permissions, no externally_connectable, no tabs/scripting/cookies/webRequest.
+    // tabGroups only labels the tabs Plato opens ("Plato" group). No host_permissions, no tabs/scripting/cookies/webRequest.
     // debugger: real mouse / key events into the job's tab (custom dropdowns, boxes, Submit), the same way a person presses.
     permissions: ['sidePanel', 'storage', 'tabGroups', 'debugger'],
     icons: ICONS,
     action: { default_title: 'Plato Apply', default_icon: ICONS },
     side_panel: { default_path: 'panel.html' },
+    // Only the Plato web app may message the extension, and only to hand over a one-time
+    // pairing code when the seeker is logged in there (background.ts). Match patterns take
+    // no port, so a local web origin is matched by host.
+    ...(o.webOrigin && { externally_connectable: { matches: [`${new URL(o.webOrigin).protocol}//${new URL(o.webOrigin).hostname}/*`] } }),
     background: { service_worker: 'background.js' },
     content_security_policy: {
       extension_pages: [

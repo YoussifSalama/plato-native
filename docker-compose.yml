@@ -74,6 +74,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
         NEXT_PUBLIC_EXTENSION_STORE_URL: ${EXTENSION_STORE_URL:-}
+        NEXT_PUBLIC_EXTENSION_IDS: ${EXTENSION_IDS:-}
     restart: unless-stopped
     depends_on:
       - api

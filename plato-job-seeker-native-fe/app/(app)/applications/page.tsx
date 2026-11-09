@@ -26,6 +26,7 @@ import { JOBS_HOME, threadHref } from "@/lib/jobs/links"
 import { applicationHref, applicationReason, canRetry, isVerifySubmission, needsAttention, retryLabel, roughly, statusView } from "@/lib/jobs/application-status"
 import { MonoTile, PlatoNote, Segmented, StatTile, StatusPill } from "@/components/plato-ui"
 import { Skeleton } from "@/components/ui/skeleton"
+import { OUTCOME_LABEL, OUTCOME_TONE } from "@/components/outcome-picker"
 import { ApplicationReview } from "./application-review"
 
 const TABS = [
@@ -310,8 +311,8 @@ function ApplicationsContent() {
                     </div>
                   </div>
                   <span>
-                    <span title={waitingOnYou || a.status === "EXPIRED" || a.status === "SKIPPED" || a.status === "FAILED" ? (a.error ?? applicationReason(a)) : undefined} className={cn("rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold whitespace-nowrap", s.tone.replace("text-warning", "text-warning-ink").replace("text-success", "text-success-ink"))}>
-                      {s.label}
+                    <span title={waitingOnYou || a.status === "EXPIRED" || a.status === "SKIPPED" || a.status === "FAILED" ? (a.error ?? applicationReason(a)) : undefined} className={cn("rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold whitespace-nowrap", a.outcome ? OUTCOME_TONE[a.outcome] : s.tone.replace("text-warning", "text-warning-ink").replace("text-success", "text-success-ink"))}>
+                      {a.outcome ? OUTCOME_LABEL[a.outcome] : s.label}
                     </span>
                   </span>
                   <span className="hidden text-sm whitespace-nowrap text-text-secondary md:block">{dateOf(a)}</span>

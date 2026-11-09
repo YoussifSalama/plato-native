@@ -559,6 +559,15 @@ enum JobApplicationStatus {
 }
 
 // Who runs an application. Null (rows from before the extension) = LEGACY.
+// What the seeker heard back, marked by the seeker (optional): Plato doesn't read
+// employer replies, so this is the only source for "Interview" on Home.
+enum ApplicationOutcome {
+    VIEWED
+    INTERVIEW
+    OFFER
+    REJECTED
+}
+
 enum ApplyEngine {
     LEGACY
     EXTENSION
@@ -611,6 +620,8 @@ model JobApplication {
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
   submitted_at DateTime?
+  outcome      ApplicationOutcome?
+  outcome_at   DateTime?
 
   @@unique([job_seeker_id, job_id])
   @@index([job_seeker_id, status])

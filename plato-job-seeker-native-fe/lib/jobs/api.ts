@@ -210,6 +210,7 @@ export type PendingQuestion = {
 export type NeedsInput = { reason: "questions" | "captcha" | "unsupported" | "profile" | "ready" | "resume" | "verify_submission"; message: string; questions: PendingQuestion[] }
 export type ApplyEvent = { applicationId: string; jobId: string; status: ApplicationStatus; step: string; message: string; attempt: number; at: string }
 
+export type ApplicationOutcome = "VIEWED" | "INTERVIEW" | "OFFER" | "REJECTED"
 export type JobApplication = {
   id: string
   status: ApplicationStatus
@@ -230,6 +231,9 @@ export type JobApplication = {
   created_at: string
   updated_at: string
   submitted_at: string | null
+  // What the seeker heard back, marked by them (optional).
+  outcome?: ApplicationOutcome | null
+  outcome_at?: string | null
   job: JobMatch["job"]
 }
 
@@ -334,6 +338,8 @@ const getApplication = (id: string) => request<ApplicationDetail>(apiClient.get(
 // After completing a human-verification step: Plato carries on in the same window, or reopens it if it was closed.
 const continueApplication = (id: string) => request<{ live: boolean; status: ApplicationStatus; message: string }>(apiClient.post(`/job-seeker/applications/${id}/continue`))
 const retryApplication = (id: string) => request<ApplicationDetail>(apiClient.post(`/job-seeker/applications/${id}/retry`))
+// "I got an interview": the seeker's own mark on a sent application (null clears it).
+const setApplicationOutcome = (id: string, outcome: ApplicationOutcome | null) => request<{ id: string; outcome: ApplicationOutcome | null; outcome_at: string | null }>(apiClient.post(`/job-seeker/applications/${id}/outcome`, { outcome }))
 const withdrawApplication = (id: string) => request<{ id: string; withdrawn: boolean }>(apiClient.delete(`/job-seeker/applications/${id}`))
 // "Apply" on the web only tags jobs for the browser extension: nothing is applied until the extension runs.
 const queueForExtension = (body: { jobIds?: string[]; top?: number; threadId?: string }) =>
@@ -382,6 +388,7 @@ export {
   setSaved,
   setHidden,
   listApplications,
+  setApplicationOutcome,
   getApplication,
   retryApplication,
   continueApplication,

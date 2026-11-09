@@ -15,7 +15,7 @@ import { MatchPill, MatchRing, MonoTile, PlatoNote, StatTile, StatusPill } from 
 import { getMe } from "@/lib/auth/api"
 import { getDigests, type Digest } from "@/lib/insights/api"
 import { createThread, getDiscoveryStats, getMatches, listApplications, setSaved, type DiscoveryStats, type JobApplication, type JobMatch } from "@/lib/jobs/api"
-import { needsAttention, statusView } from "@/lib/jobs/application-status"
+import { statusView } from "@/lib/jobs/application-status"
 import { threadHref, timeAgo } from "@/lib/jobs/links"
 import { staggerContainer, fadeUpItem } from "@/lib/motion-variants"
 
@@ -44,7 +44,8 @@ const event = (a: JobApplication) => {
   const c = <b>{a.job.company}</b>
   switch (a.status) {
     case "SUBMITTED":
-      return <>Applied to {c}</>
+      // What the seeker marked they heard back, newest news first.
+      return a.outcome === "INTERVIEW" ? <>{c} invited you to interview</> : a.outcome === "OFFER" ? <>{c} made you an offer</> : a.outcome === "VIEWED" ? <>{c} viewed your application</> : <>Applied to {c}</>
     case "IN_PROGRESS":
     case "EXTENSION_ACTIVE":
       return <>Plato is applying to {c}</>
@@ -103,9 +104,11 @@ export default function Home() {
     await setSaved(m.job.id, !m.saved).catch(() => setTop((cur) => cur?.map((x) => (x.id === m.id ? { ...x, saved: m.saved } : x)) ?? cur))
   }
 
-  const needs = apps?.filter(needsAttention) ?? []
   const sentWeek = apps?.filter((a) => a.status === "SUBMITTED" && within(a.submitted_at ?? a.updated_at, 7)).length ?? 0
   const sent = apps?.filter((a) => a.status === "SUBMITTED").length ?? 0
+  // Marked by the seeker on a sent application (optional): Plato can't read replies.
+  const viewed = apps?.filter((a) => a.outcome && a.outcome !== "REJECTED").length ?? 0
+  const interviews = apps?.filter((a) => a.outcome === "INTERVIEW" || a.outcome === "OFFER").length ?? 0
   const recent = [...(apps ?? [])].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)).slice(0, 3)
   // The one line under the greeting: what changed and what Plato is doing.
   // The owner's line once there is something to show; a first step before that.
@@ -133,9 +136,9 @@ export default function Home() {
             <Link href="/applications" data-ai="home.applied">
               <StatTile value={sent} label="Applications sent" className="card-lift" />
             </Link>
-            {/* The owner's third tile is Interviews; Plato doesn't see employer replies yet, so it is what needs you. */}
-            <Link href="/applications" data-ai="home.needs-you">
-              <StatTile value={needs.length} label="Need you" tone="hi" className="card-lift" />
+            {/* Interviews the seeker marked on their applications ("Did you hear back?"). */}
+            <Link href="/applications?tab=applied" data-ai="home.interviews" title="Mark it on an application when an employer gets back to you">
+              <StatTile value={interviews} label={interviews === 1 ? "Interview" : "Interviews"} tone="hi" className="card-lift" />
             </Link>
             <div className="flex items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-card">
               <MatchRing value={(Math.min(sentWeek, WEEK_GOAL) / WEEK_GOAL) * 100} size={46} label="" />
@@ -233,19 +236,19 @@ export default function Home() {
           {apps && (
             <>
               <div className="flex h-1.5 gap-1.5" aria-hidden>
-                <span className="rounded-full bg-primary-line" style={{ flex: Math.max(1, apps.length) }} />
-                <span className="rounded-full bg-primary/50" style={{ flex: Math.max(0.3, sent) }} />
-                <span className="rounded-full bg-warning" style={{ flex: Math.max(needs.length ? 0.3 : 0, needs.length) }} />
+                <span className="rounded-full bg-primary-line" style={{ flex: Math.max(1, sent) }} />
+                <span className="rounded-full bg-primary/55" style={{ flex: Math.max(0.4, viewed) }} />
+                <span className="rounded-full bg-primary" style={{ flex: Math.max(0.2, interviews) }} />
               </div>
               <p className="flex flex-wrap gap-x-5 text-sm">
                 <span>
                   <b>{sent}</b> sent
                 </span>
                 <span>
-                  <b>{apps.filter((a) => ["QUEUED", "IN_PROGRESS", "EXTENSION_ACTIVE"].includes(a.status)).length}</b> in progress
+                  <b>{viewed}</b> viewed
                 </span>
                 <span>
-                  <b>{needs.length}</b> need you
+                  <b>{interviews}</b> interview{interviews === 1 ? "" : "s"}
                 </span>
               </p>
             </>

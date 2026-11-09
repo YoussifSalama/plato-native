@@ -19,6 +19,7 @@ import { tmpdir } from 'os';
 import { basename, join } from 'path';
 import type { Browser, Page } from 'playwright-core';
 import { openBrowser } from './open-browser';
+import { outcomeUpdate, type Outcome } from './outcome';
 import { IEnvParams } from '../../types/config/env.types';
 import { StorageService } from '../documents/storage.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -1406,6 +1407,17 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
     });
     if (!app) throw new NotFoundException('Application not found');
     return app;
+  }
+
+  // "I got an interview" and the like: the seeker's own mark on a sent application.
+  // Any engine: it records what happened after, never changes how Plato applies.
+  async setOutcome(jobSeekerId: string, id: string, outcome: Outcome | null) {
+    const app = await this.own(jobSeekerId, id);
+    return this.prisma.jobApplication.update({
+      where: { id },
+      data: outcomeUpdate(app.status, outcome),
+      select: { id: true, outcome: true, outcome_at: true },
+    });
   }
 
   // Legacy actions must never touch rows the extension engine owns.

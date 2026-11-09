@@ -37,8 +37,17 @@ export const PAGES: Record<string, PageEntry> = {
       nav('notifications', '/notifications'),
       nav('profile', '/profile'),
       { id: 'nav.logo', label: 'Plato logo', does: 'Goes to / (Home)' },
-      { id: 'crumb.<page>', label: 'Breadcrumb above the title (e.g. JOBS, CAREER)', does: 'Goes back up to that parent page; on a search it is crumb.jobs', tpl: 'crumb.' },
-      { id: 'tour.start', label: 'Tour this page (compass, bottom right)', does: 'Starts a guided tour of the page the seeker is on' },
+      {
+        id: 'crumb.<page>',
+        label: 'Breadcrumb above the title (e.g. JOBS, CAREER)',
+        does: 'Goes back up to that parent page; on a search it is crumb.jobs',
+        tpl: 'crumb.',
+      },
+      {
+        id: 'tour.start',
+        label: 'Tour this page (compass, bottom right)',
+        does: 'Starts a guided tour of the page the seeker is on',
+      },
     ],
   },
   home: {
@@ -46,13 +55,38 @@ export const PAGES: Record<string, PageEntry> = {
     purpose:
       "Home: the seeker's week at a glance. Greeting with jobs for you, applied, need you and this week's goal; a 'waiting for you' strip with the first application Plato paused on; the top 3 matches as cards with Apply and save; recent applications; and the latest jobs from companies they follow. Questions about how the hunt is going are answered here.",
     controls: [
-      { id: 'home.matches', label: 'Jobs for you (number)', does: 'Goes to /jobs' },
-      { id: 'home.applied', label: 'Applied (number)', does: 'Goes to /applications' },
-      { id: 'home.needs-you', label: 'Need you (number)', does: 'Opens /applications, shown when applications need answers' },
-      { id: 'home.next-step', label: 'Your next steps button', does: 'Does the next setup step: complete details, link the extension, first search, apply, or set an alert' },
-      { id: 'home.first-search', label: 'Start a search', does: 'Starts a new search conversation, shown when there are no matches yet' },
+      {
+        id: 'home.matches',
+        label: 'Jobs for you (number)',
+        does: 'Goes to /jobs',
+      },
+      {
+        id: 'home.applied',
+        label: 'Applied (number)',
+        does: 'Goes to /applications',
+      },
+      {
+        id: 'home.interviews',
+        label: 'Interviews (number)',
+        does: 'Opens sent applications; counts the ones the seeker marked as an interview or offer',
+      },
+      {
+        id: 'home.next-step',
+        label: 'Your next steps button',
+        does: 'Does the next setup step: complete details, link the extension, first search, apply, or set an alert',
+      },
+      {
+        id: 'home.first-search',
+        label: 'Start a search',
+        does: 'Starts a new search conversation, shown when there are no matches yet',
+      },
       { id: 'home.all-jobs', label: 'See all', does: 'Goes to /jobs' },
-      { id: 'home.apply:<jobId>', label: 'Apply on a top match', does: 'Opens the apply-with-the-extension dialog for that job', tpl: 'home.apply:' },
+      {
+        id: 'home.apply:<jobId>',
+        label: 'Apply on a top match',
+        does: 'Opens the apply-with-the-extension dialog for that job',
+        tpl: 'home.apply:',
+      },
     ],
   },
   jobs: {
@@ -60,15 +94,55 @@ export const PAGES: Record<string, PageEntry> = {
     purpose:
       'Jobs: the seeker\'s searches on the left (each a Plato conversation, grouped by day, with New search and a Following card), every match across all searches on the right, best first. Tabs For you / Saved / Applied, quick filters (Remote, Senior, Posted this week), a checkbox on each job, Select my top 10, and a bar to apply to the selected jobs. This is where "my last search" is found.',
     controls: [
-      { id: 'jobs.new-search', label: 'New search', does: 'Starts a new search conversation' },
-      { id: 'jobs.following', label: 'Following card', does: 'Goes to /following' },
-      { id: 'jobs.search:<searchId>', label: 'A search in the left column (its name)', does: "Opens that search's conversation and results (/jobs/<searchId>)", tpl: 'jobs.search:' },
-      { id: 'jobs.top-ten', label: 'Select my top 10', does: 'Ticks the 10 best jobs that are not applied to yet' },
-      { id: 'jobs.job:<jobId>', label: 'A job title', does: 'Opens the original posting in a new tab', tpl: 'jobs.job:' },
-      { id: 'jobs.apply:<jobId>', label: 'Apply on a job', does: 'Opens the apply-with-the-extension dialog for that job', tpl: 'jobs.apply:' },
-      { id: 'jobs.tab.<tab>', label: 'For you | Saved | Applied | Hidden', does: 'Switches the list (tab = discover, saved, applied, hidden)', tpl: 'jobs.tab.' },
-      { id: 'jobs.apply-selected', label: 'Apply (bottom bar)', does: 'Opens the apply dialog for every ticked job, with their own CV' },
-      { id: 'jobs.tailor-selected', label: 'Tailor & apply (bottom bar)', does: 'Opens /jobs/review for the ticked jobs: Plato writes one resume per job to review before applying' },
+      {
+        id: 'jobs.new-search',
+        label: 'New search',
+        does: 'Starts a new search conversation',
+      },
+      {
+        id: 'jobs.following',
+        label: 'Following card',
+        does: 'Goes to /following',
+      },
+      {
+        id: 'jobs.search:<searchId>',
+        label: 'A search in the left column (its name)',
+        does: "Opens that search's conversation and results (/jobs/<searchId>)",
+        tpl: 'jobs.search:',
+      },
+      {
+        id: 'jobs.top-ten',
+        label: 'Select my top 10',
+        does: 'Ticks the 10 best jobs that are not applied to yet',
+      },
+      {
+        id: 'jobs.job:<jobId>',
+        label: 'A job title',
+        does: 'Opens the original posting in a new tab',
+        tpl: 'jobs.job:',
+      },
+      {
+        id: 'jobs.apply:<jobId>',
+        label: 'Apply on a job',
+        does: 'Opens the apply-with-the-extension dialog for that job',
+        tpl: 'jobs.apply:',
+      },
+      {
+        id: 'jobs.tab.<tab>',
+        label: 'For you | Saved | Applied | Hidden',
+        does: 'Switches the list (tab = discover, saved, applied, hidden)',
+        tpl: 'jobs.tab.',
+      },
+      {
+        id: 'jobs.apply-selected',
+        label: 'Apply (bottom bar)',
+        does: 'Opens the apply dialog for every ticked job, with their own CV',
+      },
+      {
+        id: 'jobs.tailor-selected',
+        label: 'Tailor & apply (bottom bar)',
+        does: 'Opens /jobs/review for the ticked jobs: Plato writes one resume per job to review before applying',
+      },
     ],
   },
   review: {
@@ -76,8 +150,16 @@ export const PAGES: Record<string, PageEntry> = {
     purpose:
       'Review your tailored resumes: Plato writes one resume per ticked job, one at a time, and shows only what changed from the profile (summary, experience order, keywords). Each job can be approved or set to use the original CV; nothing is sent until Approve all & apply.',
     controls: [
-      { id: 'review.approve', label: 'Approve', does: 'Approves the resume shown for this job and moves to the next one' },
-      { id: 'review.approve-all', label: 'Approve all & apply (N)', does: 'Approves every written resume and opens the apply dialog with them' },
+      {
+        id: 'review.approve',
+        label: 'Approve',
+        does: 'Approves the resume shown for this job and moves to the next one',
+      },
+      {
+        id: 'review.approve-all',
+        label: 'Approve all & apply (N)',
+        does: 'Approves every written resume and opens the apply dialog with them',
+      },
     ],
   },
   results: {
@@ -164,6 +246,12 @@ export const PAGES: Record<string, PageEntry> = {
         id: 'application.withdraw',
         label: 'Withdraw',
         does: 'Starts withdrawing (asks to confirm first)',
+      },
+      {
+        id: 'application.outcome.interview',
+        tpl: 'application.outcome.',
+        label: 'Did you hear back? Interview',
+        does: 'Marks a sent application as an interview (the seeker says so; Plato cannot read replies). Siblings: .none, .viewed, .offer, .rejected',
       },
     ],
   },

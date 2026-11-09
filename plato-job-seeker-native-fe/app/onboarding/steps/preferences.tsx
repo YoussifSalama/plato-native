@@ -248,7 +248,7 @@ function PreferencesStep({ onContinue, onBack }: { onContinue: () => void; onBac
               Expected salary
             </label>
             <div className="flex gap-2">
-              <input id="pref-salary" inputMode="numeric" value={p.salary_max ?? ""} onChange={(e) => set({ salary_max: e.target.value ? Number(e.target.value.replace(/\D/g, "")) : null })} className={cn(INPUT, "min-w-0 flex-1 font-semibold")} />
+              <input id="pref-salary" inputMode="numeric" value={p.salary_max?.toLocaleString("en-US") ?? ""} onChange={(e) => set({ salary_max: e.target.value ? Number(e.target.value.replace(/\D/g, "")) : null })} className={cn(INPUT, "min-w-0 flex-1 font-semibold")} />
               <select aria-label="Currency" value={p.salary_currency ?? "USD"} onChange={(e) => set({ salary_currency: e.target.value })} className={cn(INPUT, "w-24")}>
                 {[...new Set([p.salary_currency ?? "USD", ...CURRENCIES])].map((c) => (
                   <option key={c}>{c}</option>
@@ -263,7 +263,7 @@ function PreferencesStep({ onContinue, onBack }: { onContinue: () => void; onBac
               Minimum you&apos;d accept
             </label>
             <div className="flex flex-wrap items-center gap-3">
-              <input id="pref-min" inputMode="numeric" value={p.salary_min ?? ""} onChange={(e) => set({ salary_min: e.target.value ? Number(e.target.value.replace(/\D/g, "")) : null })} className={cn(INPUT, "max-w-[220px] flex-1")} />
+              <input id="pref-min" inputMode="numeric" value={p.salary_min?.toLocaleString("en-US") ?? ""} onChange={(e) => set({ salary_min: e.target.value ? Number(e.target.value.replace(/\D/g, "")) : null })} className={cn(INPUT, "max-w-[220px] flex-1")} />
               {fact("salary_negotiable") && (
                 <label className="flex items-center gap-2 text-[15px] font-medium">
                   <input type="checkbox" checked={facts.salary_negotiable === "Yes"} onChange={(e) => setFacts((f) => ({ ...f, salary_negotiable: e.target.checked ? "Yes" : "No" }))} className="size-5 accent-primary" />
@@ -406,7 +406,7 @@ const INPUT = "h-11 w-full rounded-xl border bg-card px-3.5 text-[15px] outline-
 const CHIP_REMOVE = "flex items-center gap-2 rounded-full border border-primary-line bg-primary-soft px-3.5 py-1.5 text-[15px] text-primary"
 
 function Column({ children }: { children: ReactNode }) {
-  return <section className="flex flex-col gap-6 rounded-[22px] border bg-card p-5">{children}</section>
+  return <section className="flex flex-col gap-6 rounded-2xl border bg-card p-5">{children}</section>
 }
 function Group({ title, hint, children }: { title: ReactNode; hint?: string; children: ReactNode }) {
   return (

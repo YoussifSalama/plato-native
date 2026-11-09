@@ -162,7 +162,7 @@
    secondary text, and the larger radius the landing page's tiles use. */
 .theme-app {
   --background: #f5f8fc;
-  --radius: 1rem;
+  --radius: 0.625rem;
   --text-secondary: #4a5a70;
   --text-tertiary: #8593a6;
   color: var(--foreground);

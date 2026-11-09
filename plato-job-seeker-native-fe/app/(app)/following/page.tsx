@@ -138,7 +138,7 @@ function FollowingContent() {
             })}
           </div>
 
-          <div className="flex flex-col gap-3 rounded-[22px] border border-primary-line bg-primary-tint p-4">
+          <div className="flex flex-col gap-3 rounded-2xl border border-primary-line bg-primary-tint p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <PlatoNote variant="headline">
                 <b className="text-[17px] text-foreground">

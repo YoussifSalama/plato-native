@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { Briefcase, Building2, Coins, GraduationCap, Home, Puzzle, Send, Sparkles, User, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { getMe, type AuthUser } from "@/lib/auth/api"
-import { getApplyReadiness } from "@/lib/jobs/api"
+import { getApplyReadiness, getDiscoveryStats } from "@/lib/jobs/api"
 import { getExtensionProgress } from "@/lib/extension/api"
 import { getInsights } from "@/lib/insights/api"
 import { getPreferences } from "@/lib/preferences/api"
@@ -52,7 +52,7 @@ function initials(fullName: string) {
   return fullName
     .split(" ")
     .filter(Boolean)
-    .slice(0, 2)
+    .slice(0, 1) // one letter, as in the owner's top bar
     .map((p) => p[0]?.toUpperCase())
     .join("")
 }
@@ -104,6 +104,13 @@ function Frame({ children }: { children: ReactNode }) {
   const { needsYou } = useNotifications()
   const [user, setUser] = useState<AuthUser | null>(null)
   const setup = useProfileStrength()
+  // "18 new" beside Jobs, as in the owner's sidebar: matches found this week.
+  const [fresh, setFresh] = useState(0)
+  useEffect(() => {
+    getDiscoveryStats()
+      .then((st) => setFresh(st.newThisWeek ?? 0))
+      .catch(() => setFresh(0))
+  }, [])
 
   useEffect(() => {
     getMe()
@@ -129,7 +136,8 @@ function Frame({ children }: { children: ReactNode }) {
       >
         <it.icon className="size-[18px] shrink-0" />
         <span className="flex-1 truncate">{it.label}</span>
-        {count > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-warning px-1.5 text-[11px] font-bold text-white">{count > 9 ? "9+" : count}</span>}
+        {count > 0 && <span className="flex size-5 items-center justify-center rounded-full bg-[#f5b82e] text-[11px] font-bold text-foreground">{count > 9 ? "9+" : count}</span>}
+        {it.href === "/jobs" && fresh > 0 && <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[11.5px] font-bold text-primary">{fresh} new</span>}
       </Link>
     )
   }

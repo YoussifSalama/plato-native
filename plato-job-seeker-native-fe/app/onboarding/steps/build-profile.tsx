@@ -198,12 +198,12 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <div className="mt-2 flex flex-wrap items-center gap-5">
-          <Button data-ai="onboarding.continue" onClick={() => void next()} disabled={!cvReady || reading} className="h-14 gap-2 rounded-xl px-8 text-[17px]">
+        <div className="mt-2 flex flex-wrap items-center gap-4">
+          <Button data-ai="onboarding.continue" onClick={() => void next()} disabled={!cvReady || reading} className="h-14 gap-2 rounded-xl px-7 text-[17px]">
             Continue to preferences
             <ArrowRight className="size-5" />
           </Button>
-          <span className="text-text-secondary">Only the CV is needed to continue.</span>
+          <span className="text-[15px] text-text-secondary">Only the CV is needed to continue.</span>
         </div>
       </section>
 
@@ -219,11 +219,11 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
           {TILES.map((t) => {
             const has = tileDocs(t, docs).length > 0
             return (
-              <div key={t.key} className={cn("flex items-center gap-3 rounded-2xl border p-4", has ? "border-success-line bg-[#f3fcf6]" : "bg-card")}>
+              <div key={t.key} className={cn("flex items-center gap-3 rounded-2xl border p-3.5", has ? "border-success-line bg-[#f3fcf6]" : "bg-card")}>
                 <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl", has ? "bg-success-soft text-success" : "bg-primary-soft text-primary")}>{has ? <Check className="size-5" /> : <t.icon className="size-5" />}</span>
                 <span className="min-w-0 flex-1">
                   <b className="block text-[16px] leading-tight">{t.title}</b>
-                  <span className="text-[14px] text-text-secondary">{t.hint}</span>
+                  <span className="block text-[13.5px] leading-snug text-text-secondary">{t.hint}</span>
                 </span>
                 <button type="button" disabled={busy === t.key} onClick={() => (setTileFor(t), tileInput.current?.click())} className="flex h-10 shrink-0 items-center gap-1 rounded-xl border bg-card px-3.5 text-[15px] font-semibold text-primary transition-colors hover:border-primary-line">
                   {busy === t.key ? <Loader2 className="size-4 animate-spin" /> : has ? "Added" : "+ Add"}

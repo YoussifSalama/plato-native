@@ -4,8 +4,7 @@ import { PAGE, PageHeader } from "@/components/page-header"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { AnimatePresence, motion } from "motion/react"
-import { ChevronDown, CircleCheck, Clock, ExternalLink, FlaskConical, PauseCircle, Radio, RotateCcw, Sparkles } from "lucide-react"
+import { Clock, FlaskConical, PauseCircle, Radio, RotateCcw, Sparkles } from "lucide-react"
 import { cn } from "cn"
 import {
   applicationEventsUrl,
@@ -16,7 +15,6 @@ import {
   listThreads,
   retryApplication,
   SOURCE_LABEL,
-  type AnswerValue,
   type ApplicationStatus,
   type ApplyEvent,
   type ApplyQueue,
@@ -24,12 +22,10 @@ import {
   type JobApplication,
   type ThreadSummary,
 } from "@/lib/jobs/api"
-import { JOBS_HOME, threadHref, timeAgo } from "@/lib/jobs/links"
-import { applicationHref, applicationReason, canRetry, isVerifySubmission, needsAttention, retryLabel, roughly, statusView, STATUS_STAGE, STEP_STAGE } from "@/lib/jobs/application-status"
+import { JOBS_HOME, threadHref } from "@/lib/jobs/links"
+import { applicationHref, applicationReason, canRetry, isVerifySubmission, needsAttention, retryLabel, roughly, statusView } from "@/lib/jobs/application-status"
 import { MonoTile, PlatoNote, Segmented, StatTile, StatusPill } from "@/components/plato-ui"
 import { Skeleton } from "@/components/ui/skeleton"
-import { StageStepper } from "../jobs/components/stage-stepper"
-import { ApplicationProof } from "./application-proof"
 import { ApplicationReview } from "./application-review"
 
 const TABS = [
@@ -51,7 +47,15 @@ const needTag = (a: JobApplication) => {
   if (r === "questions") return a.needs_input?.questions.some((q) => /cover letter/i.test(q.label)) ? "Cover letter" : "Question"
   return r === "resume" ? "Skills check" : r === "ready" ? "Submit" : r === "unsupported" ? "Apply yourself" : r === "profile" ? "Your details" : "Needs you"
 }
-const showValue = (v: AnswerValue) => (typeof v === "boolean" ? (v ? "Yes" : "No") : Array.isArray(v) ? v.join(", ") : v)
+
+// The one sentence on a needs-you card, in the owner's words: what the form wants.
+const needLine = (a: JobApplication) => {
+  const qs = a.needs_input?.questions ?? []
+  if (qs.some((q) => /cover letter/i.test(q.label))) return "They require a cover letter. Plato wrote one."
+  if (qs.length === 1) return qs[0].label.replace(/\s*\*$/, "")
+  if (qs.length > 1) return `They ask ${qs.length} questions Plato can't answer from your profile.`
+  return applicationReason(a)
+}
 
 function ApplicationsContent() {
   const router = useRouter()
@@ -73,7 +77,6 @@ function ApplicationsContent() {
     const q = next.toString()
     router.replace(q ? `/applications?${q}` : "/applications", { scroll: false })
   }
-  const [expanded, setExpanded] = useState<string | null>(focus)
   const [retrying, setRetrying] = useState<string | null>(null)
   // Every worker step seen this session, per application: the live timeline.
   const [timeline, setTimeline] = useState<Record<string, ApplyEvent[]>>({})
@@ -151,7 +154,6 @@ function ApplicationsContent() {
   const worker = queue?.worker ?? null
   const inLine = scoped.filter((a) => queue?.positions[a.id]).length
   const shown = scoped.filter((a) => inTab(tab, a))
-  const active = scoped.find((a) => a.status === "IN_PROGRESS")
 
   async function retry(a: JobApplication) {
     setRetrying(a.id)
@@ -175,25 +177,29 @@ function ApplicationsContent() {
     el?.scrollIntoView({ behavior: "smooth", block: "center" })
     el?.animate([{ boxShadow: "0 0 0 4px rgb(217 119 6 / 0.35)" }, { boxShadow: "0 0 0 0 transparent" }], { duration: 1200 })
   }
-  const dateOf = (a: JobApplication) => (a.status === "QUEUED" ? (queue?.positions[a.id] ? `#${queue.positions[a.id].position} in line` : "In queue") : timeAgo(a.submitted_at ?? a.updated_at))
+  const dateOf = (a: JobApplication) => {
+    if (a.status === "QUEUED") return "In queue"
+    const d = new Date(a.submitted_at ?? a.updated_at)
+    return d.toDateString() === new Date().toDateString() ? "Today" : d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  }
 
   return (
-    <div className={PAGE}>
-      <PageHeader
-        crumbs={threadId ? [{ label: "Jobs", href: JOBS_HOME }, { label: "Search", href: threadHref(threadId) }] : undefined}
-        title="Applications"
-        description="Every application Plato sends for you, and anything it needs from you to finish one."
-        actions={
-          apps && (
-            <div className="flex flex-wrap gap-2.5">
-              <StatTile value={sent30} label="Sent in 30 days" />
-              <StatTile value={appliedWeek} label="Sent this week" />
-              {wentThrough !== null && <StatTile value={`${wentThrough}%`} label="Went through" />}
-              <StatTile value={needs.length} label="Need you" tone={needs.length ? "need" : undefined} />
-            </div>
-          )
-        }
-      />
+    // Screen 09: the list on the left; "Needs you" on the right from the top of the page.
+    <div className={cn(PAGE, "grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_356px]")}>
+      <section className="flex min-w-0 flex-col gap-4">
+        <PageHeader
+          crumbs={threadId ? [{ label: "Jobs", href: JOBS_HOME }, { label: "Search", href: threadHref(threadId) }] : undefined}
+          title="Applications"
+          description="Every application Plato sends for you, and anything it needs from you to finish one."
+        />
+        {apps && (
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <StatTile value={sent30} label="Sent in 30 days" />
+            <StatTile value={appliedWeek} label="Sent this week" />
+            <StatTile value={wentThrough === null ? "—" : `${wentThrough}%`} label="Went through" />
+            <StatTile value={needs.length} label="Need you" tone={needs.length ? "need" : undefined} />
+          </div>
+        )}
 
       {readiness && !readiness.ready && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-warning-line bg-warning-soft/70 p-4 text-sm">
@@ -234,17 +240,16 @@ function ApplicationsContent() {
 
       {error && <p className="rounded-xl border border-destructive/30 bg-danger-soft p-3 text-sm text-destructive">{error}</p>}
 
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <section className="flex min-w-0 flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-bold tracking-tight">All applications</h2>
-            <Segmented dataAi="applications.tab" value={tab} onChange={(k) => setQuery({ tab: k })} options={TABS.filter((t) => t.key !== "needs").map((t) => ({ value: t.key, label: `${t.label} · ${scoped.filter((a) => inTab(t.key, a)).length}` }))} />
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-text-secondary">
-            {worker?.enabled && (inLine > 0 || (!active && scoped.length > 0)) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <h2 className="text-xl font-bold tracking-tight">All applications</h2>
+          <Segmented dataAi="applications.tab" value={tab} onChange={(k) => setQuery({ tab: k })} options={TABS.filter((t) => t.key !== "needs").map((t) => ({ value: t.key, label: `${t.label} · ${scoped.filter((a) => inTab(t.key, a)).length}` }))} />
+        </div>
+        {(threadId || (worker?.enabled && inLine > 0)) && (
+          <div className="-mt-1 flex flex-wrap items-center gap-2 text-[13px] text-text-secondary">
+            {worker?.enabled && inLine > 0 && (
               <span className="mr-auto flex items-center gap-2">
-                {inLine > 0 ? <Clock className="size-4 text-primary" /> : <CircleCheck className="size-4 text-success" />}
-                {inLine > 0 ? `${inLine} waiting, one at a time · ${roughly(queue?.totalEtaSeconds ?? 0)} left` : "Queue is empty."}
+                <Clock className="size-4 text-primary" />
+                {inLine} waiting, one at a time · {roughly(queue?.totalEtaSeconds ?? 0)} left
               </span>
             )}
             {threadId && (
@@ -253,177 +258,149 @@ function ApplicationsContent() {
               </button>
             )}
           </div>
+        )}
 
-          <div className="rounded-[22px] border bg-card shadow-card">
-            <div className="hidden grid-cols-[minmax(0,1fr)_118px_84px_76px_172px] gap-3 border-b px-5 py-2.5 text-[13px] text-text-tertiary md:grid">
-              <span>Job</span>
-              <span>Status</span>
-              <span>Date</span>
-              <span className="whitespace-nowrap">Resume used</span>
-              <span />
-            </div>
-            {apps === null && !error && (
-              <ul aria-busy="true" className="px-5">
-                {Array.from({ length: 4 }, (_, i) => (
-                  <li key={i} className="flex items-center gap-4 border-b border-divider py-4 last:border-b-0">
-                    <Skeleton className="size-10 rounded-[10px]" />
-                    <div className="flex flex-1 flex-col gap-2">
-                      <Skeleton className="h-4 w-1/3" />
-                      <Skeleton className="h-3 w-1/4" />
-                    </div>
-                    <Skeleton className="h-6 w-20 rounded-full" />
-                  </li>
-                ))}
-              </ul>
-            )}
-            {apps !== null && shown.length === 0 && (
-              <div className="flex flex-col items-center gap-3 py-12 text-center">
-                <span className="flex size-12 items-center justify-center rounded-full bg-primary-soft text-primary">
-                  <Sparkles className="size-5" />
-                </span>
-                <p className="text-sm font-semibold text-foreground">{scoped.length ? "Nothing in this view" : "No applications yet"}</p>
-                <p className="max-w-sm text-sm text-text-secondary">{scoped.length ? "Pick another filter to see the rest." : "Pick jobs from a search and hit “Apply”. They’ll show up here."}</p>
-              </div>
-            )}
-            <ul>
-              {shown.map((a) => {
-                const s = statusView(a)
-                const steps = timeline[a.id] ?? []
-                const last = steps.at(-1)
-                const waitingOnYou = needsAttention(a)
-                const open = expanded === a.id && !waitingOnYou
-                const atsSource = a.job.effective_ats_source ?? a.job.source
-                const supported = !worker || worker.sources.includes(atsSource)
-                const sent = a.evidence?.sent ?? []
-                const hasProof = !!a.evidence?.screenshotKey
-                const hasDetails = !waitingOnYou && (steps.length > 0 || sent.length > 0 || hasProof)
-                return (
-                  <li key={a.id} ref={a.id === focus ? focusRef : undefined} className={cn("border-b border-divider px-5 py-3 transition-colors last:border-b-0", waitingOnYou ? "bg-warning-soft/40" : a.id === focus ? "bg-primary-tint" : "hover:bg-primary-tint/60")}>
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_118px_84px_76px_172px]">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <MonoTile name={a.job.company} size="sm" />
-                        <div className="min-w-0">
-                          <Link href={applicationHref(a.id)} data-ai={`applications.row:${a.id}`} className="block truncate font-semibold text-foreground hover:underline">
-                            {a.job.title}
-                          </Link>
-                          <p className="truncate text-[13px] text-text-secondary">
-                            {a.job.company}
-                            {a.status === "IN_PROGRESS" && last ? ` · ${last.message}` : waitingOnYou || a.status === "EXPIRED" || a.status === "SKIPPED" ? ` · ${applicationReason(a)}` : ""}
-                          </p>
-                          {a.error && a.status !== "SUBMITTED" && !waitingOnYou && <p className="mt-0.5 line-clamp-1 text-xs text-destructive">{a.error}</p>}
-                        </div>
-                      </div>
-                      <span>
-                        <span className={cn("rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold whitespace-nowrap", s.tone.replace("text-warning", "text-warning-ink").replace("text-success", "text-success-ink"))}>{s.label}</span>
-                      </span>
-                      <span className="hidden text-sm whitespace-nowrap text-text-secondary md:block">{dateOf(a)}</span>
-                      <span className="hidden truncate text-sm text-text-secondary md:block" title={a.resume_strategy?.reasons?.join(" ")}>{a.resume_key ? "Tailored" : a.status === "SUBMITTED" ? "Your CV" : "—"}</span>
-                      <span className="col-span-2 flex items-center justify-end gap-1 md:col-span-1">
-                        {waitingOnYou ? (
-                          <button type="button" onClick={() => focusNeed(a.id)} className="text-sm font-semibold text-primary hover:underline xl:inline">
-                            Answer
-                          </button>
-                        ) : (
-                          <>
-                            {canRetry(a) && (
-                              <button type="button" data-ai={`applications.retry:${a.id}`} disabled={retrying === a.id} onClick={() => void retry(a)} title="Put it back in the queue" className="flex h-[30px] items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50">
-                                <RotateCcw className={cn("size-3.5", retrying === a.id && "animate-spin")} />
-                                {retryLabel(a)}
-                              </button>
-                            )}
-                            {a.status === "IN_PROGRESS" && (
-                              <button type="button" onClick={() => void focusApplicationBrowser(a.id).catch(() => setError("The browser window isn't open right now."))} className="flex h-[30px] items-center gap-1.5 rounded-lg border border-primary/30 bg-primary-soft px-2.5 text-xs font-medium whitespace-nowrap text-primary hover:bg-primary/10">
-                                <Radio className="size-3.5" />
-                                Watch live
-                              </button>
-                            )}
-                            {a.status === "SUBMITTED" && (
-                              <Link href={applicationHref(a.id)} className="text-sm font-semibold whitespace-nowrap text-primary hover:underline">
-                                See what was sent
-                              </Link>
-                            )}
-                          </>
-                        )}
-                        <a href={a.job.apply_url ?? a.job.url} target="_blank" rel="noreferrer" aria-label="Open posting" className="flex size-[30px] items-center justify-center rounded-lg text-lavender hover:bg-muted hover:text-text-secondary">
-                          <ExternalLink className="size-4" />
-                        </a>
-                        <button type="button" disabled={!hasDetails} aria-expanded={open} aria-label={open ? "Hide details" : "Show details"} onClick={() => setExpanded(open ? null : a.id)} className="flex size-[30px] items-center justify-center rounded-lg text-lavender hover:bg-muted hover:text-text-secondary disabled:opacity-30">
-                          <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
-                        </button>
-                      </span>
-                    </div>
-
-                    <AnimatePresence initial={false}>
-                      {open && hasDetails && (
-                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-                          <div className="flex flex-col gap-4 pt-4 pl-[46px]">
-                            {a.status !== "SUBMITTED" && a.status !== "EXPIRED" && supported && <StageStepper current={last ? (STEP_STAGE[last.step] ?? STATUS_STAGE[a.status]) : STATUS_STAGE[a.status]} />}
-                            {steps.length > 0 && (
-                              <ol className="flex flex-col gap-1.5 border-l border-divider pl-4">
-                                {steps.map((e, i) => (
-                                  <li key={`${e.at}-${i}`} className="relative text-[13px] text-text-secondary">
-                                    <span className={cn("absolute top-1.5 -left-[21px] size-2 rounded-full", i === steps.length - 1 ? "bg-primary" : "bg-lavender/60")} />
-                                    {e.message}
-                                    <span className="ml-2 text-xs text-text-tertiary">{new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
-                                  </li>
-                                ))}
-                              </ol>
-                            )}
-                            {hasProof && <ApplicationProof applicationId={a.id} kind={a.evidence?.failed ? "failed" : a.evidence?.dryRun ? "dryRun" : "submitted"} fileName={`plato-application-${a.job.company.replace(/\W+/g, "-").toLowerCase()}.png`} />}
-                            {sent.length > 0 && (
-                              <div className="flex flex-col gap-2">
-                                <p className="text-[11px] font-semibold tracking-[0.08em] text-text-tertiary uppercase">{a.evidence?.dryRun ? "What Plato would send" : "What Plato sent"}</p>
-                                <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                                  {sent.map((row, i) => (
-                                    <div key={i} className="min-w-0">
-                                      <dt className="truncate text-xs text-text-tertiary" title={row.label}>
-                                        {row.label}
-                                      </dt>
-                                      <dd className="text-sm whitespace-pre-line text-foreground">{showValue(row.value)}</dd>
-                                    </div>
-                                  ))}
-                                </dl>
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </li>
-                )
-              })}
+        <div className="overflow-hidden rounded-2xl border bg-card">
+          <div className="hidden md:grid-cols-[minmax(0,1fr)_100px_60px_80px_118px] gap-2.5 border-b px-3.5 py-2.5 text-[13px] text-text-secondary md:grid">
+            <span>Job</span>
+            <span>Status</span>
+            <span>Date</span>
+            <span className="whitespace-nowrap">Resume used</span>
+            <span />
+          </div>
+          {apps === null && !error && (
+            <ul aria-busy="true" className="px-4">
+              {Array.from({ length: 4 }, (_, i) => (
+                <li key={i} className="flex items-center gap-4 border-b border-divider py-3 last:border-b-0">
+                  <Skeleton className="size-[34px] rounded-[9px]" />
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-3 w-1/4" />
+                  </div>
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                </li>
+              ))}
             </ul>
-          </div>
-        </section>
-
-        {/* Needs you: Plato Apply paused these until the seeker helps (screen 09). */}
-        <aside className="flex flex-col gap-3 xl:sticky xl:top-24">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight">Needs you</h2>
-            <p className="text-[13px] text-text-secondary">Plato paused these until you help. Every answer is saved for next time.</p>
-          </div>
-          {apps !== null && needs.length === 0 && (
-            <div className="rounded-2xl border bg-card p-4 shadow-card">
-              <PlatoNote variant="inline">Nothing needs you. Plato is applying on its own.</PlatoNote>
+          )}
+          {apps !== null && shown.length === 0 && (
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+              <span className="flex size-12 items-center justify-center rounded-full bg-primary-soft text-primary">
+                <Sparkles className="size-5" />
+              </span>
+              <p className="text-sm font-semibold text-foreground">{scoped.length ? "Nothing in this view" : "No applications yet"}</p>
+              <p className="max-w-sm text-sm text-text-secondary">{scoped.length ? "Pick another filter to see the rest." : "Pick jobs from a search and hit “Apply”. They’ll show up here."}</p>
             </div>
           )}
-          {needs.map((a) => (
-            <div key={a.id} id={`need-${a.id}`} className="flex flex-col gap-3 rounded-2xl border border-warning-line bg-[#fffdf5] p-4 shadow-card">
-              <div className="flex items-center gap-3">
-                <MonoTile name={a.job.company} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <Link href={applicationHref(a.id)} className="block truncate text-sm font-semibold hover:underline">
-                    {a.job.title}
-                  </Link>
-                  <p className="truncate text-xs text-text-secondary">{a.job.company}</p>
-                </div>
-                <StatusPill tone="warning">{needTag(a)}</StatusPill>
-              </div>
-              {isVerifySubmission(a) ? <p className="text-sm font-medium text-warning-ink">{applicationReason(a)}</p> : <ApplicationReview app={a} onDone={() => void load()} />}
-            </div>
-          ))}
-        </aside>
+          <ul>
+            {shown.map((a) => {
+              const s = statusView(a)
+              const last = (timeline[a.id] ?? []).at(-1)
+              const waitingOnYou = needsAttention(a)
+              return (
+                <li key={a.id} ref={a.id === focus ? focusRef : undefined} className={cn("grid items-center gap-x-2.5 gap-y-1 border-b border-divider px-3.5 py-2 transition-colors last:border-b-0 grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_100px_60px_80px_118px]", a.id === focus ? "bg-primary-tint" : "hover:bg-primary-tint/60")}>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <MonoTile name={a.job.company} size="sm" />
+                    <div className="min-w-0">
+                      <Link href={applicationHref(a.id)} data-ai={`applications.row:${a.id}`} title={a.job.title} className="block truncate text-[14.5px] font-semibold text-foreground hover:underline">
+                        {a.job.title}
+                      </Link>
+                      <p className="truncate text-[13px] text-text-secondary" title={a.status === "IN_PROGRESS" && last ? last.message : undefined}>
+                        {a.job.company}
+                      </p>
+                    </div>
+                  </div>
+                  <span>
+                    <span title={waitingOnYou || a.status === "EXPIRED" || a.status === "SKIPPED" || a.status === "FAILED" ? (a.error ?? applicationReason(a)) : undefined} className={cn("rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold whitespace-nowrap", s.tone.replace("text-warning", "text-warning-ink").replace("text-success", "text-success-ink"))}>
+                      {s.label}
+                    </span>
+                  </span>
+                  <span className="hidden text-sm whitespace-nowrap text-text-secondary md:block">{dateOf(a)}</span>
+                  <span className="hidden truncate text-sm text-text-secondary md:block" title={a.resume_strategy?.reasons?.join(" ")}>
+                    {a.resume_key ? "Tailored" : a.status === "SUBMITTED" ? "Original" : "—"}
+                  </span>
+                  <span className="col-span-2 flex items-center justify-end md:col-span-1">
+                    {waitingOnYou ? (
+                      <button type="button" onClick={() => focusNeed(a.id)} className="text-sm font-semibold text-primary hover:underline">
+                        Open
+                      </button>
+                    ) : a.status === "SUBMITTED" ? (
+                      <Link href={applicationHref(a.id)} className="text-sm font-semibold whitespace-nowrap text-primary hover:underline">
+                        See what was sent
+                      </Link>
+                    ) : a.status === "EXPIRED" ? (
+                      <a href={a.job.url} target="_blank" rel="noreferrer" className="text-sm font-semibold whitespace-nowrap text-primary hover:underline">
+                        Job was closed
+                      </a>
+                    ) : a.status === "IN_PROGRESS" ? (
+                      <button type="button" onClick={() => void focusApplicationBrowser(a.id).catch(() => setError("The browser window isn't open right now."))} className="flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap text-primary hover:underline">
+                        <Radio className="size-3.5" />
+                        Watch live
+                      </button>
+                    ) : canRetry(a) ? (
+                      <button type="button" data-ai={`applications.retry:${a.id}`} disabled={retrying === a.id} onClick={() => void retry(a)} title="Put it back in the queue" className="flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap text-primary hover:underline disabled:opacity-50">
+                        <RotateCcw className={cn("size-3.5", retrying === a.id && "animate-spin")} />
+                        {retryLabel(a)}
+                      </button>
+                    ) : null}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      </section>
+
+      {/* Needs you: Plato Apply paused these until the seeker helps (screen 09). */}
+      <aside className="flex flex-col gap-3 xl:sticky xl:top-24">
+        <p className="flex flex-wrap items-baseline gap-x-2 pt-1">
+          <b className="text-xl tracking-tight">Needs you</b>
+          <span className="text-[13px] text-text-secondary">Plato Apply paused these until you help</span>
+        </p>
+        {apps !== null && needs.length === 0 && (
+          <div className="rounded-2xl border bg-card p-4">
+            <PlatoNote variant="inline">Nothing needs you. Plato is applying on its own.</PlatoNote>
+          </div>
+        )}
+        {needs.map((a) => (
+          <NeedCard key={a.id} app={a} tag={needTag(a)} onDone={() => void load()} />
+        ))}
+      </aside>
+    </div>
+  )
+}
+
+// One paused application, as in the owner's card: what it is, the one thing needed,
+// and the way to give it. The full answer form opens in place.
+function NeedCard({ app: a, tag, onDone }: { app: JobApplication; tag: string; onDone: () => void }) {
+  const [open, setOpen] = useState(false)
+  const verify = isVerifySubmission(a) || a.status === "NEEDS_USER_VERIFICATION"
+  return (
+    <div id={`need-${a.id}`} className="flex flex-col gap-2.5 rounded-2xl border border-warning-line bg-[#fffdf5] p-3.5">
+      <div className="flex items-center gap-3">
+        <MonoTile name={a.job.company} size="sm" />
+        <div className="min-w-0 flex-1">
+          <Link href={applicationHref(a.id)} className="block truncate text-[15px] font-semibold hover:underline">
+            {a.job.title}
+          </Link>
+          <p className="truncate text-xs text-text-secondary">{a.job.company}</p>
+        </div>
+        <StatusPill tone="warning">{tag}</StatusPill>
       </div>
+      <p className="text-[14.5px] leading-snug font-semibold">{needLine(a)}</p>
+      {verify ? (
+        <>
+          <a href={a.job.apply_url ?? a.job.url} target="_blank" rel="noreferrer" className="flex h-10 w-fit items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+            Open in Chrome
+          </a>
+          <p className="text-xs text-text-secondary">Everything else is already filled in.</p>
+        </>
+      ) : open ? (
+        <ApplicationReview app={a} onDone={onDone} />
+      ) : (
+        <button type="button" onClick={() => setOpen(true)} className="flex h-10 w-fit items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+          Answer
+        </button>
+      )}
     </div>
   )
 }

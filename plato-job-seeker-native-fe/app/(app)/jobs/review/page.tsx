@@ -105,7 +105,7 @@ function ReviewContent() {
           </Link>
           <h1 className="text-[28px] leading-tight font-extrabold tracking-tight">Review your tailored resumes</h1>
           <p className="mt-1.5 text-[15px] text-text-secondary">
-            Plato made one resume per job. You only see what changed from your profile.{" "}
+            Plato made one resume per job. You only see what changed from your master resume.{" "}
             <TokenCost action="resume" suffix=" tokens per resume" className="text-text-tertiary" />
           </p>
         </div>
@@ -131,8 +131,8 @@ function ReviewContent() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <ul className="flex flex-col gap-1 rounded-[22px] border bg-card p-2">
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
+        <ul className="flex flex-col gap-1 rounded-2xl border bg-card p-2">
           {rows.map((x, i) => {
             const j = label(x)
             return (
@@ -150,7 +150,7 @@ function ReviewContent() {
           })}
         </ul>
 
-        <section className="flex min-w-0 flex-col gap-4 rounded-[22px] border bg-card p-5">
+        <section className="flex min-w-0 flex-col gap-4 rounded-2xl border bg-card p-5">
           {row && (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">

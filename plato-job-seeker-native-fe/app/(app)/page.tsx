@@ -104,32 +104,24 @@ export default function Home() {
   }
 
   const needs = apps?.filter(needsAttention) ?? []
-  const working = apps?.find((a) => a.status === "IN_PROGRESS" || a.status === "EXTENSION_ACTIVE")
   const sentWeek = apps?.filter((a) => a.status === "SUBMITTED" && within(a.submitted_at ?? a.updated_at, 7)).length ?? 0
   const sent = apps?.filter((a) => a.status === "SUBMITTED").length ?? 0
   const recent = [...(apps ?? [])].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)).slice(0, 3)
   // The one line under the greeting: what changed and what Plato is doing.
-  const summary = !stats
-    ? "Here is where your job hunt stands."
-    : [
-        sentWeek ? `Plato sent ${sentWeek} application${sentWeek === 1 ? "" : "s"} this week.` : null,
-        working ? `It's applying to ${working.job.company} right now.` : stats.runs.running ? "It's searching for jobs right now." : null,
-        !sentWeek && !working ? (stats.shortlisted ? `${stats.shortlisted} jobs are ready for you, ${stats.quality.excellent} of them excellent matches.` : "Start a search and Plato will rank every posting against your profile.") : null,
-      ]
-        .filter(Boolean)
-        .join(" ")
+  // The owner's line once there is something to show; a first step before that.
+  const summary = !stats || stats.shortlisted || sent ? "While you were away, Plato kept your job hunt moving. Here’s where things stand." : "Start a search and Plato will rank every posting against your profile."
 
   return (
     <div className={PAGE}>
       {error && <p className="rounded-xl border border-destructive/30 bg-danger-soft p-3 text-sm text-destructive">{error}</p>}
 
       {/* Greeting and the numbers that matter this week. */}
-      <section data-tour="page-header" className="flex flex-wrap items-center gap-6 rounded-[22px] border bg-card p-6 shadow-card">
+      <section data-tour="page-header" className="flex flex-wrap items-center gap-6 rounded-2xl border bg-card p-6 shadow-card">
         <div className="min-w-[260px] flex-1">
-          <p className="eyebrow">{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</p>
+          <p className="eyebrow">{new Date().toLocaleDateString("en-GB", { weekday: "long" })}, {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long" })}</p>
           <h1 className="mt-1.5 text-[30px] leading-tight font-extrabold tracking-tight">
             {greeting()}
-            {name && <span className="text-brand-gradient">, {name}</span>}
+            {name && `, ${name}`}
           </h1>
           <p className="mt-1.5 max-w-[60ch] text-[15px] text-text-secondary">{summary}</p>
         </div>
@@ -143,7 +135,7 @@ export default function Home() {
             </Link>
             {/* The owner's third tile is Interviews; Plato doesn't see employer replies yet, so it is what needs you. */}
             <Link href="/applications" data-ai="home.needs-you">
-              <StatTile value={needs.length} label="Need you" tone={needs.length ? "need" : "hi"} className="card-lift" />
+              <StatTile value={needs.length} label="Need you" tone="hi" className="card-lift" />
             </Link>
             <div className="flex items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-card">
               <MatchRing value={(Math.min(sentWeek, WEEK_GOAL) / WEEK_GOAL) * 100} size={46} label="" />
@@ -180,12 +172,12 @@ export default function Home() {
         {top === null && (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-60 rounded-[22px]" />
+              <Skeleton key={i} className="h-60 rounded-2xl" />
             ))}
           </div>
         )}
         {top?.length === 0 && (
-          <div className="flex flex-col items-start gap-3 rounded-[22px] border bg-card p-6 shadow-card sm:flex-row sm:items-center">
+          <div className="flex flex-col items-start gap-3 rounded-2xl border bg-card p-6 shadow-card sm:flex-row sm:items-center">
             <PlatoNote variant="headline" className="flex-1">
               No matches yet. Tell Plato what you are after and it searches every board for you.
             </PlatoNote>
@@ -198,7 +190,7 @@ export default function Home() {
         {!!top?.length && (
           <motion.div variants={staggerContainer} initial="hidden" animate="show" className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {top.slice(0, 3).map((m) => (
-              <motion.article key={m.id} variants={fadeUpItem} className="card-lift flex flex-col gap-3 rounded-[22px] border bg-card p-5 shadow-card">
+              <motion.article key={m.id} variants={fadeUpItem} className="card-lift flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-card">
                 <div className="flex items-center justify-between">
                   <MonoTile name={m.job.company} />
                   <MatchRing value={m.match_percent} />
@@ -216,10 +208,10 @@ export default function Home() {
                 </div>
                 <PlatoNote variant="inline">{reason(m)}</PlatoNote>
                 <div className="mt-auto flex gap-2 pt-1">
-                  <Button data-ai={`home.apply:${m.job.id}`} className="flex-1 rounded-xl" onClick={() => setApply(m.job.id)}>
+                  <Button data-ai={`home.apply:${m.job.id}`} className="h-11 flex-1 rounded-lg text-[15px] font-semibold" onClick={() => setApply(m.job.id)}>
                     Apply
                   </Button>
-                  <Button variant="outline" size="icon" aria-label={m.saved ? "Remove from saved" : "Save"} aria-pressed={m.saved} onClick={() => toggleSave(m)} className={cn("rounded-xl", m.saved && "border-primary-line text-primary")}>
+                  <Button variant="outline" size="icon" aria-label={m.saved ? "Remove from saved" : "Save"} aria-pressed={m.saved} onClick={() => toggleSave(m)} className={cn("size-11 rounded-lg", m.saved && "border-primary-line text-primary")}>
                     <Bookmark className={cn("size-4", m.saved && "fill-current")} />
                   </Button>
                 </div>
@@ -231,7 +223,7 @@ export default function Home() {
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Applications: the funnel and the latest moves. */}
-        <div data-tour="home-recent" className="flex flex-col gap-3 rounded-[22px] border bg-card p-5 shadow-card">
+        <div data-tour="home-recent" className="flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-card">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold tracking-tight">Your applications</h2>
             <Link href="/applications" className="text-sm font-semibold text-primary hover:underline">
@@ -247,10 +239,10 @@ export default function Home() {
               </div>
               <p className="flex flex-wrap gap-x-5 text-sm">
                 <span>
-                  <b>{apps.length}</b> total
+                  <b>{sent}</b> sent
                 </span>
                 <span>
-                  <b>{sent}</b> applied
+                  <b>{apps.filter((a) => ["QUEUED", "IN_PROGRESS", "EXTENSION_ACTIVE"].includes(a.status)).length}</b> in progress
                 </span>
                 <span>
                   <b>{needs.length}</b> need you
@@ -277,7 +269,7 @@ export default function Home() {
         </div>
 
         {/* Companies you follow: the latest alert digest. */}
-        <div className="flex flex-col gap-3 rounded-[22px] border bg-card p-5 shadow-card">
+        <div className="flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-card">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold tracking-tight">Companies you follow are hiring</h2>
             <Link href="/following" className="text-sm font-semibold text-primary hover:underline">

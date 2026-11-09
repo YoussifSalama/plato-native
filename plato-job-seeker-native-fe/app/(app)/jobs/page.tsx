@@ -50,6 +50,7 @@ function JobsContent() {
   const [stats, setStats] = useState<DiscoveryStats | null>(null)
   const [following, setFollowing] = useState<string[]>([])
   const [followingNew, setFollowingNew] = useState(0)
+  const [followedRoles, setFollowedRoles] = useState(0)
   const [country, setCountry] = useState<string | null>(null)
   const [tab, setTab] = useState<MatchTab>("discover")
   const [filters, setFilters] = useState<Filters>({ local: true, remote: false, senior: false, posted: 0, salary: false })
@@ -70,7 +71,10 @@ function JobsContent() {
       .then(setStats)
       .catch(() => setStats(null))
     getInsights()
-      .then((i) => setFollowing(i.alerts.filter((a) => a.kind === "COMPANY" && a.company).map((a) => a.company as string)))
+      .then((i) => {
+        setFollowing(i.alerts.filter((a) => a.kind === "COMPANY" && a.company).map((a) => a.company as string))
+        setFollowedRoles(i.alerts.filter((a) => a.kind === "FIELD").length)
+      })
       .catch(() => setFollowing([]))
     getDigests(1)
       .then((d) => setFollowingNew(d[0]?.jobs.filter((j) => !j.closed).length ?? 0))
@@ -183,10 +187,11 @@ function JobsContent() {
             {followingNew > 0 && <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-bold text-white">{followingNew} new</span>}
           </span>
           {following.length ? (
-            <span className="flex gap-1">
+            <span className="flex items-center gap-1">
               {following.slice(0, 5).map((c) => (
                 <MonoTile key={c} name={c} size="sm" className="size-7 rounded-md text-[9px]" />
               ))}
+              {followedRoles > 0 && <span className="ml-1.5 text-[13px] text-text-secondary">+{followedRoles} role{followedRoles === 1 ? "" : "s"}</span>}
             </span>
           ) : (
             <span className="text-xs text-text-secondary">Follow companies to hear when they hire.</span>
@@ -290,7 +295,7 @@ function JobsContent() {
           </div>
         )}
         {items?.length === 0 && (
-          <div className="flex flex-col items-start gap-3 rounded-[22px] border bg-card p-6 sm:flex-row sm:items-center">
+          <div className="flex flex-col items-start gap-3 rounded-2xl border bg-card p-6 sm:flex-row sm:items-center">
             <PlatoNote variant="headline" className="flex-1">
               {tab === "saved" ? "Nothing saved yet. Bookmark a job to keep it here." : tab === "applied" ? "No applications yet. Select jobs and Plato applies for you." : tab === "hidden" ? "Nothing hidden." : "No matches here yet. Start a search and Plato ranks every posting against your profile."}
             </PlatoNote>
@@ -310,7 +315,7 @@ function JobsContent() {
               const canApply = open(m)
               const elig = m.job.eligibility
               return (
-                <motion.li key={m.id} variants={fadeUpItem} className="flex flex-wrap items-center gap-3 rounded-2xl border bg-card px-4 py-3.5 transition-colors hover:border-primary-line sm:flex-nowrap">
+                <motion.li key={m.id} variants={fadeUpItem} className="group flex flex-wrap items-center gap-3 rounded-2xl border bg-card px-4 py-3.5 transition-colors hover:border-primary-line sm:flex-nowrap">
                   <input type="checkbox" aria-label={`Select ${m.job.title}`} disabled={!canApply} checked={selected.has(m.job.id)} onChange={() => toggleSel(m.job.id)} className="size-5 shrink-0 accent-primary disabled:opacity-30" />
                   <MonoTile name={m.job.company} />
                   <div className="min-w-0 flex-1 basis-[220px]">
@@ -327,10 +332,10 @@ function JobsContent() {
                   </div>
                   <MatchPill value={m.match_percent} />
                   <span className="flex items-center gap-1">
-                    <button type="button" onClick={() => toggleSave(m)} aria-pressed={m.saved} aria-label={m.saved ? "Unsave job" : "Save job"} className={cn("flex size-9 items-center justify-center rounded-full transition-colors hover:bg-muted", m.saved ? "text-primary" : "text-lavender hover:text-text-secondary")}>
+                    <button type="button" onClick={() => toggleSave(m)} aria-pressed={m.saved} aria-label={m.saved ? "Unsave job" : "Save job"} className={cn("flex size-9 items-center justify-center rounded-full transition-[colors,opacity] hover:bg-muted focus-visible:opacity-100", m.saved ? "text-primary" : "text-lavender opacity-0 group-hover:opacity-100 hover:text-text-secondary")}>
                       <Bookmark className={cn("size-4", m.saved && "fill-current")} />
                     </button>
-                    <button type="button" onClick={() => toggleHide(m)} aria-label={m.hidden ? "Show again" : "Not interested"} title={m.hidden ? "Show again" : "Not interested"} className="flex size-9 items-center justify-center rounded-full text-lavender transition-colors hover:bg-muted hover:text-text-secondary">
+                    <button type="button" onClick={() => toggleHide(m)} aria-label={m.hidden ? "Show again" : "Not interested"} title={m.hidden ? "Show again" : "Not interested"} className="flex size-9 items-center justify-center rounded-full text-lavender opacity-0 transition-[colors,opacity] group-hover:opacity-100 hover:bg-muted hover:text-text-secondary focus-visible:opacity-100">
                       <EyeOff className="size-4" />
                     </button>
                     {app && !canApply ? (
@@ -338,7 +343,7 @@ function JobsContent() {
                         {app.label}
                       </span>
                     ) : (
-                      <Button data-ai={`jobs.apply:${m.job.id}`} onClick={() => setApply([m.job.id])} className="ml-1 rounded-xl px-5">
+                      <Button data-ai={`jobs.apply:${m.job.id}`} onClick={() => setApply([m.job.id])} className="ml-1 h-10 rounded-lg px-5 font-semibold">
                         Apply
                       </Button>
                     )}

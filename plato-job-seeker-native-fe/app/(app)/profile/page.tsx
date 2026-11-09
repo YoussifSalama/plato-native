@@ -85,7 +85,7 @@ function ProfileContent() {
   return (
     <div className={PAGE}>
       {/* Who you are to Plato, and how ready it is to apply for you. */}
-      <section data-tour="page-header" className="flex flex-wrap items-center gap-5 rounded-[22px] border bg-card p-6 shadow-card">
+      <section data-tour="page-header" className="flex flex-wrap items-center gap-5 rounded-2xl border bg-card p-6 shadow-card">
         <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-foreground text-2xl font-bold text-white">{user ? initials(user.full_name) : ""}</span>
         <div className="min-w-[220px] flex-1">
           <h1 className="text-[26px] leading-tight font-extrabold tracking-tight">{user ? titleCase(user.full_name) : <Skeleton className="h-7 w-48" />}</h1>
@@ -178,7 +178,7 @@ function ProfileContent() {
           {tab === "documents" && <DocumentsTab linked={linked} />}
         </section>
 
-        <aside className="flex flex-col gap-3 rounded-[22px] border border-primary-line bg-primary-tint/80 p-4">
+        <aside className="flex flex-col gap-3 rounded-2xl border border-primary-line bg-primary-tint/80 p-4">
           <PlatoNote variant="headline">
             <span className="block text-xs font-bold tracking-[0.04em] text-primary uppercase">Plato suggests</span>
             <b className="text-base text-foreground">
@@ -200,7 +200,7 @@ function ProfileContent() {
 
 function Card({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-3 rounded-[22px] border bg-card p-5 shadow-card">
+    <section className="flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-card">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-xl font-bold tracking-tight">{title}</h2>
         {action && <span className="rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold hover:border-primary-line">{action}</span>}
@@ -348,7 +348,7 @@ function DocumentsTab({ linked }: { linked: boolean | null }) {
           ))}
         </ul>
       </Card>
-      <section className="flex flex-wrap items-center gap-3 rounded-[22px] border bg-card p-5 shadow-card">
+      <section className="flex flex-wrap items-center gap-3 rounded-2xl border bg-card p-5 shadow-card">
         <span className="flex size-10 items-center justify-center rounded-[10px] bg-primary-soft text-primary">
           <Puzzle className="size-5" />
         </span>

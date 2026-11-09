@@ -73,10 +73,10 @@ function ConnectStep({ onBack, onDone }: { onBack: () => void; onDone: () => voi
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8 pt-6">
       <div>
         <h1 className="text-[34px] leading-tight font-extrabold tracking-tight sm:text-[40px]">Connect Plato Apply</h1>
-        <p className="mt-3 text-[16.5px] leading-relaxed text-text-secondary">Plato applies to jobs through its free Chrome extension. Connect it once and you’re done. You always press Submit yourself.</p>
+        <p className="mt-3 text-[16.5px] leading-relaxed text-text-secondary">Plato applies to jobs through its free Chrome extension. Connect it once and you’re done.</p>
       </div>
 
-      <ol className="flex flex-col divide-y divide-divider rounded-[22px] border bg-card px-6 shadow-card">
+      <ol className="flex flex-col divide-y divide-divider rounded-2xl border bg-card px-6 shadow-card">
         <li className="flex flex-wrap items-center gap-4 py-5">
           <StepDot n={1} done={linked} />
           <div className="min-w-0 flex-1">

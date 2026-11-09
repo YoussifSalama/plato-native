@@ -32,7 +32,9 @@ export const PAGES: Record<string, PageEntry> = {
       nav('home', '/'),
       nav('jobs', '/jobs'),
       nav('applications', '/applications'),
+      nav('following', '/following'),
       nav('career', '/career'),
+      nav('extension', '/extension'),
       nav('messages', '/messages'),
       nav('notifications', '/notifications'),
       nav('profile', '/profile'),
@@ -53,7 +55,7 @@ export const PAGES: Record<string, PageEntry> = {
   home: {
     path: '/',
     purpose:
-      "Home: the seeker's week at a glance. Greeting with jobs for you, applied, need you and this week's goal; a 'waiting for you' strip with the first application Plato paused on; the top 3 matches as cards with Apply and save; recent applications; and the latest jobs from companies they follow. Questions about how the hunt is going are answered here.",
+      "Home: the seeker's week at a glance. Greeting with new matches, applications sent, interviews (the ones the seeker marked on their applications) and this week's goal; the top 3 matches as cards with Apply and save; their applications (sent / viewed / interview) and latest moves; new roles from companies they follow. Questions about how the hunt is going are answered here.",
     controls: [
       {
         id: 'home.matches',
@@ -210,7 +212,8 @@ export const PAGES: Record<string, PageEntry> = {
   },
   applications: {
     path: '/applications',
-    purpose: 'Jobs the seeker applied to (or queued), with their status.',
+    purpose:
+      "Every application: tiles (sent in 30 days, sent this week, went through, need you), tabs All / In progress / Sent / Didn't go through, a table (job, status, date, resume used) and on the right 'Needs you': what Plato paused on, each with one button that opens the answer. Paths: ?tab=active|applied|problems|needs.",
     controls: [
       {
         id: 'applications.tab.<tab>',
@@ -362,7 +365,7 @@ export const PAGES: Record<string, PageEntry> = {
   profile: {
     path: '/profile',
     purpose:
-      'What the seeker can add that resumes use. Three forms, filled with type_text then submitted. Project: p-name, p-desc, p-tech, p-result, p-url. Result (achievement): a-text, a-metric, a-company. Skill with proof: s-skill, s-proof, s-url (plus a level button).',
+      "The seeker's profile, in tabs (?tab=...): resumes (default: the master resume with its score, and the versions Plato tailored), experience (from the CV, plus three forms resumes use, filled with type_text then submitted. Project: p-name, p-desc, p-tech, p-result, p-url. Result (achievement): a-text, a-metric, a-company. Skill with proof: s-skill, s-proof, s-url, plus a level button), looking (what they want), answers (application answers), documents (files and the browser extension).",
     controls: [
       {
         id: 'profile.add-project',
@@ -380,6 +383,36 @@ export const PAGES: Record<string, PageEntry> = {
         does: 'Saves the skill-with-proof form',
       },
     ],
+  },
+  following: {
+    path: '/following',
+    purpose:
+      'Companies and roles the seeker follows: company cards (roles for you, open roles, See roles opens /jobs?company=<name>, a bell to pause, Unfollow), new roles from the latest digest with View and Apply, roles they follow with on/off switches, Alert settings (how often, email), and companies to follow with a search box.',
+    controls: [
+      {
+        id: 'following.see-roles',
+        label: 'See roles (on a company card)',
+        does: "Opens /jobs?company=<name>: that company's roles",
+      },
+    ],
+  },
+  extension: {
+    path: '/extension',
+    purpose:
+      'The Plato Apply Chrome extension: make a one-time code to link a browser, the browsers already linked, and recent runs.',
+    controls: [
+      {
+        id: 'extension.generate',
+        label: 'Generate code',
+        does: 'Makes a one-time code to paste into the extension',
+      },
+    ],
+  },
+  tokens: {
+    path: '/tokens',
+    purpose:
+      "Plan & credits: the seeker's Plato tokens balance, plan, what actions cost, and upgrades.",
+    controls: [],
   },
   messages: {
     path: '/messages',

@@ -10,6 +10,8 @@ import { StatusPill } from "@/components/plato-ui"
 import { BAND_LABEL, getResumeScore, listCareerResumes, type ResumeScore, listCareerThreads, type CareerThreadSummary } from "@/lib/career/api"
 import { listInterviews, type InterviewSummary } from "@/lib/interviews/api"
 import { timeAgo } from "@/lib/jobs/links"
+import { getMatches, type JobMatch } from "@/lib/jobs/api"
+import { getProfile } from "@/lib/documents/api"
 import { getPreferences } from "@/lib/preferences/api"
 import { getSkillGap, type SkillGap } from "@/lib/skills/api"
 import { CareerChat } from "./career-chat"
@@ -21,6 +23,7 @@ type Practice = { cat: Exclude<Cat, "All">; title: string; body: string; meta: s
 const CATALOG: Practice[] = [
   { cat: "Interviews", title: "Behavioral interview (STAR)", body: "Common “tell me about a time” questions, scored", meta: "20 min · All levels", icon: Mic, prompt: "Give me a behavioral mock interview with STAR questions and score each answer" },
   { cat: "Interviews", title: "Technical interview for my role", body: "Questions on the tools and projects in your CV", meta: "25 min · Your level", icon: Mic, prompt: "Give me a technical mock interview for the role I'm targeting" },
+  { cat: "Interviews", title: "Client demo pitch", body: "Pitch a solution to a skeptical client, then get scored", meta: "15 min · Senior", icon: Mic, prompt: "Role-play a skeptical client and let me pitch a solution demo for my target role, then score my pitch" },
   { cat: "Interviews", title: "Case interview: market sizing", body: "Estimate a market out loud; Plato scores your structure", meta: "30 min · Medium", icon: Mic, prompt: "Give me a market sizing case interview and score my structure" },
   { cat: "Interviews", title: "Case interview: profitability", body: "Find why profits fell, with a structure", meta: "30 min · Hard", icon: Mic, prompt: "Give me a profitability case interview" },
   { cat: "Interviews", title: "Voice mock interview", body: "Talk it through out loud, like the real thing", meta: "20 min · All levels", icon: Mic, href: "/career/interviews" },
@@ -34,6 +37,8 @@ const CATALOG: Practice[] = [
   { cat: "Resume", title: "Tailor to a job", body: "Paste a posting, get a resume that matches it", meta: "5 min", icon: LayoutTemplate, prompt: "Tailor my resume to a job. I'll paste the posting." },
 ]
 const PAGE_SIZE = 6
+// "Add a number to more bullets (users, …): 38% have one" → "add a number to more bullets".
+const shortFix = (t: string) => t.split(/[:(]/)[0].replace(/\.$/, "").trim().replace(/^./, (c) => c.toLowerCase())
 const startHref = (p: Practice) => p.href ?? `/career?prompt=${encodeURIComponent(p.prompt ?? p.title)}`
 
 function CareerHome() {
@@ -47,6 +52,9 @@ function CareerHome() {
   const [threads, setThreads] = useState<CareerThreadSummary[] | null>(null)
   // The master resume's score (fixed rules on the server) and what would raise it.
   const [score, setScore] = useState<ResumeScore | null>(null)
+  const [skills, setSkills] = useState<string[]>([])
+  // The best match right now: the mock interview is built from its job post.
+  const [top, setTop] = useState<JobMatch | null>(null)
 
   useEffect(() => {
     getPreferences()
@@ -67,9 +75,21 @@ function CareerHome() {
     getResumeScore()
       .then(setScore)
       .catch(() => setScore(null))
+    getProfile()
+      .then((p) => setSkills(p.skills ?? []))
+      .catch(() => setSkills([]))
+    getMatches({ tab: "discover", sort: "best", take: 1 })
+      .then((r) => setTop(r.items[0] ?? null))
+      .catch(() => setTop(null))
   }, [])
 
-  const list = useMemo(() => CATALOG.filter((p) => (cat === "All" || p.cat === cat) && (!q.trim() || `${p.title} ${p.body}`.toLowerCase().includes(q.trim().toLowerCase()))), [cat, q])
+  // The technical interview is named after their strongest skills, as on the owner's screen.
+  const catalog = useMemo(() => CATALOG.map((p) => (p.title === "Technical interview for my role" && skills.length ? { ...p, title: `Technical interview: ${(skills.filter((x) => x.length <= 12).length >= 2 ? skills.filter((x) => x.length <= 12) : skills).slice(0, 2).join(" & ")}` } : p)), [skills])
+  // Aptitude and English count as started once a career conversation practised them.
+  const practised = (re: RegExp) => !!threads?.some((t) => re.test(t.title ?? ""))
+  const aptitude = practised(/reasoning|aptitude/i)
+  const english = practised(/english/i)
+  const list = useMemo(() => catalog.filter((p) => (cat === "All" || p.cat === cat) && (!q.trim() || `${p.title} ${p.body}`.toLowerCase().includes(q.trim().toLowerCase()))), [catalog, cat, q])
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
   const shown = list.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
   const done = interviews?.filter((i) => i.completedAt).length ?? 0
@@ -108,8 +128,8 @@ function CareerHome() {
                 <b className="line-clamp-2 min-h-[2.6em] text-[15px] leading-snug">{p.title}</b>
                 <span className="line-clamp-1 text-[13px] text-text-secondary">{p.body}</span>
                 <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-                  <span className="truncate text-xs text-text-tertiary">{p.meta}</span>
-                  <Link href={startHref(p)} data-ai={`career.start:${p.title}`} className="shrink-0 rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold hover:border-primary-line">
+                  <span className="truncate text-[12.5px] font-medium text-text-secondary">{p.meta}</span>
+                  <Link href={startHref(p)} data-ai={`career.start:${p.title}`} className="shrink-0 rounded-lg border bg-card px-2.5 py-1.5 text-[13.5px] font-semibold hover:border-primary-line">
                     Start
                   </Link>
                 </div>
@@ -154,7 +174,9 @@ function CareerHome() {
                 <StatusPill tone="neutral">Resume · not built</StatusPill>
               ) : null}
               {interviews !== null && <StatusPill tone={done ? "primary" : "neutral"}>{done ? `Interview practice ${Math.min(done, 3)} of 3` : "Interview practice · not started"}</StatusPill>}
-              {gaps !== null && <StatusPill tone={gaps.length ? "warning" : "success"}>{gaps.length ? `${gaps.length} skill gap${gaps.length === 1 ? "" : "s"}` : "No skill gaps"}</StatusPill>}
+              {threads !== null && <StatusPill tone={aptitude ? "primary" : "neutral"}>{aptitude ? "Aptitude · practised" : "Aptitude · not started"}</StatusPill>}
+              {threads !== null && <StatusPill tone={english ? "primary" : "neutral"}>{english ? "English · practised" : "English · not started"}</StatusPill>}
+              {!!gaps?.length && <StatusPill tone="warning">{`${gaps.length} skill gap${gaps.length === 1 ? "" : "s"}`}</StatusPill>}
             </div>
           </div>
 
@@ -163,7 +185,12 @@ function CareerHome() {
             {gaps?.[0] && (
               <Row icon={Lightbulb} title={`Learn ${gaps[0].skill}`} sub={`${gaps[0].missingIn} of your matches ask for it`} href="/career/skills" primary />
             )}
-            <Row icon={Mic} title={role ? `Mock interview: ${role}` : "Mock interview"} sub="Voice · 20 min · built from your target role" href="/career/interviews" primary={!gaps?.[0]} />
+            {top ? (
+              <Row icon={Mic} title={`Mock interview: ${top.job.company} ${top.job.title}`} sub="Voice · 20 min · built from the job post and your CV" href={`/career?job=${top.job.id}&jt=${encodeURIComponent(top.job.title)}&jc=${encodeURIComponent(top.job.company)}`} primary={!gaps?.[0]} />
+            ) : (
+              <Row icon={Mic} title={role ? `Mock interview: ${role}` : "Mock interview"} sub="Voice · 20 min · built from your target role" href="/career/interviews" primary={!gaps?.[0]} />
+            )}
+            {threads !== null && !aptitude && <Row icon={BarChart3} title="Numerical reasoning" sub="Timed · 18 min · used by many consulting firms" href={`/career?prompt=${encodeURIComponent("Give me a numerical reasoning practice test, one question at a time")}`} />}
             {!resumes?.length && <Row icon={FileText} title="Build my resume" sub="From your profile, ready as a PDF" href={`/career?prompt=${encodeURIComponent("Build my resume")}`} />}
           </div>
 
@@ -180,7 +207,7 @@ function CareerHome() {
                 <Row
                   icon={ClipboardCheck}
                   title={`Resume score · ${score.score}/100`}
-                  sub={score.topFixes.length ? `${score.topFixes.length} quick fix${score.topFixes.length === 1 ? "" : "es"} left: ${score.topFixes[0].replace(/\.$/, "").toLowerCase()}` : `${BAND_LABEL[score.band]}. Nothing quick left to fix.`}
+                  sub={score.topFixes.length ? `${score.topFixes.length} quick fix${score.topFixes.length === 1 ? "" : "es"} left: ${shortFix(score.topFixes[0])}` : `${BAND_LABEL[score.band]}. Nothing quick left to fix.`}
                   href={`/career?prompt=${encodeURIComponent(score.topFixes.length ? `Help me raise my resume score. Start with: ${score.topFixes[0]}` : "Score my resume")}`}
                   action={score.topFixes.length ? "Fix" : "Open"}
                 />

@@ -145,9 +145,9 @@ function Frame({ children }: { children: ReactNode }) {
   const strength = setup ? Math.round((setup.done / setup.total) * 100) : null
 
   return (
-    <div className="theme-app grid min-h-dvh grid-cols-1 text-foreground lg:grid-cols-[248px_1fr]">
+    <div className="theme-app grid min-h-dvh grid-cols-1 text-foreground lg:grid-cols-[216px_1fr]">
       {/* Sidebar (owner screens 05-12): the job hunt, the account, profile strength. */}
-      <aside data-tour="sidebar" className="hidden border-r bg-[#f9fbfd] px-3.5 py-6 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:gap-7">
+      <aside data-tour="sidebar" className="hidden border-r bg-[#f9fbfd] px-3 py-6 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:gap-7">
         <Link href="/" data-ai="nav.logo" className="flex items-center gap-3 px-2" title="Plato">
           <PlatoMark size={36} />
           <span className="text-[17px] font-extrabold tracking-[0.22em] text-primary">PLATO</span>

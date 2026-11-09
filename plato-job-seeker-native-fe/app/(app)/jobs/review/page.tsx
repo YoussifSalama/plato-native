@@ -11,7 +11,7 @@ import { ExtensionApplyModal } from "@/components/extension-apply-modal"
 import { MonoTile, PlatoNote, StatusPill } from "@/components/plato-ui"
 import { TokenCost } from "@/components/plato-tokens"
 import { openPlato } from "@/components/app-shell"
-import { approveResume, getCareerResume, resumeForJob, type JobResume, type ResumeChange } from "@/lib/career/api"
+import { approveResume, BAND_LABEL, getCareerResume, resumeForJob, type JobResume, type ResumeChange } from "@/lib/career/api"
 
 // Review your tailored resumes (owner screen 07). Plato writes one resume per job, one at a
 // time, and shows only what changed from the seeker's own profile. Nothing is sent until
@@ -53,7 +53,10 @@ function ReviewContent() {
   const r = row?.resume
   const label = (x: Row) => (x.resume ? x.resume.job : null)
   const approved = (x: Row) => x.useOriginal || (x.resume?.status === "built" && x.resume.approved)
-  const ready = rows.filter((x) => x.resume?.status === "built" || x.useOriginal)
+  // A resume that fits the job poorly (match below 65) is never sent by "Approve all":
+  // the seeker approves it on its own, or uses their original.
+  const held = (x: Row) => !x.useOriginal && x.resume?.status === "built" && !x.resume.approved && x.resume.score?.decision === "hold"
+  const ready = rows.filter((x) => (x.resume?.status === "built" || x.useOriginal) && !held(x))
   const okCount = rows.filter(approved).length
   const writing = rows.filter((x) => x.state === "waiting" || x.state === "writing").length
 
@@ -159,6 +162,11 @@ function ReviewContent() {
                   <h2 className="text-xl font-bold tracking-tight">{r?.job.title ?? `Job ${pick + 1}`}</h2>
                   <p className="text-sm text-text-secondary">
                     {r?.job.company ?? "…"} · resume {pick + 1} of {rows.length}
+                    {r?.status === "built" && r.score && (
+                      <span title={r.score.categories.map((c) => `${c.label} ${Math.round(c.score)}/${c.max}`).join(" · ")} className={cn("ml-2 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums", r.score.decision === "send" ? "bg-success-soft text-success-ink" : r.score.decision === "confirm" ? "bg-warning-soft text-warning-ink" : "bg-danger-soft text-destructive")}>
+                        Match {r.score.score}/100 · {BAND_LABEL[r.score.band]}
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -209,6 +217,12 @@ function ReviewContent() {
             </div>
           )}
 
+          {r?.status === "built" && r.score && r.score.decision !== "send" && !r.approved && (
+            <PlatoNote variant="inline" className="rounded-xl border border-warning-line bg-warning-soft/60 p-3 text-foreground">
+              {r.score.decision === "hold" ? `A weak fit for this job (${r.score.score}/100), so “Approve all” leaves it out. Approve it yourself to send it anyway.` : `A fair fit (${r.score.score}/100). Check it before you approve.`}
+              {r.score.topFixes[0] && ` ${r.score.topFixes[0]}`}
+            </PlatoNote>
+          )}
           {r?.status === "built" && (
             <>
               <p className="eyebrow">What Plato changed · {r.changes.length}</p>

@@ -7,8 +7,7 @@ import { BarChart3, Check, ClipboardCheck, ChevronLeft, ChevronRight, FileText, 
 import { cn } from "cn"
 import { PAGE, PageHeader } from "@/components/page-header"
 import { StatusPill } from "@/components/plato-ui"
-import { getProfile } from "@/lib/documents/api"
-import { listCareerResumes, listCareerThreads, type CareerThreadSummary } from "@/lib/career/api"
+import { BAND_LABEL, getResumeScore, listCareerResumes, type ResumeScore, listCareerThreads, type CareerThreadSummary } from "@/lib/career/api"
 import { listInterviews, type InterviewSummary } from "@/lib/interviews/api"
 import { timeAgo } from "@/lib/jobs/links"
 import { getPreferences } from "@/lib/preferences/api"
@@ -46,8 +45,8 @@ function CareerHome() {
   const [interviews, setInterviews] = useState<InterviewSummary[] | null>(null)
   const [gaps, setGaps] = useState<SkillGap[] | null>(null)
   const [threads, setThreads] = useState<CareerThreadSummary[] | null>(null)
-  // Profile sections the last review flagged: each is a quick fix.
-  const [fixes, setFixes] = useState<number | null>(null)
+  // The master resume's score (fixed rules on the server) and what would raise it.
+  const [score, setScore] = useState<ResumeScore | null>(null)
 
   useEffect(() => {
     getPreferences()
@@ -65,12 +64,9 @@ function CareerHome() {
     listCareerThreads()
       .then(setThreads)
       .catch(() => setThreads([]))
-    getProfile()
-      .then((p) => {
-        const e = p.profile_evaluation
-        setFixes(e ? (["experience", "education", "skills", "certifications", "languages", "location"] as const).filter((k) => e[k] === "NEEDS_ATTENTION").length : null)
-      })
-      .catch(() => setFixes(null))
+    getResumeScore()
+      .then(setScore)
+      .catch(() => setScore(null))
   }, [])
 
   const list = useMemo(() => CATALOG.filter((p) => (cat === "All" || p.cat === cat) && (!q.trim() || `${p.title} ${p.body}`.toLowerCase().includes(q.trim().toLowerCase()))), [cat, q])
@@ -144,15 +140,19 @@ function CareerHome() {
             <p className="eyebrow">Your readiness for</p>
             <b className="-mt-1.5 text-base">{role ? `${role} roles` : "the roles you want"}</b>
             <div className="flex flex-wrap gap-2">
-              {resumes === null ? null : resumes.some((r) => r.approved) ? (
+              {score ? (
+                <StatusPill tone={score.score >= 75 ? "success" : score.score >= 60 ? "warning" : "danger"}>
+                  {score.score >= 75 && <Check className="size-3.5" />}
+                  Resume {score.score}/100
+                </StatusPill>
+              ) : resumes?.some((r) => r.approved) ? (
                 <StatusPill tone="success">
                   <Check className="size-3.5" />
                   Resume ready
                 </StatusPill>
-              ) : (
+              ) : resumes !== null ? (
                 <StatusPill tone="neutral">Resume · not built</StatusPill>
-              )}
-              {fixes !== null && <StatusPill tone={fixes ? "warning" : "success"}>{fixes ? `Profile · ${fixes} to fix` : "Profile looks good"}</StatusPill>}
+              ) : null}
               {interviews !== null && <StatusPill tone={done ? "primary" : "neutral"}>{done ? `Interview practice ${Math.min(done, 3)} of 3` : "Interview practice · not started"}</StatusPill>}
               {gaps !== null && <StatusPill tone={gaps.length ? "warning" : "success"}>{gaps.length ? `${gaps.length} skill gap${gaps.length === 1 ? "" : "s"}` : "No skill gaps"}</StatusPill>}
             </div>
@@ -167,7 +167,7 @@ function CareerHome() {
             {!resumes?.length && <Row icon={FileText} title="Build my resume" sub="From your profile, ready as a PDF" href={`/career?prompt=${encodeURIComponent("Build my resume")}`} />}
           </div>
 
-          {(open.length > 0 || !!threads?.length || !!fixes) && (
+          {(open.length > 0 || !!threads?.length || !!score) && (
             <div className="flex flex-col gap-2.5">
               <h2 className="text-xl font-bold tracking-tight">Continue where you left off</h2>
               {open.slice(0, 1).map((i) => (
@@ -176,7 +176,15 @@ function CareerHome() {
               {threads?.slice(0, 2).map((t) => (
                 <Row key={t.id} icon={LayoutTemplate} title={t.title ?? "Career conversation"} sub={`Last active ${timeAgo(t.updated_at)}`} href={`/career?thread=${t.id}`} action="Resume" />
               ))}
-              {!!fixes && <Row icon={ClipboardCheck} title="Profile check" sub={`${fixes} quick fix${fixes === 1 ? "" : "es"} left before Plato applies`} href="/profile" action="Fix" />}
+              {score && (
+                <Row
+                  icon={ClipboardCheck}
+                  title={`Resume score · ${score.score}/100`}
+                  sub={score.topFixes.length ? `${score.topFixes.length} quick fix${score.topFixes.length === 1 ? "" : "es"} left: ${score.topFixes[0].replace(/\.$/, "").toLowerCase()}` : `${BAND_LABEL[score.band]}. Nothing quick left to fix.`}
+                  href={`/career?prompt=${encodeURIComponent(score.topFixes.length ? `Help me raise my resume score. Start with: ${score.topFixes[0]}` : "Score my resume")}`}
+                  action={score.topFixes.length ? "Fix" : "Open"}
+                />
+              )}
             </div>
           )}
         </aside>

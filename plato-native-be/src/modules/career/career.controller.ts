@@ -158,6 +158,12 @@ export class CareerController {
     return this.voice.saveTranscript(req.userId, id, parsed.data);
   }
 
+  // The master resume's score (0-100) with the fixes worth the most points. Free.
+  @Get('resume-score')
+  resumeScore(@Req() req: AuthenticatedRequest) {
+    return this.resumes.masterScore(req.userId);
+  }
+
   @Get('resumes')
   listResumes(@Req() req: AuthenticatedRequest) {
     return this.resumes.list(req.userId);

@@ -11,6 +11,12 @@ import { ResumeEngine } from '../resume/resume-engine.service';
 import { applyEdits, DocEdits } from '../resume/resume-edit';
 import { ResumeDoc, ResumeStrategy } from '../resume/resume.types';
 import { ResumeProfileService } from '../resume/resume-profile.service';
+import {
+  scoreMatch,
+  scoreProfile,
+  sendDecision,
+  THRESHOLDS,
+} from '../resume/resume-score';
 import { resolveCountry } from '../discovery/countries';
 import type { AtsReport } from '../resume/resume-ats';
 import { resumeChanges } from './resume-changes';
@@ -288,6 +294,38 @@ export class CareerResumesService {
       approved: row.approved,
       version: row.version,
       changes: doc ? resumeChanges(profile, doc, ats) : [],
+      // How well this resume fits the job, and whether Plato may send it unasked.
+      score: doc && ats ? this.matchFor(profile, doc, ats, job.title) : null,
+    };
+  }
+
+  private matchFor(
+    profile: Awaited<ReturnType<ResumeProfileService['load']>>,
+    doc: ResumeDoc,
+    ats: AtsReport,
+    jobTitle: string,
+  ) {
+    const s = scoreMatch(
+      doc,
+      ats,
+      { title: jobTitle },
+      scoreProfile(profile).score,
+    );
+    return { ...s, decision: sendDecision(s.score) };
+  }
+
+  /** The master resume's quality score (no job), from the saved profile. */
+  async masterScore(userId: string) {
+    const seeker = await this.prisma.jobSeeker.findFirst({
+      where: { user_id: userId },
+      select: { id: true },
+    });
+    if (!seeker) throw new NotFoundException('Job seeker profile not found');
+    const s = scoreProfile(await this.profiles.load(seeker.id));
+    return {
+      ...s,
+      warn: s.score < THRESHOLDS.masterWarn,
+      thresholds: THRESHOLDS,
     };
   }
 }

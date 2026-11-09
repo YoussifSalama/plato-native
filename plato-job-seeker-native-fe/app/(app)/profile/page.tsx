@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { MatchRing, PlatoNote, StatusPill } from "@/components/plato-ui"
 import { openPlato, useProfileStrength } from "@/components/app-shell"
 import { getMe, type AuthUser } from "@/lib/auth/api"
-import { getCareerResume, listCareerResumes } from "@/lib/career/api"
+import { getCareerResume, getResumeScore, listCareerResumes, type ResumeScore } from "@/lib/career/api"
 import { getDocumentFile, getProfile, listDocuments } from "@/lib/documents/api"
 import type { JobSeekerDocument, JobSeekerProfile } from "@/lib/documents/schema"
 import { getExtensionProgress } from "@/lib/extension/api"
@@ -216,7 +216,11 @@ function ResumesTab() {
   const [resumes, setResumes] = useState<Resume[] | null>(null)
   const [cv, setCv] = useState<JobSeekerDocument | null | undefined>(undefined)
   const [all, setAll] = useState(false)
+  const [score, setScore] = useState<ResumeScore | null>(null)
   useEffect(() => {
+    getResumeScore()
+      .then(setScore)
+      .catch(() => setScore(null))
     listCareerResumes()
       .then(setResumes)
       .catch(() => setResumes([]))
@@ -242,6 +246,11 @@ function ResumesTab() {
             <b className="block truncate">Master resume{cv.name ? ` · ${cv.name}` : ""}</b>
             <span className="text-xs text-text-secondary">{[cv.updated_at && `Updated ${shortDate(cv.updated_at)}`, "used as the base for every tailored version"].filter(Boolean).join(" · ")}</span>
           </span>
+          {score && (
+            <Link href={`/career?prompt=${encodeURIComponent("Score my resume and help me fix the top issues")}`} title={score.topFixes.join(" ")} className={cn("rounded-full px-2.5 py-1 text-[12.5px] font-bold tabular-nums", score.score >= 75 ? "bg-success-soft text-success-ink" : score.score >= 60 ? "bg-warning-soft text-warning-ink" : "bg-danger-soft text-destructive")}>
+              {score.score}/100
+            </Link>
+          )}
           <StatusPill tone="primary">Master</StatusPill>
           <button type="button" onClick={() => void open(() => getDocumentFile(cv.id))} className="text-sm font-semibold text-primary hover:underline">
             Preview

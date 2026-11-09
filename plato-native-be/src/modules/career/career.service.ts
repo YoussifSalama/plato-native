@@ -9,6 +9,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { profileIssues } from '../resume/resume-checks';
 import { ResumeEngine } from '../resume/resume-engine.service';
 import { ResumeProfileService } from '../resume/resume-profile.service';
+import {
+  scoreMatch,
+  scoreProfile,
+  sendDecision,
+  THRESHOLDS,
+} from '../resume/resume-score';
 import { stageOf } from '../resume/resume-strategy';
 import {
   BuildRequest,
@@ -17,7 +23,14 @@ import {
 } from './career.agent';
 import { saidBySeeker } from './quote';
 import { AttachedDoc, withAttachments } from './attachments';
-import { askWhatFor, intentFor, MessageRef, RefJob, refOf, withReference } from './reference';
+import {
+  askWhatFor,
+  intentFor,
+  MessageRef,
+  RefJob,
+  refOf,
+  withReference,
+} from './reference';
 import { research } from './research.agent';
 import { metered } from '../usage/usage';
 import { buildJobSeekerSnapshot } from '../discovery/job-seeker-snapshot';
@@ -33,6 +46,7 @@ const TOOL_STATUS: Record<string, string> = {
   get_profile: 'Reading your profile',
   research: 'Looking it up on the web',
   build_resume: 'Building your resume',
+  score_resume: 'Scoring your resume',
   save_project: 'Saving that to your profile',
   save_achievement: 'Saving that to your profile',
   confirm_skill: 'Checking and saving that skill',
@@ -182,11 +196,21 @@ export class CareerService {
     const pinned = reference
       ? await this.prisma.jobSeekerJobMatch.findFirst({
           where: { job_seeker_id: seeker.id, job_id: reference.jobId },
-          select: { job: { select: { id: true, title: true, company: true, location: true } } },
+          select: {
+            job: {
+              select: { id: true, title: true, company: true, location: true },
+            },
+          },
         })
       : null;
     const ref: MessageRef | null = pinned
-      ? { jobId: pinned.job.id, searchId: reference?.searchId ?? null, title: pinned.job.title, company: pinned.job.company, location: pinned.job.location }
+      ? {
+          jobId: pinned.job.id,
+          searchId: reference?.searchId ?? null,
+          title: pinned.job.title,
+          company: pinned.job.company,
+          location: pinned.job.location,
+        }
       : null;
     await this.prisma.careerMessage.create({
       data: {
@@ -208,9 +232,20 @@ export class CareerService {
       const q = askWhatFor(content, ref);
       onDelta?.(q.reply);
       const message = await this.prisma.careerMessage.create({
-        data: { thread_id: threadId, role: ChatRole.ASSISTANT, content: q.reply, ui: { type: 'choices', choices: q.choices } as unknown as Prisma.InputJsonValue },
+        data: {
+          thread_id: threadId,
+          role: ChatRole.ASSISTANT,
+          content: q.reply,
+          ui: {
+            type: 'choices',
+            choices: q.choices,
+          } as unknown as Prisma.InputJsonValue,
+        },
       });
-      await this.prisma.careerThread.update({ where: { id: threadId }, data: { updated_at: new Date() } });
+      await this.prisma.careerThread.update({
+        where: { id: threadId },
+        data: { updated_at: new Date() },
+      });
       return { message };
     }
     const history = await this.prisma.careerMessage.findMany({
@@ -236,13 +271,23 @@ export class CareerService {
           ])
         : [],
     );
-    const refIds = [...new Set(history.map((m) => refOf(m.ui)?.jobId).filter((x): x is string => !!x))];
+    const refIds = [
+      ...new Set(
+        history.map((m) => refOf(m.ui)?.jobId).filter((x): x is string => !!x),
+      ),
+    ];
     const refJobs = new Map<string, RefJob>(
       refIds.length
         ? (
             await this.prisma.job.findMany({
               where: { id: { in: refIds } },
-              select: { id: true, title: true, company: true, location: true, description: true },
+              select: {
+                id: true,
+                title: true,
+                company: true,
+                location: true,
+                description: true,
+              },
             })
           ).map((j) => [j.id, j])
         : [],
@@ -289,6 +334,15 @@ export class CareerService {
       },
       {
         tokens: () => this.estimates.summary(seeker.user_id),
+        // The master resume's score: fixed rules, no model, same answer every time.
+        scoreResume: async () => {
+          const s = scoreProfile(await this.profiles.load(seeker.id));
+          return {
+            ...s,
+            warn: s.score < THRESHOLDS.masterWarn,
+            thresholds: THRESHOLDS,
+          };
+        },
         profile: async () => {
           const p = await this.profiles.load(seeker.id);
           return {
@@ -330,9 +384,19 @@ export class CareerService {
         },
         startMockInterview: (mode) => {
           const j = latestRef && refJobs.get(latestRef.jobId);
-          if (!j) return { started: false, error: 'No job is pinned. Ask the seeker to open the job card and press the interview button.' };
+          if (!j)
+            return {
+              started: false,
+              error:
+                'No job is pinned. Ask the seeker to open the job card and press the interview button.',
+            };
           // The UI shows a card that starts the interview the seeker chose (text page or live voice call).
-          card = { type: 'interview', mode, job: { id: j.id, title: j.title, company: j.company }, description: (j.description ?? '').slice(0, 6000) } as unknown as ResumeCard;
+          card = {
+            type: 'interview',
+            mode,
+            job: { id: j.id, title: j.title, company: j.company },
+            description: (j.description ?? '').slice(0, 6000),
+          } as unknown as ResumeCard;
           return { started: true, mode, job: `${j.title} at ${j.company}` };
         },
         offerChoices: (options) => {
@@ -451,6 +515,17 @@ export class CareerService {
               },
       };
 
+    // Scores by fixed rules: the resume's own quality, and its fit to the job if one was given.
+    const quality = scoreProfile(await this.profiles.load(jobSeekerId));
+    const match =
+      result.ats && req.targetRole
+        ? scoreMatch(
+            result.doc,
+            result.ats,
+            { title: req.targetRole },
+            quality.score,
+          )
+        : null;
     const key = `career-resumes/${jobSeekerId}/${randomUUID()}.pdf`;
     await this.storage.putBuffer(key, result.pdf, 'application/pdf');
     const title = `${req.targetRole ?? 'General'} resume`;
@@ -502,6 +577,23 @@ export class CareerService {
         why: result.strategy.reasons,
         checks: result.checks,
         notOnResume: result.gaps,
+        score: {
+          quality: {
+            score: quality.score,
+            band: quality.band,
+            topFixes: quality.topFixes,
+          },
+          match: match && {
+            score: match.score,
+            band: match.band,
+            decision: sendDecision(match.score),
+            categories: match.categories.map(
+              (c) => `${c.label} ${c.score}/${c.max}`,
+            ),
+            topFixes: match.topFixes,
+          },
+          thresholds: THRESHOLDS,
+        },
         ats: result.ats && {
           score: result.ats.score,
           matched: result.ats.matched,

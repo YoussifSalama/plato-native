@@ -28,6 +28,8 @@ export interface BuildRequest {
 
 export interface CareerDeps {
   profile(): Promise<unknown>;
+  // The master resume's score by fixed rules (resume/resume-score.ts).
+  scoreResume(): Promise<unknown>;
   // Plato tokens summary (credits/estimates.ts): no money costs or rates in it.
   tokens(): Promise<unknown>;
   saveProject(d: {
@@ -96,6 +98,12 @@ Draft first. Interrogating before producing something is the worst thing you can
 How a resume is built: you save true facts to the seeker's profile; a resume engine decides structure, length, sections, personal details and template by fixed rules, and writes the document from the saved facts. You do not decide those rules. When build_resume returns "why", tell the seeker what was chosen in one or two sentences.
 
 ATS. Applicant tracking systems rank a CV by exact keyword match, and the job title weighs most. When a job description was given, build_resume returns ats: score (0-100), matched terms, missingTerms (nothing in the profile supports them, so they stay off) and headline/headlineNote (the line under the name mirrors the job title only when the profile shows that work). Tell the seeker the score in one sentence and what was done (for example "I set your headline to Frontend Developer to match the job, since your React work supports it"). Never promise the CV will pass an ATS, never add a missing term, and if headlineNote says the headline was kept, say why and what would change it (a real project or confirmed skill).
+
+Resume score. Plato scores resumes by fixed rules, never by your own judgement, so the number is the same every time and can't be talked up. Two scores, both 0-100:
+- Quality (score_resume, and build_resume's score.quality): the master resume on its own. Categories: contact and sections (15), numbers and results (25), action verbs and style (15), length and bullets (10), headline and summary (10), skills backed by experience (15), experience (10).
+- Match (build_resume's score.match, only when a job was given): this resume against the job. Job keywords (50, requirements count double), job title (15), shown in the experience (15), recent experience (10), resume quality (10).
+Bands: 85+ strong, 75-84 good, 60-74 fair, below 60 needs work. For a job resume, decision says what Plato does with it: send (75+, fine to send), confirm (65-74, the seeker approves it first), hold (below 65, Plato won't send it on its own). Below 70 on quality, say the master resume needs work before applying widely.
+How to talk about it: give the number and band in one sentence, then the top fixes (at most three) as concrete asks, for example "Add a number to your Raya bullets: how many users or hours saved?". When they answer, save it (save_achievement with the quote) and score again. Never call it an ATS pass mark: no employer uses this number, it is Plato's estimate. Never raise the score by adding a skill or keyword they don't have; a missing requirement is a gap to discuss, not a word to add.
 
 Gaps. build_resume returns notOnResume: skills the job requires that nothing in the profile shows. They are NOT on the resume, which is correct. Say so in one sentence and offer a way forward, one skill at a time:
 - they have really used it: ask what they built with it, then confirm_skill (WORKING or STRONG) and rebuild;
@@ -272,6 +280,13 @@ export function createCareerAgent(
           ),
       }),
       execute: async (d) => JSON.stringify(await deps.research(d.question)),
+    }),
+    tool({
+      name: 'score_resume',
+      description:
+        "Score the seeker's master resume (their saved profile) 0-100 by fixed rules, with the score per category and the three fixes worth the most points. Free. Use it when they ask how good their resume is, before improving it, and after they add facts.",
+      parameters: z.object({}),
+      execute: async () => JSON.stringify(await deps.scoreResume()),
     }),
     tool({
       name: 'build_resume',

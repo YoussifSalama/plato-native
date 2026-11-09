@@ -10,6 +10,13 @@ enum JobSeekerDocumentType {
     LICENSE
     DEGREE
     OTHER
+    // Onboarding's "other documents" (owner screen 01). Stored only; Plato attaches
+    // one when a form asks for it.
+    COVER_LETTER
+    PORTFOLIO
+    WORK_PERMIT
+    ID_DOCUMENT
+    REFERENCE_LETTER
 }
 
 enum JobSeekerDocumentStatus {

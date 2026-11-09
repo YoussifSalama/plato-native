@@ -19,6 +19,7 @@ import { tmpdir } from 'os';
 import { basename, join } from 'path';
 import type { Browser, Page } from 'playwright-core';
 import { openBrowser } from './open-browser';
+import { outcomeUpdate, type Outcome } from './outcome';
 import { IEnvParams } from '../../types/config/env.types';
 import { StorageService } from '../documents/storage.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -1131,6 +1132,30 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
         'You chose to skip this job because it asks for skills your profile does not show.',
         'ineligible',
       );
+    // Made for this job and approved on the review screen: that file, not a new build.
+    const approved = await this.prisma.careerResume
+      .findFirst({
+        where: {
+          job_seeker_id: app.job_seeker_id,
+          job_id: app.job_id,
+          approved: true,
+        },
+        orderBy: { created_at: 'desc' },
+        select: { storage_key: true },
+      })
+      .catch(() => null);
+    if (approved) {
+      try {
+        const pdf = await this.storage.getObjectBuffer(approved.storage_key);
+        await this.prisma.jobApplication.update({
+          where: { id: app.id },
+          data: { resume_key: approved.storage_key },
+        });
+        return { pdf };
+      } catch {
+        // The stored file is gone: build one as usual.
+      }
+    }
     if (!this.env.applyTailorResume || !app.job.description) return {};
     try {
       emit('drafting', 'Writing a resume for this job');
@@ -1334,6 +1359,8 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
         yearsExperience: prefs?.years_experience ?? null,
         willingToRelocate: prefs?.willing_to_relocate ?? false,
         visaSponsorshipRequired: prefs?.visa_sponsorship_required ?? false,
+        relocationNote: prefs?.relocation_note ?? null,
+        sponsorshipNote: prefs?.sponsorship_note ?? null,
         workAuthorization: prefs?.work_authorization ?? [],
         autoApplyConsent: prefs?.auto_apply_consent ?? false,
       },
@@ -1380,6 +1407,17 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
     });
     if (!app) throw new NotFoundException('Application not found');
     return app;
+  }
+
+  // "I got an interview" and the like: the seeker's own mark on a sent application.
+  // Any engine: it records what happened after, never changes how Plato applies.
+  async setOutcome(jobSeekerId: string, id: string, outcome: Outcome | null) {
+    const app = await this.own(jobSeekerId, id);
+    return this.prisma.jobApplication.update({
+      where: { id },
+      data: outcomeUpdate(app.status, outcome),
+      select: { id: true, outcome: true, outcome_at: true },
+    });
   }
 
   // Legacy actions must never touch rows the extension engine owns.

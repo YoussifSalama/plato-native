@@ -75,6 +75,9 @@ export interface Candidate {
     yearsExperience: string | null;
     willingToRelocate: boolean;
     visaSponsorshipRequired: boolean;
+    // The seeker's limits on the two flags above ("Gulf only", "only outside Egypt").
+    relocationNote?: string | null;
+    sponsorshipNote?: string | null;
     // Countries they can work in without sponsorship.
     workAuthorization: string[];
     autoApplyConsent: boolean;

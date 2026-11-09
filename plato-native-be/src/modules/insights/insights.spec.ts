@@ -591,3 +591,37 @@ describe('InsightsService.create', () => {
     });
   });
 });
+
+describe('InsightsService.overview', () => {
+  it('a followed company shows its open roles and how many are for you', async () => {
+    const jobCount = jest.fn(async () => 212);
+    const matchCount = jest.fn(async () => 14);
+    const db = {
+      jobAlert: {
+        findMany: async () => [
+          { id: 'a1', kind: 'COMPANY', company: 'PwC', paused: false },
+          { id: 'a2', kind: 'FIELD', title: 'SCM consultant', paused: false },
+        ],
+      },
+      alertSettings: {
+        upsert: async () => ({ cadence: 'EVERY_3_DAYS', last_digest_at: null }),
+      },
+      alertMatch: { groupBy: async () => [], count: async () => 0 },
+      job: { count: jobCount },
+      jobSeekerJobMatch: { count: matchCount },
+    };
+    const svc = new InsightsService(
+      db as never,
+      { getByUserId: async () => ({ id: 's1' }) } as never,
+      { account: async () => ({ plan: 'free' }) } as never,
+      { seed: jest.fn() } as never,
+      { enabled: false } as never,
+    );
+    const o = await svc.overview('u1');
+    expect(o.alerts[0]).toMatchObject({ open: 212, for_you: 14 });
+    expect(o.alerts[1]).not.toHaveProperty('open');
+    expect(matchCount.mock.calls[0]).toMatchObject([
+      { where: { job_seeker_id: 's1', hidden: false } },
+    ]);
+  });
+});

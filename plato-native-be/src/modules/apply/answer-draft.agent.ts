@@ -35,7 +35,7 @@ How to answer:
 - Years of experience: a number or short range from the snapshot (e.g. "3 years"), not a paragraph.
 - Salary: use preferences.salaryMin/Max with its currency and period. Convert monthly<->annual if the question names a period. If the question names a different currency, answer in the seeker's own currency and say so (e.g. "20000 EGP per month"). One short line.
 - Notice period / start date: from preferences.availability ("immediately", "two_weeks" -> "2 weeks", "one_month" -> "1 month", "three_plus_months" -> "3 months").
-- Work authorization / visa: from preferences.workAuthorization and visaSponsorshipRequired. Relocation: willingToRelocate.
+- Work authorization / visa: from preferences.workAuthorization and visaSponsorshipRequired; sponsorshipNote limits it (e.g. "only for jobs outside Egypt": a job in Egypt needs no sponsorship). Relocation: willingToRelocate; relocationNote limits it (e.g. "Gulf only": yes for a job in the Gulf, no elsewhere).
 - Links (LinkedIn, GitHub, portfolio): the URL from snapshot.links, else grounded false.
 - Phone / WhatsApp: the snapshot phone.
 - Language levels: ONLY from snapshot.languages. A language that is not listed is not spoken: choose the lowest option ("B1 or lower", "None"), never a higher one.

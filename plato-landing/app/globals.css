@@ -12,7 +12,7 @@
   --ink: #0e1b2c; --ink-2: #4a5a70; --ink-3: #7a889c; --mist: #a3b0c2;
   --paper: #f5f8fc; --card: #ffffff; --line: #e2e8f0; --divider: #eef2f7;
   /* status */
-  --green: #1c9a4b; --green-soft: #e3f9ea; --blue: #0a6fc2; --blue-soft: #e8f2fc; --amber: #d97706; --amber-soft: #fef3c7; --red: #f04438; --rose: #db2777; --teal: #0d9488;
+  --green: #1c9a4b; --green-soft: #e3f9ea; --blue: #0a6fc2; --blue-soft: #e8f2fc; --amber: #d97706; --amber-soft: #fef3c7; --red: #d92d20; --rose: #db2777; --teal: #0d9488;
   /* night */
   --night: #050b16; --night-2: #0a1424; --night-card: #0e1b30; --night-line: rgba(255, 255, 255, 0.09); --night-ink-2: rgba(255, 255, 255, 0.72); --night-ink-3: rgba(255, 255, 255, 0.48);
   --glow: #3fb4ee; --glow-2: #a9dcf7; --cyan: #7fe3ff;

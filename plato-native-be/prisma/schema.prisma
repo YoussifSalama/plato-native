@@ -88,6 +88,9 @@ model CareerResume {
   doc             Json?
   // The posting it was tailored to, kept to regenerate a bullet for the same job.
   job_description String?
+  // Set when the resume was made for one job (Jobs → Tailor & apply). Approval is
+  // then per job, and applying to that job uploads this file.
+  job_id          String?  @db.ObjectId
   // Versions of the resume for one target role: 1, 2, 3... A new edit is a new version.
   version         Int      @default(1)
   parent_id       String?  @db.ObjectId
@@ -206,6 +209,13 @@ enum JobSeekerDocumentType {
     LICENSE
     DEGREE
     OTHER
+    // Onboarding's "other documents" (owner screen 01). Stored only; Plato attaches
+    // one when a form asks for it.
+    COVER_LETTER
+    PORTFOLIO
+    WORK_PERMIT
+    ID_DOCUMENT
+    REFERENCE_LETTER
 }
 
 enum JobSeekerDocumentStatus {
@@ -549,6 +559,15 @@ enum JobApplicationStatus {
 }
 
 // Who runs an application. Null (rows from before the extension) = LEGACY.
+// What the seeker heard back, marked by the seeker (optional): Plato doesn't read
+// employer replies, so this is the only source for "Interview" on Home.
+enum ApplicationOutcome {
+    VIEWED
+    INTERVIEW
+    OFFER
+    REJECTED
+}
+
 enum ApplyEngine {
     LEGACY
     EXTENSION
@@ -601,6 +620,8 @@ model JobApplication {
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
   submitted_at DateTime?
+  outcome      ApplicationOutcome?
+  outcome_at   DateTime?
 
   @@unique([job_seeker_id, job_id])
   @@index([job_seeker_id, status])
@@ -1091,6 +1112,10 @@ model JobSeekerPreference {
   employment_status         String?
   willing_to_relocate       Boolean @default(false)
   visa_sponsorship_required Boolean @default(false)
+  // Limits on the two flags above, in the seeker's words ("Gulf only",
+  // "only for jobs outside Egypt"). Read by the answer-drafting agent.
+  relocation_note           String?
+  sponsorship_note          String?
   linkedin_url              String?
   // Application snapshot: facts employers' forms ask for, collected once.
   // Countries the seeker may work in without sponsorship.

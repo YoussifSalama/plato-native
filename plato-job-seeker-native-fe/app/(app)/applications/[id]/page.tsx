@@ -10,6 +10,7 @@ import { applicationEventsUrl, getApplication, getApplicationResume, retryApplic
 import { applicationReason, canRetry, failureLabel, isVerifySubmission, retryLabel, roughly, statusView, STATUS_STAGE, STEP_STAGE } from "@/lib/jobs/application-status"
 import { threadHref, timeAgo } from "@/lib/jobs/links"
 import { CompanyAvatar } from "@/components/company-avatar"
+import { OutcomePicker } from "@/components/outcome-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { StageStepper } from "../../jobs/components/stage-stepper"
@@ -181,6 +182,11 @@ export default function ApplicationPage() {
             ))}
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
+        {app.status === "SUBMITTED" && !app.evidence?.dryRun && (
+          <div className="border-t border-divider pt-4">
+            <OutcomePicker id={app.id} value={app.outcome ?? null} />
+          </div>
+        )}
       </header>
 
       {app.status !== "SUBMITTED" && app.status !== "EXPIRED" && app.status !== "SKIPPED" && app.worker.sources.includes(atsSource) && (

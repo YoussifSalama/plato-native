@@ -47,8 +47,17 @@ export function assertProductionDir(dir) {
   if (JSON.stringify(manifest.permissions) !== JSON.stringify(['sidePanel', 'storage', 'tabGroups', 'debugger'])) fail(`unexpected permissions: ${JSON.stringify(manifest.permissions)}`);
   // host_permissions only for the Plato web app's own origins: https, exact host, no wildcard, not local.
   for (const h of manifest.host_permissions ?? []) if (!/^https:\/\/[^*/]+\/\*$/.test(h) || LOCAL.test(new URL(h.replace('/*', '')).hostname)) fail(`host_permissions must be exact https origins of the Plato web app: ${h}`);
-  for (const k of ['optional_host_permissions', 'optional_permissions', 'externally_connectable', 'web_accessible_resources'])
+  for (const k of ['optional_host_permissions', 'optional_permissions', 'web_accessible_resources'])
     if (k in manifest) fail(`manifest must not declare ${k}`);
+  // externally_connectable: only the Plato web app (one exact https origin, not local) may message the
+  // extension, to hand over a pairing code. No other extensions, no wildcards, no TLS channel ids.
+  if ('externally_connectable' in manifest) {
+    const ec = manifest.externally_connectable;
+    const keys = Object.keys(ec ?? {});
+    const m = ec?.matches ?? [];
+    if (keys.join() !== 'matches' || m.length !== 1 || !/^https:\/\/[^*/]+\/\*$/.test(m[0]) || LOCAL.test(new URL(m[0].replace('/*', '')).hostname))
+      fail(`externally_connectable must be exactly one https origin of the Plato web app: ${JSON.stringify(ec)}`);
+  }
   for (const cs of manifest.content_scripts ?? []) {
     if ((cs.js ?? []).some((f) => f !== 'content.js')) fail(`content script files not allowed: ${cs.js}`);
     for (const m of cs.matches ?? []) {

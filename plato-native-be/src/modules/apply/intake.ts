@@ -53,6 +53,30 @@ export const INTAKE: IntakeQuestion[] = [
     options: ['Yes', 'No'],
     labels: /\bdriving licen[cs]e\b|\bhave a car\b/i,
   },
+  // Asked in onboarding's "Answers for your applications" (owner screen 02).
+  {
+    key: 'salary_negotiable',
+    question: 'Is your expected salary open to negotiation?',
+    type: 'choice',
+    options: ['Yes', 'No'],
+    labels: /\bnegotiab/i,
+  },
+  {
+    key: 'travel',
+    question: 'How much can you travel for work?',
+    type: 'choice',
+    options: ['No travel', 'Up to 25%', 'Up to 50%', 'Over 50%'],
+    labels:
+      /\b(willing|able|open|prepared|available)\b.{0,40}\btravel\b|\btravel (requirements?|percentage)\b|\bpercentage of travel\b|\bhow much (can you )?travel\b/i,
+  },
+  {
+    // Text fields asking when you can start get the notice period; this fills date pickers.
+    key: 'earliest_start_date',
+    question: 'What is the earliest date you could start (YYYY-MM-DD)?',
+    type: 'date',
+    labels:
+      /\b(earliest|expected|desired|preferred|possible)\s+(possible\s+)?start(ing)?\s+date\b|^\s*start(ing)? date\s*\??\s*$|\bdate (you can|available to) start\b/i,
+  },
   // --- Sensitive: optional, never inferred ---
   {
     key: 'gender',

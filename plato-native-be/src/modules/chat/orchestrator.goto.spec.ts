@@ -10,6 +10,14 @@ it('open_path allows only app pages', () => {
     '/career/interviews',
     `/career/interviews/${id}`,
     '/profile',
+    '/following',
+    '/extension',
+    '/tokens',
+    '/profile?tab=answers',
+    '/applications?tab=needs',
+    '/jobs?company=PwC',
+    `/jobs/review?ids=${id},${id}`,
+    '/career?prompt=Score%20my%20resume',
   ])
     expect(APP_PATH.test(ok)).toBe(true);
   for (const bad of [
@@ -19,6 +27,9 @@ it('open_path allows only app pages', () => {
     '/api/auth/logout',
     '/jobs/abc',
     '/login',
+    '/following/x',
+    '/profile?tab=<script>',
+    '/jobs?company=a b',
   ])
     expect(APP_PATH.test(bad)).toBe(false);
 });

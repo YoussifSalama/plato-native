@@ -38,6 +38,7 @@ await panel.goto(`chrome-extension://${id}/panel.html`);
 // a clean frame: no toast in the way, scrolled to the top
 const shot = async (name) => {
   await panel.locator('.toast').waitFor({ state: 'hidden', timeout: 10000 }).catch(() => undefined);
+  // eslint-disable-next-line no-undef -- runs inside the page (page.evaluate)
   await panel.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('*').forEach((e) => { if (e.scrollTop) e.scrollTop = 0; }); });
   await panel.waitForTimeout(250);
   await panel.screenshot({ path: join(out, `panel-${name}.png`) });

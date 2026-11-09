@@ -20,5 +20,5 @@ export type ExtensionProgress = {
 export const getExtensionProgress = async () => (await apiClient.get<ExtensionProgress>("/extension/progress")).data
 // Put jobs in the extension's queue: each becomes a waiting job in the panel. Jobs whose site the
 // extension cannot apply on (or already queued / applied) come back in `rejected` with the reason.
-export const createApplyBatch = async (jobIds: string[]) =>
-  (await apiClient.post<{ batch_id: string | null; items: { id: string; job_id: string }[]; rejected: { job_id: string; reason: string }[] }>("/extension/apply-batches", { jobIds })).data
+export const createApplyBatch = async (jobIds: string[], resumes?: Record<string, "profile" | "tailored">) =>
+  (await apiClient.post<{ batch_id: string | null; items: { id: string; job_id: string }[]; rejected: { job_id: string; reason: string }[] }>("/extension/apply-batches", { jobIds, ...(resumes && { resumes }) })).data

@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { AlertTriangle, CheckCircle2, Info, Loader2, X, XCircle } from "lucide-react"
 import { cn } from "cn"
+import { listApplications } from "@/lib/jobs/api"
+import { needsAttention } from "@/lib/jobs/application-status"
 import { listNotifications, notificationEventsUrl, type NotificationTone, type SeekerNotification } from "@/lib/notifications/api"
 import { spring } from "@/lib/motion-system"
 
@@ -71,6 +73,19 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [seen, setSeen] = useState<Set<string>>(new Set())
   const [toasts, setToasts] = useState<SeekerNotification[]>([])
+  // "Needs you" is counted from the applications themselves, with the same rule as the
+  // Applications page and Home, so every badge shows one number (SPEC §7, D2).
+  const [needsYou, setNeedsYou] = useState(0)
+  const refreshNeeds = useCallback(() => {
+    listApplications()
+      .then((apps) => setNeedsYou(apps.filter(needsAttention).length))
+      .catch(() => undefined)
+  }, [])
+  useEffect(() => {
+    refreshNeeds()
+    window.addEventListener("plato:applications-changed", refreshNeeds)
+    return () => window.removeEventListener("plato:applications-changed", refreshNeeds)
+  }, [refreshNeeds])
 
   useEffect(() => {
     listNotifications()
@@ -92,6 +107,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       const subject = n.id.split(":").slice(0, 2).join(":")
       setItems((prev) => [n, ...prev.filter((p) => !p.id.startsWith(`${subject}:`))])
       setToasts((prev) => [n, ...prev.filter((p) => p.id !== n.id)].slice(0, 3))
+      if (n.kind === "application") window.dispatchEvent(new Event("plato:applications-changed"))
       setTimeout(() => setToasts((prev) => prev.filter((p) => p.id !== n.id)), TOAST_MS)
     }
     return () => source.close()
@@ -111,12 +127,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       items,
       loading,
       unread: countable.filter((n) => !seen.has(n.id)).length,
-      needsYou: items.filter((n) => n.kind === "application" && (n.status === "NEEDS_INPUT" || n.status === "VERIFY")).length,
+      needsYou,
       isUnread: (id) => !seen.has(id) && !id.endsWith(":RUNNING"),
       markRead,
       markAllRead: () => markRead(countable.map((n) => n.id)),
     }
-  }, [items, loading, seen, markRead])
+  }, [items, loading, seen, markRead, needsYou])
 
   return (
     <NotificationsContext.Provider value={value}>

@@ -48,6 +48,18 @@ export class ResumeFileService {
       return { name, mime: /\.docx?$/i.test(name) ? 'application/msword' : 'application/pdf', data: bytes.toString('base64') };
     }
     const job = await this.prisma.job.findUniqueOrThrow({ where: { id: item.job_id }, select: { title: true, company: true, description: true, location: true } });
+    const safe = (s: string) => s.replace(/[^\w\- ]+/g, '').trim().slice(0, 60);
+    const name = `Resume - ${safe(job.company)} - ${safe(job.title)}.pdf`;
+    // Made for this job and approved on the review screen: that exact file, not a new build.
+    const approved = await this.prisma.careerResume?.findFirst({
+      where: { job_seeker_id: p.jobSeekerId, job_id: item.job_id, approved: true },
+      orderBy: { created_at: 'desc' },
+      select: { storage_key: true },
+    });
+    if (approved) {
+      const bytes = await this.storage.getObjectBuffer(approved.storage_key);
+      return { name, mime: 'application/pdf', data: bytes.toString('base64') };
+    }
     const built = await this.engine.build({
       jobSeekerId: p.jobSeekerId,
       mode: 'auto',
@@ -56,7 +68,6 @@ export class ResumeFileService {
       jobCountry: job.location ? resolveCountry(job.location) : null,
     });
     if (built.status !== 'built') throw new ConflictException(`Could not build a resume for this job (${built.kind})`);
-    const safe = (s: string) => s.replace(/[^\w\- ]+/g, '').trim().slice(0, 60);
-    return { name: `Resume - ${safe(job.company)} - ${safe(job.title)}.pdf`, mime: 'application/pdf', data: built.pdf.toString('base64') };
+    return { name, mime: 'application/pdf', data: built.pdf.toString('base64') };
   }
 }

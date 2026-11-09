@@ -72,12 +72,13 @@ const byId = (id: string) => [...document.querySelectorAll<HTMLElement>(`[data-a
 // Returns a sentence for the chat when it could not be done, so nothing fails silently.
 export async function runPageEvent(e: OrchestratorEvent, push: (path: string) => void): Promise<string | null> {
   if (e.type === "goto") {
-    if (location.pathname === e.path) return null
+    // Paths may carry a tab or filter (/profile?tab=answers): compare and route on both parts.
+    if (location.pathname + location.search === e.path) return null
     const link = () => [...document.querySelectorAll<HTMLAnchorElement>(`a[href="${CSS.escape(e.path)}"]`)].find((a) => !a.closest("[data-ai-skip]") && isVisible(a))
     // Like a person: if the link is not on this page, go through the sidebar section first
     // (Jobs for /jobs/<id>), then find the row on that page, scroll to it and click it.
     if (!link()) {
-      const section = "/" + e.path.split("/")[1]
+      const section = "/" + e.path.split(/[/?]/)[1]
       const nav = [...document.querySelectorAll<HTMLElement>(`nav a[href="${CSS.escape(section)}"]`)].find(isVisible)
       if (nav && location.pathname !== section) {
         await cursorTo(nav, `Opening ${labelOf(nav)}`.slice(0, 30), 0)

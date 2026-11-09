@@ -7,11 +7,11 @@ import { NotificationBell } from "@/app/(app)/jobs/components/notification-bell"
 // Every signed-in page starts the same way, so the seeker always knows where
 // they are: a section label (or a breadcrumb back up the tree on sub-pages),
 // the page title, one line on what the page is for, the page's own actions,
-// and the notification bell in the same corner. Use PAGE for the container.
+// and the page's own actions. The bell lives in the shell's top bar. Use PAGE for the container.
 
-export const PAGE = "flex flex-1 flex-col gap-6 px-5 py-6 sm:px-6 lg:px-8"
+export const PAGE = "flex flex-1 flex-col gap-6 px-4 pt-3 pb-10 sm:px-6 lg:px-8"
 // Pages with the Plato AI dock pinned over the bottom of the content.
-export const PAGE_DOCK = "flex flex-1 flex-col gap-6 px-5 pt-6 pb-28 sm:px-6 lg:px-8"
+export const PAGE_DOCK = "flex flex-1 flex-col gap-6 px-4 pt-3 pb-28 sm:px-6 lg:px-8"
 
 export type Crumb = { label: string; href: string }
 
@@ -42,7 +42,7 @@ export function PageHeader({
   title,
   description,
   actions,
-  bell = true,
+  bell = false,
   children,
   className,
 }: {
@@ -59,13 +59,11 @@ export function PageHeader({
     <header data-tour="page-header" className={cn("flex flex-col gap-4", className)}>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0 max-w-3xl">
-          {crumbs?.length ? (
-            <Breadcrumbs crumbs={crumbs} current={typeof title === "string" ? title : section} />
-          ) : (
-            section && <span className="eyebrow">{section}</span>
-          )}
-          <h1 className="mt-1 truncate text-2xl font-bold tracking-tight text-foreground">{title}</h1>
-          {description && <p className="mt-1 text-sm leading-relaxed text-text-secondary">{description}</p>}
+          {/* Sub-pages show the way back up. The old nav-group label (`section`) is no longer shown:
+              the sidebar has no groups now, so it named nothing the seeker could see. */}
+          {crumbs?.length ? <Breadcrumbs crumbs={crumbs} current={typeof title === "string" ? title : section} /> : null}
+          <h1 className="mt-1 truncate text-[28px] leading-tight font-extrabold tracking-tight text-foreground">{title}</h1>
+          {description && <p className="mt-1.5 text-[15px] leading-relaxed text-text-secondary">{description}</p>}
         </div>
         {(actions || bell) && (
           <div data-tour="page-actions" className="flex flex-wrap items-center gap-3">

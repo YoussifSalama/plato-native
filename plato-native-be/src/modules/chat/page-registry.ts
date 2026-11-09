@@ -32,44 +32,136 @@ export const PAGES: Record<string, PageEntry> = {
       nav('home', '/'),
       nav('jobs', '/jobs'),
       nav('applications', '/applications'),
+      nav('following', '/following'),
       nav('career', '/career'),
+      nav('extension', '/extension'),
       nav('messages', '/messages'),
       nav('notifications', '/notifications'),
       nav('profile', '/profile'),
       { id: 'nav.logo', label: 'Plato logo', does: 'Goes to / (Home)' },
-      { id: 'crumb.<page>', label: 'Breadcrumb above the title (e.g. JOBS, CAREER)', does: 'Goes back up to that parent page; on a search it is crumb.jobs', tpl: 'crumb.' },
-      { id: 'tour.start', label: 'Tour this page (compass, bottom right)', does: 'Starts a guided tour of the page the seeker is on' },
+      {
+        id: 'crumb.<page>',
+        label: 'Breadcrumb above the title (e.g. JOBS, CAREER)',
+        does: 'Goes back up to that parent page; on a search it is crumb.jobs',
+        tpl: 'crumb.',
+      },
+      {
+        id: 'tour.start',
+        label: 'Tour this page (compass, bottom right)',
+        does: 'Starts a guided tour of the page the seeker is on',
+      },
     ],
   },
   home: {
     path: '/',
     purpose:
-      "Home dashboard: the seeker's job hunt in numbers. KPIs (jobs ready, applications, searches, postings analyzed), pipeline, match quality, last 14 days, sources, work setup, seniority, salary, top locations and companies, and the latest searches. Questions about how the hunt is going are answered here.",
+      "Home: the seeker's week at a glance. Greeting with new matches, applications sent, interviews (the ones the seeker marked on their applications) and this week's goal; the top 3 matches as cards with Apply and save; their applications (sent / viewed / interview) and latest moves; new roles from companies they follow. Questions about how the hunt is going are answered here.",
     controls: [
-      { id: 'home.new-search', label: 'New search', does: 'Starts a new search conversation' },
-      { id: 'home.next-step', label: 'Your next steps button', does: 'Does the next setup step: complete details, link the extension, first search, apply, or set an alert' },
-      { id: 'home.first-search', label: 'Start your first search', does: 'Same, shown when there are no searches' },
-      { id: 'home.needs-you', label: 'Answer now', does: 'Opens /applications, shown when applications need answers' },
-      { id: 'home.all-searches', label: 'All searches', does: 'Goes to /jobs' },
-      { id: 'home.search:<searchId>', label: 'A latest-search card', does: "Opens that search's results (/jobs/<searchId>)", tpl: 'home.search:' },
+      {
+        id: 'home.matches',
+        label: 'Jobs for you (number)',
+        does: 'Goes to /jobs',
+      },
+      {
+        id: 'home.applied',
+        label: 'Applied (number)',
+        does: 'Goes to /applications',
+      },
+      {
+        id: 'home.interviews',
+        label: 'Interviews (number)',
+        does: 'Opens sent applications; counts the ones the seeker marked as an interview or offer',
+      },
+      {
+        id: 'home.next-step',
+        label: 'Your next steps button',
+        does: 'Does the next setup step: complete details, link the extension, first search, apply, or set an alert',
+      },
+      {
+        id: 'home.first-search',
+        label: 'Start a search',
+        does: 'Starts a new search conversation, shown when there are no matches yet',
+      },
+      { id: 'home.all-jobs', label: 'See all', does: 'Goes to /jobs' },
+      {
+        id: 'home.apply:<jobId>',
+        label: 'Apply on a top match',
+        does: 'Opens the apply-with-the-extension dialog for that job',
+        tpl: 'home.apply:',
+      },
     ],
   },
   jobs: {
     path: '/jobs',
     purpose:
-      'Table of every search the seeker ran (one row per search), with a text search, status tabs, an active-since filter and sorting. A row opens that search; its chevron expands the top 5 ranked jobs of that search, each with save, not interested and apply. This is where "my last search" is found.',
+      'Jobs: the seeker\'s searches on the left (each a Plato conversation, grouped by day, with New search and a Following card), every match across all searches on the right, best first. Tabs For you / Saved / Applied, quick filters (Remote, Senior, Posted this week), a checkbox on each job, Select my top 10, and a bar to apply to the selected jobs. This is where "my last search" is found.',
     controls: [
-      { id: 'jobs.new-search', label: 'New search', does: 'Starts a new search conversation' },
-      { id: 'jobs.first-search', label: 'Start your first search', does: 'Same, shown when there are no searches' },
-      { id: 'jobs.filter.q', label: 'Search by name, role or location', does: 'Filters the table as you type' },
-      { id: 'jobs.status.<status>', label: 'All | Searching | Ready | Failed | Not started', does: 'Filters by status (status = all, running, done, failed, idle)', tpl: 'jobs.status.' },
-      { id: 'jobs.filter.since', label: 'Active since', does: 'Any time, last 7, 30 or 90 days' },
-      { id: 'jobs.sort', label: 'Sort', does: 'Last activity, newest first, most jobs, name A-Z' },
-      { id: 'jobs.filter.clear', label: 'Clear filters', does: 'Resets search, status and date' },
-      { id: 'jobs.search:<searchId>', label: 'A search row (its name)', does: "Opens that search's results (/jobs/<searchId>)", tpl: 'jobs.search:' },
-      { id: 'jobs.expand:<searchId>', label: 'Chevron on a row', does: 'Shows or hides the top 5 jobs of that search', tpl: 'jobs.expand:' },
-      { id: 'jobs.top-job:<jobId>', label: 'A top job title', does: 'Opens the original posting in a new tab', tpl: 'jobs.top-job:' },
-      { id: 'jobs.top-apply:<jobId>', label: 'Apply on a top job', does: 'Opens the apply-with-the-extension dialog for that job', tpl: 'jobs.top-apply:' },
+      {
+        id: 'jobs.new-search',
+        label: 'New search',
+        does: 'Starts a new search conversation',
+      },
+      {
+        id: 'jobs.following',
+        label: 'Following card',
+        does: 'Goes to /following',
+      },
+      {
+        id: 'jobs.search:<searchId>',
+        label: 'A search in the left column (its name)',
+        does: "Opens that search's conversation and results (/jobs/<searchId>)",
+        tpl: 'jobs.search:',
+      },
+      {
+        id: 'jobs.top-ten',
+        label: 'Select my top 10',
+        does: 'Ticks the 10 best jobs that are not applied to yet',
+      },
+      {
+        id: 'jobs.job:<jobId>',
+        label: 'A job title',
+        does: 'Opens the original posting in a new tab',
+        tpl: 'jobs.job:',
+      },
+      {
+        id: 'jobs.apply:<jobId>',
+        label: 'Apply on a job',
+        does: 'Opens the apply-with-the-extension dialog for that job',
+        tpl: 'jobs.apply:',
+      },
+      {
+        id: 'jobs.tab.<tab>',
+        label: 'For you | Saved | Applied | Hidden',
+        does: 'Switches the list (tab = discover, saved, applied, hidden)',
+        tpl: 'jobs.tab.',
+      },
+      {
+        id: 'jobs.apply-selected',
+        label: 'Apply (bottom bar)',
+        does: 'Opens the apply dialog for every ticked job, with their own CV',
+      },
+      {
+        id: 'jobs.tailor-selected',
+        label: 'Tailor & apply (bottom bar)',
+        does: 'Opens /jobs/review for the ticked jobs: Plato writes one resume per job to review before applying',
+      },
+    ],
+  },
+  review: {
+    path: '/jobs/review',
+    purpose:
+      'Review your tailored resumes: Plato writes one resume per ticked job, one at a time, and shows only what changed from the profile (summary, experience order, keywords). Each job can be approved or set to use the original CV; nothing is sent until Approve all & apply.',
+    controls: [
+      {
+        id: 'review.approve',
+        label: 'Approve',
+        does: 'Approves the resume shown for this job and moves to the next one',
+      },
+      {
+        id: 'review.approve-all',
+        label: 'Approve all & apply (N)',
+        does: 'Approves every written resume and opens the apply dialog with them',
+      },
     ],
   },
   results: {
@@ -120,7 +212,8 @@ export const PAGES: Record<string, PageEntry> = {
   },
   applications: {
     path: '/applications',
-    purpose: 'Jobs the seeker applied to (or queued), with their status.',
+    purpose:
+      "Every application: tiles (sent in 30 days, sent this week, went through, need you), tabs All / In progress / Sent / Didn't go through, a table (job, status, date, resume used) and on the right 'Needs you': what Plato paused on, each with one button that opens the answer. Paths: ?tab=active|applied|problems|needs.",
     controls: [
       {
         id: 'applications.tab.<tab>',
@@ -156,6 +249,12 @@ export const PAGES: Record<string, PageEntry> = {
         id: 'application.withdraw',
         label: 'Withdraw',
         does: 'Starts withdrawing (asks to confirm first)',
+      },
+      {
+        id: 'application.outcome.interview',
+        tpl: 'application.outcome.',
+        label: 'Did you hear back? Interview',
+        does: 'Marks a sent application as an interview (the seeker says so; Plato cannot read replies). Siblings: .none, .viewed, .offer, .rejected',
       },
     ],
   },
@@ -266,7 +365,7 @@ export const PAGES: Record<string, PageEntry> = {
   profile: {
     path: '/profile',
     purpose:
-      'What the seeker can add that resumes use. Three forms, filled with type_text then submitted. Project: p-name, p-desc, p-tech, p-result, p-url. Result (achievement): a-text, a-metric, a-company. Skill with proof: s-skill, s-proof, s-url (plus a level button).',
+      "The seeker's profile, in tabs (?tab=...): resumes (default: the master resume with its score, and the versions Plato tailored), experience (from the CV, plus three forms resumes use, filled with type_text then submitted. Project: p-name, p-desc, p-tech, p-result, p-url. Result (achievement): a-text, a-metric, a-company. Skill with proof: s-skill, s-proof, s-url, plus a level button), looking (what they want), answers (application answers), documents (files and the browser extension).",
     controls: [
       {
         id: 'profile.add-project',
@@ -284,6 +383,36 @@ export const PAGES: Record<string, PageEntry> = {
         does: 'Saves the skill-with-proof form',
       },
     ],
+  },
+  following: {
+    path: '/following',
+    purpose:
+      'Companies and roles the seeker follows: company cards (roles for you, open roles, See roles opens /jobs?company=<name>, a bell to pause, Unfollow), new roles from the latest digest with View and Apply, roles they follow with on/off switches, Alert settings (how often, email), and companies to follow with a search box.',
+    controls: [
+      {
+        id: 'following.see-roles',
+        label: 'See roles (on a company card)',
+        does: "Opens /jobs?company=<name>: that company's roles",
+      },
+    ],
+  },
+  extension: {
+    path: '/extension',
+    purpose:
+      'The Plato Apply Chrome extension: make a one-time code to link a browser, the browsers already linked, and recent runs.',
+    controls: [
+      {
+        id: 'extension.generate',
+        label: 'Generate code',
+        does: 'Makes a one-time code to paste into the extension',
+      },
+    ],
+  },
+  tokens: {
+    path: '/tokens',
+    purpose:
+      "Plan & credits: the seeker's Plato tokens balance, plan, what actions cost, and upgrades.",
+    controls: [],
   },
   messages: {
     path: '/messages',

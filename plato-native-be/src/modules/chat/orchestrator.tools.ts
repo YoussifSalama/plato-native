@@ -517,8 +517,9 @@ export const proposeApplyTool = tool<
 });
 
 // Paths the assistant may open. Anything else is refused.
+// A short query string is allowed for tabs and filters (?tab=answers, ?company=PwC).
 export const APP_PATH =
-  /^\/(jobs(\/[0-9a-f]{24})?|applications(\/[0-9a-f]{24})?|career(\/interviews(\/[0-9a-f]{24})?|\/skills)?|messages|notifications|profile)?$/;
+  /^\/(jobs(\/review|\/[0-9a-f]{24})?|applications(\/[0-9a-f]{24})?|career(\/interviews(\/[0-9a-f]{24})?|\/skills)?|following|extension|tokens|messages|notifications|profile)?(\?[A-Za-z0-9_=&%.,+:-]{1,300})?$/;
 
 const gotoParams = z.object({
   more: z
@@ -529,13 +530,13 @@ const gotoParams = z.object({
   path: z
     .string()
     .describe(
-      'App path, e.g. "/jobs/<search id>" for a past search (ids are listed under "Your searches"), "/career/interviews", "/career/skills", "/applications".',
+      'App path from the site map in your instructions (# Pages and paths), e.g. "/following", "/applications?tab=needs", "/profile?tab=answers", "/jobs?company=PwC", "/jobs/<search id>" for a past search (ids are listed under "Your searches").',
     ),
 });
 export const gotoTool = tool<typeof gotoParams, OrchestratorContext>({
   name: 'open_path',
   description:
-    'Open any page of the app by path, for example a past search from the "Your searches" list ("open my latest search"), mock interviews, skills gap, an application. Prefer this over click_element when you know the path.',
+    'Open any page of the app by path ("take me to Following", "show what needs me", "open my application answers", "my latest search"). Use the paths in # Pages and paths. Prefer this over click_element when you know the path.',
   parameters: gotoParams,
   execute: (input, runContext) => {
     if (!APP_PATH.test(input.path))
@@ -626,10 +627,13 @@ export const describePageTool = tool<
 });
 
 const extensionProgressParams = z.object({ show: z.boolean() });
-export const getExtensionProgressTool = tool<typeof extensionProgressParams, OrchestratorContext>({
+export const getExtensionProgressTool = tool<
+  typeof extensionProgressParams,
+  OrchestratorContext
+>({
   name: 'get_extension_progress',
   description:
-    "What the Plato browser extension is doing right now for the seeker: whether it is online, how many jobs are waiting / being applied / need the seeker / submitted / failed / skipped, and the latest jobs with their state and note. Use it for any question about the extension or about applications it is working on. Set show to true when the seeker asks to SEE the progress: it opens the progress sidebar. Report only what this returns; never guess.",
+    'What the Plato browser extension is doing right now for the seeker: whether it is online, how many jobs are waiting / being applied / need the seeker / submitted / failed / skipped, and the latest jobs with their state and note. Use it for any question about the extension or about applications it is working on. Set show to true when the seeker asks to SEE the progress: it opens the progress sidebar. Report only what this returns; never guess.',
   parameters: extensionProgressParams,
   execute: async ({ show }, runContext) => {
     const ctx = runContext!.context;

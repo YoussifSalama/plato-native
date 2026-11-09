@@ -90,6 +90,18 @@ const getResumeDoc = (id: string) => request<{ id: string; title: string; versio
 const saveResumeEdits = (id: string, edits: ResumeEdits) => request<{ card: ResumeCard }>(apiClient.put(`/job-seeker/career/resumes/${id}`, edits))
 // A fresh wording for one part; nothing is saved until the seeker keeps it.
 const suggestResumeText = (id: string, req: { section: "summary" | "experience" | "project"; index?: number; note?: string }) => request<{ summary?: string; bullets?: string[] }>(apiClient.post(`/job-seeker/career/resumes/${id}/suggest`, req))
+// Jobs → Tailor & apply: the resume for one job (built once, then returned as is).
+export type ResumeChange = { section: "summary" | "experience" | "keywords"; before: string | null; after: string }
+// Resume scores by fixed rules on the server (resume/resume-score.ts): 85+ strong, 75+ good, 60+ fair.
+export type ScoreBand = "strong" | "good" | "fair" | "needs_work"
+export type ResumeScore = { score: number; band: ScoreBand; categories: { key: string; label: string; score: number; max: number; tips: string[] }[]; topFixes: string[]; bulletsWithoutNumbers?: { count: number; examples: string[] } }
+export type MatchScore = ResumeScore & { decision: "send" | "confirm" | "hold" }
+export const getResumeScore = () => request<ResumeScore & { warn: boolean; thresholds: { autoApply: number; confirm: number; masterWarn: number } }>(apiClient.get("/job-seeker/career/resume-score"))
+export const BAND_LABEL: Record<ScoreBand, string> = { strong: "Strong", good: "Good", fair: "Fair", needs_work: "Needs work" }
+export type JobResume =
+  | { status: "built"; id: string; job_id: string; job: { title: string; company: string }; title: string; approved: boolean; version: number; changes: ResumeChange[]; score?: MatchScore | null }
+  | { status: "gaps"; job_id: string; job: { title: string; company: string }; gaps: string[] }
+export const resumeForJob = (jobId: string, opts: { confirmedSkills?: string[]; ignoreGaps?: boolean } = {}) => request<JobResume>(apiClient.post(`/job-seeker/career/resumes/for-job/${jobId}`, opts))
 const approveResume = (id: string) => request<{ id: string; approved: boolean }>(apiClient.post(`/job-seeker/career/resumes/${id}/approve`))
 
 // Voice interview: a short-lived key + fixed prompt from our server, then the browser
@@ -102,5 +114,5 @@ const startVoiceSession = (threadId: string, req: { mode: VoiceMode; skill?: str
 const saveVoiceTranscript = (threadId: string, body: { mode: VoiceMode; seconds: number; turns: { role: "user" | "assistant"; text: string }[]; usage?: VoiceUsage }) =>
   request<{ saved: number }>(apiClient.post(`/job-seeker/career/threads/${threadId}/voice/transcript`, body))
 
-const listCareerResumes = () => request<{ id: string; title: string; target_role: string | null; version: number; approved: boolean }[]>(apiClient.get("/job-seeker/career/resumes"))
+const listCareerResumes = () => request<{ id: string; title: string; target_role: string | null; version: number; approved: boolean; job_id?: string | null; created_at?: string; changes?: number | null }[]>(apiClient.get("/job-seeker/career/resumes"))
 export { listCareerResumes, startVoiceSession, saveVoiceTranscript, getResumeDoc, saveResumeEdits, suggestResumeText, approveResume, streamCareerMessage, createCareerThread, listCareerThreads, getCareerThread, sendCareerMessage, getCareerResume }

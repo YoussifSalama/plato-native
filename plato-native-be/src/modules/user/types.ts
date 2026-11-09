@@ -66,6 +66,8 @@ export interface PreferenceInput {
   employment_status: string | null;
   willing_to_relocate: boolean;
   visa_sponsorship_required: boolean;
+  relocation_note: string | null;
+  sponsorship_note: string | null;
   linkedin_url: string | null;
   github_url: string | null;
   portfolio_url: string | null;

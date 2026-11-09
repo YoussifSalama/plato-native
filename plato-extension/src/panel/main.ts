@@ -1327,6 +1327,18 @@ const actions: Actions = {
   refresh: () => void refresh(),
 };
 
+// Linked from the Plato web app while this panel was open (background.ts, auto-link): load the account.
+chrome.runtime.onMessage.addListener((msg: unknown, sender) => {
+  if (sender.id !== chrome.runtime.id || (msg as { type?: string } | null)?.type !== 'plato:linked' || state.status !== 'unpaired') return;
+  void guard(async () => {
+    state.status = 'loading';
+    preselected = false;
+    await refresh();
+    await loadSearches().catch(fail);
+    toast('Linked from your Plato account.', 'ok');
+  });
+});
+
 // The person pressed Stop on the page overlay: cancel that job's session.
 chrome.runtime.onMessage.addListener((msg: unknown, sender) => {
   if (sender.id !== chrome.runtime.id || (msg as { type?: string } | null)?.type !== 'plato:stop' || sender.tab?.id === undefined) return;

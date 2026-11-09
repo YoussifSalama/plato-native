@@ -1,4 +1,4 @@
-export type DocumentType = "CV_RESUME" | "CERTIFICATE" | "LICENSE" | "DEGREE" | "OTHER"
+export type DocumentType = "CV_RESUME" | "CERTIFICATE" | "LICENSE" | "DEGREE" | "OTHER" | "COVER_LETTER" | "PORTFOLIO" | "WORK_PERMIT" | "ID_DOCUMENT" | "REFERENCE_LETTER"
 export type DocumentStatus = "UPLOADED" | "PROCESSING" | "TEXT_EXTRACTED" | "READY" | "FAILED"
 export type SectionStatus = "LOOKS_GOOD" | "NEEDS_ATTENTION"
 export type SectionKey = "experience" | "education" | "skills" | "certifications" | "languages" | "location"
@@ -10,6 +10,8 @@ export type JobSeekerDocument = {
   status: DocumentStatus
   processing_error: string | null
   storage_key: string
+  created_at?: string
+  updated_at?: string
 }
 
 export type Experience = {

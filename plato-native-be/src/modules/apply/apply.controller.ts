@@ -18,12 +18,17 @@ import { z } from 'zod';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JobSeekerService } from '../user/job-seeker.service';
 import { ApplyService } from './apply.service';
+import { OUTCOMES } from './outcome';
 
 const answersSchema = z.object({
   answers: z.record(
     z.string(),
     z.union([z.string().max(5000), z.boolean(), z.array(z.string().max(500))]),
   ),
+});
+
+const outcomeSchema = z.object({
+  outcome: z.enum(OUTCOMES).nullable(),
 });
 
 const liveInputSchema = z.object({
@@ -194,6 +199,19 @@ export class ApplyController {
   ) {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
     return this.applyService.markSubmitted(jobSeekerId, id);
+  }
+
+  // The seeker says what they heard back (or clears it). Optional, sent ones only.
+  @Post(':id/outcome')
+  async outcome(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = outcomeSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    const jobSeekerId = await this.requireJobSeekerId(req.userId);
+    return this.applyService.setOutcome(jobSeekerId, id, parsed.data.outcome);
   }
 
   // Declared last: static GET routes above (queue, readiness, events) must

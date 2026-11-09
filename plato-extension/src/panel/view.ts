@@ -195,25 +195,58 @@ function nav(doc: Document, s: PanelState, a: Actions) {
   return h(doc, 'nav', { class: 'seg', attrs: { role: 'tablist' } }, tab('jobs', 'Jobs'), tab('batch', 'Batch', badge));
 }
 
+// Screen 04: paste the code from Plato into eight boxes (XXXX-XXXX). Typing moves to the
+// next box, Backspace to the previous one, and a pasted code fills them all.
+const CODE_LEN = 8;
+function connect(doc: Document, s: PanelState, a: Actions) {
+  const boxes = Array.from({ length: CODE_LEN }, (_, i) => h(doc, 'input', { class: 'box', id: `code-${i}`, type: 'text', maxlength: 1, autocomplete: 'off', attrs: { 'aria-label': `Code character ${i + 1}`, inputmode: 'text', autocapitalize: 'characters', spellcheck: 'false' } }));
+  const code = () => boxes.map((b) => b.value).join('');
+  const fill = (from: number, text: string) => {
+    const chars = text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LEN - from).split('');
+    chars.forEach((c, k) => { const box = boxes[from + k]; if (box) box.value = c; });
+    boxes[Math.min(from + chars.length, CODE_LEN - 1)]?.focus();
+  };
+  const submit = () => a.pair(`${code().slice(0, 4)}-${code().slice(4)}`, browserName());
+  boxes.forEach((b, i) => {
+    b.addEventListener('input', () => {
+      const v = b.value;
+      b.value = '';
+      fill(i, v);
+    });
+    b.addEventListener('paste', (e) => {
+      e.preventDefault();
+      fill(i, e.clipboardData?.getData('text') ?? '');
+    });
+    b.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !b.value) boxes[i - 1]?.focus();
+      if (e.key === 'Enter' && code().length === CODE_LEN) submit();
+    });
+  });
+  return h(doc, 'div', { class: 'body connect-body' },
+    h(doc, 'section', { class: 'connect' },
+      s.error ? banner(doc, 'err', 'alert', null, s.error) : null,
+      h(doc, 'span', { class: 'mark big', text: 'P' }),
+      h(doc, 'h2', { text: 'Connect to your Plato account' }),
+      h(doc, 'p', { text: 'Logged in to Plato in this browser? Open Plato and this links itself. Or paste the code from Plato.' }),
+      h(doc, 'div', { class: 'boxes', attrs: { role: 'group', 'aria-label': 'Pairing code' } }, ...boxes.slice(0, 4), h(doc, 'span', { class: 'dash', text: '-' }), ...boxes.slice(4)),
+      btn(doc, 'Connect', submit, 'btn primary block', { disabled: s.busy, id: 'link' }),
+      h(doc, 'div', { class: 'or', text: 'No code yet?' }),
+      h(doc, 'a', { class: 'btn block', href: `${__WEB_ORIGIN__}/extension?pair=1`, attrs: { target: '_blank', rel: 'noreferrer' } }, 'Get my code from Plato', h(doc, 'span', { text: '→' })),
+      h(doc, 'p', { class: 'meta', text: `Opens ${__WEB_ORIGIN__.replace(/^https?:\/\//, '')} in a new tab with your code ready to copy.` })),
+    h(doc, 'p', { class: 'foot', text: 'Plato Apply only runs on job application pages.' }));
+}
+// The name shown on Plato's Extension page, e.g. "Chrome on macOS".
+function browserName() {
+  const ua = (globalThis.navigator?.userAgent ?? '');
+  const os = /Mac OS X/.test(ua) ? 'macOS' : /Windows/.test(ua) ? 'Windows' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : '';
+  return os ? `Chrome on ${os}` : 'This browser';
+}
+
 function renderInner(doc: Document, root: HTMLElement, s: PanelState, a: Actions, registry: Registry) {
   root.append(header(doc, s, a));
   if (s.status === 'loading') return void root.append(h(doc, 'div', { class: 'body' }, h(doc, 'div', { class: 'stack' }, h(doc, 'div', { class: 'skel' }), h(doc, 'div', { class: 'skel' }), h(doc, 'div', { class: 'skel' }))));
 
-  if (s.status === 'unpaired') {
-    const code = h(doc, 'input', { class: 'field', id: 'code', type: 'text', placeholder: 'ABCD-EFGH', maxlength: 20, autocomplete: 'off', attrs: { 'aria-label': 'Pairing code' } });
-    const label = h(doc, 'input', { class: 'field', id: 'label', type: 'text', placeholder: 'Name this browser (optional)', maxlength: 60, autocomplete: 'off', attrs: { 'aria-label': 'Browser name' } });
-    const step = (n: number, text: string) => h(doc, 'li', {}, h(doc, 'span', { class: 'n', text: String(n) }), h(doc, 'span', { text }));
-    root.append(h(doc, 'div', { class: 'body' },
-      s.error ? banner(doc, 'err', 'alert', null, s.error) : null,
-      h(doc, 'section', { class: 'card pad link' },
-        h(doc, 'span', { class: 'tile' }, icon(doc, 'link')),
-        h(doc, 'h2', { text: 'Link this browser to Plato' }),
-        h(doc, 'p', { text: 'Only you can link a browser to your account. It takes a few seconds.' }),
-        h(doc, 'ol', { class: 'steps' }, step(1, 'In Plato, open Extension in the sidebar.'), step(2, 'Press “Generate code” and copy it.'), step(3, 'Paste it here and press Link.')),
-        code, label,
-        btn(doc, 'Link this browser', () => a.pair(code.value, label.value || 'This browser'), 'btn primary block', { disabled: s.busy, id: 'link' }))));
-    return;
-  }
+  if (s.status === 'unpaired') return void root.append(connect(doc, s, a));
 
   root.append(nav(doc, s, a));
   if (s.menuOpen) root.append(menu(doc, s, a));

@@ -9,7 +9,7 @@
   --fg: #0e1b2c; --fg2: #4a5a70; --muted: #7a889c; --line: #e2e8f0; --bg: #f5f8fc; --card: #ffffff;
   --fill: #eef2f7; --fill-2: #f5f8fc; --track: #e2e8f0; --dim: #c3cdd9;
   --ok: #1c9a4b; --ok-soft: #e3f9ea; --warn: #d97706; --warn-soft: #fef3c7; --warn-fg: #92400e; --warn-line: #fcd9a0;
-  --err: #f04438; --err-soft: #fee4e2; --err-fg: #b42318; --info: #0b7fab; --info-soft: #e1f3fa;
+  --err: #d92d20; --err-soft: #fee4e2; --err-fg: #b42318; --info: #0b7fab; --info-soft: #e1f3fa;
   --r-ctl: 10px; --r-card: 14px; --r-sheet: 18px;
   --shadow: 0 1px 2px rgba(14, 27, 44, .05), 0 4px 14px rgba(0, 91, 167, .06);
 }
@@ -332,3 +332,21 @@ select { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--fg); p
 .filters.sites { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-top: 0; }
 .filters.sites::-webkit-scrollbar { display: none; }
 .filters.sites .chip { flex: none; }
+
+/* ---- connect (screen 04) ---- */
+.connect-body { display: flex; flex-direction: column; }
+.connect { margin: auto 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0; padding: 8px 4px; }
+.connect .mark.big { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 16px; }
+.connect h2 { font-size: 21px; font-weight: 800; letter-spacing: -.015em; line-height: 1.2; }
+.connect > p { margin-top: 6px; font-size: 14px; color: var(--fg2); }
+.connect .banner { width: 100%; margin-bottom: 12px; text-align: left; }
+.boxes { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 18px 0 16px; }
+.box { width: 34px; height: 46px; padding: 0; text-align: center; border: 1.5px solid var(--p-line); border-radius: 9px; background: var(--p-tint); font: inherit; font-size: 18px; font-weight: 700; color: var(--fg); text-transform: uppercase; }
+.box:focus { outline: 0; border-color: var(--p); background: var(--card); box-shadow: 0 0 0 3px var(--p-soft); }
+.boxes .dash { color: var(--dim); font-weight: 700; padding: 0 2px; }
+.connect .btn.block { text-decoration: none; }
+.connect .or { display: flex; align-items: center; gap: 10px; width: 100%; margin: 16px 0 12px; font-size: 12.5px; color: var(--muted); }
+.connect .or::before, .connect .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.connect .meta { margin-top: 10px; }
+.foot { margin-top: auto; padding: 12px 0 2px; text-align: center; font-size: 12px; color: var(--muted); }
+

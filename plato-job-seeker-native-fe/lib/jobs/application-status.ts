@@ -4,14 +4,14 @@ import type { ApplicationStatus, FailureKind, NeedsInput } from "@/lib/jobs/api"
 // applications list and the application page. A bare "Failed" next to a job
 // says nothing; every label names the thing that is in that state.
 export const APPLICATION_STATUS: Record<ApplicationStatus, { label: string; tone: string; hint: string }> = {
-  QUEUED: { label: "In apply queue", tone: "bg-secondary text-secondary-foreground", hint: "Waiting for its turn. Plato applies one at a time." },
+  QUEUED: { label: "Queued", tone: "bg-secondary text-secondary-foreground", hint: "Waiting for its turn. Plato applies one at a time." },
   IN_PROGRESS: { label: "Applying now", tone: "bg-info-soft text-info", hint: "Plato is filling and submitting the form right now." },
   NEEDS_INPUT: { label: "Needs you", tone: "bg-warning-soft text-warning", hint: "Plato can't finish this one alone." },
-  NEEDS_USER_VERIFICATION: { label: "Verify you're human", tone: "bg-warning-soft text-warning", hint: "The site asks for a person. Complete the check, then continue." },
-  SUBMITTED: { label: "Applied", tone: "bg-success-soft text-success", hint: "Plato submitted this application for you." },
-  FAILED: { label: "Apply failed", tone: "bg-destructive/10 text-destructive", hint: "Plato tried to apply and could not." },
-  EXPIRED: { label: "Posting closed", tone: "bg-muted text-muted-foreground", hint: "The employer closed this posting before Plato could apply." },
-  SKIPPED: { label: "Skipped by Plato", tone: "bg-muted text-muted-foreground", hint: "Plato decided not to apply to this one." },
+  NEEDS_USER_VERIFICATION: { label: "Needs you", tone: "bg-warning-soft text-warning", hint: "The site asks for a person. Complete the check, then continue." },
+  SUBMITTED: { label: "Sent", tone: "bg-success-soft text-success", hint: "Plato submitted this application for you." },
+  FAILED: { label: "Didn't go through", tone: "bg-destructive/10 text-destructive", hint: "Plato tried to apply and could not." },
+  EXPIRED: { label: "Didn't go through", tone: "bg-muted text-muted-foreground", hint: "The employer closed this posting before Plato could apply." },
+  SKIPPED: { label: "Didn't go through", tone: "bg-muted text-muted-foreground", hint: "Plato decided not to apply to this one." },
   EXTENSION_ACTIVE: { label: "In your browser", tone: "bg-info-soft text-info", hint: "The Plato browser extension is working on this one with you. You press Submit." },
 }
 

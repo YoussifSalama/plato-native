@@ -4,7 +4,9 @@ import {
   Controller,
   Get,
   NotFoundException,
+  HttpCode,
   Patch,
+  Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -16,7 +18,15 @@ import { JobSeekerPreferenceService } from '../user/job-seeker-preference.servic
 import { JobSeekerProfileService } from '../user/job-seeker-profile.service';
 import { IEnvParams } from '../../types/config/env.types';
 import { createPreferenceSuggestionAgent } from './preferences-suggestion.agent';
-import { preferenceEditSchema } from './preferences.schema';
+import { Prisma } from '@prisma/client';
+import {
+  preferenceEditSchema,
+  preferenceEstimateSchema,
+} from './preferences.schema';
+import { PrismaService } from '../prisma/prisma.service';
+import { indexFilter } from '../discovery/adapters/local-index.adapter';
+import { resolveCountry } from '../discovery/countries';
+import { checkSalary } from '../discovery/salary-sanity';
 import { metered } from '../usage/usage';
 
 @Controller('job-seeker/preferences')
@@ -27,6 +37,7 @@ export class PreferencesController {
     private readonly preferenceService: JobSeekerPreferenceService,
     private readonly profileService: JobSeekerProfileService,
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   private async requireJobSeekerId(userId: string) {
@@ -89,5 +100,65 @@ export class PreferencesController {
       ...parsed.data,
       source: 'USER_CONFIRMED',
     });
+  }
+
+  // Onboarding, while the seeker edits (owner screen 02): "With these settings
+  // Plato sees about N open jobs" and whether the salary is in the usual range.
+  // Cheap: one count over the local index, no AI, no tokens.
+  @Post('estimate')
+  @HttpCode(200)
+  async estimate(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    const parsed = preferenceEstimateSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    const p = parsed.data;
+    const seeker = await this.jobSeekerService.getByUserId(req.userId);
+    if (!seeker) throw new NotFoundException('Job seeker profile not found');
+
+    const remoteTypes = p.work_setup.filter(
+      (w): w is 'onsite' | 'hybrid' | 'remote' | 'any' =>
+        ['onsite', 'hybrid', 'remote', 'any'].includes(w),
+    );
+    let openJobs = 0;
+    if (p.roles.length) {
+      const res = (await this.prisma.job.aggregateRaw({
+        pipeline: [
+          {
+            $match: indexFilter({
+              titles: p.roles,
+              locations: p.preferred_locations,
+              remoteTypes,
+              willingToRelocate: !!p.willing_to_relocate,
+            }),
+          },
+          { $count: 'n' },
+        ] as Prisma.InputJsonValue[],
+      })) as unknown as { n: number }[];
+      openJobs = res[0]?.n ?? 0;
+    }
+
+    const amount = p.salary_max ?? p.salary_min;
+    const home = seeker.location as { city?: string; country?: string } | null;
+    const residence = home
+      ? resolveCountry([home.city, home.country].filter(Boolean).join(', '))
+      : null;
+    const targets = [
+      ...new Set(
+        p.preferred_locations
+          .map((l) => resolveCountry(l))
+          .filter((c): c is string => !!c),
+      ),
+    ];
+    const salary =
+      amount && p.salary_currency
+        ? checkSalary({
+            amount,
+            currency: p.salary_currency,
+            period: p.salary_period ?? 'MONTHLY',
+            residence,
+            targets,
+            remote: remoteTypes.includes('remote'),
+          })
+        : null;
+    return { openJobs, salary };
   }
 }

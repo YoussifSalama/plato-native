@@ -14,6 +14,11 @@ import {
   JobSource,
 } from '@prisma/client';
 import { effectiveApplySource } from '../apply/ats-detect';
+import {
+  matchReasons,
+  seekerReferenceScore,
+  seekerTerms,
+} from './match-reasons';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobSeekerPreferenceService } from '../user/job-seeker-preference.service';
 import { AtsAggregatorAdapter } from './adapters/ats-aggregator.adapter';
@@ -70,7 +75,9 @@ import {
   type LevelKey,
 } from './match-facets';
 
-export type MatchTab = 'discover' | 'saved' | 'applied' | 'recommended';
+// hidden: jobs the seeker marked "not interested" (the Jobs page's Hidden tab).
+export type MatchTab =
+  'discover' | 'saved' | 'applied' | 'recommended' | 'hidden';
 export type MatchSort = 'best' | 'newest' | 'salary' | 'company';
 export type MatchLevel = LevelKey;
 
@@ -678,26 +685,62 @@ export class DiscoveryService implements OnModuleInit {
    */
   async addJobByUrl(jobSeekerId: string, rawUrl: string) {
     const url = new URL(rawUrl);
-    if (url.protocol !== 'https:') throw new BadRequestException('Only https links');
+    if (url.protocol !== 'https:')
+      throw new BadRequestException('Only https links');
     let title = url.pathname.split('/').filter(Boolean).pop() ?? url.hostname;
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { accept: 'text/html' } });
-      const t = /<title[^>]*>([^<]{1,200})<\/title>/i.exec(await res.text())?.[1];
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(8000),
+        headers: { accept: 'text/html' },
+      });
+      const t = /<title[^>]*>([^<]{1,200})<\/title>/i.exec(
+        await res.text(),
+      )?.[1];
       if (t) title = t.replace(/\s+/g, ' ').trim();
     } catch {
       /* page unreachable: keep the slug */
     }
     const company = url.hostname.split('.')[0];
     const job = await this.prisma.job.upsert({
-      where: { source_external_id: { source: 'MANUAL', external_id: url.href } },
-      create: { source: 'MANUAL', external_id: url.href, title, company, url: url.href, apply_url: url.href },
+      where: {
+        source_external_id: { source: 'MANUAL', external_id: url.href },
+      },
+      create: {
+        source: 'MANUAL',
+        external_id: url.href,
+        title,
+        company,
+        url: url.href,
+        apply_url: url.href,
+      },
       update: {},
     });
-    const run = await this.prisma.discoveryRun.findFirst({ where: { job_seeker_id: jobSeekerId }, orderBy: { started_at: 'desc' }, select: { id: true } });
-    const existing = await this.prisma.jobSeekerJobMatch.findFirst({ where: { job_seeker_id: jobSeekerId, job_id: job.id }, select: { id: true } });
+    const run = await this.prisma.discoveryRun.findFirst({
+      where: { job_seeker_id: jobSeekerId },
+      orderBy: { started_at: 'desc' },
+      select: { id: true },
+    });
+    const existing = await this.prisma.jobSeekerJobMatch.findFirst({
+      where: { job_seeker_id: jobSeekerId, job_id: job.id },
+      select: { id: true },
+    });
     const match = existing
-      ? await this.prisma.jobSeekerJobMatch.update({ where: { id: existing.id }, data: { shortlisted: true } })
-      : await this.prisma.jobSeekerJobMatch.create({ data: { job_seeker_id: jobSeekerId, job_id: job.id, shortlisted: true, match_score: 0, ...(run && { discovery_run_id: run.id, discovery_run_ids: [run.id] }) } });
+      ? await this.prisma.jobSeekerJobMatch.update({
+          where: { id: existing.id },
+          data: { shortlisted: true },
+        })
+      : await this.prisma.jobSeekerJobMatch.create({
+          data: {
+            job_seeker_id: jobSeekerId,
+            job_id: job.id,
+            shortlisted: true,
+            match_score: 0,
+            ...(run && {
+              discovery_run_id: run.id,
+              discovery_run_ids: [run.id],
+            }),
+          },
+        });
     return { job, match };
   }
 
@@ -754,6 +797,7 @@ export class DiscoveryService implements OnModuleInit {
             match_score: true,
             saved: true,
             hidden: true,
+            discovered_at: true,
             job: {
               select: {
                 title: true,
@@ -854,6 +898,11 @@ export class DiscoveryService implements OnModuleInit {
         skipped: byStatus(appsByStatus, 'SKIPPED'),
       },
       shortlisted: matches.length,
+      // Home's "New matches": found in the last 7 days, not hidden.
+      newThisWeek: matches.filter(
+        (m) =>
+          !m.hidden && m.discovered_at.getTime() > Date.now() - 7 * 86_400_000,
+      ).length,
       saved: matches.filter((m) => m.saved).length,
       hidden: matches.filter((m) => m.hidden).length,
       analyzed: runs.reduce((n, r) => n + r.fetched, 0),
@@ -984,7 +1033,10 @@ export class DiscoveryService implements OnModuleInit {
     }
 
     // Where the seeker lives or can work, for the eligibility line on each card.
-    const countries = await this.seekerCountryNames(jobSeekerId);
+    const [countries, terms] = await Promise.all([
+      this.seekerCountryNames(jobSeekerId),
+      seekerTerms(this.prisma, jobSeekerId),
+    ]);
     return {
       total,
       items: items.map((m) => {
@@ -1005,6 +1057,8 @@ export class DiscoveryService implements OnModuleInit {
           job,
           match_percent,
           match_label: matchLabel(match_percent),
+          // "Matches your SAP, ERP rollouts and presales" on the card.
+          reasons: matchReasons(rawJob, terms),
           application_status: applications[0]?.status ?? null,
           // Enough for the row to say what happened and link to the details.
           application_id: applications[0]?.id ?? null,
@@ -1065,20 +1119,8 @@ export class DiscoveryService implements OnModuleInit {
   // Match % is relative to a reference score. The single best score is a
   // poor reference (one outlier makes everything else look weak), so use the
   // 90th percentile of the seeker's shortlist instead.
-  async referenceScore(jobSeekerId: string): Promise<number | null> {
-    const rows = await this.prisma.jobSeekerJobMatch.findMany({
-      where: {
-        job_seeker_id: jobSeekerId,
-        shortlisted: true,
-        match_score: { gt: 0 },
-      },
-      select: { match_score: true },
-      orderBy: { match_score: 'desc' },
-      take: 5000,
-    });
-    if (!rows.length) return null;
-    const idx = Math.floor(rows.length * 0.1);
-    return rows[Math.min(idx, rows.length - 1)].match_score;
+  referenceScore(jobSeekerId: string): Promise<number | null> {
+    return seekerReferenceScore(this.prisma, jobSeekerId);
   }
 
   private matchWhere(
@@ -1172,10 +1214,14 @@ export class DiscoveryService implements OnModuleInit {
 
     return {
       job_seeker_id: jobSeekerId,
-      ...(shortlistedOnly && tab !== 'saved' && tab !== 'applied'
+      ...(shortlistedOnly &&
+      tab !== 'saved' &&
+      tab !== 'applied' &&
+      tab !== 'hidden'
         ? { shortlisted: true }
         : {}),
       ...(tab === 'saved' ? { saved: true } : {}),
+      ...(tab === 'hidden' ? { hidden: true } : {}),
       ...(tab === 'discover' || tab === 'recommended' ? { hidden: false } : {}),
       // "Strong match" threshold (75% of the best score) across all searches.
       ...(tab === 'recommended' && maxScore
@@ -1212,10 +1258,13 @@ export class DiscoveryService implements OnModuleInit {
     });
     // Which boards the jobs came from, for the Source filter.
     const bySource = new Map<string, number>();
-    for (const r of rows) bySource.set(r.job.source, (bySource.get(r.job.source) ?? 0) + 1);
+    for (const r of rows)
+      bySource.set(r.job.source, (bySource.get(r.job.source) ?? 0) + 1);
     return {
       ...buildFacets(rows.map((r) => r.job)),
-      sources: [...bySource].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count),
+      sources: [...bySource]
+        .map(([value, count]) => ({ value, count }))
+        .sort((a, b) => b.count - a.count),
     };
   }
 

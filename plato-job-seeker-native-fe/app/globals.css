@@ -60,6 +60,10 @@
   --color-divider: var(--divider);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-line: var(--warning-line);
+  --color-success-ink: var(--success-ink);
+  --color-danger-soft: var(--danger-soft);
   --color-rose: var(--rose);
   --color-rose-soft: var(--rose-soft);
   --color-teal: var(--teal);
@@ -108,7 +112,8 @@
   --muted-foreground: #7a889c;
   --accent: #e8f2fc;
   --accent-foreground: #005ba7;
-  --destructive: #f04438;
+  --destructive: #d92d20;
+  --danger-soft: #fee4e2;
   --border: #e2e8f0;
   --input: #dce4ee;
   --ring: #005ba7;
@@ -132,12 +137,15 @@
   --info-soft: #e1f3fa;
   --lavender: #a3b0c2;
   --navy: #0e1b2c;
-  /* Pre-login pages (auth, onboarding) keep secondary text at full ink. */
-  --text-secondary: #0e1b2c;
+  --text-secondary: #4a5a70;
   --text-tertiary: #5b6b80;
   --divider: #eef2f7;
   --warning: #d97706;
   --warning-soft: #fef3c7;
+  /* Amber text: #d97706 on its soft fill is only ~2.6:1, so text uses the darker ink. */
+  --warning-ink: #b45309;
+  --warning-line: #f5d98b;
+  --success-ink: #15803d;
   --rose: #db2777;
   --rose-soft: #fce7f3;
   --teal: #0d9488;
@@ -154,7 +162,7 @@
    secondary text, and the larger radius the landing page's tiles use. */
 .theme-app {
   --background: #f5f8fc;
-  --radius: 1rem;
+  --radius: 0.625rem;
   --text-secondary: #4a5a70;
   --text-tertiary: #8593a6;
   color: var(--foreground);
@@ -247,9 +255,10 @@
   font-family: var(--font-mono);
   font-size: 11.5px;
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--primary);
+  /* Metadata, dates and counters (SPEC U4); a Plato note's own label is primary. */
+  color: var(--text-tertiary);
 }
 
 /* Resting card shadow, and the hover lift the landing tiles use. */
@@ -271,97 +280,11 @@
   }
 }
 
-/* ---------- Spatial glass (every signed-in page) ----------
-   Frosted, translucent panels floating over slow brand-colour light. The
-   app shell puts .glass-scope on its root and renders <SpatialBackdrop/>.
-   Only the outermost panels blur (nested ones just inherit the translucent
-   tokens), and <dialog>s stay solid so modals always read cleanly. Delete
-   the class from app-shell.tsx to go back to the flat look. */
-.glass-scope {
-  isolation: isolate;
-  background: transparent;
-  --glass: rgb(255 255 255 / 0.58);
-  --glass-strong: rgb(255 255 255 / 0.78);
-  --glass-edge: rgb(255 255 255 / 0.78);
-  --glass-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.9),
-    0 1px 2px rgb(0 58 110 / 0.05),
-    0 18px 50px -26px rgb(0 58 110 / 0.36);
-}
-.glass-scope :is(.shadow-card, .bg-card.rounded-lg, .bg-card.rounded-xl, .bg-card.rounded-2xl):not(dialog, dialog *, :is(.shadow-card, .bg-card) *) {
-  --card: var(--glass);
-  --border: var(--glass-edge);
-  --muted: rgb(14 27 44 / 0.06);
-  --divider: rgb(14 27 44 / 0.07);
-  --primary-tint: rgb(232 242 252 / 0.6);
-  --secondary: rgb(232 242 252 / 0.72);
-  background-color: var(--glass);
-  border-color: var(--glass-edge);
-  -webkit-backdrop-filter: blur(22px) saturate(170%);
-  backdrop-filter: blur(22px) saturate(170%);
-  box-shadow: var(--glass-shadow);
-}
-.glass-scope .card-lift:hover {
-  transform: translateY(-4px) scale(1.006);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.95),
-    0 30px 70px -28px rgb(0 58 110 / 0.5);
-  border-color: rgb(255 255 255 / 0.95);
-}
-.glass-scope .bg-brand-gradient {
-  background-image: linear-gradient(135deg, rgb(0 91 167 / 0.88), rgb(10 127 208 / 0.82) 55%, rgb(0 161 226 / 0.76));
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  backdrop-filter: blur(22px) saturate(160%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 24px 60px -24px rgb(0 91 167 / 0.65);
-}
-/* Holes that must stay solid so what is behind them does not read through. */
-.glass-scope [data-ring-hole] {
-  background: rgb(255 255 255 / 0.94);
-  box-shadow: inset 0 1px 3px rgb(0 58 110 / 0.12);
-}
-
-/* Floating sidebar / top bar panel. */
-@utility glass-panel {
-  background-color: rgb(255 255 255 / 0.55);
-  border: 1px solid rgb(255 255 255 / 0.8);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
-  backdrop-filter: blur(26px) saturate(180%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.95),
-    0 24px 60px -30px rgb(0 58 110 / 0.4);
-}
-
-/* The light behind the glass. */
-.glass-orbs {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 1px 1px, rgb(0 91 167 / 0.07) 1px, transparent 0) 0 0 / 22px 22px,
-    linear-gradient(160deg, #eaf3fc, #f5f8fc 45%, #eef6fb);
-}
-.glass-orbs span {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(80px);
-  opacity: 0.5;
-  translate: calc(var(--mx, 0) * var(--depth)) calc(var(--my, 0) * var(--depth));
-  transition: translate 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
-  animation: glass-drift 24s ease-in-out infinite alternate;
-}
-.glass-orbs span:nth-child(1) { --depth: 26px; width: 560px; height: 560px; left: -140px; top: -180px; background: #00a1e2; opacity: 0.4; }
-.glass-orbs span:nth-child(2) { --depth: -34px; width: 640px; height: 640px; right: -200px; top: 30%; background: #005ba7; opacity: 0.3; animation-duration: 30s; }
-.glass-orbs span:nth-child(3) { --depth: 18px; width: 460px; height: 460px; left: 38%; bottom: -200px; background: #7fe3ff; animation-duration: 26s; animation-delay: -8s; }
-@keyframes glass-drift {
-  from { transform: translate(0, 0) scale(1); }
-  to { transform: translate(60px, 40px) scale(1.12); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .glass-orbs span { animation: none; transition: none; translate: none; }
-}
-@media (prefers-reduced-transparency: reduce) {
-  .glass-scope :is(.shadow-card, .bg-card.rounded-lg, .bg-card.rounded-xl, .bg-card.rounded-2xl) { --card: #ffffff; --border: #e2e8f0; background-color: #ffffff; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .glass-panel { background-color: #ffffff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* ---------- Flat surfaces (the business owner's screens) ----------
+   White panels with a 1px cool border on the paper background. No blur,
+   no translucency (design/new-ui/SPEC.md §1). */
+@utility surface-panel {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgb(14 27 44 / 0.04);
 }

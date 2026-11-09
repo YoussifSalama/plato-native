@@ -46,7 +46,9 @@ const matchesQuerySchema = z.object({
   shortlistedOnly: bool,
   runId: z.string().optional(),
   threadId: z.string().optional(),
-  tab: z.enum(['discover', 'saved', 'applied', 'recommended']).optional(),
+  tab: z
+    .enum(['discover', 'saved', 'applied', 'recommended', 'hidden'])
+    .optional(),
   sort: z.enum(['best', 'newest', 'salary', 'company']).optional(),
   q: z.string().optional(),
   remoteType: z.enum(JobRemoteType).optional(),
@@ -140,7 +142,9 @@ export class DiscoveryController {
   // Paste a job link: it becomes a job on the latest search so the extension can apply to it.
   @Post('jobs/by-url')
   async addJobByUrl(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
-    const parsed = z.object({ url: z.string().url().max(2000) }).safeParse(body);
+    const parsed = z
+      .object({ url: z.string().url().max(2000) })
+      .safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
     return this.discoveryService.addJobByUrl(jobSeekerId, parsed.data.url);
@@ -303,7 +307,10 @@ export class DiscoveryController {
   // "Apply" on the web only TAGS jobs for the browser extension (no server-side applying):
   // the extension pre-ticks them in its wizard. Explicit ids, or "top N" of the conversation's pool.
   @Post('extension-queue')
-  async extensionQueue(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+  async extensionQueue(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: unknown,
+  ) {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
     const parsed = applySchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);

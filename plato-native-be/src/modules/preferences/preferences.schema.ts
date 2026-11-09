@@ -51,6 +51,23 @@ export const preferenceEditSchema = z.object({
   // Application snapshot. Optional so older clients keep saving.
   work_authorization: z.array(z.string().min(1).max(80)).max(20).optional(),
   auto_apply_consent: z.boolean().optional(),
+  // Onboarding (owner screen 02). Optional so older clients keep saving.
+  salary_period: z.enum(['MONTHLY', 'YEARLY']).optional(),
+  relocation_note: z.string().trim().max(120).nullable().optional(),
+  sponsorship_note: z.string().trim().max(120).nullable().optional(),
+});
+
+// Draft preferences, while the seeker edits them: how many open jobs fit, and
+// whether the salary sits in the usual range.
+export const preferenceEstimateSchema = z.object({
+  roles: z.array(z.string().max(120)).max(30),
+  preferred_locations: z.array(z.string().max(120)).max(30),
+  work_setup: z.array(z.string()).max(4),
+  willing_to_relocate: z.boolean().optional(),
+  salary_min: z.number().nullable().optional(),
+  salary_max: z.number().nullable().optional(),
+  salary_currency: z.string().max(8).nullable().optional(),
+  salary_period: z.enum(['MONTHLY', 'YEARLY']).optional(),
 });
 
 export type PreferenceEditInput = z.infer<typeof preferenceEditSchema>;

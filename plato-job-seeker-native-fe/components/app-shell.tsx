@@ -1,99 +1,118 @@
 "use client"
 
-import { ExtensionProgressNav } from "@/components/extension-progress"
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Bell, BellRing, Briefcase, FileText, GraduationCap, HelpCircle, Home, MessageCircle, PanelLeftClose, PanelLeftOpen, Puzzle, User, type LucideIcon } from "lucide-react"
+import { Briefcase, Building2, Coins, GraduationCap, Home, Puzzle, Send, Sparkles, User, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { getMe, type AuthUser } from "@/lib/auth/api"
+import { getApplyReadiness, getDiscoveryStats } from "@/lib/jobs/api"
+import { getExtensionProgress } from "@/lib/extension/api"
+import { getInsights } from "@/lib/insights/api"
+import { getPreferences } from "@/lib/preferences/api"
+import { listDocuments } from "@/lib/documents/api"
 import { NotificationsProvider, useNotifications } from "@/components/notifications-provider"
-import { TokensChip, TokensNav } from "@/components/plato-tokens"
+import { TokensChip } from "@/components/plato-tokens"
 import { VerifyEmailBanner } from "@/components/verify-email-banner"
 import { PlatoMark } from "@/components/plato-orb"
-import { SpatialBackdrop } from "@/components/spatial-backdrop"
+import { PlatoStatusPill } from "@/components/extension-progress"
+import { ExtensionAutoLink } from "@/components/extension-auto-link"
+import { NotificationBell } from "@/app/(app)/jobs/components/notification-bell"
 
-type NavItem = { href: string; label: string; icon: LucideIcon; soon?: boolean }
-// Grouped the way the job hunt goes: see where you stand, find and apply,
-// grow, then the account. Page headers use the same section names.
-const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
-  { label: null, items: [{ href: "/", label: "Home", icon: Home }] },
-  {
-    label: "Find & apply",
-    items: [
-      { href: "/jobs", label: "Jobs", icon: Briefcase },
-      { href: "/applications", label: "Applications", icon: FileText },
-      { href: "/insights", label: "Job alerts", icon: BellRing },
-    ],
-  },
-  { label: "Grow", items: [{ href: "/career", label: "Career", icon: GraduationCap }] },
-  {
-    label: "Account",
-    items: [
-      { href: "/notifications", label: "Notifications", icon: Bell },
-      { href: "/extension", label: "Extension", icon: Puzzle },
-      { href: "/profile", label: "Profile", icon: User },
-      { href: "/messages", label: "Messages", icon: MessageCircle, soon: true },
-    ],
-  },
+type NavItem = { href: string; label: string; icon: LucideIcon }
+// The job hunt, in order (SPEC §5). The account pages sit at the bottom.
+const NAV: NavItem[] = [
+  { href: "/", label: "Home", icon: Home },
+  { href: "/jobs", label: "Jobs", icon: Briefcase },
+  { href: "/applications", label: "Applications", icon: Send },
+  { href: "/following", label: "Following", icon: Building2 },
+  { href: "/career", label: "Career", icon: GraduationCap },
 ]
-const NAV = NAV_GROUPS.flatMap((g) => g.items)
+const ACCOUNT: NavItem[] = [
+  { href: "/profile", label: "Profile", icon: User },
+  { href: "/tokens", label: "Plan & credits", icon: Coins },
+  { href: "/extension", label: "Extension", icon: Puzzle },
+]
+
+// What the command bar suggests on each page, so the seeker sees Plato can act right here.
+const PROMPTS: [string, string][] = [
+  ["/jobs", "Tailor my resume for my best match"],
+  ["/applications", "Follow up on applications older than 2 weeks"],
+  ["/following", "Follow companies hiring in my field"],
+  ["/career", "Practice an interview for my next application"],
+  ["/profile", "Make my resume bullets stronger"],
+  ["/tokens", "How many tokens does applying use?"],
+  ["/extension", "Is my browser connected?"],
+]
+const promptFor = (path: string) => PROMPTS.find(([p]) => path.startsWith(p))?.[1] ?? "Find remote jobs that fit my CV"
+
+const isActive = (href: string, path: string) => (href === "/" ? path === "/" : path.startsWith(href) || (href === "/following" && path.startsWith("/insights")))
 
 function initials(fullName: string) {
   return fullName
     .split(" ")
     .filter(Boolean)
-    .slice(0, 2)
+    .slice(0, 1) // one letter, as in the owner's top bar
     .map((p) => p[0]?.toUpperCase())
     .join("")
 }
-
 function titleCase(s: string) {
   return s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase())
 }
 
-const COLLAPSED_KEY = "plato.sidebarCollapsed"
-
-// Collapsed state lives in localStorage; useSyncExternalStore keeps SSR
-// (always expanded) and the client in agreement without a hydration mismatch.
-const listeners = new Set<() => void>()
-const readCollapsed = () => {
-  try {
-    return localStorage.getItem(COLLAPSED_KEY) === "1"
-  } catch {
-    return false
-  }
-}
-const subscribe = (cb: () => void) => {
-  listeners.add(cb)
-  return () => listeners.delete(cb)
-}
-const writeCollapsed = (v: boolean) => {
-  try {
-    localStorage.setItem(COLLAPSED_KEY, v ? "1" : "0")
-  } catch {}
-  listeners.forEach((l) => l())
+// The command bar opens the native Plato chat on this page. Pages with their own
+// assistant (a search thread) do not take "plato:ask", so the palette opens instead.
+export function openPlato(text = "") {
+  const taken = !window.dispatchEvent(new CustomEvent("plato:ask", { cancelable: true, detail: { text } }))
+  if (!taken) window.dispatchEvent(new CustomEvent("plato:palette", { detail: { text } }))
 }
 
-// Post-login frame: white sidebar, cobalt brand from the logo, soft-blue active state.
-// Expanded shows icon + label; collapsed is an icon rail with tooltips.
 function AppShell({ children }: { children: ReactNode }) {
   return (
     <NotificationsProvider>
+      <ExtensionAutoLink />
       <Frame>{children}</Frame>
     </NotificationsProvider>
   )
 }
 
+// How far the seeker is from Plato applying on its own: profile details, a linked
+// browser, job alerts. Read from the same checks as the next-steps guide.
+// "Profile strength" in the owner's screens: the share of five checks that let Plato apply
+// without stopping (the server's readiness check, a portfolio link, a second document,
+// a linked browser, something followed). The next missing one is the hint.
+export function useProfileStrength() {
+  const [s, setS] = useState<{ done: number; total: number; next: { label: string; short: string; href: string } | null } | null>(null)
+  useEffect(() => {
+    Promise.allSettled([getApplyReadiness(), getExtensionProgress(), getInsights(), getPreferences(), listDocuments()]).then(([r, e, i, p, d]) => {
+      const steps = [
+        { ok: r.status === "fulfilled" && r.value.ready, short: r.status === "fulfilled" && r.value.missing[0] ? `Add ${r.value.missing[0].label.toLowerCase()}` : "Finish your details", label: r.status === "fulfilled" && r.value.missing[0] ? `Add ${r.value.missing[0].label.toLowerCase()} so Plato never stops to ask.` : "Finish your details.", href: "/profile?tab=answers" },
+        { ok: p.status === "fulfilled" && !!p.value.portfolio_url, short: "Add a portfolio link", label: "Add a portfolio link so Plato can paste it into forms.", href: "/onboarding?step=2" },
+        { ok: d.status === "fulfilled" && d.value.length > 1, short: "Add a second document", label: "Add a second document, like a certificate.", href: "/onboarding?step=1" },
+        { ok: e.status === "fulfilled" && e.value.linked, short: "Link the extension", label: "Link the browser extension.", href: "/extension" },
+        { ok: i.status === "fulfilled" && i.value.alerts.length > 0, short: "Follow a company", label: "Follow a company you'd like to work for.", href: "/following" },
+      ]
+      const open = steps.find((x) => !x.ok)
+      setS({ done: steps.filter((x) => x.ok).length, total: steps.length, next: open ? { label: open.label, short: open.short, href: open.href } : null })
+    })
+  }, [])
+  return s
+}
+
 function Frame({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const { unread, needsYou } = useNotifications()
-  // Live counts on the nav: unread notifications, applications waiting on you.
-  const badge: Record<string, number> = { "/notifications": unread, "/applications": needsYou }
   const router = useRouter()
+  const { needsYou } = useNotifications()
   const [user, setUser] = useState<AuthUser | null>(null)
-  const collapsed = useSyncExternalStore(subscribe, readCollapsed, () => false)
+  const setup = useProfileStrength()
+  // "18 new" beside Jobs, as in the owner's sidebar: matches found this week.
+  const [fresh, setFresh] = useState(0)
+  useEffect(() => {
+    getDiscoveryStats()
+      .then((st) => setFresh(st.newThisWeek ?? 0))
+      .catch(() => setFresh(0))
+  }, [])
 
   useEffect(() => {
     getMe()
@@ -101,136 +120,101 @@ function Frame({ children }: { children: ReactNode }) {
       .catch(() => router.replace("/login"))
   }, [router])
 
-  const toggle = () => writeCollapsed(!collapsed)
-
-  const item = (active: boolean) =>
-    cn(
-      "flex items-center gap-3 rounded-2xl text-sm transition-all duration-200",
-      collapsed ? "size-11 justify-center" : "px-3.5 py-2.5",
-      active
-        ? "bg-white font-semibold text-primary shadow-[0_1px_2px_rgb(0_58_110/0.06),0_8px_22px_-10px_rgb(0_58_110/0.3)]"
-        : "font-medium text-text-secondary hover:bg-white/55 hover:text-foreground",
+  const link = (it: NavItem, size: "main" | "sub") => {
+    const active = isActive(it.href, pathname)
+    const count = it.href === "/applications" ? needsYou : 0
+    return (
+      <Link
+        key={it.href}
+        href={it.href}
+        data-ai={`nav.${it.label.toLowerCase()}`}
+        data-tour={`nav-${it.label.toLowerCase().replace(/[^a-z]+/g, "-")}`}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex items-center gap-3 rounded-2xl border transition-all duration-200",
+          size === "main" ? "px-3.5 py-2.5 text-[15px]" : "px-3.5 py-2 text-sm",
+          active ? "border-border bg-card font-semibold text-primary shadow-[0_1px_2px_rgb(14_27_44/0.05)]" : "border-transparent font-medium text-foreground hover:bg-card",
+        )}
+      >
+        <it.icon className="size-[18px] shrink-0" />
+        <span className="flex-1 truncate">{it.label}</span>
+        {count > 0 && <span className="flex size-5 items-center justify-center rounded-full bg-[#f5b82e] text-[11px] font-bold text-foreground">{count > 9 ? "9+" : count}</span>}
+        {it.href === "/jobs" && fresh > 0 && <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[11.5px] font-bold text-primary">{fresh} new</span>}
+      </Link>
     )
+  }
+
+  const strength = setup ? Math.round((setup.done / setup.total) * 100) : null
 
   return (
-    <div className={cn("theme-app glass-scope grid min-h-dvh grid-cols-1 text-foreground transition-[grid-template-columns] duration-300", collapsed ? "lg:grid-cols-[104px_1fr]" : "lg:grid-cols-[284px_1fr]")}>
-      <SpatialBackdrop />
-      {/* Floating glass sidebar: brand, navigation, a status card, the account. */}
-      <div className="hidden lg:sticky lg:top-0 lg:block lg:h-dvh lg:py-4 lg:pl-4">
-        <aside data-tour="sidebar" className={cn("glass-panel flex h-full flex-col justify-between rounded-[28px] py-5", collapsed ? "px-3" : "px-3.5")}>
-          <div className="flex min-h-0 flex-col gap-6">
-            <div className={cn("flex items-center", collapsed ? "flex-col gap-3" : "justify-between gap-2 pr-0.5 pl-1.5")}>
-              <Link href="/" data-ai="nav.logo" className="flex min-w-0 items-center gap-3" title="Plato">
-                <PlatoMark size={38} />
-                {!collapsed && (
-                  <span className="min-w-0">
-                    <span className="block text-[17px] leading-tight font-extrabold tracking-tight text-foreground">Plato</span>
-                    <span className="block truncate text-[11.5px] text-text-tertiary">Your AI job hunter</span>
-                  </span>
-                )}
-              </Link>
-              <button
-                type="button"
-                onClick={toggle}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                aria-expanded={!collapsed}
-                title={collapsed ? "Expand" : "Collapse"}
-                className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-white/70 hover:text-foreground"
-              >
-                {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-              </button>
-            </div>
-
-            <nav data-tour="sidebar-nav" className={cn("scroll-thin -mr-1 flex min-h-0 flex-col gap-4 overflow-y-auto pr-1", collapsed && "items-center")}>
-              {NAV_GROUPS.map((g) => (
-                <div key={g.label ?? "top"} className={cn("flex flex-col gap-1", collapsed && "items-center")}>
-                  {g.label &&
-                    (collapsed ? (
-                      <span className="mx-auto mb-1 h-px w-6 bg-foreground/10" aria-hidden />
-                    ) : (
-                      <span className="px-3.5 pb-1 font-mono text-[10.5px] font-medium tracking-[0.08em] text-text-tertiary uppercase">{g.label}</span>
-                    ))}
-                  {g.items.map((it) => {
-                    const { href, label, icon: Icon } = it
-                    const soon = !!it.soon
-                    const active = href === "/" ? pathname === "/" : pathname.startsWith(href)
-                    return (
-                      <Link key={href} href={href} data-ai={`nav.${label.toLowerCase()}`} data-tour={`nav-${label.toLowerCase().replace(/\s+/g, "-")}`} aria-current={active ? "page" : undefined} title={collapsed ? (soon ? `${label} (coming soon)` : label) : undefined} className={cn(item(active), soon && !active && "opacity-70")}>
-                        <span className="relative shrink-0">
-                          <Icon className="size-[18px]" />
-                          {collapsed && badge[href] > 0 && <span className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive" />}
-                        </span>
-                        {!collapsed && <span className="flex-1 truncate">{label}</span>}
-                        {!collapsed && soon && <span className="rounded-full bg-foreground/6 px-2 py-0.5 text-[10px] font-semibold text-text-tertiary">Soon</span>}
-                        {!collapsed && badge[href] > 0 && (
-                          <span className={cn("flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold", href === "/applications" ? "bg-warning-soft text-warning" : "bg-destructive text-white")}>{badge[href] > 9 ? "9+" : badge[href]}</span>
-                        )}
-                      </Link>
-                    )
-                  })}
-                </div>
-              ))}
-            </nav>
-          </div>
-
-          <div className={cn("flex flex-col gap-3", collapsed && "items-center")}>
-            {/* Status card: what is running for the seeker right now. */}
-            {collapsed ? (
-              <div className="flex flex-col items-center gap-1">
-                <ExtensionProgressNav collapsed itemClass={item(false)} />
-                <TokensNav collapsed itemClass={item(pathname.startsWith("/tokens"))} />
-              </div>
-            ) : (
-              <div data-tour="status-card" className="flex flex-col gap-0.5 rounded-2xl border border-white/80 bg-white/70 p-1.5 shadow-[0_8px_24px_-16px_rgb(0_58_110/0.35)]">
-                <ExtensionProgressNav collapsed={false} variant="row" itemClass="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] transition-colors hover:bg-primary-tint" />
-                <TokensNav collapsed={false} variant="row" itemClass={cn("flex rounded-xl px-2.5 py-2 text-[13px] transition-colors hover:bg-primary-tint", pathname.startsWith("/tokens") && "bg-primary-tint")} />
-              </div>
-            )}
-            {user && (
-              <div className={cn("flex items-center gap-1", collapsed ? "flex-col" : "pl-1")}>
-                <Link href="/profile" title={collapsed ? titleCase(user.full_name) : undefined} className={cn("group flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl p-1.5 transition-colors hover:bg-white/55", collapsed && "justify-center")}>
-                  <span className="flex size-[38px] shrink-0 items-center justify-center rounded-full bg-brand-gradient text-xs font-bold text-white shadow-[0_6px_14px_-6px_rgb(0_91_167/0.6)]">{initials(user.full_name)}</span>
-                  {!collapsed && (
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-bold text-foreground">{titleCase(user.full_name)}</span>
-                      <span className="block truncate text-xs text-text-tertiary">Job seeker · View profile</span>
-                    </span>
-                  )}
-                </Link>
-                <a href="#" title="Help & Support" aria-label="Help & Support" className="flex size-9 shrink-0 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-white/70 hover:text-foreground">
-                  <HelpCircle className="size-[17px]" />
-                </a>
-              </div>
-            )}
-          </div>
-        </aside>
-      </div>
+    <div className="theme-app grid min-h-dvh grid-cols-1 text-foreground lg:grid-cols-[216px_1fr]">
+      {/* Sidebar (owner screens 05-12): the job hunt, the account, profile strength. */}
+      <aside data-tour="sidebar" className="hidden border-r bg-[#f9fbfd] px-3 py-6 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:gap-7">
+        <Link href="/" data-ai="nav.logo" className="flex items-center gap-3 px-2" title="Plato">
+          <PlatoMark size={36} />
+          <span className="text-[17px] font-extrabold tracking-[0.22em] text-primary">PLATO</span>
+        </Link>
+        <nav data-tour="sidebar-nav" aria-label="Main" className="flex flex-col gap-1">
+          {NAV.map((it) => link(it, "main"))}
+        </nav>
+        <div className="mt-auto flex flex-col gap-3">
+          <nav aria-label="Account" className="flex flex-col gap-0.5">
+            {ACCOUNT.map((it) => link(it, "sub"))}
+          </nav>
+          {setup && (
+            <Link href={setup.next?.href ?? "/profile"} data-tour="status-card" className="flex flex-col gap-2 rounded-2xl border bg-card p-3.5 transition-colors hover:border-primary-line">
+              <span className="flex items-center justify-between text-sm">
+                <b>Profile strength</b>
+                <b className="text-primary tabular-nums">{strength}%</b>
+              </span>
+              <span className="h-1.5 overflow-hidden rounded-full bg-divider">
+                <span className="block h-full rounded-full bg-primary" style={{ width: `${strength}%` }} />
+              </span>
+              <span className="text-xs text-text-secondary">{setup.next ? setup.next.label : "Plato has everything it needs to apply for you."}</span>
+            </Link>
+          )}
+        </div>
+      </aside>
 
       <div className="flex min-w-0 flex-col">
-        {/* Compact nav for < lg, where the sidebar is hidden. */}
-        <div className="glass-panel sticky top-2 z-30 mx-2 mt-2 flex items-center gap-3 rounded-2xl px-3 py-2 lg:hidden">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.png" alt="Plato" width={28} height={28} className="size-7" />
+        {/* Top bar: tell Plato what to do, what it is doing, tokens, notifications, you. */}
+        <header className="sticky top-0 z-30 flex flex-wrap items-center gap-2.5 border-b bg-background px-3 py-3 sm:px-6 lg:px-8">
+          <Link href="/" className="lg:hidden" aria-label="Plato home">
+            <Image src="/logo.png" alt="" width={32} height={32} className="size-8" />
           </Link>
-          <nav className="scroll-thin flex min-w-0 flex-1 gap-1 overflow-x-auto">
-            {NAV.map(({ href, label, icon: Icon }) => {
-              const active = href === "/" ? pathname === "/" : pathname.startsWith(href)
+          <button type="button" data-ai="nav.command-bar" onClick={() => openPlato()} className="surface-panel flex h-12 min-w-0 flex-1 items-center gap-3 rounded-2xl px-4 text-left text-sm text-text-secondary transition-colors hover:border-primary-line lg:max-w-[640px]">
+            <Sparkles className="size-[18px] shrink-0 text-primary" />
+            <span className="truncate">
+              Tell Plato what to do: <span className="text-text-tertiary">“{promptFor(pathname)}”</span>
+            </span>
+            <kbd className="ml-auto hidden rounded-md border px-1.5 py-0.5 font-mono text-[11px] text-text-secondary sm:block">Ctrl K</kbd>
+          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <PlatoStatusPill />
+            <span className="hidden md:block">
+              <TokensChip />
+            </span>
+            <NotificationBell />
+            {user && (
+              <Link href="/profile" title={titleCase(user.full_name)} aria-label="Your profile" className="flex size-11 items-center justify-center rounded-full bg-foreground text-sm font-bold text-white">
+                {initials(user.full_name)}
+              </Link>
+            )}
+          </div>
+          {/* Compact nav for < lg, where the sidebar is hidden. */}
+          <nav aria-label="Main" className="scroll-thin surface-panel flex w-full gap-1 overflow-x-auto rounded-2xl p-1 lg:hidden">
+            {[...NAV, ...ACCOUNT].map(({ href, label, icon: Icon }) => {
+              const active = isActive(href, pathname)
               return (
-                <Link
-                  key={href}
-                  href={href}
-                  data-ai={`nav.${label.toLowerCase()}`}
-                  className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium", active ? "bg-white font-semibold text-primary shadow-sm" : "text-text-secondary")}
-                >
+                <Link key={href} href={href} data-ai={`nav.${label.toLowerCase()}`} className={cn("flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium", active ? "bg-primary-soft font-semibold text-primary" : "text-text-secondary")}>
                   <Icon className="size-3.5" />
                   {label}
-                  {badge[href] > 0 && <span className="size-1.5 rounded-full bg-destructive" />}
+                  {href === "/applications" && needsYou > 0 && <span className="size-1.5 rounded-full bg-warning" />}
                 </Link>
               )
             })}
           </nav>
-          <TokensChip />
-        </div>
+        </header>
         {user && user.email_verified === false && <VerifyEmailBanner email={user.email} />}
         {children}
       </div>

@@ -38,10 +38,14 @@ const batch = (items: ApiItem[], sessions: PanelState['sessions'] = {}, o: { out
 describe('panel view', () => {
   it('unpaired: asks for the code and calls pair with what was typed', () => {
     const { root, a } = draw({ status: 'unpaired' });
-    (root.querySelector('#code') as HTMLInputElement).value = 'ABCD-EFGH';
-    (root.querySelector('#label') as HTMLInputElement).value = 'Laptop';
+    // a pasted code fills every box, whatever its spacing or case
+    const first = root.querySelector('#code-0') as HTMLInputElement;
+    const paste = new Event('paste', { cancelable: true }) as Event & { clipboardData: unknown };
+    paste.clipboardData = { getData: () => ' abcd-efgh ' };
+    first.dispatchEvent(paste);
+    expect(Array.from(root.querySelectorAll<HTMLInputElement>('.box'), (b) => b.value).join('')).toBe('ABCDEFGH');
     (root.querySelector('#link') as HTMLButtonElement).click();
-    expect(a.pair).toHaveBeenCalledWith('ABCD-EFGH', 'Laptop');
+    expect(a.pair).toHaveBeenCalledWith('ABCD-EFGH', expect.any(String));
   });
 
   it('renders listing text as text, never as HTML (queued jobs, search jobs, batch rows)', () => {

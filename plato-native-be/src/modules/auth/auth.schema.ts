@@ -10,9 +10,15 @@ const phoneSchema = z
   .transform(normalizePhone)
   .refine((v) => E164.test(v), 'Enter a valid phone number with country code');
 
+// Stored and looked up lowercase: phones capitalize the first letter, so "Ali@x.com" must log in as "ali@x.com".
+const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email('Enter a valid email');
 export const signupSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
-  email: z.string().email('Enter a valid email'),
+  email: emailSchema,
   phone: phoneSchema,
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
@@ -23,7 +29,7 @@ const passwordSchema = z
   .max(200);
 
 export const forgotSchema = z.object({
-  email: z.string().email('Enter a valid email'),
+  email: emailSchema,
 });
 
 export const resetSchema = z.object({
@@ -34,7 +40,7 @@ export const resetSchema = z.object({
 export const tokenSchema = z.object({ token: z.string().min(20).max(200) });
 
 export const loginSchema = z.object({
-  email: z.string().email('Enter a valid email'),
+  email: emailSchema,
   password: z.string().min(1, 'Password is required'),
 });
 

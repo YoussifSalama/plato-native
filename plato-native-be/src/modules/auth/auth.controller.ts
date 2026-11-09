@@ -61,8 +61,12 @@ export class AuthController {
       httpOnly: true,
       sameSite: 'lax',
       // Secure in production, unless COOKIE_SECURE=false: a plain-http run on a bare IP (no TLS yet) would otherwise lose the cookie
-      secure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : nodeEnv === 'production',
+      secure: process.env.COOKIE_SECURE
+        ? process.env.COOKIE_SECURE === 'true'
+        : nodeEnv === 'production',
       maxAge: ACCESS_TOKEN_MAX_AGE_MS,
+      // Parent domain (".platohiring.com") so the web app's route guard on jobs.* sees the cookie the api.* host set.
+      domain: process.env.COOKIE_DOMAIN || undefined,
     });
   }
 
@@ -101,7 +105,9 @@ export class AuthController {
 
   @Post('logout')
   logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie(ACCESS_TOKEN_COOKIE);
+    res.clearCookie(ACCESS_TOKEN_COOKIE, {
+      domain: process.env.COOKIE_DOMAIN || undefined,
+    });
     return { success: true };
   }
 

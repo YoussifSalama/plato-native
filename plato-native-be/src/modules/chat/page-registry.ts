@@ -261,8 +261,45 @@ export const PAGES: Record<string, PageEntry> = {
   career: {
     path: '/career',
     purpose:
-      'Career chat with its own assistant: build or improve a resume, tailor to a job, mock and voice interviews, prove a skill. Links to interviews history and skills gap.',
+      'Career hub: readiness, profile snapshot preview, recommended next steps, the three practice modules (skill assessment, AI interview with general and job simulation, proof of skills), progress and recent results, and the practice library. With ?prompt/?thread it is the career coach chat (resume, tailoring, voice interviews).',
     controls: [
+      {
+        id: 'career.snapshot',
+        label: 'Profile snapshot',
+        does: 'Opens /career/snapshot (skills, readiness, strengths, weaknesses, history)',
+      },
+      {
+        id: 'career.rec:<n>',
+        label: 'Recommended next',
+        does: 'Starts recommendation n (0 = the top one): an assessment, interview, simulation or proof challenge',
+        tpl: 'career.rec:',
+      },
+      {
+        id: 'career.module.assessment',
+        label: 'Skill assessment',
+        does: 'Opens /career/assessments',
+      },
+      {
+        id: 'career.module.interview-general',
+        label: 'General interview',
+        does: 'Opens /career/interviews/general',
+      },
+      {
+        id: 'career.module.interview-job',
+        label: 'Job simulation',
+        does: 'Opens /career/interviews/simulate',
+      },
+      {
+        id: 'career.module.proof',
+        label: 'Proof of skills',
+        does: 'Opens /career/proof',
+      },
+      {
+        id: 'career.result:<id>',
+        label: 'A recent result',
+        does: 'Opens that result report',
+        tpl: 'career.result:',
+      },
       {
         id: 'career.interviews',
         label: 'Interviews',
@@ -338,6 +375,186 @@ export const PAGES: Record<string, PageEntry> = {
     purpose:
       'Skills gap: skills the best-matching jobs ask for that the profile does not show, with how many jobs each would unlock. Read-only.',
     controls: [],
+  },
+  snapshot: {
+    path: '/career/snapshot',
+    purpose:
+      'Profile snapshot: readiness, every skill with its level and evidence, strengths, weaknesses, all recommendations and the history of scored activities.',
+    controls: [
+      {
+        id: 'snapshot.assess:<skill>',
+        label: 'Assess',
+        does: 'Starts the assessment for that skill',
+        tpl: 'snapshot.assess:',
+      },
+      {
+        id: 'snapshot.prove:<skill>',
+        label: 'Prove it',
+        does: 'Opens a proof-of-skill challenge for that skill',
+        tpl: 'snapshot.prove:',
+      },
+    ],
+  },
+  assessments: {
+    path: '/career/assessments',
+    purpose:
+      'Skill assessments to choose from: skills on the CV first, then skills the matches ask for.',
+    controls: [
+      {
+        id: 'assessment.start:<slug>',
+        label: 'Start',
+        does: 'Opens that assessment. slugs: sql, excel, python, javascript, data-analysis, project-management, business-communication',
+        tpl: 'assessment.start:',
+      },
+    ],
+  },
+  assessment: {
+    path: '/career/assessments/<slug>',
+    purpose:
+      'One adaptive assessment: self-rating, then 7 multiple-choice questions, then the results page.',
+    controls: [
+      {
+        id: 'assessment.self.<n>',
+        label: 'Self-rating 1-5',
+        does: 'Picks how the seeker rates themselves',
+        tpl: 'assessment.self.',
+      },
+      {
+        id: 'assessment.begin',
+        label: 'Start assessment',
+        does: 'Starts the questions',
+      },
+      {
+        id: 'assessment.option:<n>',
+        label: 'Answer 1-4',
+        does: 'Picks an answer. Never pick answers for the seeker unless they say which.',
+        tpl: 'assessment.option:',
+      },
+      {
+        id: 'assessment.next',
+        label: 'Next question',
+        does: 'Confirms the answer',
+      },
+      { id: 'assessment.exit', label: 'Exit', does: 'Back to Career' },
+    ],
+  },
+  generalInterview: {
+    path: '/career/interviews/general',
+    purpose:
+      'General AI interview: set role, main skill, focus and length, then a written interview scored per answer.',
+    controls: [
+      {
+        id: 'interview.general.role',
+        label: 'Role',
+        does: 'Type the role',
+      },
+      {
+        id: 'interview.general.skill',
+        label: 'Main skill',
+        does: 'Type the skill',
+      },
+      {
+        id: 'interview.general.focus.<focus>',
+        label: 'Focus',
+        does: 'mixed | behavioral | technical | situational',
+        tpl: 'interview.general.focus.',
+      },
+      {
+        id: 'interview.general.length.<n>',
+        label: 'Length',
+        does: '3 or 5 questions',
+        tpl: 'interview.general.length.',
+      },
+      {
+        id: 'interview.general.start',
+        label: 'Start interview',
+        does: 'Starts the session',
+      },
+      {
+        id: 'interview.session.answer',
+        label: 'Answer box',
+        does: 'The seeker types their answer',
+      },
+      {
+        id: 'interview.session.next',
+        label: 'Next question',
+        does: 'Submits the answer (the last one scores the interview)',
+      },
+    ],
+  },
+  simulate: {
+    path: '/career/interviews/simulate',
+    purpose:
+      'Job interview simulation: pick one of the seeker\'s matches (the server writes questions from the job post and keeps the scorecard) or paste a job description.',
+    controls: [
+      {
+        id: 'simulate.source.<source>',
+        label: 'My matches | Paste a job',
+        does: 'Switches where the job comes from (match, paste)',
+        tpl: 'simulate.source.',
+      },
+      {
+        id: 'simulate.job:<jobId>',
+        label: 'A matched job',
+        does: 'Selects that job',
+        tpl: 'simulate.job:',
+      },
+      {
+        id: 'simulate.paste.text',
+        label: 'Job description',
+        does: 'Paste the posting',
+      },
+      {
+        id: 'simulate.start',
+        label: 'Start the interview',
+        does: 'Starts it (matched jobs open /career/interviews/<id>)',
+      },
+    ],
+  },
+  proof: {
+    path: '/career/proof',
+    purpose:
+      'Proof-of-skill challenges: real work samples scored against a visible rubric, gap skills first.',
+    controls: [
+      {
+        id: 'proof.open:<id>',
+        label: 'Start',
+        does: 'Opens the challenge workspace',
+        tpl: 'proof.open:',
+      },
+    ],
+  },
+  proofWorkspace: {
+    path: '/career/proof/<id>',
+    purpose:
+      'One challenge: brief and rubric, an editor that saves a draft as the seeker types, then scoring.',
+    controls: [
+      { id: 'proof.editor', label: 'Editor', does: 'The seeker writes here' },
+      {
+        id: 'proof.check',
+        label: 'Check my work',
+        does: 'Ticks the rubric items the draft already covers',
+      },
+      {
+        id: 'proof.submit',
+        label: 'Submit for scoring',
+        does: 'Scores it and opens the result',
+      },
+    ],
+  },
+  result: {
+    path: '/career/results/<id>',
+    purpose:
+      'One result report: score, breakdown, feedback per question, how the profile snapshot moved, and the next steps.',
+    controls: [
+      { id: 'result.retry', label: 'Try again', does: 'Starts it again' },
+      { id: 'result.back', label: 'Back to Career', does: 'Opens /career' },
+      {
+        id: 'result.snapshot',
+        label: 'View profile snapshot',
+        does: 'Opens /career/snapshot',
+      },
+    ],
   },
   notifications: {
     path: '/notifications',

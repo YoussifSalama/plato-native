@@ -7,6 +7,8 @@ import { Loader2 } from "lucide-react"
 import { answerInterview, getInterview, startInterview, type Interview } from "@/lib/interviews/api"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
+import { invalidateCareerData } from "@/lib/career-hub/snapshot"
 
 export default function InterviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -30,7 +32,14 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
     }
     setBusy(false)
   }
-  const send = () => run(async () => { setIv(await answerInterview(id, text.trim())); setText("") })
+  const send = () =>
+    run(async () => {
+      const next = await answerInterview(id, text.trim())
+      // A finished interview changes the Career hub's snapshot.
+      if (next.completedAt) invalidateCareerData()
+      setIv(next)
+      setText("")
+    })
   const retry = () => run(async () => router.push(`/career/interviews/${(await startInterview({ retryOf: id })).id}`))
 
   return (
@@ -83,7 +92,11 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
                   </div>
                 ) : null,
               )}
-              <Button data-ai="interview.retry" onClick={retry} disabled={busy} variant="outline" className="self-start">Retry the same interview</Button>
+              <div className="flex flex-wrap gap-2">
+                <Button data-ai="interview.retry" onClick={retry} disabled={busy} variant="outline">Retry the same interview</Button>
+                <Link href="/career/snapshot" data-ai="interview.snapshot" className="flex h-11 items-center rounded-lg border bg-card px-4 text-base font-medium hover:bg-muted">See your updated snapshot</Link>
+                <Link href="/career" data-ai="interview.back" className="flex h-11 items-center rounded-lg bg-primary px-4 text-base font-medium text-white hover:bg-primary-hover">Back to Career</Link>
+              </div>
             </section>
           )}
         </>

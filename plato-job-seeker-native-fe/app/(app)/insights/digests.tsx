@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { ArrowUpRight, ChevronDown, Globe2, Mail, MailCheck, MapPin, Sparkles } from "lucide-react"
+import { ArrowUpRight, ChevronDown, Globe2, Inbox, Mail, MailCheck, MapPin, Sparkles } from "lucide-react"
 import { cn } from "cn"
 import { CompanyAvatar } from "@/components/company-avatar"
 import { Skeleton } from "@/components/ui/skeleton"
+import { CARD, EmptyState, SectionHeader } from "@/components/plato-ui"
 import type { Digest } from "@/lib/insights/api"
 import { timeAgo } from "@/lib/jobs/links"
 import { ease, spring } from "@/lib/motion-system"
@@ -23,9 +24,9 @@ export function Digests({ digests, focus }: { digests: Digest[] | null; focus: s
     })
   const first = digests?.[0]?.id
   return (
-    <section className="flex flex-col gap-4 rounded-xl border bg-card p-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-bold text-foreground">Your digests</h2>
+    <section data-tour="following-digests" className={cn(CARD, "flex flex-col gap-4 p-5 sm:p-6")}>
+      <div className="flex flex-col gap-1.5">
+        <SectionHeader title="Your digests" icon={Inbox} accent="cobalt" />
         <p className="text-sm text-text-secondary">Everything your alerts found, as it was sent. A job that has closed since is marked.</p>
       </div>
       {digests === null ? (
@@ -35,14 +36,7 @@ export function Digests({ digests, focus }: { digests: Digest[] | null; focus: s
           ))}
         </div>
       ) : digests.length === 0 ? (
-        <div className="flex items-center gap-3 rounded-lg bg-primary-tint p-4">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
-            <Sparkles className="size-4" />
-          </span>
-          <p className="text-sm text-text-secondary">
-            <span className="font-semibold text-foreground">No digests yet.</span> Your first one arrives once your alerts find new jobs.
-          </p>
-        </div>
+        <EmptyState icon={Sparkles} title="No digests yet" hint="Your first one arrives once your alerts find new jobs." />
       ) : (
         <ul className="flex flex-col gap-2.5">
           {digests.map((d, i) => (
@@ -62,8 +56,8 @@ function DigestCard({ d, open, focused, onToggle, index }: { d: Digest; open: bo
   }, [focused, reduced])
   const companies = [...new Set(d.jobs.map((j) => j.company))].slice(0, 4)
   return (
-    <motion.li ref={ref} initial={reduced ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring.settle, delay: reduced ? 0 : Math.min(index, 6) * 0.04 }} className={cn("scroll-mt-6 overflow-hidden rounded-lg border transition-shadow", open && "shadow-[0_18px_40px_-30px_rgba(0,91,167,0.6)]", focused && "border-primary/40")}>
-      <button type="button" onClick={onToggle} aria-expanded={open} data-ai={`insights.digest:${d.id}`} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-primary-tint">
+    <motion.li ref={ref} initial={reduced ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring.settle, delay: reduced ? 0 : Math.min(index, 6) * 0.04 }} className={cn("scroll-mt-6 overflow-hidden rounded-lg border transition-[box-shadow,border-color] duration-200 hover:border-primary-line", open && "shadow-[var(--shadow-lift)]", focused && "border-primary-line")}>
+      <button type="button" onClick={onToggle} aria-expanded={open} data-ai={`insights.digest:${d.id}`} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-200 hover:bg-muted/60">
         <span className="flex -space-x-2">
           {companies.map((c) => (
             <CompanyAvatar key={c} name={c} size={28} className="ring-2 ring-card" />
@@ -90,7 +84,7 @@ function DigestCard({ d, open, focused, onToggle, index }: { d: Digest; open: bo
           <motion.ul initial={reduced ? false : { height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: reduced ? 0 : 0.25, ease: ease.out }} className="border-t border-divider">
             {d.jobs.map((j) => (
               <li key={j.id} className="border-b border-divider last:border-b-0">
-                <a href={j.url} target="_blank" rel="noreferrer" data-ai={`insights.job:${j.id}`} className={cn("group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-primary-tint", j.closed && "opacity-60")}>
+                <a href={j.url} target="_blank" rel="noreferrer" data-ai={`insights.job:${j.id}`} className={cn("group flex items-center gap-3 px-4 py-3 transition-colors duration-200 hover:bg-muted/60", j.closed && "opacity-60")}>
                   <CompanyAvatar name={j.company} size={36} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">

@@ -13,6 +13,7 @@ import { edgeTypes } from "@/app/(app)/jobs/components/journey/journey-edges"
 import { nodeTypes } from "@/app/(app)/jobs/components/journey/journey-nodes"
 import { TypedText } from "@/app/(app)/jobs/components/journey/typed-text"
 import { PlatoMark } from "@/components/plato-orb"
+import { StatIcon, type Accent } from "@/components/plato-ui"
 import { SourceTile } from "@/components/source-tile"
 import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
 
@@ -84,7 +85,7 @@ function DemoCanvas() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5">
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-border/70 bg-card/60 shadow-sm backdrop-blur">
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/70 bg-card/60 shadow-card backdrop-blur">
         <div className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-full border bg-card/95 py-1 pr-3 pl-1.5 text-xs font-medium text-foreground shadow-sm">
           <PlatoMark size={20} live={frame.progress.stage !== "done"} />
           How a search runs
@@ -123,23 +124,26 @@ function DemoCanvas() {
   )
 }
 
-const PROOF = [
-  { icon: Gauge, title: "Ranked against your profile", body: "Scored on your skills, titles and experience. Best fits first." },
-  { icon: Send, title: "Apply to your top matches", body: "Pick the roles you like; Plato queues the applications." },
+const PROOF: { icon: typeof Gauge; accent: Accent; title: string; body: string }[] = [
+  { icon: Gauge, accent: "cobalt", title: "Ranked against your profile", body: "Scored on your skills, titles and experience. Best fits first." },
+  { icon: Send, accent: "azure", title: "Apply to your top matches", body: "Pick the roles you like; Plato queues the applications." },
 ]
+const TILE = "rounded-xl border bg-card p-3 shadow-card"
 
 function AuthShowcase() {
   return (
     <motion.div initial="hidden" animate="show" variants={staggerContainer} className="flex min-h-0 flex-1 flex-col gap-5">
       <motion.div variants={fadeUpItem}>
-        <Link href="/" className="flex w-fit items-center gap-2.5">
+        <Link href="/" className="flex w-fit items-center gap-2.5 rounded-lg transition-opacity duration-200 hover:opacity-80">
           <PlatoMark size={34} />
           <span className="text-lg font-semibold text-foreground">Plato</span>
         </Link>
       </motion.div>
 
       <motion.div variants={fadeUpItem} className="flex flex-col gap-2">
-        <h1 className="max-w-lg text-[28px] leading-tight font-semibold text-balance text-foreground xl:text-3xl">Your AI job hunter, working in the open</h1>
+        <h1 className="type-page-title max-w-lg text-balance text-foreground xl:text-[32px]">
+          Your AI job hunter, <span className="text-brand-gradient">working in the open</span>
+        </h1>
         <p className="max-w-lg text-sm text-text-secondary xl:text-[15px]">
           Tell Plato what you want. It searches live job sources, ranks every posting against your profile and applies to the ones you choose.
         </p>
@@ -152,8 +156,8 @@ function AuthShowcase() {
       </motion.div>
 
       <motion.div variants={fadeUpItem} className="grid shrink-0 items-start gap-3 sm:grid-cols-3">
-        <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border bg-card p-3">
-          <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Live sources</span>
+        <div className={`flex min-w-0 flex-col gap-1.5 ${TILE}`}>
+          <span className="eyebrow">Live sources</span>
           <span className="flex items-center gap-1.5">
             <SourceTile source="LINKEDIN" size={24} />
             <SourceTile source="WORKABLE" size={24} />
@@ -163,13 +167,11 @@ function AuthShowcase() {
           </span>
           <span className="text-xs text-text-secondary">Plus Glassdoor, ZipRecruiter and more. Last 30 days only.</span>
         </div>
-        {PROOF.map(({ icon: Icon, title, body }) => (
-          <div key={title} className="flex items-start gap-3 rounded-lg border bg-card p-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-primary-soft text-primary">
-              <Icon className="size-4" />
-            </span>
+        {PROOF.map(({ icon, accent, title, body }) => (
+          <div key={title} className={`flex items-start gap-3 ${TILE}`}>
+            <StatIcon icon={icon} accent={accent} className="size-8 rounded-lg [&_svg]:size-4" />
             <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-sm font-semibold text-foreground">{title}</span>
+              <span className="type-card-title text-[14px] text-foreground">{title}</span>
               <span className="text-xs leading-relaxed text-text-secondary">{body}</span>
             </span>
           </div>

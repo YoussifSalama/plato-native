@@ -136,10 +136,11 @@ function Canvas({ run, progress, journey, onFinished }: CanvasProps) {
   const unread = notesOpen ? 0 : notes.length - readCount
 
   return (
-    <div className="relative h-[620px] overflow-hidden rounded-xl border bg-muted/20">
+    <div data-tour="search-journey" className="relative h-[620px] overflow-hidden rounded-xl border bg-muted/20">
       <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-2">
         <button
           type="button"
+          data-tour="search-notes"
           aria-expanded={notesOpen}
           aria-label={notesOpen ? "Hide Plato's notes" : "Show Plato's notes"}
           onClick={() => {

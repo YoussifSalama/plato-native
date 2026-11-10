@@ -98,6 +98,9 @@ export function createApi(cfg: ApiConfig) {
       call<{ ok: true }>('POST', `/extension/v1/items/${id}/heartbeat`, { attempt_id }),
     transition: (id: string, body: TransitionBody) =>
       call<ApiItem>('POST', `/extension/v1/items/${id}/transition`, body),
+    // Proof of apply: the screenshot of the submitted page (base64 JPEG/PNG, <= 5 MB), right after the submit is recorded.
+    proof: (id: string, body: { image: string; url?: string; capturedAt?: string }) =>
+      call<{ ok: true; screenshotKey: string }>('POST', `/extension/v1/items/${encodeURIComponent(id)}/proof`, body),
     // The seeker's identity details for this item (only while this device holds it).
     candidate: (id: string) => call<Candidate>('GET', `/extension/v1/items/${id}/candidate`),
     unpair: () => call<{ revoked: boolean }>('DELETE', '/extension/v1/device'),

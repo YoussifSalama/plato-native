@@ -6,6 +6,7 @@ import { BadgeCheck, Download, Eye, FileText, Loader2, Pencil, X } from "lucide-
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { approveResume, getCareerResume, type ResumeCard } from "@/lib/career/api"
+import { InfoTip } from "@/components/info-tip"
 
 // One fetch per resume, shared by the preview and the download.
 const blobs = new Map<string, Promise<Blob>>()
@@ -36,7 +37,10 @@ function AtsPanel({ ats }: { ats: NonNullable<ResumeCard["ats"]> }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card/70 p-3 text-xs">
       <div className="flex items-center justify-between gap-3">
-        <span className="font-semibold text-foreground">Keyword match for this job</span>
+        <span className="flex items-center gap-1.5 font-semibold text-foreground">
+          Keyword match for this job
+          <InfoTip text="The share of the job post's keywords that appear on this resume, with required skills counting double. Terms nothing in your profile supports are left off on purpose." label="What keyword match means" />
+        </span>
         <span className={cn("text-sm font-bold", tone)}>{ats.score}%</span>
       </div>
       {ats.headlineNote && <p className="text-muted-foreground">{ats.headlineNote}</p>}

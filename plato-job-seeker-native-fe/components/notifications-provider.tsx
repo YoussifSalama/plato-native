@@ -1,5 +1,6 @@
 "use client"
 
+import { liveSource } from "@/lib/live-source"
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -88,7 +89,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, [refreshNeeds])
 
   useEffect(() => {
-    listNotifications()
+    const fetchFeed = () => listNotifications()
+    fetchFeed()
       .then((feed) => {
         setItems(feed)
         // First visit on this browser: history is not news.
@@ -100,8 +102,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       .catch(() => setItems([]))
       .finally(() => setLoading(false))
 
-    const source = new EventSource(notificationEventsUrl(), { withCredentials: true })
-    source.onmessage = (msg) => {
+    // Open only while this tab is visible (see lib/live-source); back on the tab, refetch what was missed.
+    const onMessage = (msg: MessageEvent) => {
       const n = JSON.parse(msg.data as string) as SeekerNotification
       // Same thing, new state: replace the older entry for that run/application.
       const subject = n.id.split(":").slice(0, 2).join(":")
@@ -110,7 +112,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       if (n.kind === "application") window.dispatchEvent(new Event("plato:applications-changed"))
       setTimeout(() => setToasts((prev) => prev.filter((p) => p.id !== n.id)), TOAST_MS)
     }
-    return () => source.close()
+    return liveSource(notificationEventsUrl(), onMessage, () => {
+      fetchFeed()
+        .then(setItems)
+        .catch(() => undefined)
+    })
   }, [])
 
   const markRead = useCallback((ids: string[]) => {

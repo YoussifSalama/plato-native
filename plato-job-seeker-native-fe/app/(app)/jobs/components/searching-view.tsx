@@ -22,17 +22,19 @@ function SearchingView({
   const done = progress.stage === "done"
   return (
     <div className="flex flex-col gap-6">
-      <motion.div variants={lineReveal} initial="hidden" animate="show" className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-foreground">
+      <motion.div data-tour="search-progress" variants={lineReveal} initial="hidden" animate="show" className="flex flex-col gap-1">
+        <h2 className="type-section-title text-foreground">
           {failed ? "Search stopped" : done ? "Search complete" : "Watch Plato work"}
-        </h1>
+        </h2>
         <p className="text-sm text-muted-foreground">
           {failed
             ? "Something went wrong along the way — details below."
             : "Every step below is a real event from the search. Plato is in the corner if you need anything meanwhile."}
         </p>
       </motion.div>
-      <StageStepper current={0} />
+      <div data-tour="search-stages">
+        <StageStepper current={0} />
+      </div>
       <JourneyCanvas run={run} progress={progress} journey={journey} onFinished={onFinished} />
     </div>
   )

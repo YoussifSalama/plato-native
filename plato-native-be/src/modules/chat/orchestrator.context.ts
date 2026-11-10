@@ -14,6 +14,9 @@ export const APP_PAGES = [
   'messages',
   'notifications',
   'profile',
+  'following',
+  'tokens',
+  'extension',
 ] as const;
 export type AppPage = (typeof APP_PAGES)[number];
 

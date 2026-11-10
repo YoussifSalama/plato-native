@@ -113,7 +113,7 @@ export type ChatThread = ThreadSummary & { messages: ThreadMessage[] }
 
 // What the agent asked the app to do this turn. `navigate` moves pages; the
 // rest drive the results list and are applied by ResultsView as UiCommand.
-export type AppPage = "home" | "jobs" | "applications" | "career" | "messages" | "notifications" | "profile"
+export type AppPage = "home" | "jobs" | "applications" | "career" | "messages" | "notifications" | "profile" | "following" | "tokens" | "extension"
 export type FilterKey = "remoteType" | "jobType" | "level" | "location" | "salaryMin" | "hasSalary" | "postedWithinDays" | "acceptsCountry" | "salaryCurrency"
 export type OrchestratorEvent =
   | { type: "search_started"; runId: string }
@@ -226,7 +226,8 @@ export type JobApplication = {
   // Worker steps of the latest attempt (persisted, survives restarts).
   events?: ApplyEvent[] | null
   // What Plato sent (or would send, in a dry run), in the employer's own wording.
-  evidence: { dryRun?: boolean; manual?: boolean; failed?: boolean; diagnosis?: string; repairs?: number; indicators?: string[]; confirmation?: string; screenshotKey?: string | null; sent?: { label: string; value: AnswerValue }[]; at?: string } | null
+  // Extension applications: source "extension", how the send was confirmed, and the page text it saw (marker).
+  evidence: { dryRun?: boolean; manual?: boolean; failed?: boolean; diagnosis?: string; repairs?: number; indicators?: string[]; confirmation?: string; screenshotKey?: string | null; sent?: { label: string; value: AnswerValue }[]; at?: string; source?: "extension"; confirmed_by?: "page_marker" | "user_attestation"; marker?: string | null; proofUrl?: string | null; proofCapturedAt?: string | null } | null
   thread_id: string | null
   created_at: string
   updated_at: string
@@ -325,7 +326,29 @@ const setHidden = (jobId: string, value: boolean) =>
 const listApplications = (filters: { threadId?: string; status?: ApplicationStatus[] } = {}) =>
   request<JobApplication[]>(apiClient.get("/job-seeker/applications", { params: { threadId: filters.threadId, status: filters.status?.join(",") || undefined } }))
 
+// One state change of an extension application (newest last). Older items have none yet.
+export type ApplyItemStep = { at: string; from: string; to: string; message?: string; reason?: string; marker?: string; failure_kind?: string }
+export type ApplyBatchItemView = {
+  state: string
+  provider: string | null
+  resume_choice: "profile" | "tailored" | null
+  last: { seq: number; to: string; at: string; message?: string; reason?: string; marker?: string; failure_kind?: string } | null
+  history: ApplyItemStep[]
+  verify_reason: string | null
+  created_at: string
+  updated_at: string
+}
 export type ApplicationDetail = JobApplication & {
+  // Who applied: the browser extension, or Plato's own worker (LEGACY / unset on older rows).
+  engine?: "EXTENSION" | "LEGACY" | null
+  // Confirmed answers keyed by the form's field id (labels come from needs_input.questions).
+  answers?: Record<string, AnswerValue> | null
+  // The extension's latest batch item for this application (null for Plato's own worker).
+  batch_item?: ApplyBatchItemView | null
+  // A tailored resume can be opened with getApplicationResume.
+  has_tailored_resume?: boolean
+  // Why this job matched: the same percent and reasons the job cards show (null when it never ranked).
+  match?: { percent: number; label: JobMatch["match_label"]; reasons: string[] } | null
   thread: { id: string; title: string | null } | null
   events: ApplyEvent[]
   place: { position: number; etaSeconds: number } | null

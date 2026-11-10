@@ -4,7 +4,7 @@ import type { AppPage, DiscoveryRun } from "@/lib/jobs/api"
 export const JOBS_HOME = "/jobs"
 
 // Where the assistant's `navigate` events go.
-export const PAGE_PATH: Record<AppPage, string> = { home: "/", jobs: JOBS_HOME, applications: "/applications", career: "/career", messages: "/messages", notifications: "/notifications", profile: "/profile" }
+export const PAGE_PATH: Record<AppPage, string> = { home: "/", jobs: JOBS_HOME, applications: "/applications", career: "/career", messages: "/messages", notifications: "/notifications", profile: "/profile", following: "/following", tokens: "/tokens", extension: "/extension" }
 
 export function threadHref(threadId: string) {
   return `/jobs/${threadId}`

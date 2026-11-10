@@ -11,6 +11,8 @@ import {
 import { randomUUID } from 'crypto';
 import { applicationNotification } from '../notifications/notification-factory';
 import { NotificationsBus } from '../notifications/notifications.bus';
+import { ApplyEventsBus, ApplyStep } from '../apply/apply-events.bus';
+import { NOTIFY_APPLICATION_STATUSES } from '../notifications/notification-factory';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   canMove,
@@ -43,6 +45,28 @@ export interface TransitionInput {
   };
 }
 
+// Every transition is kept (newest last) so the seeker can see each step the
+// extension took; `last` stays the latest one for everything that reads it.
+export const HISTORY_CAP = 50;
+export interface HistoryEntry {
+  at: string;
+  from: string;
+  to: string;
+  message?: string;
+  reason?: string;
+  marker?: string;
+  failure_kind?: string;
+}
+export const withHistory = (
+  prev: Detail,
+  entry: HistoryEntry,
+): HistoryEntry[] => {
+  const past = Array.isArray(prev.history)
+    ? (prev.history as HistoryEntry[])
+    : [];
+  return [...past, entry].slice(-HISTORY_CAP);
+};
+
 const now = () => new Date();
 const inMs = (ms: number) => new Date(Date.now() + ms);
 
@@ -55,6 +79,7 @@ export class ExtensionBatchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsBus,
+    private readonly events: ApplyEventsBus,
   ) {}
 
   // ---- web (cookie): create a batch ---------------------------------
@@ -332,7 +357,7 @@ export class ExtensionBatchService {
     const last = (item.detail as Detail | null)?.last;
     if (t.seq <= item.seq) {
       if (t.seq === item.seq && last?.to === t.to && state === t.to) {
-        await this.mirror(item, t.to);
+        await this.mirror(item, t.to, t.to);
         return dto(item);
       }
       throw new ConflictException('Out of order');
@@ -353,9 +378,19 @@ export class ExtensionBatchService {
       throw new BadRequestException('VERIFY needs a reason');
 
     const prev = (item.detail ?? {}) as Detail;
+    const at = new Date().toISOString();
     const next: Detail = {
       ...prev,
-      last: { seq: t.seq, to: t.to, at: new Date().toISOString(), ...d },
+      last: { seq: t.seq, to: t.to, at, ...d },
+      history: withHistory(prev, {
+        at,
+        from: state,
+        to: t.to,
+        ...(d.message && { message: d.message }),
+        ...(d.reason && { reason: d.reason }),
+        ...(d.marker && { marker: d.marker }),
+        ...(d.failure_kind && { failure_kind: d.failure_kind }),
+      }),
       ...(t.to === 'AWAITING_SUBMIT' && {
         armed: true,
         armed_at: new Date().toISOString(),
@@ -380,7 +415,7 @@ export class ExtensionBatchService {
     });
     if (r.count !== 1) throw new ConflictException('Item changed; reload it');
     const updated = await this.item(p, itemId);
-    await this.mirror(updated, t.to);
+    await this.mirror(updated, t.to, state);
     return dto(updated);
   }
 
@@ -458,9 +493,16 @@ export class ExtensionBatchService {
     for (const item of expired) {
       const st = item.state;
       if (st === 'AWAITING_SUBMIT') {
-        const detail = {
-          ...((item.detail ?? {}) as Detail),
+        const prevDetail = (item.detail ?? {}) as Detail;
+        const detail: Detail = {
+          ...prevDetail,
           verify_reason: 'lease_expired_after_ready',
+          history: withHistory(prevDetail, {
+            at: now().toISOString(),
+            from: st,
+            to: 'VERIFY',
+            reason: 'lease_expired_after_ready',
+          }),
         };
         const r = await this.prisma.applyBatchItem.updateMany({
           where: { id: item.id, state: 'AWAITING_SUBMIT', device_id: item.device_id },
@@ -569,9 +611,11 @@ export class ExtensionBatchService {
   }
 
   // Reflect a settled item on its application row. Idempotent.
+  // `from`: the item's state before this transition (a replay passes `to`: no second bell).
   private async mirror(
     item: { job_seeker_id: string; job_id: string; detail: unknown },
     to: ItemState,
+    from?: ItemState,
   ) {
     const last = (det(item.detail).last ?? {}) as Detail;
     const where = {
@@ -580,7 +624,13 @@ export class ExtensionBatchService {
       engine: 'EXTENSION' as const,
       status: 'EXTENSION_ACTIVE' as const,
     };
-    if (to === 'SUBMITTED_CONFIRMED' || to === 'SUBMITTED_ATTESTED')
+    if (to === 'SUBMITTED_CONFIRMED' || to === 'SUBMITTED_ATTESTED') {
+      // Merge into what the application already holds. A screenshotKey without
+      // proofCapturedAt is an older attempt's (worker failure shot), not proof
+      // of this submit: dropped, the extension uploads its own right after.
+      const prior = (await this.prisma.jobApplication.findFirst({ where, select: { evidence: true } }))
+        ?.evidence as Detail | null | undefined;
+      const { screenshotKey, ...kept } = prior ?? {};
       await this.prisma.jobApplication.updateMany({
         where,
         data: {
@@ -589,6 +639,8 @@ export class ExtensionBatchService {
           needs_input: null,
           // Machine evidence and the person's word stay distinguishable.
           evidence: {
+            ...kept,
+            ...(screenshotKey && kept.proofCapturedAt && { screenshotKey }),
             source: 'extension',
             confirmed_by:
               to === 'SUBMITTED_CONFIRMED' ? 'page_marker' : 'user_attestation',
@@ -597,7 +649,7 @@ export class ExtensionBatchService {
           },
         },
       });
-    else if (to === 'FAILED')
+    } else if (to === 'FAILED')
       await this.prisma.jobApplication.updateMany({
         where,
         data: {
@@ -620,6 +672,55 @@ export class ExtensionBatchService {
       });
     else if (to === 'VERIFY') await this.markVerify(item);
     else if (to === 'CANCELLED') await this.releaseLock(item);
+    await this.announce(item, to, last, from);
+  }
+
+  // Tell the open web app right away: the Applications pages update live (same stream as
+  // the server worker), and a sent or failed application rings the bell. VERIFY already
+  // notified in markVerify. Best effort: a missed event only means the page catches up on refetch.
+  private async announce(
+    item: { job_seeker_id: string; job_id: string },
+    to: ItemState,
+    last: Detail,
+    from?: ItemState,
+  ) {
+    const app = await this.prisma.jobApplication
+      .findUnique({
+        where: {
+          job_seeker_id_job_id: {
+            job_seeker_id: item.job_seeker_id,
+            job_id: item.job_id,
+          },
+        },
+        include: { job: { select: { title: true, company: true } } },
+      })
+      .catch(() => null);
+    if (!app) return;
+    const step: ApplyStep =
+      to === 'SUBMITTED_CONFIRMED' || to === 'SUBMITTED_ATTESTED'
+        ? 'submitted'
+        : to === 'FAILED'
+          ? 'failed'
+          : to === 'SKIPPED' || to === 'CANCELLED'
+            ? 'skipped'
+            : to === 'VERIFY'
+              ? 'human_check'
+              : 'filling';
+    const live = app.status === 'EXTENSION_ACTIVE' && step === 'filling';
+    this.events.publish(item.job_seeker_id, {
+      applicationId: app.id,
+      jobId: app.job_id,
+      // IN_PROGRESS keeps the row in place; anything else makes the page refetch.
+      status: live ? 'IN_PROGRESS' : app.status,
+      step,
+      message: last.message ? String(last.message) : `Extension: ${to.toLowerCase().replace(/_/g, ' ')}`,
+      attempt: 0,
+      at: new Date().toISOString(),
+    });
+    // No bell for a replay, for VERIFY (markVerify told them), or when the seeker settles a
+    // VERIFY themselves ("it was sent" / "it was not"): they just answered it.
+    if (from !== to && from !== 'VERIFY' && step !== 'human_check' && NOTIFY_APPLICATION_STATUSES.includes(app.status))
+      this.notifications.publish(item.job_seeker_id, applicationNotification(app));
   }
 }
 

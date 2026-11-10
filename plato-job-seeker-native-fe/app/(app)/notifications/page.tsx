@@ -9,6 +9,7 @@ import { timeAgo } from "@/lib/jobs/links"
 import { NotificationIcon, useNotifications } from "@/components/notifications-provider"
 import { PillTabs } from "@/components/pill-tabs"
 import { Skeleton } from "@/components/ui/skeleton"
+import { CARD, EmptyState } from "@/components/plato-ui"
 import type { SeekerNotification } from "@/lib/notifications/api"
 
 const FILTERS = [
@@ -31,14 +32,14 @@ export default function NotificationsPage() {
   const count = (key: FilterKey) => (key === "unread" ? unread : items.filter((n) => FILTERS.find((f) => f.key === key)?.test?.(n) ?? true).length)
 
   return (
-    <div className={PAGE}>
+    <div data-tour-state={loading ? undefined : items.length ? "notifications.list" : "notifications.empty"} className={PAGE}>
       <PageHeader
         section="Account"
         title="Notifications"
         description="Searches that finished, applications that moved and new jobs from your alerts. Updates arrive live."
         bell={false}
         actions={
-          <button type="button" data-ai="notifications.mark-all-read" disabled={!unread} onClick={markAllRead} className="h-9 rounded-full border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50">
+          <button type="button" data-ai="notifications.mark-all-read" disabled={!unread} onClick={markAllRead} className="h-9 rounded-full border bg-card px-4 text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary-line hover:bg-primary-tint disabled:opacity-50">
             Mark all read
           </button>
         }
@@ -46,7 +47,7 @@ export default function NotificationsPage() {
 
       <PillTabs id="notifications-filter" tabs={FILTERS.map((f) => ({ key: f.key, label: f.label, count: count(f.key) }))} value={filter} onChange={setFilter} label="Filter notifications" dataAi="notifications.filter" />
 
-      <div className="rounded-lg border bg-card px-5 py-1">
+      <div data-tour="notifications-list" className={cn(CARD, "overflow-hidden px-5 py-1")}>
         {loading && (
           <ul aria-busy="true">
             {Array.from({ length: 5 }, (_, i) => (
@@ -61,30 +62,38 @@ export default function NotificationsPage() {
           </ul>
         )}
         {!loading && shown.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-12 text-center">
-            <span className="flex size-12 items-center justify-center rounded-full bg-primary-soft text-primary">
-              <BellOff className="size-5" />
-            </span>
-            <p className="text-sm font-semibold text-foreground">{filter === "unread" ? "You're all caught up" : "Nothing here yet"}</p>
-            <p className="max-w-sm text-sm text-text-secondary">Start a search or apply to a few jobs. Plato will tell you here when something needs you.</p>
-          </div>
+          <EmptyState
+            icon={BellOff}
+            className="my-4 border-0 py-10"
+            title={filter === "unread" ? "You're all caught up" : "Nothing here yet"}
+            hint={filter === "alert" ? "Follow a company and new jobs from it show up here." : filter === "unread" ? "New updates appear here as they arrive." : "Start a search or apply to a few jobs. Plato will tell you here when something needs you."}
+            action={
+              filter === "alert" ? (
+                <Link href="/following" className="group inline-flex items-center gap-1.5 rounded-lg bg-primary-soft px-3 py-1.5 text-[13px] font-semibold text-primary transition-colors duration-200 hover:bg-primary hover:text-primary-foreground">
+                  Follow a company
+                  <ArrowRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
+                </Link>
+              ) : undefined
+            }
+          />
         )}
         <ul>
-          {shown.map((n) => (
-            <li key={n.id} className="-mx-5 border-b border-divider last:border-b-0">
-              <Link href={n.href} data-ai={`notifications.item:${n.id}`} onClick={() => markRead([n.id])} className={cn("flex items-center gap-3.5 px-5 py-4 transition-colors hover:bg-primary-tint", isUnread(n.id) && "bg-primary-tint/70")}>
+          {shown.map((n, i) => (
+            <li key={n.id} className="-mx-5 border-b border-divider animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-both duration-300 last:border-b-0" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
+              {/* Unread: a thin cobalt bar on the left and a faint tint, not a filled block. */}
+              <Link href={n.href} data-ai={`notifications.item:${n.id}`} onClick={() => markRead([n.id])} className={cn("group relative flex items-center gap-3.5 px-5 py-4 transition-colors duration-200 hover:bg-primary-tint", isUnread(n.id) && "bg-primary-tint/40 before:absolute before:inset-y-3 before:left-0 before:w-[3px] before:rounded-r-full before:bg-primary")}>
                 <NotificationIcon n={n} className="size-9" />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
-                    <span className="truncate text-[15px] font-semibold text-foreground">{n.title}</span>
+                    <span className="type-card-title truncate text-foreground">{n.title}</span>
                     {isUnread(n.id) && <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="unread" />}
                   </span>
                   <span className="line-clamp-2 block text-sm text-text-secondary">{n.body}</span>
-                  <span className="mt-0.5 block text-xs text-text-tertiary">
+                  <span className="type-meta mt-0.5 block text-text-tertiary">
                     {n.kind === "run" ? "Search" : n.kind === "queue" ? "Apply queue" : n.kind === "alert" ? "Job alerts" : "Application"} · {timeAgo(n.at)}
                   </span>
                 </span>
-                <ArrowRight className="size-4 shrink-0 text-lavender" />
+                <ArrowRight className="size-4 shrink-0 text-lavender transition-[color,transform] duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
               </Link>
             </li>
           ))}

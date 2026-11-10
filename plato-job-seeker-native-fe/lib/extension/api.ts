@@ -15,7 +15,7 @@ export type ExtensionProgress = {
   linked: boolean
   counts: { waiting: number; working: number; needsYou: number; submitted: number; failed: number; skipped: number }
   active: number
-  recent: { id: string; title: string; company: string; state: string; note: string | null; updated_at: string }[]
+  recent: { id: string; application_id: string | null; title: string; company: string; state: string; note: string | null; updated_at: string }[]
 }
 export const getExtensionProgress = async () => (await apiClient.get<ExtensionProgress>("/extension/progress")).data
 // Put jobs in the extension's queue: each becomes a waiting job in the panel. Jobs whose site the

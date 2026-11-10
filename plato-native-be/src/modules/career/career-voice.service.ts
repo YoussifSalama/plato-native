@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ChatRole } from '@prisma/client';
+import { ChatRole, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { IEnvParams } from '../../types/config/env.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,6 +20,12 @@ import {
   VOICE_MAX_MINUTES,
   voiceInstructions,
 } from './career-voice';
+import {
+  MIN_VOICE_WORDS,
+  VoiceScorecard,
+  voiceScorecardFor,
+  voiceWords,
+} from '../interview/interview';
 
 export const voiceStartSchema = z.object({
   mode: z.enum(['practice', 'mock', 'skill']),
@@ -27,6 +33,8 @@ export const voiceStartSchema = z.object({
   // The job title they are preparing for.
   role: z.string().trim().max(80).optional(),
   jobDescription: z.string().trim().max(6000).optional(),
+  // The practice format (behavioral, case, negotiation role-play...).
+  focus: z.string().trim().max(300).optional(),
 });
 
 export const voiceTranscriptSchema = z.object({
@@ -52,7 +60,19 @@ export const voiceTranscriptSchema = z.object({
       cachedInputTokens: z.number().int().min(0).max(5_000_000),
     })
     .optional(),
+  // What the call was for, so the written scorecard judges it against the right role or job.
+  context: z
+    .object({
+      title: z.string().trim().max(160),
+      focus: z.string().trim().max(300).optional(),
+      jobDescription: z.string().trim().max(6000).optional(),
+    })
+    .optional(),
 });
+
+// Why a finished call has no scorecard: nothing said, too little to judge, no tokens left
+// for the scorer, or the scorer failed (the transcript is saved either way).
+export type Unscored = 'empty' | 'short' | 'tokens' | 'failed';
 
 const LABEL = {
   practice: 'Practice interview',
@@ -118,6 +138,7 @@ export class CareerVoiceService {
       skill: req.skill,
       role: req.role,
       jobDescription: req.jobDescription,
+      focus: req.focus,
     });
     const model = this.env.realtimeModel;
     const res = await fetch(
@@ -173,9 +194,71 @@ export class CareerVoiceService {
     body: z.infer<typeof voiceTranscriptSchema>,
   ) {
     const { thread } = await this.ownedThread(userId, threadId);
+    // The balance before settling: the reservation is still taken out of it.
+    const before = await this.credits.account(userId);
     // settled first: a call with nothing said still ran
-    await this.settleVoice(userId, threadId, body);
-    if (!body.turns.length) return { saved: 0 };
+    const settled = await this.settleVoice(userId, threadId, body);
+    const saved = body.turns.length
+      ? await this.saveTurns(threadId, thread.title, body)
+      : 0;
+    if (!body.turns.some((t) => t.role === 'user'))
+      return this.noScore(saved, 'empty');
+    if (voiceWords(body.turns) < MIN_VOICE_WORDS)
+      return this.noScore(saved, 'short');
+    // The scorer is a paid AI step: only with tokens left after the call's own charge.
+    // The charge itself is recorded asynchronously, so it is worked out here, not re-read.
+    if (before.balance + settled.heldTokens - settled.chargeTokens <= 0)
+      return this.noScore(saved, 'tokens');
+    let scorecard: VoiceScorecard | null = null;
+    try {
+      scorecard = await voiceScorecardFor(
+        this.env.careerModel,
+        {
+          title: body.context?.title || LABEL[body.mode],
+          focus: body.context?.focus,
+          description: body.context?.jobDescription,
+        },
+        body.turns,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `voice scorecard failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return this.noScore(saved, 'failed');
+    }
+    if (!scorecard) return this.noScore(saved, 'short');
+    // Kept with the transcript, in the same conversation, so the text assistant sees it too.
+    await this.prisma.careerMessage.create({
+      data: {
+        thread_id: threadId,
+        role: ChatRole.ASSISTANT,
+        content: `Scorecard for this voice interview: ${scorecard.overall}/100. ${[
+          scorecard.strengths[0] && `Strength: ${scorecard.strengths[0]}`,
+          scorecard.gaps[0] && `To work on: ${scorecard.gaps[0]}`,
+        ]
+          .filter(Boolean)
+          .join('. ')}`.trim(),
+        ui: {
+          type: 'voice-scorecard',
+          title: body.context?.title || LABEL[body.mode],
+          scorecard,
+        } as unknown as Prisma.InputJsonValue,
+        created_at: new Date(Date.now() + body.turns.length + 2),
+      },
+    });
+    return { saved, scorecard, unscored: null };
+  }
+
+  private noScore(saved: number, why: Unscored) {
+    return { saved, scorecard: null, unscored: why };
+  }
+
+  private async saveTurns(
+    threadId: string,
+    title: string | null,
+    body: z.infer<typeof voiceTranscriptSchema>,
+  ) {
+    const thread = { title };
     const minutes = Math.max(1, Math.round(body.seconds / 60));
     // Distinct, increasing timestamps keep the order stable.
     const t0 = Date.now();
@@ -205,7 +288,7 @@ export class CareerVoiceService {
       },
     });
     // Usage and cost are stored for us only; the client is never told.
-    return { saved: body.turns.length };
+    return body.turns.length;
   }
 
   // The browser reports the call's length and tokens, so neither decides the
@@ -231,6 +314,7 @@ export class CareerVoiceService {
     const u = body.usage;
     const reported = u ? voiceCost(this.env.realtimeModel, u) : null;
     if (hold) await this.credits.release(userId, hold.id);
+    const heldTokens = hold ? Math.max(0, -hold.amount) : 0;
     recordUsage({
       feature: 'career.voice',
       model: this.env.realtimeModel,
@@ -246,5 +330,6 @@ export class CareerVoiceService {
         ...u,
       },
     });
+    return { heldTokens, chargeTokens: toTokens(charge) };
   }
 }

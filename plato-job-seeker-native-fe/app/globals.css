@@ -76,7 +76,8 @@
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
+  /* One card radius for the whole app (SPEC §2: 16px). Controls use rounded-lg (10px), chips rounded-full. */
+  --radius-2xl: 1rem;
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 }
@@ -154,8 +155,10 @@
   --brand-gradient: linear-gradient(135deg, #005ba7 0%, #0a7fd0 55%, #00a1e2 100%);
   --brand-glow: rgba(0, 161, 226, 0.14);
   --shadow-brand: 0 12px 30px -12px rgba(0, 91, 167, 0.45);
-  --shadow-card: 0 1px 2px rgba(14, 27, 44, 0.04), 0 8px 24px -16px rgba(14, 27, 44, 0.14);
-  --shadow-lift: 0 20px 50px -20px rgba(14, 27, 44, 0.22);
+  /* Elevation scale: card (resting, barely there), lift (hover), float (launchers, popovers). */
+  --shadow-card: 0 1px 2px rgba(14, 27, 44, 0.04), 0 2px 6px -2px rgba(14, 27, 44, 0.04);
+  --shadow-lift: 0 1px 2px rgba(14, 27, 44, 0.04), 0 10px 24px -12px rgba(14, 27, 44, 0.16);
+  --shadow-float: 0 12px 32px -12px rgba(0, 58, 110, 0.3), 0 2px 6px -2px rgba(14, 27, 44, 0.08);
 }
 
 /* Post-login product shell: the same palette on cool paper, softer
@@ -250,28 +253,81 @@
   color: transparent;
 }
 
-/* Small uppercase mono label above a heading, as on the landing page. */
+/* Small uppercase label above a heading: dates, step counters, card kickers.
+   Sans, not mono, so it sits with the headings it introduces. */
 @utility eyebrow {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   /* Metadata, dates and counters (SPEC U4); a Plato note's own label is primary. */
   color: var(--text-tertiary);
+}
+
+/* ---------- Type scale (post-login app) ----------
+   One scale for every page. Named type-* (not text-*) so the class merger never
+   mistakes them for a text colour. Colour comes from the usual text-* tokens.
+   page title 28 · section title 18 · card title 15 · body 14 · meta 12.5 · stat 26 */
+@utility type-page-title {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+@utility type-section-title {
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+@utility type-card-title {
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+@utility type-body {
+  font-size: 14px;
+  line-height: 1.55;
+}
+@utility type-meta {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+/* Big KPI numbers. Always tabular so a row of them lines up. */
+@utility type-stat {
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Horizontal scrollers (the compact nav) that should not show a bar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
 }
 
 /* Resting card shadow, and the hover lift the landing tiles use. */
 @utility shadow-card {
   box-shadow: var(--shadow-card);
 }
+@utility shadow-lift {
+  box-shadow: var(--shadow-lift);
+}
 @utility shadow-brand {
   box-shadow: var(--shadow-brand);
 }
+@utility shadow-float {
+  box-shadow: var(--shadow-float);
+}
 @utility card-lift {
-  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s, border-color 0.25s;
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.2s, border-color 0.2s;
   &:hover {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
     box-shadow: var(--shadow-lift);
     border-color: var(--primary-line);
   }

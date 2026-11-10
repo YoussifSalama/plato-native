@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { ExtensionBatchService } from './batch.service';
+import { ExtensionBatchService, HISTORY_CAP, withHistory } from './batch.service';
 import { limiter } from './extension-auth.guard';
 import { PROVIDER_POLICY } from './provider-policy';
 import { fakePrisma } from './testing/fake-prisma';
@@ -12,10 +12,11 @@ const makeBus = () => ({ publish: jest.fn() });
 const setup = () => {
   const prisma = fakePrisma();
   const bus = makeBus();
-  const svc = new ExtensionBatchService(prisma as any, bus as any);
+  const events = { publish: jest.fn() };
+  const svc = new ExtensionBatchService(prisma as any, bus as any, events as any);
   // Fixture provider: the real gate keeps everything BLOCKED (tested below).
   svc.policy = () => 'FILL_ONLY';
-  return { prisma, svc, bus };
+  return { prisma, svc, bus, events };
 };
 const jobId = (n: number) => String(n).padStart(24, '1');
 const addJob = (prisma: any, n = 1, source = 'WORKABLE') =>
@@ -48,7 +49,7 @@ describe('provider gate', () => {
   it('a BLOCKED provider: no batch, and no claim, with the real policy', async () => {
     PROVIDER_POLICY.workable = 'BLOCKED'; // every registered provider is enabled now: block one to test the gate
     const prisma = fakePrisma();
-    const svc = new ExtensionBatchService(prisma as any, makeBus() as any); // real policy
+    const svc = new ExtensionBatchService(prisma as any, makeBus() as any, { publish: jest.fn() } as any); // real policy
     const job = await addJob(prisma);
     const r = await svc.createBatch('seeker1', [job.id]);
     expect(r).toMatchObject({ batch_id: null, rejected: [{ reason: 'provider_blocked' }] });
@@ -163,6 +164,36 @@ describe('transitions', () => {
     expect(done.state).toBe('SUBMITTED_CONFIRMED');
     expect(app(prisma)).toMatchObject({ status: 'SUBMITTED', engine: 'EXTENSION' });
     expect(app(prisma).evidence).toMatchObject({ confirmed_by: 'page_marker', marker: 'Application received' });
+  });
+
+  it('tells the open web app live: every step on the apply stream, one bell when sent', async () => {
+    const { prisma, svc, bus, events } = setup();
+    const it = await item(prisma, svc);
+    const c = await svc.claim(A, it.id);
+    await drive(svc, A, c, [...armed, ['SUBMITTED_CONFIRMED', { marker: 'Application received' }]]);
+    const steps = events.publish.mock.calls.map((x: any) => [x[1].status, x[1].step]);
+    expect(steps[0]).toEqual(['IN_PROGRESS', 'filling']);
+    expect(steps.at(-1)).toEqual(['SUBMITTED', 'submitted']);
+    expect(bus.publish).toHaveBeenCalledTimes(1);
+    expect(bus.publish.mock.calls[0][1]).toMatchObject({ status: 'SUBMITTED', title: 'Application sent' });
+  });
+
+  it('keeps every transition in detail.history (capped) without changing detail.last', async () => {
+    const { prisma, svc } = setup();
+    const it = await item(prisma, svc);
+    const c = await svc.claim(A, it.id);
+    await drive(svc, A, c, [...armed, ['SUBMITTED_CONFIRMED', { marker: 'Thanks!' }]]);
+    const detail = (prisma.applyBatchItem.rows.find((r: any) => r.id === it.id) as any).detail;
+    expect(detail.history.map((h: any) => `${h.from}>${h.to}`)).toEqual([
+      'CLAIMED>PREPARING', 'PREPARING>FILLING', 'FILLING>REVIEW', 'REVIEW>AWAITING_SUBMIT', 'AWAITING_SUBMIT>SUBMITTED_CONFIRMED',
+    ]);
+    expect(detail.history[4]).toMatchObject({ marker: 'Thanks!', at: detail.last.at });
+    expect(detail.last).toMatchObject({ seq: 5, to: 'SUBMITTED_CONFIRMED', marker: 'Thanks!' });
+    const full = Array.from({ length: HISTORY_CAP }, (_, i) => ({ at: String(i), from: 'A', to: 'B' }));
+    const capped = withHistory({ history: full }, { at: 'new', from: 'B', to: 'C' });
+    expect(capped).toHaveLength(HISTORY_CAP);
+    expect(capped[0].at).toBe('1');
+    expect(capped[HISTORY_CAP - 1].at).toBe('new');
   });
 
   it('attestation is recorded separately from machine confirmation', async () => {

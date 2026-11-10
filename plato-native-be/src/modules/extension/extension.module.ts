@@ -22,11 +22,13 @@ import { DocumentsModule } from '../documents/documents.module';
 import { ResumeEngine } from '../resume/resume-engine.service';
 import { DiscoveryService } from '../discovery/discovery.service';
 import { DISCOVERY_MATCHES, SearchesService } from './searches.service';
+import { ApplyModule } from '../apply/apply.module';
 import { V3Controller } from './v3/v3.controller';
 import { V3SessionService } from './v3/v3-session.service';
+import { ProofService } from './proof.service';
 
 @Module({
-  imports: [AuthModule, UserModule, DiscoveryModule, ResumeModule, DocumentsModule],
+  imports: [AuthModule, UserModule, DiscoveryModule, ResumeModule, DocumentsModule, ApplyModule],
   controllers: [
     V3Controller,
     ExtensionWebController,
@@ -48,6 +50,7 @@ import { V3SessionService } from './v3/v3-session.service';
     QueueService,
     ExtensionSettingsService,
     V3SessionService,
+    ProofService,
   ],
 })
 export class ExtensionModule {}

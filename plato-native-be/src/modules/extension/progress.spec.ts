@@ -7,6 +7,7 @@ describe('extensionProgress', () => {
     const prisma: any = {
       applyBatchItem: { findMany: async () => [item('1', 'REVIEW'), item('2', 'NEEDS_USER', { detail: { last: { reason: 'questions', message: 'Needs your answer: Salary' } } }), item('3', 'SUBMITTED_CONFIRMED'), item('4', 'PENDING'), item('5', 'PENDING'), item('6', 'SKIPPED')] },
       job: { findMany: async () => [{ id: 'j2', title: 'Dev', company: 'Acme' }] },
+      jobApplication: { findMany: async () => [{ id: 'a3', job_id: 'j3' }] },
       extensionDevice: { findMany: async () => [{ last_used_at: new Date() }, { last_used_at: new Date(Date.now() - 3600_000) }] },
     };
     const p = await extensionProgress(prisma, 's1');
@@ -14,6 +15,9 @@ describe('extensionProgress', () => {
     expect(p.active).toBe(2);
     expect(p.online).toBe(true);
     expect(p.recent.find((r) => r.id === '2')).toMatchObject({ title: 'Dev', company: 'Acme', note: 'Needs your answer: Salary' });
+    // Cards link to the application for the same (seeker, job); items without one stay unlinked.
+    expect(p.recent.find((r) => r.id === '3')?.application_id).toBe('a3');
+    expect(p.recent.find((r) => r.id === '1')?.application_id).toBeNull();
   });
 
   it('offline when no linked browser spoke recently', async () => {

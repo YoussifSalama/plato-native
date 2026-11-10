@@ -23,6 +23,11 @@ export async function extensionProgress(prisma: any, jobSeekerId: string) {
   const jobs: any[] = recent.length
     ? await prisma.job.findMany({ where: { id: { in: recent.map((i) => i.job_id) } }, select: { id: true, title: true, company: true } })
     : [];
+  // ApplyBatchItem.application_id is not written by the batch flow; an application is unique per (seeker, job),
+  // so the card's link comes from that pair.
+  const apps: any[] = recent.length
+    ? await prisma.jobApplication.findMany({ where: { job_seeker_id: jobSeekerId, job_id: { in: recent.map((i) => i.job_id) } }, select: { id: true, job_id: true } })
+    : [];
   const devices: any[] = await prisma.extensionDevice.findMany({
     where: { job_seeker_id: jobSeekerId, revoked_at: null },
     select: { last_used_at: true },
@@ -39,6 +44,7 @@ export async function extensionProgress(prisma: any, jobSeekerId: string) {
       const d = (i.detail?.last ?? {}) as { message?: string; reason?: string };
       return {
         id: i.id,
+        application_id: (i.application_id as string | null) ?? apps.find((a) => a.job_id === i.job_id)?.id ?? null,
         title: j?.title ?? 'Job',
         company: j?.company ?? '',
         state: i.state as string,

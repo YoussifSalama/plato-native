@@ -87,3 +87,13 @@ export const STATUS_STAGE: Record<ApplicationStatus, number> = { QUEUED: 1, IN_P
 
 // "about 40 sec" / "about 6 min": an estimate, so never more precise than that.
 export const roughly = (seconds: number) => (seconds < 90 ? `about ${Math.max(10, Math.round(seconds / 10) * 10)} sec` : `about ${Math.round(seconds / 60)} min`)
+
+// Extension step reasons (backend codes like "easy_apply_unconfirmed") in plain words, shared by the
+// application page and the Extension progress drawer. Unknown codes are humanized, never shown raw.
+const REASON: Record<string, string> = {
+  lease_expired_after_ready: "The browser stopped answering after the form was ready, so Plato can't tell whether it was sent.",
+  easy_apply_unconfirmed: "The site's quick apply didn't show a confirmation page.",
+  duplicate: "You already have an application for this job.",
+  closed: "The posting is closed.",
+}
+export const reasonText = (r: string) => REASON[r] ?? r.replace(/[_-]+/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())

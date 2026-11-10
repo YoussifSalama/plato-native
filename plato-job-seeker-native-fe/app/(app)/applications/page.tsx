@@ -1,10 +1,11 @@
 "use client"
 
+import { liveSource } from "@/lib/live-source"
 import { PAGE, PageHeader } from "@/components/page-header"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Clock, FlaskConical, PauseCircle, Radio, RotateCcw, Sparkles } from "lucide-react"
+import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, CircleCheck, Clock, Hand, Send, FlaskConical, ListChecks, PauseCircle, Radio, RotateCcw, Sparkles, TriangleAlert } from "lucide-react"
 import { cn } from "cn"
 import {
   applicationEventsUrl,
@@ -24,11 +25,15 @@ import {
 } from "@/lib/jobs/api"
 import { JOBS_HOME, threadHref } from "@/lib/jobs/links"
 import { applicationHref, applicationReason, canRetry, isVerifySubmission, needsAttention, retryLabel, roughly, statusView } from "@/lib/jobs/application-status"
-import { MonoTile, PlatoNote, Segmented, StatTile, StatusPill } from "@/components/plato-ui"
+import { EmptyState, MonoTile, PlatoNote, SectionHeader, StatTile, StatusPill } from "@/components/plato-ui"
+import { PillTabs } from "@/components/pill-tabs"
 import { Skeleton } from "@/components/ui/skeleton"
+import { buttonVariants } from "@/components/ui/button"
 import { OUTCOME_LABEL, OUTCOME_TONE } from "@/components/outcome-picker"
 import { ApplicationReview } from "./application-review"
+import { InfoTip } from "@/components/info-tip"
 
+const PAGE_SIZE = 20
 const TABS = [
   { key: "all", label: "All", statuses: null },
   { key: "needs", label: "Needs you", statuses: ["NEEDS_INPUT", "NEEDS_USER_VERIFICATION"] },
@@ -38,7 +43,9 @@ const TABS = [
 ] as const satisfies readonly { key: string; label: string; statuses: readonly ApplicationStatus[] | null }[]
 type TabKey = (typeof TABS)[number]["key"]
 
-const inLastDays = (iso: string, days: number) => Date.now() - new Date(iso).getTime() < days * 864e5
+// The sidebar "Needs you" badge recounts on this event (notifications-provider).
+const changed = () => window.dispatchEvent(new Event("plato:applications-changed"))
+const inLastDays =(iso: string, days: number) => Date.now() - new Date(iso).getTime() < days * 864e5
 const inLastWeek = (iso: string) => inLastDays(iso, 7)
 // The owner's tags on a "Needs you" card: what kind of help Plato is waiting for.
 const needTag = (a: JobApplication) => {
@@ -78,6 +85,8 @@ function ApplicationsContent() {
     const q = next.toString()
     router.replace(q ? `/applications?${q}` : "/applications", { scroll: false })
   }
+  // The detail page's "Applications" crumb comes back to this tab and filter.
+  const detailHref = (id: string) => (params.toString() ? `${applicationHref(id)}?from=${encodeURIComponent(params.toString())}` : applicationHref(id))
   const [retrying, setRetrying] = useState<string | null>(null)
   // Every worker step seen this session, per application: the live timeline.
   const [timeline, setTimeline] = useState<Record<string, ApplyEvent[]>>({})
@@ -115,15 +124,17 @@ function ApplicationsContent() {
       .then(setReadiness)
       .catch(() => setReadiness(null))
     // Event-driven: each worker step lands here; a status change refetches rows.
-    const source = new EventSource(applicationEventsUrl(), { withCredentials: true })
-    source.onmessage = (msg) => {
-      const event = JSON.parse(msg.data as string) as ApplyEvent
-      setTimeline((prev) => ({ ...prev, [event.applicationId]: [...(prev[event.applicationId] ?? []), event].slice(-12) }))
-      // A settled application moves everyone behind it up the line.
-      if (event.status !== "IN_PROGRESS") void Promise.all([load(), loadQueue()])
-      else setApps((prev) => prev?.map((a) => (a.id === event.applicationId ? { ...a, status: "IN_PROGRESS" } : a)) ?? prev)
-    }
-    return () => source.close()
+    return liveSource(
+      applicationEventsUrl(),
+      (msg) => {
+        const event = JSON.parse(msg.data as string) as ApplyEvent
+        setTimeline((prev) => ({ ...prev, [event.applicationId]: [...(prev[event.applicationId] ?? []), event].slice(-12) }))
+        // A settled application moves everyone behind it up the line.
+        if (event.status !== "IN_PROGRESS") void Promise.all([load(), loadQueue()])
+        else setApps((prev) => prev?.map((a) => (a.id === event.applicationId ? { ...a, status: "IN_PROGRESS" } : a)) ?? prev)
+      },
+      () => void Promise.all([load(), loadQueue()]),
+    )
   }, [load, loadQueue])
 
   // Events drive the page; this slow poll only covers a dropped stream and
@@ -155,12 +166,19 @@ function ApplicationsContent() {
   const worker = queue?.worker ?? null
   const inLine = scoped.filter((a) => queue?.positions[a.id]).length
   const shown = scoped.filter((a) => inTab(tab, a))
+  // ponytail: client-side pages over the full list; move to server paging if lists reach the thousands.
+  // The page belongs to a tab, so switching tabs starts at page 1.
+  const [pg, setPg] = useState({ tab, n: 0 })
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE))
+  const page = pg.tab === tab ? Math.min(pg.n, pages - 1) : 0
+  const pageRows = shown.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   async function retry(a: JobApplication) {
     setRetrying(a.id)
     try {
       await retryApplication(a.id)
       await Promise.all([load(), loadQueue()])
+      changed()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not retry")
     } finally {
@@ -186,36 +204,48 @@ function ApplicationsContent() {
 
   return (
     // Screen 09: the list on the left; "Needs you" on the right from the top of the page.
-    <div className={cn(PAGE, "grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_356px]")}>
-      <section className="flex min-w-0 flex-col gap-4">
+    <div data-tour-state={apps === null ? undefined : !scoped.length ? "applications.empty" : needs.length ? "applications.needs" : "applications.list"} className={cn(PAGE, "grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_356px]")}>
+      <section className="flex min-w-0 flex-col gap-4 xl:self-stretch">
         <PageHeader
           crumbs={threadId ? [{ label: "Jobs", href: JOBS_HOME }, { label: "Search", href: threadHref(threadId) }] : undefined}
           title="Applications"
           description="Every application Plato sends for you, and anything it needs from you to finish one."
         />
+        {!apps && !error && (
+          <div aria-busy="true" className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} className="h-[74px] rounded-xl" />
+            ))}
+          </div>
+        )}
         {apps && (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <StatTile value={sent30} label="Sent in 30 days" />
-            <StatTile value={appliedWeek} label="Sent this week" />
-            <StatTile value={wentThrough === null ? "—" : `${wentThrough}%`} label="Went through" />
-            <StatTile value={needs.length} label="Need you" tone={needs.length ? "need" : undefined} />
+          <div data-tour="applications-stats" className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <StatTile value={sent30} label="Sent in 30 days" icon={Send} accent="cobalt" index={0} />
+            <StatTile value={appliedWeek} label="Sent this week" icon={CalendarDays} accent="azure" index={1} />
+            {/* StatTile's label is text only, so the (i) sits in the tile's bottom-right corner. */}
+            <div className="relative">
+              <StatTile value={wentThrough === null ? "—" : `${wentThrough}%`} label="Went through" icon={CircleCheck} accent="green" index={2} className="h-full" />
+              <InfoTip className="absolute right-2.5 bottom-2.5" label="What went through means" text="Of the applications that finished, the share that were sent. Ones still queued, in progress or waiting on you aren't counted." />
+            </div>
+            <StatTile value={needs.length} label="Need you" tone={needs.length ? "need" : undefined} icon={Hand} accent="amber" index={3} />
           </div>
         )}
 
       {readiness && !readiness.ready && (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-warning-line bg-warning-soft/70 p-4 text-sm">
+        <div data-tour="applications-readiness" className="flex flex-wrap items-center gap-3 rounded-2xl border border-l-[3px] border-l-warning bg-card p-4 text-sm shadow-card">
+          <TriangleAlert className="size-4 shrink-0 text-warning" />
           <p className="min-w-0 flex-1 text-foreground">
             <span className="font-semibold">Plato can&apos;t apply for you yet.</span> It never asks per job, so it needs these once: {readiness.missing.map((m) => m.label).join("; ")}.
           </p>
-          <Link href="/onboarding?step=2" className="inline-flex h-9 shrink-0 items-center rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground">
+          <Link href="/onboarding?step=2" className="inline-flex h-9 shrink-0 items-center rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-colors duration-200 hover:bg-primary-hover">
             Complete my details
           </Link>
         </div>
       )}
 
       {worker?.paused?.map((p) => (
-        <div key={p.source} className="flex items-start gap-3 rounded-2xl border border-warning-line bg-warning-soft/70 p-4 text-sm">
-          <PauseCircle className="mt-0.5 size-4 shrink-0 text-warning-ink" />
+        <div key={p.source} className="flex items-start gap-3 rounded-2xl border border-l-[3px] border-l-warning bg-card p-4 text-sm shadow-card">
+          <PauseCircle className="mt-0.5 size-4 shrink-0 text-warning" />
           <p className="text-foreground">
             <span className="font-semibold">{p.source[0] + p.source.slice(1).toLowerCase()} applications are on hold</span> until {new Date(p.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. The site asks &quot;verify you are human&quot; on every application, and Plato doesn&apos;t bypass that. The ones it reached are under &quot;Needs you&quot; with a link to submit by hand.
           </p>
@@ -223,7 +253,7 @@ function ApplicationsContent() {
       ))}
 
       {worker && (!worker.enabled || worker.dryRun) && (
-        <div className="flex items-start gap-3 rounded-2xl border border-info/20 bg-info-soft/70 p-4 text-sm">
+        <div className="flex items-start gap-3 rounded-2xl border border-l-[3px] border-l-info bg-card p-4 text-sm shadow-card">
           {worker.enabled ? <FlaskConical className="mt-0.5 size-4 shrink-0 text-info" /> : <PauseCircle className="mt-0.5 size-4 shrink-0 text-info" />}
           <p className="text-foreground">
             {worker.enabled ? (
@@ -241,9 +271,13 @@ function ApplicationsContent() {
 
       {error && <p className="rounded-xl border border-destructive/30 bg-danger-soft p-3 text-sm text-destructive">{error}</p>}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-          <h2 className="text-xl font-bold tracking-tight">All applications</h2>
-          <Segmented dataAi="applications.tab" value={tab} onChange={(k) => setQuery({ tab: k })} options={TABS.filter((t) => t.key !== "needs").map((t) => ({ value: t.key, label: `${t.label} · ${scoped.filter((a) => inTab(t.key, a)).length}` }))} />
+        {/* The table block stays in view on wide screens (rows scroll inside it); the Needs you column scrolls with the page. */}
+        <div className="flex flex-col gap-4 xl:sticky xl:top-16 xl:max-h-[calc(100dvh-4rem)] xl:pb-4">
+        {/* Title, tabs and column headings stay put while the list scrolls (desktop; the top bar is 64px there). */}
+        <div className="z-20 -mx-1 flex flex-col gap-3 bg-background px-1 pt-2 lg:sticky lg:top-16">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionHeader title="All applications" icon={ListChecks} accent="amber" />
+          <PillTabs id="applications-tabs" label="Applications" dataAi="applications.tab" value={tab} onChange={(k) => setQuery({ tab: k })} tabs={TABS.filter((t) => t.key !== "needs").map((t) => ({ key: t.key, label: t.label, count: apps ? scoped.filter((a) => inTab(t.key, a)).length : undefined }))} />
         </div>
         {(threadId || (worker?.enabled && inLine > 0)) && (
           <div className="-mt-1 flex flex-wrap items-center gap-2 text-[13px] text-text-secondary">
@@ -251,6 +285,7 @@ function ApplicationsContent() {
               <span className="mr-auto flex items-center gap-2">
                 <Clock className="size-4 text-primary" />
                 {inLine} waiting, one at a time · {roughly(queue?.totalEtaSeconds ?? 0)} left
+                <InfoTip label="How the time left is estimated" text="Plato applies one at a time for everyone, so this is your last application's place in the shared line times the average time one application takes." />
               </span>
             )}
             {threadId && (
@@ -261,14 +296,22 @@ function ApplicationsContent() {
           </div>
         )}
 
-        <div className="overflow-hidden rounded-2xl border bg-card">
-          <div className="hidden md:grid-cols-[minmax(0,1fr)_100px_60px_80px_118px] gap-2.5 border-b px-3.5 py-2.5 text-[13px] text-text-secondary md:grid">
+          <div className="hidden md:grid-cols-[minmax(0,1fr)_136px_60px_80px_118px] gap-2.5 rounded-t-2xl border bg-card px-3.5 py-2.5 text-[13px] text-text-secondary md:grid">
             <span>Job</span>
-            <span>Status</span>
+            <span className="flex items-center gap-1.5">
+              Status
+              <InfoTip label="What the statuses mean" text="Didn't go through covers failed, closed and skipped applications. Please check means Plato can't tell whether the form was sent, so check the site or your email before applying again." />
+            </span>
             <span>Date</span>
-            <span className="whitespace-nowrap">Resume used</span>
+            <span className="flex items-center gap-1.5 whitespace-nowrap">
+              Resume used
+              <InfoTip label="What tailored and original mean" text="Tailored is a resume Plato wrote from your profile for that job. Original is the resume you uploaded. A dash means none was sent yet." />
+            </span>
             <span />
           </div>
+        </div>
+
+        <div data-tour="applications-list" className="overflow-hidden rounded-2xl border bg-card md:-mt-4 md:rounded-t-none md:border-t-0 xl:min-h-0 xl:overflow-y-auto">
           {apps === null && !error && (
             <ul aria-busy="true" className="px-4">
               {Array.from({ length: 4 }, (_, i) => (
@@ -284,25 +327,32 @@ function ApplicationsContent() {
             </ul>
           )}
           {apps !== null && shown.length === 0 && (
-            <div className="flex flex-col items-center gap-3 py-12 text-center">
-              <span className="flex size-12 items-center justify-center rounded-full bg-primary-soft text-primary">
-                <Sparkles className="size-5" />
-              </span>
-              <p className="text-sm font-semibold text-foreground">{scoped.length ? "Nothing in this view" : "No applications yet"}</p>
-              <p className="max-w-sm text-sm text-text-secondary">{scoped.length ? "Pick another filter to see the rest." : "Pick jobs from a search and hit “Apply”. They’ll show up here."}</p>
-            </div>
+            <EmptyState
+              icon={Sparkles}
+              className="m-4 border-0 py-10"
+              title={scoped.length ? "Nothing in this view" : "No applications yet"}
+              hint={scoped.length ? "Pick another filter to see the rest." : "Pick jobs from a search and hit “Apply”. They’ll show up here."}
+              action={
+                scoped.length ? undefined : (
+                  <Link href={JOBS_HOME} data-tour="applications-find-jobs" className="group/cta inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary-soft px-3.5 text-sm font-semibold text-primary transition-colors duration-200 hover:bg-primary hover:text-primary-foreground">
+                    Find jobs
+                    <ArrowRight className="size-3.5 transition-transform group-hover/cta:translate-x-0.5" />
+                  </Link>
+                )
+              }
+            />
           )}
           <ul>
-            {shown.map((a) => {
+            {pageRows.map((a) => {
               const s = statusView(a)
               const last = (timeline[a.id] ?? []).at(-1)
               const waitingOnYou = needsAttention(a)
               return (
-                <li key={a.id} ref={a.id === focus ? focusRef : undefined} className={cn("grid items-center gap-x-2.5 gap-y-1 border-b border-divider px-3.5 py-2 transition-colors last:border-b-0 grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_100px_60px_80px_118px]", a.id === focus ? "bg-primary-tint" : "hover:bg-primary-tint/60")}>
+                <li key={a.id} ref={a.id === focus ? focusRef : undefined} className={cn("grid items-center gap-x-2.5 gap-y-1 border-b border-divider px-3.5 py-2 transition-colors duration-200 last:border-b-0 grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_136px_60px_80px_118px]", a.id === focus ? "bg-primary-tint" : "hover:bg-primary-tint/60")}>
                   <div className="flex min-w-0 items-center gap-3">
                     <MonoTile name={a.job.company} size="sm" />
                     <div className="min-w-0">
-                      <Link href={applicationHref(a.id)} data-ai={`applications.row:${a.id}`} title={a.job.title} className="block truncate text-[14.5px] font-semibold text-foreground hover:underline">
+                      <Link href={detailHref(a.id)} data-ai={`applications.row:${a.id}`} title={a.job.title} className="block truncate text-[14.5px] font-semibold text-foreground transition-colors duration-200 hover:text-primary">
                         {a.job.title}
                       </Link>
                       <p className="truncate text-[13px] text-text-secondary" title={a.status === "IN_PROGRESS" && last ? last.message : undefined}>
@@ -325,8 +375,9 @@ function ApplicationsContent() {
                         Open
                       </button>
                     ) : a.status === "SUBMITTED" ? (
-                      <Link href={applicationHref(a.id)} className="text-sm font-semibold whitespace-nowrap text-primary hover:underline">
+                      <Link href={detailHref(a.id)} className="group/cta inline-flex items-center gap-1 text-sm font-semibold whitespace-nowrap text-primary transition-colors duration-200 hover:text-primary-hover">
                         See what was sent
+                        <ArrowRight className="size-3.5 transition-transform group-hover/cta:translate-x-0.5" />
                       </Link>
                     ) : a.status === "EXPIRED" ? (
                       <a href={a.job.url} target="_blank" rel="noreferrer" className="text-sm font-semibold whitespace-nowrap text-primary hover:underline">
@@ -349,21 +400,47 @@ function ApplicationsContent() {
             })}
           </ul>
         </div>
+        {/* Same bottom bar as Jobs: what this view is, and the pages. */}
+        {shown.length > 0 && (
+          <div data-tour="applications-pager" className="sticky bottom-[92px] z-10 mr-12 flex flex-wrap items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-[0_18px_40px_-20px_rgb(0_58_110/0.35)] sm:bottom-4 sm:mr-0">
+            <span className="text-[13px] text-text-secondary">{needs.length ? `${needs.length} need you. Plato sends the rest on its own.` : "Plato sends these on its own and keeps you posted."}</span>
+            <span className="ml-auto flex items-center gap-2 text-[13px] text-text-tertiary tabular-nums">
+              {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + pageRows.length} of {shown.length}
+              <button type="button" aria-label="Previous page" disabled={page === 0} onClick={() => setPg({ tab, n: page - 1 })} className="flex size-8 items-center justify-center rounded-lg border bg-card disabled:opacity-40">
+                <ChevronLeft className="size-4" />
+              </button>
+              <button type="button" aria-label="Next page" disabled={page >= pages - 1} onClick={() => setPg({ tab, n: page + 1 })} className="flex size-8 items-center justify-center rounded-lg border bg-card disabled:opacity-40">
+                <ChevronRight className="size-4" />
+              </button>
+            </span>
+          </div>
+        )}
+        </div>
       </section>
 
       {/* Needs you: Plato Apply paused these until the seeker helps (screen 09). */}
-      <aside className="flex flex-col gap-3 xl:sticky xl:top-24">
-        <p className="flex flex-wrap items-baseline gap-x-2 pt-1">
-          <b className="text-xl tracking-tight">Needs you</b>
-          <span className="text-[13px] text-text-secondary">Plato Apply paused these until you help</span>
-        </p>
+      <aside data-tour="applications-needs" className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1 pt-1">
+          <SectionHeader
+            title={
+              <span className="flex items-center gap-1.5">
+                Needs you
+                <InfoTip label="What needs you means" text="Applications Plato paused because only you can give what's missing: answers, a skills check, a human check on the site, or confirming it was sent. They wait here until you act." />
+              </span>
+            }
+            icon={Hand}
+            accent="amber"
+          />
+          <span className="pl-[42px] text-[13px] text-text-secondary">Plato Apply paused these until you help</span>
+        </div>
+        {apps === null && !error && Array.from({ length: 2 }, (_, i) => <Skeleton key={i} className="h-[132px] rounded-2xl" />)}
         {apps !== null && needs.length === 0 && (
-          <div className="rounded-2xl border bg-card p-4">
+          <div className="rounded-2xl border bg-card p-4 shadow-card animate-in fade-in-0 duration-300">
             <PlatoNote variant="inline">Nothing needs you. Plato is applying on its own.</PlatoNote>
           </div>
         )}
-        {needs.map((a) => (
-          <NeedCard key={a.id} app={a} tag={needTag(a)} onDone={() => void load()} />
+        {needs.map((a, i) => (
+          <NeedCard key={a.id} app={a} tag={needTag(a)} index={i} onDone={() => void load().then(changed)} />
         ))}
       </aside>
     </div>
@@ -372,25 +449,28 @@ function ApplicationsContent() {
 
 // One paused application, as in the owner's card: what it is, the one thing needed,
 // and the way to give it. The full answer form opens in place.
-function NeedCard({ app: a, tag, onDone }: { app: JobApplication; tag: string; onDone: () => void }) {
+// Repeated card actions use the soft primary; the page's one solid CTA is elsewhere.
+const SOFT_CTA = "w-fit border-transparent bg-primary-soft text-primary shadow-none transition-colors duration-200 hover:bg-primary hover:text-primary-foreground"
+function NeedCard({ app: a, tag, index = 0, onDone }: { app: JobApplication; tag: string; index?: number; onDone: () => void }) {
   const [open, setOpen] = useState(false)
   const verify = isVerifySubmission(a) || a.status === "NEEDS_USER_VERIFICATION"
   return (
-    <div id={`need-${a.id}`} className="flex flex-col gap-2.5 rounded-2xl border border-warning-line bg-[#fffdf5] p-3.5">
+    <div id={`need-${a.id}`} data-tour="need-card" style={{ animationDelay: `${Math.min(index, 6) * 70}ms` }} className="relative flex flex-col gap-2.5 overflow-hidden rounded-2xl border bg-card p-4 pl-5 shadow-card transition-[border-color,box-shadow] duration-200 animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-both hover:border-primary-line hover:shadow-[var(--shadow-lift)]">
+      <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] bg-warning" />
       <div className="flex items-center gap-3">
         <MonoTile name={a.job.company} size="sm" />
         <div className="min-w-0 flex-1">
-          <Link href={applicationHref(a.id)} className="block truncate text-[15px] font-semibold hover:underline">
+          <Link href={applicationHref(a.id)} className="block truncate text-[15px] font-semibold transition-colors duration-200 hover:text-primary">
             {a.job.title}
           </Link>
           <p className="truncate text-xs text-text-secondary">{a.job.company}</p>
         </div>
         <StatusPill tone="warning">{tag}</StatusPill>
       </div>
-      <p className="text-[14.5px] leading-snug font-semibold">{needLine(a)}</p>
+      <p className="text-sm leading-snug text-text-secondary">{needLine(a)}</p>
       {verify ? (
         <>
-          <a href={a.job.apply_url ?? a.job.url} target="_blank" rel="noreferrer" className="flex h-10 w-fit items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+          <a href={a.job.apply_url ?? a.job.url} target="_blank" rel="noreferrer" data-tour="need-action" className={cn(buttonVariants({ variant: "outline", size: "sm" }), SOFT_CTA)}>
             Open in Chrome
           </a>
           <p className="text-xs text-text-secondary">Everything else is already filled in.</p>
@@ -398,8 +478,8 @@ function NeedCard({ app: a, tag, onDone }: { app: JobApplication; tag: string; o
       ) : open ? (
         <ApplicationReview app={a} onDone={onDone} />
       ) : (
-        <button type="button" onClick={() => setOpen(true)} className="flex h-10 w-fit items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-          Answer
+        <button type="button" data-ai={`applications.need:${a.id}`} data-tour="need-action" onClick={() => setOpen(true)} className={cn(buttonVariants({ variant: "outline", size: "sm" }), SOFT_CTA)}>
+          {a.needs_input?.reason === "questions" ? "Answer" : a.needs_input?.reason === "resume" ? "Check skills" : a.needs_input?.reason === "profile" ? "Add details" : "Open"}
         </button>
       )}
     </div>

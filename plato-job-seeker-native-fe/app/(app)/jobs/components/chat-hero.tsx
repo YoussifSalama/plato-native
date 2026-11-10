@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { ArrowRight, Award, Briefcase, Building2, Globe2, MapPin, Paperclip, Send, Sparkles, X } from "lucide-react"
 import { cn } from "cn"
+import { InputGroup, InputGroupTextarea } from "@/components/ui/input-group"
 import type { ThreadMessage } from "@/lib/jobs/api"
 import type { Preferences } from "@/lib/preferences/schema"
 import { formatPreferenceSummary } from "@/lib/preference-format"
@@ -49,8 +50,8 @@ function Composer({ onSend, busy, autoFocus, placeholder = "Tell Plato what you'
         e.preventDefault()
         submit()
       }}
-      className="group flex flex-wrap items-end gap-2 rounded-lg border bg-card p-2 pl-4 shadow-[0_12px_40px_-16px_rgba(0,91,167,0.35)] transition-shadow focus-within:border-primary/50 focus-within:shadow-[0_16px_50px_-16px_rgba(0,91,167,0.5)]"
     >
+      <InputGroup className="group flex-wrap items-end gap-2 rounded-lg bg-card p-2 pl-4 shadow-[0_12px_40px_-16px_rgba(0,91,167,0.35)] transition-shadow focus-within:shadow-[0_16px_50px_-16px_rgba(0,91,167,0.5)]">
       {chip && (
         // A pinned reference (a job): sent with the next message so Plato knows exactly what it is about.
         <span data-ai="chat.reference" className="flex w-full items-center pt-1">
@@ -67,7 +68,7 @@ function Composer({ onSend, busy, autoFocus, placeholder = "Tell Plato what you'
       )}
       <Sparkles className="mb-3.5 size-4 shrink-0 text-primary/70" />
       {/* Enter sends, Shift+Enter starts a new line. */}
-      <textarea
+      <InputGroupTextarea
         data-ai="chat.input"
         ref={ref}
         rows={1}
@@ -84,12 +85,12 @@ function Composer({ onSend, busy, autoFocus, placeholder = "Tell Plato what you'
         }}
         disabled={busy}
         placeholder={placeholder}
-        className="scroll-thin max-h-[200px] min-h-11 min-w-0 flex-1 resize-none bg-transparent py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        className="scroll-thin max-h-[200px] min-h-11 min-w-0 px-0 py-2.5 text-base leading-6 disabled:opacity-60"
       />
       {allowFile ? (
         <>
           <input ref={picker} type="file" accept={allowFile} hidden onChange={(e) => (setFile(e.target.files?.[0] ?? null), (e.target.value = ""))} />
-          <button type="button" data-ai="chat.attach" disabled={busy} onClick={() => picker.current?.click()} aria-label="Attach a CV" title="Attach your CV (PDF or Word)" className={cn("mb-1.5 flex max-w-40 items-center gap-1.5 rounded-sm p-2 text-xs", file ? "bg-primary-tint text-primary" : "text-muted-foreground hover:text-foreground")}>
+          <button type="button" data-ai="chat.attach" disabled={busy} onClick={() => picker.current?.click()} aria-label="Attach a CV" title="Attach your CV (PDF or Word)" className={cn("mb-1.5 flex max-w-40 items-center gap-1.5 rounded-md p-2 text-xs transition-colors duration-200", file ? "bg-primary-tint text-primary" : "text-muted-foreground hover:bg-muted hover:text-primary")}>
             <Paperclip className="size-4 shrink-0" />
             {file && <span className="truncate">{file.name}</span>}
           </button>
@@ -106,10 +107,11 @@ function Composer({ onSend, busy, autoFocus, placeholder = "Tell Plato what you'
         whileTap={{ scale: 0.96 }}
         transition={spring.micro}
         aria-label="Send"
-        className="flex size-11 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-md shadow-primary/30 disabled:opacity-40 disabled:shadow-none"
+        className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/30 transition-colors duration-200 hover:bg-primary-hover disabled:opacity-40 disabled:shadow-none"
       >
         <Send className="size-4" />
       </motion.button>
+      </InputGroup>
     </form>
     <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
       <kbd className="font-sans font-semibold">Enter</kbd> to send · <kbd className="font-sans font-semibold">Shift</kbd> + <kbd className="font-sans font-semibold">Enter</kbd> for a new line
@@ -127,7 +129,7 @@ function Transcript({ messages, busy, error, onAnswer }: { messages: ThreadMessa
     ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: "smooth" })
   }, [messages, busy])
   return (
-    <div ref={ref} className="scroll-thin flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-1 py-2 pr-3">
+    <div ref={ref} data-tour="search-transcript" className="scroll-thin flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-1 py-2 pr-3">
       {messages.map((m) =>
         m.role === "USER" ? (
           <motion.div key={m.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="ml-auto max-w-[75%] rounded-lg rounded-br-[6px] bg-primary px-4 py-2.5 text-sm text-primary-foreground shadow-md shadow-primary/20">
@@ -142,7 +144,7 @@ function Transcript({ messages, busy, error, onAnswer }: { messages: ThreadMessa
               </p>
             </div>
             {m.ui && m.id === openCard && (
-              <div className="pl-10">
+              <div data-tour="search-question" className="pl-10">
                 <QuestionCardView card={m.ui} busy={busy} onSubmit={onAnswer} />
               </div>
             )}
@@ -155,7 +157,7 @@ function Transcript({ messages, busy, error, onAnswer }: { messages: ThreadMessa
           <span className="text-sm text-muted-foreground">Plato is thinking…</span>
         </div>
       )}
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p role="alert" className="rounded-lg border border-l-4 border-l-destructive bg-card px-3 py-2 text-xs text-foreground">{error}</p>}
     </div>
   )
 }
@@ -204,8 +206,9 @@ function ChatHero({
   ]
 
   return (
-    <section className="relative flex h-[calc(100dvh-150px)] min-h-[560px] w-full flex-col overflow-hidden rounded-xl border bg-[radial-gradient(circle_at_1px_1px,var(--border)_1px,transparent_0)] bg-[size:22px_22px]">
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 glow-top" />
+    <section className="relative isolate flex h-[calc(100dvh-150px)] min-h-[560px] w-full flex-col overflow-hidden rounded-2xl border bg-card shadow-card">
+      {/* The Home hero's soft brand glow, led by the Jobs azure. */}
+      <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_70%_at_0%_0%,color-mix(in_oklch,var(--azure)_10%,transparent),transparent_60%),radial-gradient(50%_60%_at_100%_100%,color-mix(in_oklch,var(--primary)_8%,transparent),transparent_65%)]" />
 
       <div className="relative flex min-h-0 flex-1 flex-col px-6 pt-10 pb-6 sm:px-10">
         <AnimatePresence mode="wait" initial={false}>
@@ -220,10 +223,10 @@ function ChatHero({
                   <TypedText text={opener} onDone={() => setOpenerDone(true)} />
                 </motion.p>
                 {facts.length > 0 && (
-                  <motion.div variants={v(lineReveal)} className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <motion.div data-tour="search-known" variants={v(lineReveal)} className="flex flex-wrap items-center justify-center gap-2 pt-1">
                     <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">What I know</span>
                     {facts.map((f) => (
-                      <span key={f.text} className="flex items-center gap-1.5 rounded-full border bg-card/80 px-3 py-1 text-xs text-foreground backdrop-blur">
+                      <span key={f.text} className="flex items-center gap-1.5 rounded-full border bg-card/80 px-3 py-1 text-xs text-foreground shadow-card backdrop-blur">
                         <f.icon className="size-3.5 text-primary" />
                         <span className="max-w-[220px] truncate">{f.text}</span>
                       </span>
@@ -233,6 +236,7 @@ function ChatHero({
               </motion.div>
 
               <motion.div
+                data-tour="search-suggestions"
                 initial="hidden"
                 animate={openerDone || reduced ? "show" : "hidden"}
                 variants={v(nodeContent)}
@@ -249,15 +253,15 @@ function ChatHero({
                     whileTap={{ scale: 0.98 }}
                     transition={spring.micro}
                     className={cn(
-                      "flex flex-col items-start gap-2 rounded-lg border p-4 text-left shadow-sm transition-colors",
-                      s.primary ? "border-primary/40 bg-primary text-primary-foreground shadow-lg shadow-primary/25" : "bg-card/90 backdrop-blur hover:border-primary/40",
+                      "group flex flex-col items-start gap-2 rounded-2xl border p-4 text-left transition-[border-color,box-shadow] duration-200",
+                      s.primary ? "border-primary/40 bg-primary text-primary-foreground shadow-brand" : "bg-card/90 shadow-card backdrop-blur hover:border-primary-line hover:shadow-[var(--shadow-lift)]",
                     )}
                   >
-                    <span className={cn("flex size-9 items-center justify-center rounded-md", s.primary ? "bg-white/15" : "bg-primary/10 text-primary")}>
+                    <span className={cn("flex size-9 items-center justify-center rounded-lg transition-colors duration-200", s.primary ? "bg-white/15" : "bg-info-soft text-info group-hover:bg-primary-soft group-hover:text-primary")}>
                       <s.icon className="size-4" />
                     </span>
-                    <span className="text-sm font-semibold">{s.title}</span>
-                    <span className={cn("text-xs", s.primary ? "text-primary-foreground/80" : "text-muted-foreground")}>{s.sub}</span>
+                    <span className="type-card-title">{s.title}</span>
+                    <span className={cn("type-meta", s.primary ? "text-primary-foreground/80" : "text-muted-foreground")}>{s.sub}</span>
                   </motion.button>
                 ))}
               </motion.div>
@@ -276,7 +280,7 @@ function ChatHero({
           )}
         </AnimatePresence>
 
-        <div className="mt-auto shrink-0 pt-6">
+        <div data-tour="search-composer" className="mt-auto shrink-0 pt-6">
           <Composer
             onSend={onSend}
             busy={busy}

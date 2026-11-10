@@ -1,94 +1,72 @@
 "use client"
 
-import { Breadcrumbs, PAGE, PageHeader } from "@/components/page-header"
 import { use, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Loader2 } from "lucide-react"
-import { answerInterview, getInterview, startInterview, type Interview } from "@/lib/interviews/api"
-import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import { SearchX } from "lucide-react"
+import { EmptyState } from "@/components/plato-ui"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SOFT_CTA } from "@/components/career-hub"
+import { getInterview, type Interview } from "@/lib/interviews/api"
+import { interviewName } from "@/lib/interviews/flow"
+import { FlowShell } from "../flow-ui"
+import { ChatRun } from "../chat-run"
+import { InterviewResult, fromInterview } from "../interview-result"
 
+// A written interview: the flow's last step while it runs, then its result. Reached from the
+// flow's Start, from "Continue" on Interviews, and from the history.
 export default function InterviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const router = useRouter()
   const [iv, setIv] = useState<Interview | null>(null)
-  const [text, setText] = useState("")
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     getInterview(id).then(setIv, (e) => setError(e instanceof Error ? e.message : "Could not load the interview"))
   }, [id])
 
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true)
-    setError(null)
-    try {
-      await fn()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong")
-    }
-    setBusy(false)
-  }
-  const send = () => run(async () => { setIv(await answerInterview(id, text.trim())); setText("") })
-  const retry = () => run(async () => router.push(`/career/interviews/${(await startInterview({ retryOf: id })).id}`))
-
+  if (error)
+    return (
+      <FlowShell step={7} name="Interview">
+        <EmptyState
+          icon={SearchX}
+          className="bg-card py-10"
+          title="This interview couldn't be opened"
+          hint={error}
+          action={
+            <Link href="/career/interviews" data-ai="interview.back" className={SOFT_CTA}>
+              Back to Interviews
+            </Link>
+          }
+        />
+      </FlowShell>
+    )
+  if (!iv)
+    return (
+      <FlowShell step={7} name="Interview">
+        <div aria-busy="true" className="flex flex-col gap-3">
+          <Skeleton className="h-24 w-full rounded-2xl" />
+          <Skeleton className="h-16 w-2/3 rounded-2xl" />
+          <Skeleton className="h-56 w-full rounded-2xl" />
+        </div>
+      </FlowShell>
+    )
+  const title = interviewName({ target: iv.target, jobTitle: iv.target === "general" ? undefined : iv.jobTitle, round: iv.round, focus: iv.focus, format: iv.format })
+  if (iv.completedAt && iv.scorecard)
+    return (
+      <FlowShell step={7} name="Result">
+        <div data-tour-state="interview.result">
+          <InterviewResult r={fromInterview(iv)} />
+        </div>
+      </FlowShell>
+    )
   return (
-    <div className={PAGE}>
-      {!iv && !error && (
-        <>
-          <Breadcrumbs crumbs={[{ label: "Career", href: "/career" }, { label: "Interviews", href: "/career/interviews" }]} />
-          <Skeleton className="h-40 w-full" />
-        </>
+    <FlowShell step={7} name="Interview">
+      {iv.next ? (
+        <div data-tour-state={iv.style === "coach" ? "interview.run.coach" : "interview.run.real"}>
+          <ChatRun iv={iv} title={title} onChange={setIv} />
+        </div>
+      ) : (
+        <Skeleton className="h-56 w-full rounded-2xl" />
       )}
-      {iv && (
-        <>
-          <PageHeader crumbs={[{ label: "Career", href: "/career" }, { label: "Interviews", href: "/career/interviews" }]} title={iv.jobTitle} description={`${iv.company} · mock interview`} bell={false} />
-
-          {iv.turns.map((t, i) => (
-            <div key={i} className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-sm">
-              <p className="font-semibold text-foreground">{i + 1}. {t.question}</p>
-              <p className="whitespace-pre-wrap text-text-secondary">{t.answer}</p>
-              {t.followUp && <p className="font-semibold text-foreground">Follow-up: {t.followUp}</p>}
-              {t.followUpAnswer && <p className="whitespace-pre-wrap text-text-secondary">{t.followUpAnswer}</p>}
-              {iv.scorecard?.questions.find((q) => q.index === i) && (
-                <p className="rounded-md bg-primary-tint px-3 py-2 text-foreground">
-                  <b>{iv.scorecard.questions.find((q) => q.index === i)!.score}/5</b> · {iv.scorecard.questions.find((q) => q.index === i)!.feedback}
-                </p>
-              )}
-            </div>
-          ))}
-
-          {iv.next && (
-            <div className="flex flex-col gap-3 rounded-lg border-2 border-primary/40 bg-card p-4">
-              <p className="text-xs text-text-tertiary">{iv.next.followUp ? "Follow-up" : `Question ${iv.next.index + 1} of ${iv.total}`}</p>
-              <p className="font-semibold text-foreground">{iv.next.text}</p>
-              <textarea data-ai="interview.answer" value={text} onChange={(e) => setText(e.target.value)} maxLength={4000} rows={5} disabled={busy} placeholder="Type your answer…" className="w-full rounded-md border bg-background p-3 text-sm" />
-              <Button data-ai="interview.send" onClick={send} disabled={busy || !text.trim()} className="self-end">
-                {busy && <Loader2 className="size-4 animate-spin" />}
-                {busy && iv.next.index === iv.total - 1 ? "Scoring…" : "Send answer"}
-              </Button>
-            </div>
-          )}
-
-          {iv.scorecard && (
-            <section className="flex flex-col gap-3 rounded-lg border bg-card p-5 text-sm">
-              <h2 className="text-lg font-bold text-foreground">Scorecard: {iv.scorecard.overall}/100</h2>
-              <p className="text-text-secondary">Communication {iv.scorecard.communication.score}/5 · {iv.scorecard.communication.note}</p>
-              {([["Strengths", iv.scorecard.strengths], ["Gaps", iv.scorecard.gaps], ["Next steps", iv.scorecard.nextSteps]] as const).map(([h, list]) =>
-                list.length ? (
-                  <div key={h}>
-                    <h3 className="font-semibold text-foreground">{h}</h3>
-                    <ul className="list-disc pl-5 text-text-secondary">{list.map((x) => <li key={x}>{x}</li>)}</ul>
-                  </div>
-                ) : null,
-              )}
-              <Button data-ai="interview.retry" onClick={retry} disabled={busy} variant="outline" className="self-start">Retry the same interview</Button>
-            </section>
-          )}
-        </>
-      )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </div>
+    </FlowShell>
   )
 }

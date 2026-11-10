@@ -18,10 +18,10 @@ import {
 import { stageOf } from '../resume/resume-strategy';
 import {
   BuildRequest,
+  CareerDeps,
   careerGreeting,
   createCareerAgent,
 } from './career.agent';
-import { saidBySeeker } from './quote';
 import { AttachedDoc, withAttachments } from './attachments';
 import {
   askWhatFor,
@@ -42,7 +42,7 @@ import { CreditsEstimatesService } from '../credits/estimates.service';
 const HISTORY_LIMIT = 30;
 
 // What the seeker sees while a tool runs.
-const TOOL_STATUS: Record<string, string> = {
+export const TOOL_STATUS: Record<string, string> = {
   get_profile: 'Reading your profile',
   research: 'Looking it up on the web',
   build_resume: 'Building your resume',
@@ -54,6 +54,19 @@ const TOOL_STATUS: Record<string, string> = {
 };
 
 type Searched = { query: string; sources: string[] };
+
+// What the model needs from a conversation's recent history (see historyContext).
+export interface KnownContext {
+  modelText: (m: { content: string; ui: Prisma.JsonValue | null }) => string;
+  latestRef: MessageRef | null;
+  refJobs: Map<string, RefJob>;
+}
+
+// The note an assistant message carries for the model: it only sees text.
+export const careerNote = (ui: unknown) =>
+  (ui as { type?: string } | null)?.type === 'resume'
+    ? `\n[You showed the seeker the resume PDF "${(ui as ResumeCard).title}"]`
+    : '';
 // What a message shows under it: a resume file, and/or that Plato looked something up.
 type ResearchCard = { type: 'research'; searched: Searched[] };
 export type ResumeCard = {
@@ -181,49 +194,15 @@ export class CareerService {
     });
     if (!thread) throw new NotFoundException('Conversation not found');
 
-    // Only the seeker's own, successfully read documents can be attached.
-    const attached = attachmentIds.length
-      ? await this.prisma.jobSeekerDocument.findMany({
-          where: {
-            id: { in: attachmentIds },
-            job_seeker_id: seeker.id,
-            status: 'READY',
-          },
-          select: { id: true, name: true },
-        })
-      : [];
-    // A pinned job must be one of this seeker's own matches.
-    const pinned = reference
-      ? await this.prisma.jobSeekerJobMatch.findFirst({
-          where: { job_seeker_id: seeker.id, job_id: reference.jobId },
-          select: {
-            job: {
-              select: { id: true, title: true, company: true, location: true },
-            },
-          },
-        })
-      : null;
-    const ref: MessageRef | null = pinned
-      ? {
-          jobId: pinned.job.id,
-          searchId: reference?.searchId ?? null,
-          title: pinned.job.title,
-          company: pinned.job.company,
-          location: pinned.job.location,
-        }
-      : null;
+    const attached = await this.attachable(seeker.id, attachmentIds);
+    const ref = await this.pinnedRef(seeker.id, reference);
+    const userUi = CareerService.userUi(attached, ref);
     await this.prisma.careerMessage.create({
       data: {
         thread_id: threadId,
         role: ChatRole.USER,
         content,
-        ...((attached.length || ref) && {
-          ui: {
-            type: attached.length ? 'attachment' : 'reference',
-            ...(attached.length && { documents: attached }),
-            ...(ref && { reference: ref }),
-          } as unknown as Prisma.InputJsonValue,
-        }),
+        ...(userUi && { ui: userUi }),
       },
     });
     // A job pinned to THIS message with no stated intent: ask, in code, before any agent runs (a "hi" or
@@ -239,7 +218,7 @@ export class CareerService {
           ui: {
             type: 'choices',
             choices: q.choices,
-          } as unknown as Prisma.InputJsonValue,
+          },
         },
       });
       await this.prisma.careerThread.update({
@@ -253,6 +232,139 @@ export class CareerService {
       orderBy: { created_at: 'desc' },
       take: HISTORY_LIMIT,
     });
+    const known = await this.historyContext(seeker.id, history);
+    const input: AgentInputItem[] = history.reverse().map((m) =>
+      m.role === ChatRole.USER
+        ? { role: 'user' as const, content: known.modelText(m) }
+        : {
+            role: 'assistant' as const,
+            status: 'completed' as const,
+            content: [
+              {
+                type: 'output_text' as const,
+                text: `${m.content}${careerNote(m.ui)}`,
+              },
+            ],
+          },
+    );
+
+    const kit = this.toolkit(seeker, threadId, known);
+    const agent = createCareerAgent(
+      this.careerModel,
+      {
+        firstName: seeker.user.full_name.split(' ')[0],
+        context: await this.seekerContext(seeker.id, seeker.user.full_name),
+      },
+      kit.deps,
+    );
+    // Always streamed; without onDelta it behaves like a plain run.
+    const streamed = await run(agent, input, { stream: true });
+    for await (const event of streamed) {
+      if (
+        event.type === 'raw_model_stream_event' &&
+        event.data.type === 'output_text_delta'
+      )
+        onDelta?.(event.data.delta);
+      // Say what the assistant is doing while a tool runs.
+      else if (
+        event.type === 'run_item_stream_event' &&
+        event.item.type === 'tool_call_item'
+      ) {
+        const name = (event.item.rawItem as { name?: string }).name ?? '';
+        const text = TOOL_STATUS[name];
+        if (text) onStatus?.(text);
+      }
+    }
+    await streamed.completed;
+    const result = metered('career.chat', this.careerModel, streamed);
+    const reply =
+      typeof result.finalOutput === 'string'
+        ? result.finalOutput
+        : 'Sorry, I lost my train of thought. Could you say that again?';
+
+    const ui = kit.replyUi();
+    const message = await this.prisma.careerMessage.create({
+      data: {
+        thread_id: threadId,
+        role: ChatRole.ASSISTANT,
+        content: reply,
+        ...(ui && { ui }),
+      },
+    });
+    await this.prisma.careerThread.update({
+      where: { id: threadId },
+      data: {
+        updated_at: new Date(),
+        // First real message names the conversation.
+        ...(thread.title === 'New conversation' && {
+          title: content.slice(0, 60),
+        }),
+      },
+    });
+    return { message };
+  }
+
+  // ---- Shared with the one Plato AI (chat/chat-thread.service.ts), which runs
+  // these same career tools inside its own agent and conversation.
+
+  /** Only the seeker's own, successfully read documents can be attached. */
+  async attachable(jobSeekerId: string, ids: string[] = []) {
+    return ids.length
+      ? this.prisma.jobSeekerDocument.findMany({
+          where: {
+            id: { in: ids },
+            job_seeker_id: jobSeekerId,
+            status: 'READY',
+          },
+          select: { id: true, name: true },
+        })
+      : [];
+  }
+
+  /** A pinned job must be one of this seeker's own matches. */
+  async pinnedRef(
+    jobSeekerId: string,
+    reference?: { jobId: string; searchId?: string },
+  ): Promise<MessageRef | null> {
+    const pinned = reference
+      ? await this.prisma.jobSeekerJobMatch.findFirst({
+          where: { job_seeker_id: jobSeekerId, job_id: reference.jobId },
+          select: {
+            job: {
+              select: { id: true, title: true, company: true, location: true },
+            },
+          },
+        })
+      : null;
+    return pinned
+      ? {
+          jobId: pinned.job.id,
+          searchId: reference?.searchId ?? null,
+          title: pinned.job.title,
+          company: pinned.job.company,
+          location: pinned.job.location,
+        }
+      : null;
+  }
+
+  /** What a seeker's message carries: attached CVs and/or a pinned job. */
+  static userUi(
+    attached: { id: string; name: string | null }[],
+    ref: MessageRef | null,
+  ): Prisma.InputJsonValue | undefined {
+    if (!attached.length && !ref) return undefined;
+    return {
+      type: attached.length ? 'attachment' : 'reference',
+      ...(attached.length && { documents: attached }),
+      ...(ref && { reference: ref }),
+    };
+  }
+
+  /** Attached CV texts and pinned jobs of the recent history, for the model's view of each message. */
+  async historyContext(
+    jobSeekerId: string,
+    history: { role: ChatRole; content: string; ui: Prisma.JsonValue | null }[],
+  ): Promise<KnownContext> {
     const docIds = history.flatMap((m) =>
       ((m.ui as { documents?: { id: string }[] } | null)?.documents ?? []).map(
         (d) => d.id,
@@ -262,7 +374,7 @@ export class CareerService {
       docIds.length
         ? (
             await this.prisma.jobSeekerDocument.findMany({
-              where: { id: { in: docIds }, job_seeker_id: seeker.id },
+              where: { id: { in: docIds }, job_seeker_id: jobSeekerId },
               select: { id: true, name: true, extracted_text: true },
             })
           ).map((d) => [
@@ -292,197 +404,134 @@ export class CareerService {
           ).map((j) => [j.id, j])
         : [],
     );
-    // the job the seeker pinned most recently: the one a mock interview is about
-    const latestRef = history.map((m) => refOf(m.ui)).find(Boolean) ?? null;
-    const modelText = (m: (typeof history)[number]) =>
+    const modelText = (m: { content: string; ui: Prisma.JsonValue | null }) =>
       withReference(withAttachments(m.content, m.ui, docs), m.ui, refJobs);
-    const input: AgentInputItem[] = history.reverse().map((m) =>
-      m.role === ChatRole.USER
-        ? { role: 'user' as const, content: modelText(m) }
-        : {
-            role: 'assistant' as const,
-            status: 'completed' as const,
-            content: [
-              {
-                type: 'output_text' as const,
-                text:
-                  (m.ui as { type?: string } | null)?.type === 'resume'
-                    ? `${m.content}\n[You showed the seeker the resume PDF "${(m.ui as ResumeCard).title}"]`
-                    : m.content,
-              },
-            ],
-          },
-    );
-
-    const userSaid = history
-      .filter((m) => m.role === ChatRole.USER)
-      .map(modelText);
-    const need = (quote: string) => {
-      if (!saidBySeeker(userSaid, quote))
-        throw new Error(
-          'That quote is not in what the seeker wrote. Ask them first, in their own words, and quote it exactly. Do not save anything from a link or from assumptions.',
-        );
+    return {
+      modelText,
+      // history is newest first: the job the seeker pinned most recently is the one a mock interview is about
+      latestRef: history.map((m) => refOf(m.ui)).find(Boolean) ?? null,
+      refJobs,
     };
+  }
+
+  /**
+   * The career tools' dependencies for one turn, plus what the turn produced
+   * (a resume / interview card, web lookups, tappable choices) for the reply's ui.
+   * threadId: the CareerThread a resume belongs to; null when the turn runs in a
+   * Plato AI (chat) conversation, whose id is not a career thread.
+   */
+  toolkit(
+    seeker: { id: string; user_id: string },
+    threadId: string | null,
+    known: KnownContext,
+  ) {
     let card = null as ResumeCard | null;
     const searched: Searched[] = [];
     let choices: string[] = [];
-    const agent = createCareerAgent(
-      this.careerModel,
-      {
-        firstName: seeker.user.full_name.split(' ')[0],
-        context: await this.seekerContext(seeker.id, seeker.user.full_name),
+    const deps: CareerDeps = {
+      tokens: () => this.estimates.summary(seeker.user_id),
+      // The master resume's score: fixed rules, no model, same answer every time.
+      scoreResume: async () => {
+        const s = scoreProfile(await this.profiles.load(seeker.id));
+        return {
+          ...s,
+          warn: s.score < THRESHOLDS.masterWarn,
+          thresholds: THRESHOLDS,
+        };
       },
-      {
-        tokens: () => this.estimates.summary(seeker.user_id),
-        // The master resume's score: fixed rules, no model, same answer every time.
-        scoreResume: async () => {
-          const s = scoreProfile(await this.profiles.load(seeker.id));
+      profile: async () => {
+        const p = await this.profiles.load(seeker.id);
+        return {
+          ...p,
+          stage: stageOf(p.totalYears),
+          issues: profileIssues(p),
+        };
+      },
+      saveProject: async (d) =>
+        void (await this.profiles.addProject(seeker.id, d)),
+      saveAchievement: async (d) =>
+        void (await this.profiles.addAchievement(seeker.id, d)),
+      confirmSkill: async (d) =>
+        void (await this.profiles.upsertSkillEvidence(seeker.id, d)),
+      setPreferences: (d) => this.profiles.saveSettings(seeker.id, d),
+      research: async (question) => {
+        // A few lookups per message is plenty; more is a loop.
+        if (searched.length >= 3)
           return {
-            ...s,
-            warn: s.score < THRESHOLDS.masterWarn,
-            thresholds: THRESHOLDS,
+            found: false,
+            error:
+              'Enough research for one message. Answer with what you have.',
           };
-        },
-        profile: async () => {
-          const p = await this.profiles.load(seeker.id);
+        try {
+          const r = await research(this.searchModel, question);
+          searched.push({ query: question.slice(0, 140), sources: r.sources });
+          return r;
+        } catch (error) {
+          this.logger.warn(`Research failed: ${(error as Error).message}`);
           return {
-            ...p,
-            stage: stageOf(p.totalYears),
-            issues: profileIssues(p),
+            found: false,
+            error:
+              'The web lookup failed. Say so and ask the seeker for the details.',
           };
-        },
-        saveProject: async (d) =>
-          void (await this.profiles.addProject(seeker.id, d)),
-        saveAchievement: async (d) =>
-          void (await this.profiles.addAchievement(seeker.id, d)),
-        confirmSkill: async (d) =>
-          void (await this.profiles.upsertSkillEvidence(seeker.id, d)),
-        setPreferences: (d) => this.profiles.saveSettings(seeker.id, d),
-        research: async (question) => {
-          // A few lookups per message is plenty; more is a loop.
-          if (searched.length >= 3)
-            return {
-              found: false,
-              error:
-                'Enough research for one message. Answer with what you have.',
-            };
-          try {
-            const r = await research(this.searchModel, question);
-            searched.push({
-              query: question.slice(0, 140),
-              sources: r.sources,
-            });
-            return r;
-          } catch (error) {
-            this.logger.warn(`Research failed: ${(error as Error).message}`);
-            return {
-              found: false,
-              error:
-                'The web lookup failed. Say so and ask the seeker for the details.',
-            };
+        }
+      },
+      startMockInterview: (mode) => {
+        const j = known.latestRef && known.refJobs.get(known.latestRef.jobId);
+        if (!j)
+          return {
+            started: false,
+            error:
+              'No job is pinned. Ask the seeker to open the job card and press the interview button.',
+          };
+        // The UI shows a card that starts the interview the seeker chose (text page or live voice call).
+        card = {
+          type: 'interview',
+          mode,
+          job: { id: j.id, title: j.title, company: j.company },
+          description: (j.description ?? '').slice(0, 6000),
+        } as unknown as ResumeCard;
+        return { started: true, mode, job: `${j.title} at ${j.company}` };
+      },
+      offerChoices: (options) => {
+        choices = options
+          .map((o) => o.trim())
+          .filter(Boolean)
+          .slice(0, 4);
+      },
+      buildResume: async (req) => {
+        try {
+          const out = await this.build(seeker.id, threadId, req);
+          card = out.card;
+          return out.reply;
+        } catch (error) {
+          this.logger.warn(`Resume build failed: ${(error as Error).message}`);
+          return {
+            built: false,
+            error: 'Could not build the resume right now.',
+          };
+        }
+      },
+    };
+    // The ui saved with the reply: a card if one was made, the lookups and choices with it.
+    const replyUi = (): Prisma.InputJsonValue | undefined =>
+      card || searched.length || choices.length
+        ? {
+            ...(card ??
+              (searched.length ? { type: 'research' } : { type: 'choices' })),
+            ...(searched.length && { searched }),
+            ...(choices.length && { choices }),
           }
-        },
-        startMockInterview: (mode) => {
-          const j = latestRef && refJobs.get(latestRef.jobId);
-          if (!j)
-            return {
-              started: false,
-              error:
-                'No job is pinned. Ask the seeker to open the job card and press the interview button.',
-            };
-          // The UI shows a card that starts the interview the seeker chose (text page or live voice call).
-          card = {
-            type: 'interview',
-            mode,
-            job: { id: j.id, title: j.title, company: j.company },
-            description: (j.description ?? '').slice(0, 6000),
-          } as unknown as ResumeCard;
-          return { started: true, mode, job: `${j.title} at ${j.company}` };
-        },
-        offerChoices: (options) => {
-          choices = options
-            .map((o) => o.trim())
-            .filter(Boolean)
-            .slice(0, 4);
-        },
-        buildResume: async (req) => {
-          try {
-            const out = await this.build(seeker.id, threadId, req);
-            card = out.card;
-            return out.reply;
-          } catch (error) {
-            this.logger.warn(
-              `Resume build failed: ${(error as Error).message}`,
-            );
-            return {
-              built: false,
-              error: 'Could not build the resume right now.',
-            };
-          }
-        },
-      },
-    );
-    // Always streamed; without onDelta it behaves like a plain run.
-    const streamed = await run(agent, input, { stream: true });
-    for await (const event of streamed) {
-      if (
-        event.type === 'raw_model_stream_event' &&
-        event.data.type === 'output_text_delta'
-      )
-        onDelta?.(event.data.delta);
-      // Say what the assistant is doing while a tool runs.
-      else if (
-        event.type === 'run_item_stream_event' &&
-        event.item.type === 'tool_call_item'
-      ) {
-        const name = (event.item.rawItem as { name?: string }).name ?? '';
-        const text = TOOL_STATUS[name];
-        if (text) onStatus?.(text);
-      }
-    }
-    await streamed.completed;
-    const result = metered('career.chat', this.careerModel, streamed);
-    const reply =
-      typeof result.finalOutput === 'string'
-        ? result.finalOutput
-        : 'Sorry, I lost my train of thought. Could you say that again?';
-
-    const message = await this.prisma.careerMessage.create({
-      data: {
-        thread_id: threadId,
-        role: ChatRole.ASSISTANT,
-        content: reply,
-        ...(card || searched.length || choices.length
-          ? {
-              ui: {
-                ...(card ??
-                  (searched.length
-                    ? { type: 'research' }
-                    : { type: 'choices' })),
-                ...(searched.length && { searched }),
-                ...(choices.length && { choices }),
-              } as unknown as Prisma.InputJsonValue,
-            }
-          : {}),
-      },
-    });
-    await this.prisma.careerThread.update({
-      where: { id: threadId },
-      data: {
-        updated_at: new Date(),
-        // First real message names the conversation.
-        ...(thread.title === 'New conversation' && {
-          title: content.slice(0, 60),
-        }),
-      },
-    });
-    return { message };
+        : undefined;
+    return {
+      deps,
+      replyUi,
+      made: () => !!(card || searched.length || choices.length),
+    };
   }
-
   // Runs the shared resume engine, stores the PDF and the strategy it used.
   private async build(
     jobSeekerId: string,
-    threadId: string,
+    threadId: string | null,
     req: BuildRequest,
   ) {
     const result = await this.engine.build({

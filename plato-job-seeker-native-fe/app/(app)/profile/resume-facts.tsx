@@ -1,10 +1,16 @@
 "use client"
 
 import { useCallback, useEffect, useState, type ReactNode } from "react"
-import { Loader2, Trash2 } from "lucide-react"
+import { BadgeCheck, FolderGit2, Loader2, Trash2, TrendingUp, type LucideIcon } from "lucide-react"
+import { cn } from "cn"
+import { CARD, SectionHeader } from "@/components/plato-ui"
 import { Button } from "@/components/ui/button"
+import { Field as UIField, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { FilterChip } from "@/components/filter-controls"
 import { Textarea } from "@/components/ui/textarea"
+import { Skeleton } from "@/components/ui/skeleton"
+import { InfoTip } from "@/components/info-tip"
 import { addAchievement, addProject, addSkillProof, getResumeFacts, removeResumeFact, type ResumeFacts } from "@/lib/resume-profile/api"
 
 // What Plato uses to write your resumes and applications. Everything here is
@@ -12,11 +18,14 @@ import { addAchievement, addProject, addSkillProof, getResumeFacts, removeResume
 
 const LEVEL = { LEARNING: "Learning", WORKING: "Working", STRONG: "Strong" } as const
 
-function Section({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+// The three add buttons share one view, so they use the soft primary instead of three solid ones.
+const SOFT_BTN = "bg-primary-soft text-primary shadow-none hover:bg-primary hover:text-primary-foreground"
+
+function Section({ title, hint, icon, index, children, tour }: { title: string; hint: string; icon: LucideIcon; index: number; children: ReactNode; tour?: string }) {
   return (
-    <section className="flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-card">
-      <div>
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+    <section data-tour={tour} className={cn(CARD, "flex flex-col gap-3 p-5 animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-both duration-500")} style={{ animationDelay: `${index * 70}ms` }}>
+      <div className="flex flex-col gap-1.5">
+        <SectionHeader title={title} icon={icon} accent="cobalt" as="h3" />
         <p className="text-sm text-text-secondary">{hint}</p>
       </div>
       {children}
@@ -26,12 +35,12 @@ function Section({ title, hint, children }: { title: string; hint: string; child
 
 function Row({ title, sub, onRemove }: { title: string; sub?: string | null; onRemove: () => void }) {
   return (
-    <li className="flex items-start justify-between gap-3 rounded-md border px-3 py-2">
+    <li className="group flex items-start justify-between gap-3 rounded-xl border px-3 py-2 transition-colors duration-200 hover:border-primary-line hover:bg-primary-tint/50">
       <div className="min-w-0">
         <p className="text-sm font-medium text-foreground">{title}</p>
         {sub && <p className="text-xs whitespace-pre-line text-text-secondary">{sub}</p>}
       </div>
-      <button type="button" aria-label="Remove" onClick={onRemove} className="shrink-0 rounded-sm p-1 text-text-tertiary hover:text-destructive">
+      <button type="button" aria-label="Remove" onClick={onRemove} className="-m-1 shrink-0 rounded-md p-2 text-text-tertiary transition-colors duration-200 hover:bg-danger-soft hover:text-destructive">
         <Trash2 className="size-4" />
       </button>
     </li>
@@ -40,10 +49,12 @@ function Row({ title, sub, onRemove }: { title: string; sub?: string | null; onR
 
 function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return (
-    <label htmlFor={id} className="flex flex-col gap-1 text-xs font-medium text-text-secondary">
-      {label}
+    <UIField className="gap-1">
+      <FieldLabel htmlFor={id} className="text-xs font-medium text-text-secondary">
+        {label}
+      </FieldLabel>
       {children}
-    </label>
+    </UIField>
   )
 }
 
@@ -79,11 +90,11 @@ export function ResumeFactsPanel() {
   return (
     <div className="flex flex-col gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {!facts && !error && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {!facts && !error && <Skeleton className="h-48 rounded-2xl" />}
 
       {facts && (
         <div className="grid items-start gap-5 2xl:grid-cols-3">
-          <Section title="Projects" hint="Real things you built. Especially useful early in your career.">
+          <Section title="Projects" icon={FolderGit2} index={0} tour="profile-projects" hint="Real things you built. Especially useful early in your career.">
             <ul className="flex flex-col gap-2">
               {facts.projects.map((p) => (
                 <Row key={p.id} title={p.name} sub={[p.description, p.result && `Result: ${p.result}`].filter(Boolean).join("\n")} onRemove={() => void remove("projects", p.id)} />
@@ -114,14 +125,14 @@ export function ResumeFactsPanel() {
               <Field id="p-url" label="Link">
                 <Input id="p-url" type="url" value={project.url} onChange={(e) => setProject({ ...project, url: e.target.value })} placeholder="https://" />
               </Field>
-              <Button type="submit" data-ai="profile.add-project" size="sm" disabled={busy} className="w-fit">
+              <Button type="submit" data-ai="profile.add-project" size="sm" disabled={busy} className={cn("w-fit", SOFT_BTN)}>
                 {busy && <Loader2 className="size-3.5 animate-spin" />}
                 Add project
               </Button>
             </form>
           </Section>
 
-          <Section title="Results" hint="What changed because of your work. A real number makes a bullet much stronger.">
+          <Section title="Results" icon={TrendingUp} index={1} tour="profile-results" hint="What changed because of your work. A real number makes a bullet much stronger.">
             <ul className="flex flex-col gap-2">
               {facts.achievements.map((a) => (
                 <Row key={a.id} title={a.metric ? `${a.text} (${a.metric})` : a.text} sub={a.company ?? a.project_name} onRemove={() => void remove("achievements", a.id)} />
@@ -143,14 +154,14 @@ export function ResumeFactsPanel() {
               <Field id="a-company" label="Employer (as in your CV, optional)">
                 <Input id="a-company" value={achievement.company} onChange={(e) => setAchievement({ ...achievement, company: e.target.value })} />
               </Field>
-              <Button type="submit" data-ai="profile.add-result" size="sm" disabled={busy} className="w-fit">
+              <Button type="submit" data-ai="profile.add-result" size="sm" disabled={busy} className={cn("w-fit", SOFT_BTN)}>
                 {busy && <Loader2 className="size-3.5 animate-spin" />}
                 Add result
               </Button>
             </form>
           </Section>
 
-          <Section title="Skills with proof" hint="A skill with proof can go on a resume even if your CV never listed it. Skills you are learning are shown as currently learning.">
+          <Section title="Skills with proof" icon={BadgeCheck} index={2} tour="profile-skill-proof" hint="A skill with proof can go on a resume even if your CV never listed it.">
             <ul className="flex flex-col gap-2">
               {facts.skills.map((s) => (
                 <Row key={s.id} title={`${s.skill} · ${LEVEL[s.level]}`} sub={s.proof} onRemove={() => void remove("skills", s.id)} />
@@ -166,12 +177,13 @@ export function ResumeFactsPanel() {
               <Field id="s-skill" label="Skill">
                 <Input id="s-skill" value={skill.skill} onChange={(e) => setSkill({ ...skill, skill: e.target.value })} required />
               </Field>
-              <div className="flex gap-2" role="group" aria-label="Level">
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Level">
                 {(["LEARNING", "WORKING", "STRONG"] as const).map((l) => (
-                  <button key={l} type="button" onClick={() => setSkill({ ...skill, level: l })} className={`rounded-full border px-3 py-1 text-xs font-medium ${skill.level === l ? "border-primary bg-primary-soft text-primary" : "text-text-secondary"}`}>
+                  <FilterChip key={l} on={skill.level === l} onClick={() => setSkill({ ...skill, level: l })}>
                     {LEVEL[l]}
-                  </button>
+                  </FilterChip>
                 ))}
+                <InfoTip text="Working and Strong count as proof, so Plato may put the skill on a tailored resume. Learning is shown only as currently learning and never counted as experience." label="What the skill levels mean" />
               </div>
               <Field id="s-proof" label="What you built or did with it">
                 <Textarea id="s-proof" value={skill.proof} onChange={(e) => setSkill({ ...skill, proof: e.target.value })} required className="min-h-16 text-sm" />
@@ -179,7 +191,7 @@ export function ResumeFactsPanel() {
               <Field id="s-url" label="Link (optional)">
                 <Input id="s-url" type="url" value={skill.url} onChange={(e) => setSkill({ ...skill, url: e.target.value })} placeholder="https://" />
               </Field>
-              <Button type="submit" data-ai="profile.add-skill" size="sm" disabled={busy} className="w-fit">
+              <Button type="submit" data-ai="profile.add-skill" size="sm" disabled={busy} className={cn("w-fit", SOFT_BTN)}>
                 {busy && <Loader2 className="size-3.5 animate-spin" />}
                 Add skill
               </Button>

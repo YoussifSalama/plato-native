@@ -8,9 +8,17 @@ import { ChatService } from './chat.service';
 import { ChatThreadController } from './chat-thread.controller';
 import { ChatThreadService } from './chat-thread.service';
 import { CreditsModule } from '../credits/credits.module';
+import { CareerModule } from '../career/career.module';
 
 @Module({
-  imports: [AuthModule, UserModule, DiscoveryModule, ApplyModule, CreditsModule],
+  imports: [
+    AuthModule,
+    UserModule,
+    DiscoveryModule,
+    ApplyModule,
+    CreditsModule,
+    CareerModule,
+  ],
   controllers: [ChatController, ChatThreadController],
   providers: [ChatService, ChatThreadService],
 })

@@ -2,9 +2,10 @@
 
 import { useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, HelpCircle } from "lucide-react"
 import { cn } from "cn"
 import { ease } from "@/lib/motion-system"
+import { CARD, SectionHeader } from "@/components/plato-ui"
 
 // The questions people actually ask about tokens, answered plainly.
 const QUESTIONS = [
@@ -18,14 +19,14 @@ export function TokensFaq() {
   const reduced = !!useReducedMotion()
   const [open, setOpen] = useState<number | null>(0)
   return (
-    <section className="flex flex-col gap-4">
-      <h2 className="text-lg font-bold text-foreground">Questions people ask</h2>
-      <div className="divide-y divide-divider rounded-xl border bg-card">
+    <section data-tour="tokens-faq" className="flex flex-col gap-4">
+      <SectionHeader title="Questions people ask" icon={HelpCircle} accent="cobalt" />
+      <div className={cn(CARD, "divide-y divide-divider overflow-hidden")}>
         {QUESTIONS.map(({ q, a }, i) => {
           const isOpen = open === i
           return (
             <div key={q}>
-              <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : i)} className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-sm font-semibold text-foreground transition-colors hover:text-primary">
+              <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : i)} className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-sm font-semibold text-foreground transition-colors duration-200 hover:bg-muted/60 hover:text-primary">
                 {q}
                 <ChevronDown className={cn("size-4 shrink-0 text-text-tertiary transition-transform duration-300", isOpen && "rotate-180 text-primary")} />
               </button>

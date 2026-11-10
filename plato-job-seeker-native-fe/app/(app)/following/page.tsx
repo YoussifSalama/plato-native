@@ -3,13 +3,19 @@
 import { Suspense, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Bell, BellOff, Plus, Search, SlidersHorizontal, X } from "lucide-react"
+import { motion } from "motion/react"
+import { ArrowUpRight, Bell, BellOff, Briefcase, Building2, Clock, Compass, Mail, Plus, Search, SlidersHorizontal, Sparkles, X } from "lucide-react"
 import { cn } from "cn"
-import { PAGE, PageHeader } from "@/components/page-header"
+import { PAGE } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExtensionApplyModal } from "@/components/extension-apply-modal"
-import { MatchPill, MonoTile, PlatoNote, StatusPill } from "@/components/plato-ui"
+import { InfoTip } from "@/components/info-tip"
+import { CARD, EmptyState, MatchPill, MonoTile, SectionHeader, StatIcon, StatusPill } from "@/components/plato-ui"
+import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
 import { CADENCES, createAlert, deleteAlert, getDigests, getInsights, saveAlertSettings, searchCompanies, updateAlert, type AlertSettings, type CompanySuggestion, type Digest, type InsightsOverview, type JobAlert } from "@/lib/insights/api"
 import { timeAgo } from "@/lib/jobs/links"
 import { DigestSettings } from "../insights/digest-settings"
@@ -78,118 +84,194 @@ function FollowingContent() {
   const cadence = data ? (CADENCES.find((c) => c.value === data.settings.cadence)?.label ?? "").toLowerCase() : ""
 
   return (
-    <div className={PAGE}>
-      <PageHeader
-        title="Following"
-        description="New openings at companies you follow and in roles you care about."
-        actions={
-          <Button variant="outline" onClick={() => setSettingsOpen((o) => !o)} aria-expanded={settingsOpen} className="h-11 gap-2 rounded-xl bg-card px-4">
-            <SlidersHorizontal className="size-4" />
-            Alert settings
-          </Button>
-        }
-      />
+    <div data-tour-state={!data ? undefined : settingsOpen ? "following.settings" : data.alerts.length ? "following.list" : "following.empty"} className={PAGE}>
+      {/* Header: what this page is and one line of status. No wall of zero counters. */}
+      <header data-tour="page-header" className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="eyebrow">Job alerts</p>
+          <h1 className="type-page-title mt-1.5">Following</h1>
+          <p className="mt-1.5 max-w-[60ch] text-[15px] text-text-secondary">Plato watches the companies and roles you pick and tells you when something new fits you.</p>
+        </div>
+        <Button variant="outline" data-ai="following.settings" onClick={() => setSettingsOpen((o) => !o)} aria-expanded={settingsOpen} className="gap-2 bg-card">
+          <SlidersHorizontal className="size-4" />
+          Alert settings
+        </Button>
+      </header>
+      {data && (
+        <p data-tour="following-status" className="-mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-text-secondary">
+          <span className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-primary" />
+            Watching <b className="text-foreground">{companies.length}</b> compan{companies.length === 1 ? "y" : "ies"} and <b className="text-foreground">{roles.length}</b> role{roles.length === 1 ? "" : "s"}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Clock className="size-3.5 text-text-tertiary" />
+            Checked {cadence || "on your schedule"}
+            <InfoTip text="How often new jobs from your alerts reach you, gathered into one digest. Only jobs still open are sent, never the same one twice, and nothing is sent when nothing is new." label="What the digest schedule means" />
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Mail className="size-3.5 text-text-tertiary" />
+            {[data.settings.in_app && "In Plato", data.settings.email && data.settings.emailAvailable && "by email"].filter(Boolean).join(" and ") || "Alerts paused"}
+          </span>
+          {latest && <span>Last digest {timeAgo(latest.at)}</span>}
+        </p>
+      )}
       {error && (
-        <p role="alert" className="flex items-center gap-3 rounded-xl border border-warning-line bg-warning-soft px-4 py-3 text-sm">
+        <p role="alert" className="flex items-center gap-3 rounded-xl border border-l-4 border-l-warning bg-card px-4 py-3 text-sm shadow-card">
           <span className="flex-1">{error}</span>
-          <button type="button" aria-label="Dismiss" onClick={() => setError(null)}>
+          <button type="button" aria-label="Dismiss" onClick={() => setError(null)} className="rounded-md p-1 text-text-secondary transition-colors duration-200 hover:bg-muted hover:text-foreground">
             <X className="size-4" />
           </button>
         </p>
       )}
       {settingsOpen && <DigestSettings data={data} onChange={changeSettings} />}
 
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_350px]">
-        <section className="flex min-w-0 flex-col gap-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold tracking-tight">Companies you follow</h2>
-            {data && (
-              <span className="text-sm text-text-secondary">
-                {data.used.company} of {data.limits.company} on {data.plan[0] + data.plan.slice(1).toLowerCase()}
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="flex min-w-0 flex-col gap-6">
+          {/* 1. What's new comes first; when nothing is new it is one calm line, not an empty box. */}
+          {digests === null ? (
+            <Skeleton className="h-16 rounded-2xl" />
+          ) : newRoles.length === 0 ? (
+            <div data-tour="following-new" className={cn(CARD, "flex items-center gap-3 px-4 py-3.5")}>
+              <StatIcon icon={Bell} accent="cobalt" className="size-9" />
+              <span className="min-w-0 flex-1 text-sm">
+                <b className="text-foreground">No new roles yet.</b> <span className="text-text-secondary">Plato checks the companies you follow {cadence || "on your schedule"} and lists what fits you here.</span>
               </span>
-            )}
-          </div>
-          {!data && <Skeleton className="h-40 rounded-2xl" />}
-          {data && companies.length === 0 && <PlatoNote variant="inline">You don&apos;t follow any company yet. Pick one on the right and Plato tells you when they post a role that fits.</PlatoNote>}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {companies.map((c) => {
-              const n = newAt(c.company)
-              return (
-                <div key={c.id} className={cn("group relative flex min-w-0 flex-col gap-1.5 rounded-2xl border bg-card p-3", c.paused && "opacity-60")}>
-                  <div className="flex items-start justify-between gap-2">
-                    <MonoTile name={c.company ?? "?"} />
-                    {n ? <StatusPill tone="primary">{n} new</StatusPill> : <span className="text-[11px] whitespace-nowrap text-text-tertiary">No new roles</span>}
-                  </div>
-                  <b className="mt-1 truncate text-[15.5px]">{c.company}</b>
-                  <span className="text-[12.5px] leading-snug text-text-secondary">{c.open != null ? `${c.for_you ?? 0} for you · ${c.open} open` : c.sent ? `${c.sent} sent to you so far` : "Nothing sent yet"}</span>
-                  <div className="mt-1.5 flex gap-2">
-                    <Link href={`/jobs?company=${encodeURIComponent(c.company ?? "")}`} data-ai="following.see-roles" className="flex-1 rounded-lg border bg-card py-1.5 text-center text-sm font-semibold whitespace-nowrap hover:border-primary-line">
-                      See roles
-                    </Link>
-                    <button type="button" aria-label={c.paused ? `Resume alerts for ${c.company}` : `Pause alerts for ${c.company}`} aria-pressed={!c.paused} onClick={() => togglePause(c)} className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-card text-text-secondary hover:border-primary-line">
-                      {c.paused ? <BellOff className="size-4" /> : <Bell className="size-4" />}
-                    </button>
-                  </div>
-                  <button type="button" onClick={() => void run(() => deleteAlert(c.id))} className="self-start text-xs text-text-tertiary hover:text-destructive hover:underline">
-                    Unfollow
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="flex flex-col gap-3 rounded-2xl border border-primary-line bg-primary-tint p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <PlatoNote variant="headline">
-                <b className="text-[17px] text-foreground">
-                  {newRoles.length} new role{newRoles.length === 1 ? "" : "s"} from companies you follow
-                </b>
-              </PlatoNote>
-              {latest && <span className="text-[13px] text-text-secondary">In your digest from {timeAgo(latest.at)}</span>}
             </div>
-            {digests === null && <Skeleton className="h-24 rounded-xl" />}
-            {digests !== null && newRoles.length === 0 && <p className="text-sm text-text-secondary">Nothing new yet. Plato checks every company you follow and sends what fits {cadence || "on your schedule"}.</p>}
-            {newRoles.map((j) => (
-              <div key={j.id} className="flex flex-wrap items-center gap-3 rounded-xl border bg-card px-3 py-2.5">
-                <MonoTile name={j.company} size="sm" />
-                <span className="min-w-0 flex-1">
-                  <b className="block truncate text-[15px]">{j.title}</b>
-                  <span className="block truncate text-xs text-text-secondary">{[j.company, j.location, j.posted_at && `posted ${timeAgo(j.posted_at)}`].filter(Boolean).join(" · ")}</span>
-                </span>
-                {j.match_percent != null && <MatchPill value={j.match_percent} />}
-                <a href={j.url} target="_blank" rel="noreferrer" className="rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold hover:border-primary-line">
-                  View
-                </a>
-                <Button size="sm" onClick={() => setApply(j.id)} className="rounded-lg px-4">
-                  Apply
-                </Button>
+          ) : (
+            <div data-tour="following-new" className={cn(CARD, "flex flex-col gap-3 p-5")}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <SectionHeader title={`${newRoles.length} new role${newRoles.length === 1 ? "" : "s"} for you`} icon={Sparkles} accent="cobalt" />
+                {latest && <span className="type-meta text-text-secondary">From your digest {timeAgo(latest.at)}</span>}
               </div>
-            ))}
+              {newRoles.map((j) => (
+                <div key={j.id} className="group flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors duration-200 hover:bg-muted/60">
+                  <MonoTile name={j.company} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <b className="type-card-title block truncate">{j.title}</b>
+                    <span className="type-meta block truncate text-text-secondary">{[j.company, j.location, j.posted_at && `posted ${timeAgo(j.posted_at)}`].filter(Boolean).join(" · ")}</span>
+                  </span>
+                  {j.match_percent != null && <MatchPill value={j.match_percent} />}
+                  <a href={j.url} target="_blank" rel="noreferrer" className="group/view inline-flex items-center gap-1 rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold transition-colors duration-200 hover:border-primary-line hover:text-primary">
+                    View
+                    <ArrowUpRight className="size-3.5 text-text-tertiary transition-transform group-hover/view:translate-x-0.5 group-hover/view:-translate-y-0.5 group-hover/view:text-primary" />
+                  </a>
+                  <Button size="sm" onClick={() => setApply(j.id)} className="rounded-lg bg-primary-soft px-4 text-primary transition-colors duration-200 hover:bg-primary hover:text-primary-foreground">
+                    Apply
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 2. Companies you follow: one tidy list, actions on the right, no zero counters. */}
+          <div data-tour="following-companies" className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <SectionHeader
+                title={
+                  <span className="flex items-center gap-1.5">
+                    Companies you follow
+                    <InfoTip text="“Open” is every live job Plato knows of at that company; “for you” is how many of those are in your own matches. The bell pauses alerts without unfollowing." label="What open and for you mean" />
+                  </span>
+                }
+                icon={Building2}
+                accent="cobalt"
+              />
+              {data && (
+                <span className="flex shrink-0 items-center gap-1.5 type-meta text-text-secondary">
+                  {data.used.company} of {data.limits.company} on {data.plan[0].toUpperCase() + data.plan.slice(1).toLowerCase()}
+                  <InfoTip text={`Your plan lets you follow up to ${data.limits.company} companies and ${data.limits.field} roles. Paused ones still count, so remove one to make room.`} label="What the follow limit means" side="left" />
+                </span>
+              )}
+            </div>
+            <div className={cn(CARD, "flex flex-col divide-y divide-divider overflow-hidden")}>
+              {!data &&
+                Array.from({ length: 3 }, (_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3">
+                    <Skeleton className="size-10 rounded-lg" />
+                    <span className="flex flex-1 flex-col gap-1.5">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-48" />
+                    </span>
+                  </div>
+                ))}
+              {data && companies.length === 0 && <EmptyState icon={Building2} title="You don't follow any company yet" hint="Search on the right and Plato tells you when they post a role that fits." className="m-3 border-0" />}
+              <motion.ul key={data ? "ready" : "loading"} variants={staggerContainer} initial="hidden" animate="show" className="contents">
+                {companies.map((c) => {
+                  const n = newAt(c.company)
+                  const counts = [c.open ? `${c.open} open` : null, c.for_you ? `${c.for_you} for you` : null].filter(Boolean).join(" · ")
+                  return (
+                    <motion.li key={c.id} variants={fadeUpItem} className={cn("group flex items-center gap-3 px-4 py-3 transition-colors duration-200 hover:bg-muted/50", c.paused && "opacity-60")}>
+                      <MonoTile name={c.company ?? "?"} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <b className="type-card-title truncate">{c.company}</b>
+                          {n > 0 && <StatusPill tone="primary">{n} new</StatusPill>}
+                          {c.paused && <StatusPill tone="neutral">Paused</StatusPill>}
+                        </span>
+                        <span className="type-meta block truncate text-text-secondary">{c.paused ? "Alerts paused" : counts || (c.sent ? `${c.sent} sent to you so far` : "Watching · nothing new yet")}</span>
+                      </span>
+                      <Link href={`/jobs?company=${encodeURIComponent(c.company ?? "")}`} data-ai="following.see-roles" className="group/see inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-soft px-3 py-1.5 text-[13px] font-semibold text-primary transition-colors duration-200 hover:bg-primary hover:text-primary-foreground">
+                        See roles
+                        <ArrowUpRight className="size-3.5 transition-transform group-hover/see:translate-x-0.5" />
+                      </Link>
+                      <button type="button" title={c.paused ? "Resume alerts" : "Pause alerts"} aria-label={c.paused ? `Resume alerts for ${c.company}` : `Pause alerts for ${c.company}`} aria-pressed={!c.paused} onClick={() => togglePause(c)} className="flex size-8 shrink-0 items-center justify-center rounded-lg text-text-tertiary transition-colors duration-200 hover:bg-muted hover:text-primary">
+                        {c.paused ? <BellOff className="size-4" /> : <Bell className="size-4" />}
+                      </button>
+                      <button type="button" title="Unfollow" aria-label={`Unfollow ${c.company}`} onClick={() => void run(() => deleteAlert(c.id))} className="flex size-8 shrink-0 items-center justify-center rounded-lg text-text-tertiary transition-colors duration-200 hover:bg-danger-soft hover:text-destructive">
+                        <X className="size-4" />
+                      </button>
+                    </motion.li>
+                  )
+                })}
+              </motion.ul>
+              {data && (
+                <button type="button" onClick={() => document.querySelector<HTMLInputElement>('input[aria-label="Search any company to follow"]')?.focus()} className="flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-primary transition-colors duration-200 hover:bg-primary-tint">
+                  <Plus className="size-4" />
+                  Follow a company
+                </button>
+              )}
+            </div>
           </div>
 
           {!!digests?.length && <Digests digests={digests} focus={focus} />}
         </section>
 
         <aside className="flex flex-col gap-6">
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold tracking-tight">Roles you follow</h2>
-              <button type="button" onClick={() => setRoleDraft("")} className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+          <div data-tour="following-roles" className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <SectionHeader
+                title={
+                  <span className="flex items-center gap-1.5">
+                    Roles you follow
+                    <InfoTip text="A role alert picks up new jobs at any company whose title matches it, and the location or remote-only rule if you set one. The switch pauses it without deleting it." label="How a role alert works" />
+                  </span>
+                }
+                icon={Briefcase}
+                accent="cobalt"
+              />
+              <button type="button" data-ai="following.follow-role" onClick={() => setRoleDraft("")} className="flex shrink-0 items-center gap-1 rounded-md text-[13px] font-semibold text-primary transition-colors duration-200 hover:text-primary-hover">
                 <Plus className="size-4" />
                 Follow a role
               </button>
             </div>
-            <div className="flex flex-col divide-y divide-divider rounded-2xl border bg-card">
+            <div className={cn(CARD, "flex flex-col divide-y divide-divider overflow-hidden")}>
+              {!data &&
+                Array.from({ length: 3 }, (_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3">
+                    <span className="flex flex-1 flex-col gap-1.5">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-24" />
+                    </span>
+                    <Skeleton className="h-5 w-9 rounded-full" />
+                  </div>
+                ))}
               {roles.map((r) => (
-                <label key={r.id} className="flex cursor-pointer items-center gap-3 px-4 py-3">
+                <label key={r.id} className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors duration-200 hover:bg-muted/60">
                   <span className="min-w-0 flex-1">
-                    <b className="block truncate">{r.title}</b>
-                    <span className="text-xs text-text-secondary">{[r.location, r.remote_only ? "Remote only" : null, `${r.sent} sent so far`].filter(Boolean).join(" · ")}</span>
+                    <b className="type-card-title block truncate">{r.title}</b>
+                    <span className="type-meta text-text-secondary">{[r.location, r.remote_only ? "Remote only" : null, r.sent ? `${r.sent} sent so far` : "Nothing sent yet"].filter(Boolean).join(" · ")}</span>
                   </span>
-                  <input type="checkbox" role="switch" checked={!r.paused} onChange={() => togglePause(r)} aria-label={`Alerts for ${r.title}`} className="peer sr-only" />
-                  <span aria-hidden className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-ring", r.paused ? "bg-foreground/15" : "bg-primary")}>
-                    <span className={cn("absolute top-0.5 size-5 rounded-full bg-white shadow transition-[left]", r.paused ? "left-0.5" : "left-[22px]")} />
-                  </span>
+                  <Switch size="sm" checked={!r.paused} onCheckedChange={() => togglePause(r)} aria-label={`Alerts for ${r.title}`} />
                 </label>
               ))}
               {roleDraft !== null && (
@@ -206,49 +288,47 @@ function FollowingContent() {
                   <label htmlFor="new-role" className="sr-only">
                     Role to follow
                   </label>
-                  <input id="new-role" autoFocus value={roleDraft} onChange={(e) => setRoleDraft(e.target.value)} placeholder="A role, like SCM consultant" className="h-10 min-w-0 flex-1 rounded-lg border px-3 text-sm outline-none focus:border-primary" />
+                  <Input id="new-role" autoFocus value={roleDraft} onChange={(e) => setRoleDraft(e.target.value)} placeholder="A role, like SCM consultant" className="flex-1" />
                   <Button type="submit" size="sm" className="rounded-lg">
                     Follow
                   </Button>
                 </form>
               )}
-              {data && roles.length === 0 && roleDraft === null && <p className="px-4 py-3 text-sm text-text-secondary">No roles yet. Follow one to hear about new openings.</p>}
+              {data && roles.length === 0 && roleDraft === null && <EmptyState icon={Briefcase} title="No roles yet" hint="Follow one to hear about new openings." className="m-3 border-0" />}
             </div>
-            {data && (
-              <span className="text-xs text-text-secondary">
-                Digest {cadence} · {[data.settings.in_app && "in Plato", data.settings.email && "by email"].filter(Boolean).join(" and ") || "paused"}
-              </span>
-            )}
           </div>
 
-          <div className="flex flex-col gap-2.5">
-            <h2 className="text-xl font-bold tracking-tight">More companies to follow</h2>
-            <label className="surface-panel flex h-11 items-center gap-2 rounded-xl px-3">
-              <Search className="size-4 text-text-tertiary" />
-              <span className="sr-only">Search any company to follow</span>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search any company to follow" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-text-tertiary" />
-            </label>
-            <div className="flex flex-col divide-y divide-divider rounded-2xl border bg-card">
+          {/* Follow more: search lives inside its card; the hint is plain text, not a fake field. */}
+          <div data-tour="following-search" className={cn(CARD, "flex flex-col gap-3 p-4")}>
+            <SectionHeader title="Follow more companies" icon={Compass} accent="cobalt" as="h3" className="[&_h3]:type-card-title" />
+            <InputGroup className="bg-card">
+              <InputGroupAddon>
+                <Search />
+              </InputGroupAddon>
+              <InputGroupInput data-ai="following.company-search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search any company to follow" placeholder="Search any company" />
+            </InputGroup>
+            <div className="-mx-1 flex flex-col">
               {suggestions
                 .filter((s) => !followed.has(s.name.toLowerCase()))
                 .slice(0, 6)
                 .map((s) => (
-                  <div key={s.key} className="flex items-center gap-3 px-3.5 py-2.5">
+                  <div key={s.key} className="flex items-center gap-3 rounded-lg px-1 py-2 transition-colors duration-200 hover:bg-muted/60">
                     <MonoTile name={s.name} size="sm" />
                     <span className="min-w-0 flex-1">
-                      <b className="block truncate text-[14.5px]">{s.name}</b>
-                      <span className="text-xs text-text-secondary">
-                        {s.jobs} open job{s.jobs === 1 ? "" : "s"} Plato knows of
+                      <b className="block truncate text-[14px]">{s.name}</b>
+                      <span className="type-meta text-text-secondary">
+                        {s.jobs} open job{s.jobs === 1 ? "" : "s"}
                       </span>
                     </span>
-                    <button type="button" onClick={() => void run(() => createAlert({ kind: "COMPANY", company: s.name }))} className="flex items-center gap-1 rounded-full border border-primary-line px-3 py-1.5 text-sm font-semibold text-primary hover:bg-primary-soft">
+                    <button type="button" onClick={() => void run(() => createAlert({ kind: "COMPANY", company: s.name }))} className="flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-[13px] font-semibold text-primary transition-colors duration-200 hover:bg-primary hover:text-primary-foreground">
                       <Plus className="size-3.5" />
                       Follow
                     </button>
                   </div>
                 ))}
+              {!q.trim() && !suggestions.some((s) => !followed.has(s.name.toLowerCase())) && <p className="px-1 text-[13px] text-text-tertiary">Type a company name to see it here.</p>}
               {q.trim() && !suggestions.some((s) => s.name.toLowerCase() === q.trim().toLowerCase()) && (
-                <button type="button" onClick={() => (void run(() => createAlert({ kind: "COMPANY", company: q.trim() })), setQ(""))} className="flex items-center gap-2 px-3.5 py-2.5 text-left text-sm font-semibold text-primary hover:bg-primary-tint">
+                <button type="button" onClick={() => (void run(() => createAlert({ kind: "COMPANY", company: q.trim() })), setQ(""))} className="flex items-center gap-2 rounded-lg px-1 py-2 text-left text-sm font-semibold text-primary transition-colors duration-200 hover:bg-primary-tint">
                   <Plus className="size-4" />
                   Follow “{q.trim()}”
                 </button>

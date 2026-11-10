@@ -109,10 +109,22 @@ const approveResume = (id: string) => request<{ id: string; approved: boolean }>
 export type VoiceMode = "practice" | "mock" | "skill"
 // Summed from the call's response.done events; the audio/text split is what is billed.
 export type VoiceUsage = { responses: number; audioInputTokens: number; audioOutputTokens: number; textInputTokens: number; textOutputTokens: number; cachedInputTokens: number }
-const startVoiceSession = (threadId: string, req: { mode: VoiceMode; skill?: string; role?: string; jobDescription?: string }) =>
+const startVoiceSession = (threadId: string, req: { mode: VoiceMode; skill?: string; role?: string; jobDescription?: string; focus?: string }) =>
   request<{ clientSecret: string; model: string; instructions: string; maxSeconds: number }>(apiClient.post(`/job-seeker/career/threads/${threadId}/voice/session`, req))
-const saveVoiceTranscript = (threadId: string, body: { mode: VoiceMode; seconds: number; turns: { role: "user" | "assistant"; text: string }[]; usage?: VoiceUsage }) =>
-  request<{ saved: number }>(apiClient.post(`/job-seeker/career/threads/${threadId}/voice/transcript`, body))
+// The written scorecard of a call (same scoring as a written interview), or why there is none:
+// empty = nothing said, short = too little to judge, tokens = none left for the scorer, failed.
+export type VoiceScorecard = {
+  questions: { index: number; question: string; answer: string; score: number; feedback: string }[]
+  communication: { score: number; note: string }
+  strengths: string[]
+  gaps: string[]
+  nextSteps: string[]
+  overall: number
+}
+export type VoiceUnscored = "empty" | "short" | "tokens" | "failed"
+// context: what the call was for, so the scorecard judges it against the right role or job.
+const saveVoiceTranscript = (threadId: string, body: { mode: VoiceMode; seconds: number; turns: { role: "user" | "assistant"; text: string }[]; usage?: VoiceUsage; context?: { title: string; focus?: string; jobDescription?: string } }) =>
+  request<{ saved: number; scorecard: VoiceScorecard | null; unscored: VoiceUnscored | null }>(apiClient.post(`/job-seeker/career/threads/${threadId}/voice/transcript`, body, { timeout: 90_000 }))
 
 const listCareerResumes = () => request<{ id: string; title: string; target_role: string | null; version: number; approved: boolean; job_id?: string | null; created_at?: string; changes?: number | null }[]>(apiClient.get("/job-seeker/career/resumes"))
 export { listCareerResumes, startVoiceSession, saveVoiceTranscript, getResumeDoc, saveResumeEdits, suggestResumeText, approveResume, streamCareerMessage, createCareerThread, listCareerThreads, getCareerThread, sendCareerMessage, getCareerResume }

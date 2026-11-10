@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 
 // Native <dialog>: the browser gives focus trap, Esc and the backdrop.
 // `remember` adds a "don't ask again" box; its value is passed to onConfirm.
@@ -15,14 +16,14 @@ function ConfirmDialog({ open, title, children, confirmLabel, remember, onConfir
     if (!open && el.open) el.close()
   }, [open])
   return (
-    <dialog ref={ref} onCancel={(e) => (e.preventDefault(), onCancel())} onClick={(e) => e.target === ref.current && onCancel()} className="m-auto w-[min(440px,calc(100vw-2rem))] rounded-lg border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40">
+    <dialog ref={ref} onCancel={(e) => (e.preventDefault(), onCancel())} onClick={(e) => e.target === ref.current && onCancel()} className="m-auto w-[min(440px,calc(100vw-2rem))] overflow-hidden rounded-2xl border bg-card p-0 text-foreground shadow-[0_28px_70px_-28px_rgba(0,91,167,0.45)] backdrop:bg-foreground/30 backdrop:backdrop-blur-sm">
       {open && (
-        <div className="flex flex-col gap-4 p-6">
-          <h2 className="text-lg font-bold">{title}</h2>
+        <div className="flex flex-col gap-4 p-6 animate-in fade-in-0 zoom-in-95 duration-200">
+          <h2 className="type-section-title">{title}</h2>
           <div className="text-sm leading-relaxed text-muted-foreground">{children}</div>
           {remember && (
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="size-4 accent-primary" />
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+              <Checkbox checked={checked} onCheckedChange={(c) => setChecked(c)} />
               {remember}
             </label>
           )}

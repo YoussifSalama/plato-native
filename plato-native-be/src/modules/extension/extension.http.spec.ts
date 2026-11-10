@@ -27,6 +27,7 @@ import { ExtensionService } from './extension.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnswersService } from './answers.service';
 import { ResumeFileService } from './resume-file.service';
+import { ProofService } from './proof.service';
 import { QueueService } from './queue.service';
 import { ExtensionSettingsService } from './settings';
 import { OrchestratorService } from './orchestrator.service';
@@ -105,6 +106,7 @@ describe('route protection over HTTP', () => {
         { provide: ExtensionSettingsService, useValue: {} },
         { provide: AnswersService, useValue: { draft: async () => [] } },
         { provide: ResumeFileService, useValue: {} },
+        { provide: ProofService, useValue: {} },
         { provide: OrchestratorService, useValue: { turn: async () => ({ reply: 'ok', events: [] }) } },
         {
           provide: JobSeekerService,

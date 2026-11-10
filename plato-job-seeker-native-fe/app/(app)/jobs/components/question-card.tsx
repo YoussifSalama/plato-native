@@ -2,10 +2,12 @@
 
 import { useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowLeft, ArrowRight, Check, Plus } from "lucide-react"
+import { ArrowLeft, ArrowRight, Plus } from "lucide-react"
 import { cn } from "cn"
 import type { CardQuestion, Choice, QuestionCard, SalaryAnswer, ThreadMessage } from "@/lib/jobs/api"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { FilterChip } from "@/components/filter-controls"
 
 type Answer = string | string[] | SalaryAnswer | null
 
@@ -22,27 +24,10 @@ const LEAD: Record<string, string> = {
 
 // The card is open only while it is the last thing said: once the seeker has
 // replied it becomes history and the reply carries their answers.
+// Only a question card counts: a chat thread can also hold career cards (resume, choices).
 export function pendingCardId(messages: ThreadMessage[]) {
   const last = messages.at(-1)
-  return last?.role === "ASSISTANT" && last.ui ? last.id : null
-}
-
-function Chip({ label, selected, onClick, disabled }: { label: string; selected: boolean; onClick: () => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      aria-pressed={selected}
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50",
-        selected ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted",
-      )}
-    >
-      {selected && <Check className="size-3.5" />}
-      {label}
-    </button>
-  )
+  return last?.role === "ASSISTANT" && last.ui && Array.isArray((last.ui as Partial<QuestionCard>).questions) ? last.id : null
 }
 
 // Countries: tap a suggestion, or type any other country or city.
@@ -69,7 +54,7 @@ function OtherPlace({ onAdd, disabled }: { onAdd: (text: string) => void; disabl
         placeholder="Other country or city…"
         className="h-9 w-48 text-sm"
       />
-      <button type="button" disabled={disabled || !text.trim()} onClick={add} aria-label="Add" className="flex size-9 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted disabled:opacity-40">
+      <button type="button" disabled={disabled || !text.trim()} onClick={add} aria-label="Add" className="flex size-9 items-center justify-center rounded-lg border text-muted-foreground transition-colors duration-200 hover:border-primary-line hover:text-primary disabled:opacity-40">
         <Plus className="size-4" />
       </button>
     </div>
@@ -107,19 +92,22 @@ function Field({
           placeholder="e.g. 3000"
           className="h-9 w-32 text-sm"
         />
-        <select
-          value={s.currency}
-          disabled={disabled}
-          onChange={(e) => set({ currency: e.target.value })}
-          aria-label="Currency"
-          className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
-        >
-          {[...new Set([s.currency, ...CURRENCIES])].map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
+        <Select items={[...new Set([s.currency, ...CURRENCIES])].map((c) => ({ value: c, label: c }))} value={s.currency} disabled={disabled} onValueChange={(v) => v && set({ currency: v })}>
+          <SelectTrigger size="sm" aria-label="Currency">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[...new Set([s.currency, ...CURRENCIES])].map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {(["MONTHLY", "YEARLY"] as const).map((p) => (
-          <Chip key={p} disabled={disabled} label={p === "MONTHLY" ? "per month" : "per year"} selected={s.period === p} onClick={() => set({ period: p })} />
+          <FilterChip key={p} on={s.period === p} onClick={() => set({ period: p })}>
+            {p === "MONTHLY" ? "per month" : "per year"}
+          </FilterChip>
         ))}
       </div>
     )
@@ -136,7 +124,9 @@ function Field({
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
-          <Chip key={o.value} disabled={disabled} label={o.label} selected={chosen.includes(o.value)} onClick={() => toggle(o.value)} />
+          <FilterChip key={o.value} on={chosen.includes(o.value)} onClick={() => toggle(o.value)}>
+            {o.label}
+          </FilterChip>
         ))}
       </div>
       {isCountry && (
@@ -203,7 +193,7 @@ function QuestionCardView({ card, onSubmit, busy }: { card: QuestionCard; onSubm
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex w-[min(540px,100%)] flex-col gap-4 rounded-lg border bg-card p-4 shadow-sm">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex w-[min(540px,100%)] flex-col gap-4 rounded-2xl border bg-card p-4 shadow-card">
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between text-xs text-text-tertiary">
           <span className="font-semibold text-foreground">{card.title}</span>
@@ -213,7 +203,7 @@ function QuestionCardView({ card, onSubmit, busy }: { card: QuestionCard; onSubm
         </div>
         <div className="flex gap-1.5" role="progressbar" aria-valuemin={1} aria-valuemax={total} aria-valuenow={step + 1}>
           {card.questions.map((item, i) => (
-            <button key={item.id} type="button" disabled={busy} aria-label={`Go to step ${i + 1}`} onClick={() => go(i)} className={cn("h-1.5 flex-1 rounded-full transition-colors", i <= step ? "bg-primary" : "bg-muted")} />
+            <button key={item.id} type="button" disabled={busy} aria-label={`Go to step ${i + 1}`} onClick={() => go(i)} className={cn("h-1.5 flex-1 rounded-full transition-colors duration-200", i <= step ? "bg-primary" : "bg-muted")} />
           ))}
         </div>
       </div>
@@ -228,36 +218,39 @@ function QuestionCardView({ card, onSubmit, busy }: { card: QuestionCard; onSubm
           transition={{ duration: 0.18 }}
           className="flex min-h-[132px] flex-col gap-3"
         >
-          <p className="text-[15px] font-medium text-foreground">{q.label}</p>
-          <Field
-            q={q}
-            value={answers[q.id] ?? null}
-            extras={extras[q.id] ?? []}
-            disabled={busy}
-            onChange={change}
-            onAddExtra={(c) => setExtras((e) => ({ ...e, [q.id]: [...(e[q.id] ?? []), c] }))}
-          />
+          <p className="type-card-title text-foreground">{q.label}</p>
+          {/* A disabled fieldset also locks the chips, which take no disabled prop. */}
+          <fieldset disabled={busy} className="m-0 min-w-0 border-0 p-0 disabled:opacity-60">
+            <Field
+              q={q}
+              value={answers[q.id] ?? null}
+              extras={extras[q.id] ?? []}
+              disabled={busy}
+              onChange={change}
+              onAddExtra={(c) => setExtras((e) => ({ ...e, [q.id]: [...(e[q.id] ?? []), c] }))}
+            />
+          </fieldset>
         </motion.div>
       </AnimatePresence>
 
       <div className="flex flex-wrap items-center gap-2">
         {step > 0 && (
-          <button type="button" disabled={busy} onClick={() => go(step - 1)} className="inline-flex items-center gap-1 rounded-sm px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50">
+          <button type="button" disabled={busy} onClick={() => go(step - 1)} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground disabled:opacity-50">
             <ArrowLeft className="size-4" /> Back
           </button>
         )}
         <div className="ml-auto flex items-center gap-2">
           {!last && isEmpty(answers[q.id] ?? null, q) && (
-            <button type="button" disabled={busy} onClick={() => go(step + 1)} className="rounded-sm px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => go(step + 1)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground disabled:opacity-50">
               Skip
             </button>
           )}
-          <button type="button" disabled={busy} onClick={next} className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-            {last ? "Find jobs" : "Next"} <ArrowRight className="size-4" />
+          <button type="button" disabled={busy} onClick={next} className="group inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors duration-200 hover:bg-primary-hover disabled:opacity-50">
+            {last ? "Find jobs" : "Next"} <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
           </button>
         </div>
       </div>
-      <button type="button" disabled={busy} onClick={() => onSubmit("Use my saved profile for all of this.")} className="self-start text-xs text-text-tertiary underline-offset-2 hover:underline disabled:opacity-50">
+      <button type="button" disabled={busy} onClick={() => onSubmit("Use my saved profile for all of this.")} className="self-start text-xs text-text-tertiary underline-offset-2 transition-colors duration-200 hover:text-primary hover:underline disabled:opacity-50">
         Just use my saved profile
       </button>
     </motion.div>

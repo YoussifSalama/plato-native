@@ -26,7 +26,7 @@ if (uri && !safe) throw new Error('SCRATCH_DB_URI is not the scratch database: r
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasourceUrl: uri });
-    svc = new ExtensionBatchService(prisma as any, bus as any);
+    svc = new ExtensionBatchService(prisma as any, bus as any, { publish: jest.fn() } as any);
     svc.policy = () => 'FILL_ONLY';
   });
   afterAll(() => prisma.$disconnect());

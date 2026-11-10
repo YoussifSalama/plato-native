@@ -1,20 +1,34 @@
 import { recordUsage } from '../usage/usage';
 import { CareerVoiceService } from './career-voice.service';
+import { voiceScorecardFor } from '../interview/interview';
 
 // @nestjs/config ships as ESM, which this Jest setup does not load; the service only needs its type
 jest.mock('@nestjs/config', () => ({ ConfigService: class {} }));
 jest.mock('../usage/usage', () => ({ recordUsage: jest.fn() }));
+// The scorer is an AI call: stubbed, and checked for when it may run.
+jest.mock('../interview/interview', () => {
+  const actual = jest.requireActual<typeof import('../interview/interview')>(
+    '../interview/interview',
+  );
+  return { ...actual, voiceScorecardFor: jest.fn() };
+});
 
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000);
 
 // CreditsService is injected: the reservation it finds and the release are stubbed here.
 const credits = {
+  account: jest.fn().mockResolvedValue({ balance: 500 }),
   openHold: jest.fn(),
   release: jest.fn().mockResolvedValue(true),
 };
 const releaseHold = credits.release;
 
-function service(holds: { id: string; created_at: Date; meta: object }[]) {
+let prisma: {
+  careerMessage: { createMany: jest.Mock; create: jest.Mock };
+};
+function service(
+  holds: { id: string; created_at: Date; meta: object; amount?: number }[],
+) {
   credits.openHold.mockImplementation(
     (_u: string, _f: string, thread: string) =>
       Promise.resolve(
@@ -22,7 +36,7 @@ function service(holds: { id: string; created_at: Date; meta: object }[]) {
           null,
       ),
   );
-  const prisma = {
+  prisma = {
     jobSeeker: {
       findUnique: jest
         .fn()
@@ -32,9 +46,11 @@ function service(holds: { id: string; created_at: Date; meta: object }[]) {
       findFirst: jest.fn().mockResolvedValue({ id: 't1', title: 'x' }),
       update: jest.fn(),
     },
-    careerMessage: { createMany: jest.fn() },
+    careerMessage: { createMany: jest.fn(), create: jest.fn() },
+  } as never;
+  const config = {
+    get: () => ({ realtimeModel: 'gpt-realtime-mini', careerModel: 'm' }),
   };
-  const config = { get: () => ({ realtimeModel: 'gpt-realtime-mini' }) };
   return new CareerVoiceService(
     prisma as never,
     {} as never,
@@ -58,7 +74,10 @@ const bigUsage = {
   cachedInputTokens: 0,
 };
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  credits.account.mockResolvedValue({ balance: 500 });
+});
 
 describe('voice interview settlement', () => {
   it('releases the reservation and charges per started minute the server saw, not the browser-reported cost', async () => {
@@ -143,7 +162,7 @@ describe('voice interview settlement', () => {
       seconds: 20,
       turns: [],
     });
-    expect(r).toEqual({ saved: 0 });
+    expect(r).toEqual({ saved: 0, scorecard: null, unscored: 'empty' });
     expect(releaseHold).toHaveBeenCalledWith('u1', 'h1');
     expect(recordUsage).toHaveBeenCalledTimes(1);
   });
@@ -162,5 +181,109 @@ describe('voice interview settlement', () => {
       turns,
     });
     expect(releaseHold).not.toHaveBeenCalled();
+  });
+});
+
+describe('voice interview scorecard', () => {
+  const answer = (n: number) =>
+    Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+  const talk = [
+    { role: 'assistant' as const, text: 'Tell me about a project you led.' },
+    { role: 'user' as const, text: answer(40) },
+  ];
+  const card = {
+    questions: [
+      { index: 0, question: 'q', answer: 'a', score: 4, feedback: 'f' },
+    ],
+    communication: { score: 4, note: 'n' },
+    strengths: ['clear'],
+    gaps: ['numbers'],
+    nextSteps: [],
+    overall: 75,
+  };
+  const hold = (minutes: number, ago: number) => ({
+    id: 'h1',
+    created_at: minutesAgo(ago),
+    meta: { thread: 't1', minutes },
+    amount: -minutes * 100, // 100 tokens a minute ($0.10 at $0.001 a token)
+  });
+
+  it('scores the call after settling it, stores the scorecard with the transcript and returns it', async () => {
+    (voiceScorecardFor as jest.Mock).mockResolvedValue(card);
+    const svc = service([hold(10, 3)]);
+    const r = await svc.saveTranscript('u1', 't1', {
+      mode: 'mock',
+      seconds: 180,
+      turns: talk,
+      context: { title: 'General interview', focus: 'Behavioral' },
+    });
+    expect(r).toEqual({ saved: 2, scorecard: card, unscored: null });
+    // the call is settled (released + charged) before the scorer runs
+    expect(releaseHold).toHaveBeenCalledWith('u1', 'h1');
+    expect(
+      (releaseHold as jest.Mock).mock.invocationCallOrder[0],
+    ).toBeLessThan((voiceScorecardFor as jest.Mock).mock.invocationCallOrder[0]);
+    expect(voiceScorecardFor).toHaveBeenCalledWith(
+      'm',
+      expect.objectContaining({ title: 'General interview', focus: 'Behavioral' }),
+      talk,
+    );
+    // the voice minutes are the only charge recorded here: the scorer meters itself (career.voice.score)
+    expect(recordUsage).toHaveBeenCalledTimes(1);
+    expect(prisma.careerMessage.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        thread_id: 't1',
+        ui: expect.objectContaining({ type: 'voice-scorecard', scorecard: card }),
+      }),
+    });
+  });
+
+  it('no answers: nothing scored and no scorer call', async () => {
+    const svc = service([hold(5, 1)]);
+    const r = await svc.saveTranscript('u1', 't1', {
+      mode: 'mock',
+      seconds: 40,
+      turns: [{ role: 'assistant', text: 'Hi, ready?' }],
+    });
+    expect(r).toMatchObject({ scorecard: null, unscored: 'empty' });
+    expect(voiceScorecardFor).not.toHaveBeenCalled();
+  });
+
+  it('too little said to judge: no scorer call, no tokens spent on it', async () => {
+    const svc = service([hold(5, 1)]);
+    const r = await svc.saveTranscript('u1', 't1', {
+      mode: 'mock',
+      seconds: 60,
+      turns: [talk[0], { role: 'user', text: 'yes I am ready' }],
+    });
+    expect(r).toMatchObject({ saved: 2, scorecard: null, unscored: 'short' });
+    expect(voiceScorecardFor).not.toHaveBeenCalled();
+  });
+
+  it('no tokens left after the call is charged: the transcript is saved, the scorer does not run', async () => {
+    // 10 minutes (100 tokens) reserved out of a balance that is now 0; the call used 10 minutes
+    credits.account.mockResolvedValue({ balance: 0 });
+    const svc = service([hold(10, 12)]);
+    const r = await svc.saveTranscript('u1', 't1', {
+      mode: 'mock',
+      seconds: 600,
+      turns: talk,
+    });
+    expect(r).toMatchObject({ saved: 2, scorecard: null, unscored: 'tokens' });
+    expect(voiceScorecardFor).not.toHaveBeenCalled();
+  });
+
+  it('a scorer failure still keeps the transcript and the charge', async () => {
+    (voiceScorecardFor as jest.Mock).mockRejectedValue(new Error('down'));
+    const svc = service([hold(10, 2)]);
+    const r = await svc.saveTranscript('u1', 't1', {
+      mode: 'practice',
+      seconds: 120,
+      turns: talk,
+    });
+    expect(r).toMatchObject({ saved: 2, scorecard: null, unscored: 'failed' });
+    expect(prisma.careerMessage.createMany).toHaveBeenCalled();
+    expect(releaseHold).toHaveBeenCalledWith('u1', 'h1');
+    expect(recordUsage).toHaveBeenCalledTimes(1);
   });
 });

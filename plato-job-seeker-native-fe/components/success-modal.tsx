@@ -26,18 +26,19 @@ function SuccessModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ type: "spring", damping: 20, stiffness: 280 }}
-            className="flex w-full max-w-xs flex-col items-center gap-3 rounded-2xl border bg-card p-8 text-center shadow-2xl"
+            className="relative isolate flex w-full max-w-xs flex-col items-center gap-3 overflow-hidden rounded-2xl border bg-card p-8 text-center shadow-float"
           >
+            <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(70%_60%_at_0%_0%,color-mix(in_oklch,var(--primary)_9%,transparent),transparent_65%),radial-gradient(60%_55%_at_100%_100%,color-mix(in_oklch,var(--azure)_10%,transparent),transparent_70%)]" />
             <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", stiffness: 300, damping: 15, delay: 0.1 }}
-              className="flex size-14 items-center justify-center rounded-full bg-success-soft text-success"
+              className="flex size-14 items-center justify-center rounded-full bg-success-soft text-success ring-4 ring-success-soft/50"
             >
               <CheckCircle2 className="size-8" />
             </motion.span>
-            <p className="text-lg font-semibold text-foreground">{title}</p>
-            {description && <p className="text-sm text-muted-foreground">{description}</p>}
+            <p className="type-section-title text-foreground">{title}</p>
+            {description && <p className="type-body text-text-secondary">{description}</p>}
           </motion.div>
         </motion.div>
       )}

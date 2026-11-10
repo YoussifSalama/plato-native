@@ -14,10 +14,9 @@ import { TypedText } from "../jobs/components/journey/typed-text"
 import { useTypedArrivals } from "../jobs/components/use-typed-arrivals"
 import { ResumeEditPanel } from "./resume-edit"
 import { VoiceInterviewPanel } from "./voice-interview"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { TokenCost } from "@/components/plato-tokens"
 import type { EstimateAction } from "@/lib/credits/api"
-import { startInterview } from "@/lib/interviews/api"
 import { ResumeFileCard, ResumePreviewPanel } from "./resume-file"
 
 // Starters adapt to where the seeker is: no resume yet, a target role, and so on. Each one
@@ -52,7 +51,7 @@ function SearchedNote({ searched }: { searched: Searched[] }) {
       <Globe className="size-3.5 text-primary" />
       <span>Looked this up on the web</span>
       {sources.map((u) => (
-        <a key={u} href={u} target="_blank" rel="noreferrer" className="rounded-full border bg-card/80 px-2 py-0.5 hover:border-primary/40 hover:text-foreground">
+        <a key={u} href={u} target="_blank" rel="noreferrer" className="rounded-full border bg-card/80 px-2 py-0.5 transition-colors duration-200 hover:border-primary/40 hover:text-foreground">
           {host(u)}
         </a>
       ))}
@@ -89,7 +88,7 @@ function Choices({ options, onPick }: { options: string[]; onPick: (text: string
   return (
     <div className="flex flex-wrap gap-2 pl-10">
       {options.map((o, i) => (
-        <motion.button key={o} type="button" initial={{ opacity: 0, y: 8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ ...spring.enter, delay: 0.08 * i }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => onPick(o)} className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary-tint px-3.5 py-1.5 text-sm font-medium text-primary hover:border-primary/60 hover:bg-card">
+        <motion.button key={o} type="button" initial={{ opacity: 0, y: 8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ ...spring.enter, delay: 0.08 * i }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => onPick(o)} className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary-tint px-3.5 py-1.5 text-sm font-medium text-primary transition-colors duration-200 hover:border-primary/60 hover:bg-card">
           <Sparkles className="size-3.5" />
           {o}
         </motion.button>
@@ -146,39 +145,18 @@ function Transcript({ messages, busy, error, steps, previewId, onPreview, onEdit
   )
 }
 
-// Plato set up a mock interview for the pinned job: start it as written questions or as a live voice call.
-function InterviewStartCard({ card, onVoice }: { card: InterviewCard; onVoice: (job: { title: string; description: string }) => void }) {
-  const router = useRouter()
-  const [starting, setStarting] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-  const chat = () => {
-    setStarting(true)
-    setErr(null)
-    startInterview({ jobId: card.job.id }).then(
-      (i) => router.push(`/career/interviews/${i.id}`),
-      (e) => (setStarting(false), setErr(e instanceof Error ? e.message : "Could not start the interview")),
-    )
-  }
+// Plato set up a mock interview for the pinned job: it opens the interview flow with the job
+// (and chat or voice) already chosen; the flow asks the rest and shows the cost before Start.
+function InterviewStartCard({ card }: { card: InterviewCard; onVoice?: (job: { title: string; description: string }) => void }) {
+  const href = `/career/interviews/new?${new URLSearchParams({ target: "job", job: card.job.id, jt: card.job.title, jc: card.job.company, how: card.mode })}`
   return (
-    <div className="ml-10 flex w-fit flex-col gap-2 rounded-lg border bg-card p-4">
+    <div className="ml-10 flex w-fit flex-col gap-2 rounded-xl border bg-card p-4 shadow-card">
       <p className="flex items-center gap-2 text-sm font-semibold"><Briefcase className="size-4 text-primary" />{card.job.title} · {card.job.company}</p>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={starting} onClick={chat} className={cn("flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold", card.mode === "chat" ? "bg-primary text-primary-foreground" : "border bg-card hover:bg-muted")}>
-          <MessagesSquare className="size-4" />{starting ? "Preparing…" : "Start chat interview"}
-        </button>
-        <button type="button" onClick={() => onVoice({ title: card.job.title, description: card.description })} className={cn("flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold", card.mode === "voice" ? "bg-primary text-primary-foreground" : "border bg-card hover:bg-muted")}>
-          <Mic className="size-4" />Start voice interview
-        </button>
-      </div>
-      <p className="flex flex-wrap gap-x-3 text-[11px] text-text-tertiary">
-        <span>
-          Chat interview <TokenCost action="mock_interview" suffix=" tokens" />
-        </span>
-        <span>
-          Voice <TokenCost action="voice_minute" suffix=" tokens / min" />
-        </span>
-      </p>
-      {err && <p className="text-xs text-destructive">{err}</p>}
+      <Link href={href} data-ai="career.interview.open" className="flex w-fit items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-colors duration-200 hover:bg-primary-hover">
+        {card.mode === "voice" ? <Mic className="size-4" /> : <MessagesSquare className="size-4" />}
+        Set up the {card.mode === "voice" ? "voice" : "chat"} interview
+      </Link>
+      <p className="text-[11px] text-text-tertiary">Two quick questions, then the exact cost before you start.</p>
     </div>
   )
 }
@@ -219,6 +197,8 @@ function CareerHero({ threadId, onVoiceFinished, hasResume, steps, firstName, pr
     <div className="relative flex h-[calc(100dvh-150px)] min-h-[560px] w-full gap-4">
       <section className="relative flex min-w-0 flex-1 overflow-hidden rounded-xl border bg-[radial-gradient(circle_at_1px_1px,var(--border)_1px,transparent_0)] bg-[size:22px_22px]">
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 glow-top" />
+      {/* Career light: a faint green glow bottom-right, under the brand glow. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(45%_55%_at_100%_100%,color-mix(in_oklch,var(--success)_7%,transparent),transparent_65%)]" />
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-10 pb-6 sm:px-10">
         <AnimatePresence mode="wait" initial={false}>
@@ -257,10 +237,10 @@ function CareerHero({ threadId, onVoiceFinished, hasResume, steps, firstName, pr
                     whileHover={reduced ? undefined : { y: -3 }}
                     whileTap={{ scale: 0.98 }}
                     transition={spring.micro}
-                    className={cn("flex flex-col items-start gap-2 rounded-lg border p-4 text-left shadow-sm transition-colors", s.primary ? "border-primary/40 bg-primary text-primary-foreground shadow-lg shadow-primary/25" : "bg-card/90 backdrop-blur hover:border-primary/40")}
+                    className={cn("group flex flex-col items-start gap-2 rounded-xl border p-4 text-left shadow-sm transition-[border-color,box-shadow,background-color] duration-200", s.primary ? "border-primary/40 bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary-hover" : "bg-card/90 backdrop-blur hover:border-primary-line hover:shadow-[var(--shadow-lift)]")}
                   >
                     <span className="flex w-full items-start justify-between">
-                      <span className={cn("flex size-9 items-center justify-center rounded-md", s.primary ? "bg-white/15" : "bg-primary/10 text-primary")}>
+                      <span className={cn("flex size-9 items-center justify-center rounded-lg transition-colors duration-200", s.primary ? "bg-white/15" : "bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground")}>
                         <s.icon className="size-4" />
                       </span>
                       {s.badge && <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase", s.primary ? "bg-white/20 text-primary-foreground" : "bg-primary/10 text-primary")}>{s.badge}</span>}
@@ -280,7 +260,7 @@ function CareerHero({ threadId, onVoiceFinished, hasResume, steps, firstName, pr
                   <p className="text-sm font-semibold text-foreground">Plato Career</p>
                   <p className="text-xs text-muted-foreground">{busy ? "Working on it…" : "Your resume, skills and next steps"}</p>
                 </div>
-                <button type="button" data-ai="career.voice" onClick={() => setVoiceOpen(true)} className="ml-auto flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary/40">
+                <button type="button" data-ai="career.voice" onClick={() => setVoiceOpen(true)} className="group ml-auto flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors duration-200 hover:border-primary-line hover:bg-primary-tint hover:text-primary">
                   <Mic className="size-3.5 text-primary" />
                   Voice interview
                 </button>
@@ -323,4 +303,4 @@ function CareerHero({ threadId, onVoiceFinished, hasResume, steps, firstName, pr
   )
 }
 
-export { CareerHero }
+export { CareerHero, Transcript }

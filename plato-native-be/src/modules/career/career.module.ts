@@ -13,5 +13,7 @@ import { CreditsModule } from '../credits/credits.module';
   imports: [AuthModule, ResumeModule, DocumentsModule, UserModule, CreditsModule],
   controllers: [CareerController],
   providers: [CareerService, CareerResumesService, CareerVoiceService],
+  // The one Plato AI (chat module) runs the career tools in its own conversation.
+  exports: [CareerService],
 })
 export class CareerModule {}

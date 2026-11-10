@@ -32,6 +32,8 @@ const visible = (el: Element) => {
   const r = el.getBoundingClientRect()
   return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden"
 }
+// The screen a multi-screen page is showing now, if it says (see lib/tours.ts).
+const screen = () => [...document.querySelectorAll("[data-tour-state]")].find(visible)?.getAttribute("data-tour-state") ?? null
 const find = (sel?: string) => (sel ? ([...document.querySelectorAll(sel)].find(visible) as HTMLElement | undefined) : undefined)
 
 export function PageTour() {
@@ -46,13 +48,13 @@ export function PageTour() {
   const hint = hintFor === tour.id
 
   const start = useCallback(() => {
-    // Only the steps whose element is on screen now (or that need none).
-    const live = tour.steps.filter((s) => !s.target || find(s.target))
+    // The tour for the screen showing now; only the steps whose element is on screen (or that need none).
+    const live = tourFor(pathname, screen()).steps.filter((s) => !s.target || find(s.target))
     if (!live.length) return
     setHintFor(null)
     setI(0)
     setRun({ id: tour.id, steps: live })
-  }, [tour])
+  }, [tour, pathname])
   const close = useCallback(() => {
     markSeen(tour.id)
     setRun(null)
@@ -62,6 +64,19 @@ export function PageTour() {
     window.addEventListener("plato:start-tour", start)
     return () => window.removeEventListener("plato:start-tour", start)
   }, [start])
+  // Dev only: window.__platoTourCheck() lists this page's tour steps and whether each one's
+  // element is on screen right now (a step whose element is missing is skipped by the tour).
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return
+    const w = window as unknown as { __platoTourCheck?: () => unknown }
+    w.__platoTourCheck = () => {
+      const t = tourFor(pathname, screen())
+      return { path: pathname, state: screen(), tour: t.id, name: t.name, steps: t.steps.map((s) => ({ title: s.title, target: s.target ?? null, shown: !s.target || !!find(s.target) })) }
+    }
+    return () => {
+      delete w.__platoTourCheck
+    }
+  }, [pathname])
   // On a first visit to a page, offer its tour for a few seconds.
   useEffect(() => {
     if (seen(tour.id)) return
@@ -76,7 +91,7 @@ export function PageTour() {
 
   return (
     <>
-      <div data-ai-skip className="pointer-events-none fixed right-6 bottom-[92px] z-40 flex items-center gap-2">
+      <div data-ai-skip className="pointer-events-none fixed right-5 bottom-[72px] z-40 flex items-center gap-2 sm:right-7 sm:bottom-[76px]">
         <AnimatePresence>
           {hint && !steps && (
             <motion.button
@@ -85,7 +100,7 @@ export function PageTour() {
               initial={{ opacity: 0, x: 8 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 8 }}
-              className="surface-panel pointer-events-auto rounded-full px-3.5 py-2 text-xs font-semibold text-foreground"
+              className="surface-panel pointer-events-auto hidden h-8 items-center rounded-full px-3 text-xs font-semibold text-foreground shadow-float sm:flex"
             >
               New here? Take a quick tour of {tour.name}
             </motion.button>
@@ -98,10 +113,10 @@ export function PageTour() {
           onClick={() => (steps ? close() : start())}
           aria-label={`Tour this page: ${tour.name}`}
           title="Tour this page"
-          className="surface-panel group pointer-events-auto relative flex size-11 items-center justify-center rounded-full text-primary transition-transform hover:scale-105"
+          className="surface-panel group pointer-events-auto relative flex size-9 items-center justify-center rounded-full text-primary shadow-float transition-colors duration-200 hover:border-primary-line"
         >
-          <Compass className="size-5 transition-transform duration-500 group-hover:rotate-45" />
-          {hint && !steps && <span className="absolute -top-0.5 -right-0.5 size-3 animate-pulse rounded-full border-2 border-white bg-azure" aria-hidden />}
+          <Compass className="size-4 transition-transform duration-500 group-hover:rotate-45" strokeWidth={1.8} />
+          {hint && !steps && <span className="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full bg-azure ring-2 ring-background" aria-hidden />}
         </button>
       </div>
       {mounted && steps && createPortal(<TourOverlay steps={steps} index={i} setIndex={setI} onClose={close} />, document.body)}
@@ -215,13 +230,13 @@ function TourOverlay({ steps, index, setIndex, onClose }: { steps: TourStep[]; i
           <span className="eyebrow">
             Step {index + 1} of {steps.length}
           </span>
-          <button type="button" onClick={onClose} aria-label="End the tour" className="-mt-1 -mr-1 flex size-7 items-center justify-center rounded-full text-text-tertiary hover:bg-muted hover:text-foreground">
+          <button type="button" onClick={onClose} aria-label="End the tour" className="-mt-1 -mr-1 flex size-7 items-center justify-center rounded-full text-text-tertiary transition-colors duration-200 hover:bg-muted hover:text-foreground">
             <X className="size-4" />
           </button>
         </div>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div key={index} initial={reduced ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={reduced ? undefined : { opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
-            <h2 id="tour-title" className="mt-2 text-[15px] font-bold">
+            <h2 id="tour-title" className="type-card-title mt-2">
               {step.title}
             </h2>
             <p id="tour-body" className="mt-1.5 text-sm leading-relaxed text-text-secondary">
@@ -232,18 +247,18 @@ function TourOverlay({ steps, index, setIndex, onClose }: { steps: TourStep[]; i
         <div className="mt-4 flex items-center gap-3">
           <span className="flex flex-1 gap-1" aria-hidden>
             {steps.map((_, n) => (
-              <span key={n} className={cn("h-1.5 rounded-full transition-all", n === index ? "w-5 bg-primary" : n < index ? "w-1.5 bg-primary/40" : "w-1.5 bg-foreground/12")} />
+              <span key={n} className={cn("h-1.5 rounded-full transition-all duration-300", n === index ? "w-5 bg-primary" : n < index ? "w-1.5 bg-primary/40" : "w-1.5 bg-foreground/12")} />
             ))}
           </span>
           {index > 0 && (
-            <button type="button" onClick={() => setIndex(index - 1)} className="flex h-9 items-center gap-1 rounded-full px-3 text-sm font-semibold text-text-secondary hover:bg-muted">
-              <ArrowLeft className="size-4" />
+            <button type="button" onClick={() => setIndex(index - 1)} className="group flex h-9 items-center gap-1 rounded-full px-3 text-sm font-semibold text-text-secondary transition-colors duration-200 hover:bg-muted hover:text-foreground">
+              <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
               Back
             </button>
           )}
-          <button type="button" onClick={() => (last ? onClose() : setIndex(index + 1))} className="flex h-9 items-center gap-1 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-brand hover:bg-primary-hover">
+          <button type="button" onClick={() => (last ? onClose() : setIndex(index + 1))} className="group flex h-9 items-center gap-1 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-brand transition-colors duration-200 hover:bg-primary-hover">
             {last ? "Done" : "Next"}
-            {!last && <ArrowRight className="size-4" />}
+            {!last && <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />}
           </button>
         </div>
       </motion.div>

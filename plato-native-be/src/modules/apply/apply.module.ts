@@ -15,7 +15,7 @@ import { AdapterHelper } from './adapters/helpers/adapters.helper';
 @Module({
   imports: [UserModule, AuthModule, DocumentsModule, ResumeModule],
   controllers: [ApplyController],
-  exports: [ApplyService],
+  exports: [ApplyService, ApplyEventsBus],
   providers: [
     ApplyService,
     ApplyEventsBus,

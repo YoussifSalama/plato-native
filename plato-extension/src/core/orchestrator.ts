@@ -35,6 +35,9 @@ export interface OrchestratorDeps {
   setInterval?: typeof setInterval;
   clearInterval?: typeof clearInterval;
   onLost?: (itemId: string) => void;
+  // A submit was recorded (acknowledged by the server): proof of apply (core/proof.ts). Awaited so the page is
+  // shot before the run moves on; its errors never reach the apply flow.
+  onSubmitted?: (s: Session, to: 'SUBMITTED_CONFIRMED' | 'SUBMITTED_ATTESTED') => Promise<void>;
 }
 
 export function createOrchestrator(d: OrchestratorDeps) {
@@ -73,6 +76,7 @@ export function createOrchestrator(d: OrchestratorDeps) {
       const updated = await d.api.transition(s.item.id, body);
       s.seq = body.seq;
       s.item = { ...s.item, ...updated };
+      if ((to === 'SUBMITTED_CONFIRMED' || to === 'SUBMITTED_ATTESTED') && d.onSubmitted) await Promise.resolve().then(() => d.onSubmitted?.(s, to)).catch(() => undefined);
       return updated;
     } catch (e) {
       const status = e instanceof ApiError ? e.status : 0;

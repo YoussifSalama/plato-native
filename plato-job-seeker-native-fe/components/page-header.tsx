@@ -9,16 +9,17 @@ import { NotificationBell } from "@/app/(app)/jobs/components/notification-bell"
 // the page title, one line on what the page is for, the page's own actions,
 // and the page's own actions. The bell lives in the shell's top bar. Use PAGE for the container.
 
-export const PAGE = "flex flex-1 flex-col gap-6 px-4 pt-3 pb-10 sm:px-6 lg:px-8"
+// pb-24 keeps the last card clear of the floating Plato AI launcher.
+export const PAGE = "flex flex-1 flex-col gap-6 px-4 pt-5 pb-24 sm:px-6 lg:px-8 lg:pt-6"
 // Pages with the Plato AI dock pinned over the bottom of the content.
-export const PAGE_DOCK = "flex flex-1 flex-col gap-6 px-4 pt-3 pb-28 sm:px-6 lg:px-8"
+export const PAGE_DOCK = "flex flex-1 flex-col gap-6 px-4 pt-5 pb-28 sm:px-6 lg:px-8 lg:pt-6"
 
 export type Crumb = { label: string; href: string }
 
 // "JOBS › SENIOR FRONTEND ROLES": the way back up, on every sub-page.
 export function Breadcrumbs({ crumbs, current }: { crumbs: Crumb[]; current?: ReactNode }) {
   return (
-    <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-1 font-mono text-[11.5px] font-medium tracking-[0.06em] uppercase">
+    <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-1 text-[11.5px] font-semibold tracking-[0.08em] uppercase">
       {crumbs.map((c) => (
         <span key={c.href} className="flex items-center gap-1">
           <Link href={c.href} data-ai={`crumb.${c.label.toLowerCase().replace(/\s+/g, "-")}`} className="text-primary hover:underline">
@@ -62,11 +63,11 @@ export function PageHeader({
           {/* Sub-pages show the way back up. The old nav-group label (`section`) is no longer shown:
               the sidebar has no groups now, so it named nothing the seeker could see. */}
           {crumbs?.length ? <Breadcrumbs crumbs={crumbs} current={typeof title === "string" ? title : section} /> : null}
-          <h1 className="mt-1 truncate text-[28px] leading-tight font-extrabold tracking-tight text-foreground">{title}</h1>
-          {description && <p className="mt-1.5 text-[15px] leading-relaxed text-text-secondary">{description}</p>}
+          <h1 className="type-page-title mt-1 truncate text-foreground">{title}</h1>
+          {description && <p className="mt-1.5 max-w-[68ch] text-[15px] leading-relaxed text-text-secondary">{description}</p>}
         </div>
         {(actions || bell) && (
-          <div data-tour="page-actions" className="flex flex-wrap items-center gap-3">
+          <div data-tour="page-actions" className="flex flex-wrap items-center gap-2">
             {actions}
             {bell && <NotificationBell />}
           </div>

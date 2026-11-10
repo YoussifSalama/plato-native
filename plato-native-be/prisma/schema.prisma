@@ -338,8 +338,8 @@ model InsightsCursor {
 
 // ========== interview.prisma ==========
 
-// A text mock interview tied to a listed job. Questions are generated once from
-// the posting; a retry copies them into a new session.
+// A text mock interview for a listed job, a pasted job post or a role in general.
+// Questions are generated once; a retry copies them into a new session.
 model MockInterview {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   job_seeker_id String    @db.ObjectId
@@ -351,7 +351,7 @@ model MockInterview {
   company         String
   job_description String
 
-  // [{ kind, question, answer?, followUp?, followUpAnswer? }]
+  // [{ kind, question, answer?, followUp?, followUpAnswer?, feedback? }]
   turns     Json
   // Set when finished: per-question scores, communication, gaps, next steps.
   scorecard Json?
@@ -359,6 +359,9 @@ model MockInterview {
   score     Int?
   // The session this one repeats (same questions).
   retry_of_id String? @db.ObjectId
+  // How it was set up (interview.ts Setup): { target: job|paste|general, style, format,
+  // round?, focus?, role?, skill?, length }. Optional: older rows are job / real / standard.
+  setup Json?
 
   created_at   DateTime  @default(now())
   completed_at DateTime?

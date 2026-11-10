@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { cn } from "cn"
+import { InfoTip } from "@/components/info-tip"
 import { setApplicationOutcome, type ApplicationOutcome } from "@/lib/jobs/api"
 
 // Plato can't read employer replies, so the seeker says what happened, if they want to.
@@ -33,11 +34,15 @@ export function OutcomePicker({ id, value, onChange }: { id: string; value: Appl
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-semibold">
-        Did you hear back? <span className="font-normal text-text-tertiary">Optional. Only you see this.</span>
+        <span className="inline-flex items-center gap-1.5 align-middle">
+          Did you hear back?
+          <InfoTip label="Why mark what you heard back" text="Plato can't read replies from employers. What you mark here feeds the interview and viewed counts on your Home page." />
+        </span>{" "}
+        <span className="font-normal text-text-tertiary">Optional. Only you see this.</span>
       </p>
       <div role="radiogroup" aria-label="What you heard back" className="flex flex-wrap gap-1.5">
         {ORDER.map((o) => (
-          <button key={o ?? "none"} type="button" role="radio" aria-checked={current === o} data-ai={`application.outcome.${(o ?? "none").toLowerCase()}`} onClick={() => void pick(o)} className={cn("rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors", current === o ? "border-primary bg-primary text-white" : "bg-card text-foreground hover:border-primary-line")}>
+          <button key={o ?? "none"} type="button" role="radio" aria-checked={current === o} data-ai={`application.outcome.${(o ?? "none").toLowerCase()}`} onClick={() => void pick(o)} className={cn("rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors duration-200 active:scale-[0.97]", current === o ? "border-primary bg-primary text-white shadow-sm shadow-primary/20" : "bg-card text-foreground hover:border-primary-line hover:bg-primary-tint hover:text-primary")}>
             {o ? OUTCOME_LABEL[o] : "Not yet"}
           </button>
         ))}

@@ -27,8 +27,12 @@ it('every registry control exists in the frontend code', () => {
     .filter(
       (c) =>
         !code.includes(c.tpl ? `data-ai={\`${c.tpl}` : `data-ai="${c.id}"`) &&
+        // Shared components (SectionHeader, …) take the name as a prop and put it on their link.
+        !(!c.tpl && code.includes(`dataAi="${c.id}"`)) &&
         // Shared tab components build the name from a prop: dataAi="results.tab".
-        !(c.tpl && code.includes(`dataAi="${c.tpl.replace(/\.$/, '')}"`)),
+        !(c.tpl && code.includes(`dataAi="${c.tpl.replace(/\.$/, '')}"`)) &&
+        // Shared action components take a templated name in an object: dataAi: `library.voice:${id}`.
+        !(c.tpl && code.includes(`dataAi: \`${c.tpl}`)),
     )
     .map((c) => c.id);
   expect(missing).toEqual([]);
@@ -36,7 +40,9 @@ it('every registry control exists in the frontend code', () => {
 
 it('finds the page of a control that is not on screen', () => {
   expect(pathOfControl('notifications.mark-all-read')).toBe('/notifications');
-  expect(pathOfControl('career.new-conversation')).toBe('/career');
+  expect(pathOfControl('career.snapshot')).toBe('/career');
+  // The assistant panel is on every page: no page to open first.
+  expect(pathOfControl('assistant.new-conversation')).toBeNull();
   expect(pathOfControl('jobs.search:abc')).toBe('/jobs');
   expect(pathOfControl('results.tab.saved')).toBeNull();
 });

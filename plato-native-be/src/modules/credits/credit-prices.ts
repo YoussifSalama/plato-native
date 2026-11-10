@@ -189,9 +189,11 @@ export const FEATURE_LABELS: Record<string, string> = {
   'career.research': 'Career research',
   'career.research.search': 'Career research (web search)',
   'career.voice': 'Voice interview',
+  'career.voice.score': 'Voice interview scorecard',
   'resume.write': 'Writing a resume',
   'resume.analyze': 'Checking a resume against a job',
   'interview.plan': 'Mock interview',
   'interview.followup': 'Mock interview',
+  'interview.coach': 'Mock interview coaching',
   'interview.score': 'Mock interview feedback',
 };

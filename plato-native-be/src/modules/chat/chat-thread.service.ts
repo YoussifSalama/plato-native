@@ -1,7 +1,7 @@
 import { pathOfControl } from './page-registry';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { run, type AgentInputItem } from '@openai/agents';
+import { run, type AgentInputItem, type Tool } from '@openai/agents';
 import { ChatRole, Prisma } from '@prisma/client';
 import { IEnvParams } from '../../types/config/env.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,13 +23,44 @@ import type { QuestionCard } from './intake';
 import { metered } from '../usage/usage';
 import { extensionProgress } from '../extension/progress';
 import { CreditsEstimatesService } from '../credits/estimates.service';
+import {
+  CareerService,
+  careerNote,
+  TOOL_STATUS,
+} from '../career/career.service';
+import { careerTools } from '../career/career.agent';
+import { askWhatFor, intentFor } from '../career/reference';
 
 const HISTORY_LIMIT = 30;
 
 // The agent only sees text, so a card it showed is written into history.
 function cardNote(ui: unknown) {
+  if (!ui) return '';
+  // A career card (resume PDF, interview, lookups, choices) from the career tools.
+  if ((ui as { type?: string }).type) return careerNote(ui);
   const ids = ((ui as QuestionCard | null)?.questions ?? []).map((q) => q.id);
-  return `[You showed the seeker a question card: ${ids.join(', ')}]`;
+  return `\n[You showed the seeker a question card: ${ids.join(', ')}]`;
+}
+
+// What the seeker sees while a tool runs (career tools add theirs).
+const STATUS: Record<string, string> = {
+  ...TOOL_STATUS,
+  start_job_search: 'Starting the search',
+  get_search_status: 'Checking the search',
+  list_shortlisted_jobs: 'Reading your matches',
+  get_job_details: 'Reading the job',
+  get_application_readiness: 'Checking your application details',
+  get_extension_progress: 'Checking the extension',
+};
+
+export interface SendOptions {
+  // Documents already uploaded by this seeker (a CV to improve).
+  attachmentIds?: string[];
+  // A job pinned to the message; must be one of the seeker's matches.
+  reference?: { jobId: string; searchId?: string };
+  // Streaming: text pieces of the reply, and what is being done while a tool runs.
+  onDelta?: (text: string) => void;
+  onStatus?: (text: string) => void;
 }
 
 @Injectable()
@@ -42,6 +73,7 @@ export class ChatThreadService {
     private readonly discoveryService: DiscoveryService,
     private readonly applyService: ApplyService,
     private readonly estimates: CreditsEstimatesService,
+    private readonly career: CareerService,
   ) {}
 
   private async seekerFor(userId: string) {
@@ -119,6 +151,7 @@ export class ChatThreadService {
     threadId: string,
     content: string,
     ui: UiContext = {},
+    opts: SendOptions = {},
   ) {
     const { jobSeeker, snapshot } = await this.seekerFor(userId);
     const thread = await this.prisma.chatThread.findFirst({
@@ -127,25 +160,69 @@ export class ChatThreadService {
     if (!thread) throw new NotFoundException('Thread not found');
 
     // An auto follow-up is not something the seeker said: not saved, only shown to the model.
-    if (!ui.auto)
+    const attached = ui.auto
+      ? []
+      : await this.career.attachable(jobSeeker.id, opts.attachmentIds);
+    const ref = ui.auto
+      ? null
+      : await this.career.pinnedRef(jobSeeker.id, opts.reference);
+    if (!ui.auto) {
+      const userUi = CareerService.userUi(attached, ref);
+      const firstWords = !(await this.prisma.chatMessage.count({
+        where: { thread_id: threadId, role: ChatRole.USER },
+      }));
       await this.prisma.chatMessage.create({
-        data: { thread_id: threadId, role: ChatRole.USER, content },
+        data: {
+          thread_id: threadId,
+          role: ChatRole.USER,
+          content,
+          ...(userUi && { ui: userUi }),
+        },
       });
+      // A conversation started from the panel on another page is named by its
+      // first message; a search page keeps its search title.
+      if (firstWords && ui.page)
+        await this.prisma.chatThread.update({
+          where: { id: threadId },
+          data: { title: content.slice(0, 60) },
+        });
+    }
+    // A job pinned to THIS message with no stated intent: ask, in code, before any
+    // agent runs (a "hi" must never start a resume build). Same rule as the career chat.
+    if (ref && !intentFor(content)) {
+      const q = askWhatFor(content, ref);
+      opts.onDelta?.(q.reply);
+      const message = await this.prisma.chatMessage.create({
+        data: {
+          thread_id: threadId,
+          role: ChatRole.ASSISTANT,
+          content: q.reply,
+          ui: { type: 'choices', choices: q.choices },
+        },
+      });
+      await this.prisma.chatThread.update({
+        where: { id: threadId },
+        data: { updated_at: new Date() },
+      });
+      return { message, events: [] as OrchestratorEvent[] };
+    }
     const history = await this.prisma.chatMessage.findMany({
       where: { thread_id: threadId },
       orderBy: { created_at: 'desc' },
       take: HISTORY_LIMIT,
     });
+    // Attached CVs and pinned jobs are read into the messages they came with.
+    const known = await this.career.historyContext(jobSeeker.id, history);
     const input: AgentInputItem[] = history.reverse().map((m) =>
       m.role === ChatRole.USER
-        ? { role: 'user' as const, content: m.content }
+        ? { role: 'user' as const, content: known.modelText(m) }
         : {
             role: 'assistant' as const,
             status: 'completed' as const,
             content: [
               {
                 type: 'output_text' as const,
-                text: m.ui ? `${m.content}\n${cardNote(m.ui)}` : m.content,
+                text: `${m.content}${cardNote(m.ui)}`,
               },
             ],
           },
@@ -218,11 +295,14 @@ export class ChatThreadService {
     };
 
     const model = this.configService.get<IEnvParams>('env')!.chatModel;
+    const kit = this.career.toolkit(jobSeeker, null, known);
     const agent = createOrchestratorAgent(
       model,
       { firstName: jobSeeker.user.full_name, snapshot },
       live,
       await elsewhereMemory(this.prisma, jobSeeker.id, 'search'),
+      // Resumes built here have no career thread (this is a chat thread).
+      careerTools(kit.deps) as Tool<OrchestratorContext>[],
     );
     const events: OrchestratorEvent[] = [];
     const context: OrchestratorContext = {
@@ -238,11 +318,24 @@ export class ChatThreadService {
       preferenceService: this.preferenceService,
       snapshot,
     };
-    const result = metered(
-      'chat.orchestrator',
-      model,
-      await run(agent, input, { context }),
-    );
+    // Always streamed; without onDelta it behaves like a plain run.
+    const streamed = await run(agent, input, { context, stream: true });
+    for await (const event of streamed) {
+      if (
+        event.type === 'raw_model_stream_event' &&
+        event.data.type === 'output_text_delta'
+      )
+        opts.onDelta?.(event.data.delta);
+      else if (
+        event.type === 'run_item_stream_event' &&
+        event.item.type === 'tool_call_item'
+      ) {
+        const name = (event.item.rawItem as { name?: string }).name ?? '';
+        if (STATUS[name]) opts.onStatus?.(STATUS[name]);
+      }
+    }
+    await streamed.completed;
+    const result = metered('chat.orchestrator', model, streamed);
     // A control named from another page's map is not on this screen: go to its
     // page first (the app then sends the new page and the assistant clicks it).
     const onScreen = new Set(ui.pageMap?.elements.map((e) => e.id) ?? []);
@@ -287,9 +380,12 @@ export class ChatThreadService {
         thread_id: threadId,
         role: ChatRole.ASSISTANT,
         content: reply,
-        ...(context.card && {
-          ui: context.card as unknown as Prisma.InputJsonValue,
-        }),
+        // A question card wins; otherwise what the career tools made (resume, choices…).
+        ...(context.card
+          ? { ui: context.card as unknown as Prisma.InputJsonValue }
+          : kit.replyUi()
+            ? { ui: kit.replyUi() }
+            : {}),
       },
     });
     await this.prisma.chatThread.update({

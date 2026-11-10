@@ -20,9 +20,9 @@ export function VerifyEmailBanner({ email }: { email: string }) {
   return (
     <AnimatePresence>
       {state !== "closed" && (
-        <motion.div role="status" initial={reduced ? false : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }} transition={spring.settle} className="mx-6 mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-2.5 text-sm lg:mr-6 lg:ml-7">
-          <MailWarning className="size-4 shrink-0 text-warning" />
-          <span className="min-w-0 flex-1 text-foreground">
+        <motion.div role="status" initial={reduced ? false : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }} transition={spring.settle} className="relative grid grid-cols-[auto_1fr_auto] items-start gap-x-2.5 border-b border-primary-line/60 bg-primary-tint py-2 pr-3 pl-4 text-[13px] leading-5 sm:flex sm:items-center sm:justify-center sm:pl-6 lg:pl-8">
+          <MailWarning className="mt-0.5 size-4 shrink-0 text-primary sm:mt-0" strokeWidth={1.8} />
+          <span className="min-w-0 py-0.5 text-text-secondary [overflow-wrap:anywhere] sm:py-0 [&_.font-semibold]:text-foreground">
             {state === "sent" ? (
               <>A new link is on its way to <span className="font-semibold">{email}</span>.</>
             ) : state === "failed" ? (
@@ -34,13 +34,13 @@ export function VerifyEmailBanner({ email }: { email: string }) {
             )}
           </span>
           {state !== "sent" && (
-            <button type="button" onClick={resend} disabled={state === "busy"} data-ai="verify-email.resend" className="flex items-center gap-1.5 rounded-md bg-card px-3 py-1 text-xs font-semibold text-primary shadow-sm transition-colors hover:bg-primary-tint disabled:opacity-60">
+            <button type="button" onClick={resend} disabled={state === "busy"} data-ai="verify-email.resend" className="col-start-2 row-start-2 -ml-2 flex h-7 shrink-0 items-center gap-1.5 justify-self-start rounded-md px-2 text-[13px] sm:ml-0 font-semibold whitespace-nowrap text-primary transition-colors duration-200 hover:bg-primary-soft disabled:opacity-60">
               {state === "busy" && <Loader2 className="size-3.5 animate-spin" />}
               Send the link again
             </button>
           )}
-          <button type="button" onClick={() => setState("closed")} aria-label="Hide for now" className="flex size-6 items-center justify-center rounded-sm text-text-tertiary hover:bg-card hover:text-foreground">
-            <X className="size-4" />
+          <button type="button" onClick={() => setState("closed")} aria-label="Hide for now" className="col-start-3 row-start-1 flex size-7 shrink-0 sm:absolute sm:top-1/2 sm:right-3 sm:-translate-y-1/2 items-center justify-center rounded-md text-text-tertiary transition-colors duration-200 hover:bg-primary-soft hover:text-foreground">
+            <X className="size-3.5" />
           </button>
         </motion.div>
       )}

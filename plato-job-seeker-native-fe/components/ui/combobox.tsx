@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge"
 
 const Combobox = ComboboxPrimitive.Root
 
-// Same input surface as components/ui/input.tsx (h-11, rounded-lg, border-input,
+// Same input surface as components/ui/input.tsx (h-10, rounded-lg, border-input,
 // same focus ring) so this reads as the same field type as Input/Select — it just
-// grows past h-11 once chips wrap, same as TagInput.
+// grows past h-10 once chips wrap, same as TagInput.
 const ComboboxChips = React.forwardRef<HTMLDivElement, ComboboxPrimitive.Chips.Props>(
   function ComboboxChips({ className, ...props }, ref) {
     return (
@@ -18,7 +18,7 @@ const ComboboxChips = React.forwardRef<HTMLDivElement, ComboboxPrimitive.Chips.P
         ref={ref}
         data-slot="combobox-chips"
         className={cn(
-          "flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-lg border border-input bg-white px-3 py-1.5 text-sm transition-colors outline-none focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-disabled:cursor-not-allowed has-disabled:opacity-50 has-aria-invalid:border-destructive has-aria-invalid:ring-3 has-aria-invalid:ring-destructive/20",
+          "flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-lg border border-input bg-white px-3 py-1.5 text-sm transition-colors outline-none focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/20 has-disabled:cursor-not-allowed has-disabled:opacity-50 has-aria-invalid:border-destructive has-aria-invalid:ring-3 has-aria-invalid:ring-destructive/20",
           className
         )}
         {...props}

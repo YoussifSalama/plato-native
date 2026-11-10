@@ -1,10 +1,12 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { ArrowRight, Award, Check, FileText, IdCard, Loader2, Lock, Plus, ScrollText, Upload } from "lucide-react"
+import { ArrowRight, Award, Check, FileText, FolderOpen, IdCard, Loader2, Lock, Plus, ScrollText, Upload } from "lucide-react"
 import { cn } from "cn"
+import { InfoTip } from "@/components/info-tip"
 import { Button } from "@/components/ui/button"
 import { PlatoMark } from "@/components/plato-orb"
+import { SectionHeader, StatIcon } from "@/components/plato-ui"
 import { BuildProfileSkeleton } from "@/components/onboarding-skeletons"
 import { analyzeProfile, getProfile, listDocuments, replaceDocument, uploadDocument } from "@/lib/documents/api"
 import type { DocumentType, JobSeekerDocument, JobSeekerProfile } from "@/lib/documents/schema"
@@ -141,7 +143,7 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
   const summary = profile?.experiences?.length ? cvSummary(profile) : null
 
   return (
-    <div className="mx-auto grid w-full max-w-[1300px] grid-cols-1 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12">
+    <div data-tour-state="onboarding.documents" className="mx-auto grid w-full max-w-[1300px] grid-cols-1 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12">
       <input ref={cvInput} type="file" accept=".pdf,.doc,.docx" hidden onChange={(e) => (e.target.files?.[0] && void uploadCv(e.target.files[0]), (e.target.value = ""))} />
       <input ref={tileInput} type="file" hidden onChange={(e) => (e.target.files?.[0] && tileFor && void uploadTile(tileFor, e.target.files[0]), (e.target.value = ""))} />
 
@@ -152,31 +154,40 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
           <p className="mt-3 text-[16.5px] leading-relaxed text-text-secondary">Start with your CV. Add any other documents now, and Plato attaches the right one whenever a job asks for it, so you never stop mid-application to look for a file.</p>
         </div>
 
-        <p className="mt-2 font-semibold">
-          Resume / CV <span className="text-destructive">*</span>
-        </p>
-        {cv ? (
-          <div className={cn("flex items-center gap-4 rounded-2xl border p-4", cv.status === "FAILED" ? "border-destructive/30 bg-danger-soft" : "border-success-line bg-[#f3fcf6]")}>
-            <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl", cv.status === "FAILED" ? "bg-card text-destructive" : "bg-success-soft text-success")}>{cvReady ? <Check className="size-5" /> : cv.status === "FAILED" ? <FileText className="size-5" /> : <Loader2 className="size-5 animate-spin" />}</span>
-            <span className="min-w-0 flex-1">
-              <b className="block truncate text-[17px]">{cv.name ?? "Your CV"}</b>
-              <span className={cn("text-[14.5px]", cv.status === "FAILED" ? "text-destructive" : "text-success-ink")}>{cv.status === "FAILED" ? (cv.processing_error ?? "Plato could not read this file. Try a PDF.") : cvReady ? "Read · experience, education and skills added to your profile" : "Reading your CV…"}</span>
+        <SectionHeader
+          className="mt-2"
+          icon={FileText}
+          accent="cobalt"
+          title={
+            <span className="flex items-center gap-1.5">
+              Resume / CV <span className="text-destructive">*</span>
+              <InfoTip text="Plato reads it into your profile: experience, education and skills. Your job matches and tailored resumes are built from that profile." label="What Plato does with your CV" />
             </span>
-            <Button variant="outline" onClick={() => cvInput.current?.click()} disabled={busy === "cv"} className="h-11 rounded-xl bg-card px-4">
+          }
+        />
+        {cv ? (
+          // White card; the state shows only in the thin left edge and the icon.
+          <div data-tour="onboarding-cv" className={cn("flex flex-wrap items-center gap-4 rounded-2xl border border-l-4 bg-card p-4 shadow-card animate-in fade-in-0 duration-300", cv.status === "FAILED" ? "border-l-destructive" : cvReady ? "border-l-success" : "border-l-primary")}>
+            <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl", cv.status === "FAILED" ? "bg-danger-soft text-destructive" : cvReady ? "bg-success-soft text-success" : "bg-primary-soft text-primary")}>{cvReady ? <Check className="size-5" /> : cv.status === "FAILED" ? <FileText className="size-5" /> : <Loader2 className="size-5 animate-spin" />}</span>
+            <span className="min-w-0 flex-1 basis-48">
+              <b className="block truncate text-[17px]">{cv.name ?? "Your CV"}</b>
+              <span className={cn("text-[14.5px]", cv.status === "FAILED" ? "text-destructive" : cvReady ? "text-success-ink" : "text-text-secondary")}>{cv.status === "FAILED" ? (cv.processing_error ?? "Plato could not read this file. Try a PDF.") : cvReady ? "Read · experience, education and skills added to your profile" : "Reading your CV…"}</span>
+            </span>
+            <Button variant="outline" onClick={() => cvInput.current?.click()} disabled={busy === "cv"} className="h-11 rounded-xl bg-card px-4 transition-colors duration-200 hover:border-primary-line hover:text-primary">
               {busy === "cv" && <Loader2 className="size-4 animate-spin" />}
               Replace
             </Button>
           </div>
         ) : (
-          <button type="button" onClick={() => cvInput.current?.click()} disabled={busy === "cv"} className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary-line bg-primary-tint px-6 py-8 text-center transition-colors hover:bg-primary-soft">
-            {busy === "cv" ? <Loader2 className="size-6 animate-spin text-primary" /> : <Upload className="size-6 text-primary" />}
+          <button type="button" data-tour="onboarding-cv" onClick={() => cvInput.current?.click()} disabled={busy === "cv"} className="group/up flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary-line bg-primary-tint px-6 py-8 text-center transition-colors duration-200 hover:border-primary hover:bg-primary-soft">
+            <span className="flex size-12 items-center justify-center rounded-xl bg-card text-primary shadow-card transition-transform duration-200 group-hover/up:-translate-y-0.5">{busy === "cv" ? <Loader2 className="size-6 animate-spin" /> : <Upload className="size-6" />}</span>
             <b>Upload your CV</b>
             <span className="text-sm text-text-secondary">PDF or Word, up to 10 MB</span>
           </button>
         )}
 
         {cvReady && (
-          <div className="flex gap-3 rounded-2xl border border-primary-line bg-primary-tint p-4">
+          <div className="flex gap-3 rounded-2xl border border-primary-line bg-primary-tint p-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
             <PlatoMark size={30} />
             <div className="min-w-0 flex-1">
               <p className="text-xs font-bold tracking-[0.04em] text-primary uppercase">Plato read your CV</p>
@@ -199,41 +210,48 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="mt-2 flex flex-wrap items-center gap-4">
-          <Button data-ai="onboarding.continue" onClick={() => void next()} disabled={!cvReady || reading} className="h-14 gap-2 rounded-xl px-7 text-[17px]">
+          <Button data-ai="onboarding.continue" onClick={() => void next()} disabled={!cvReady || reading} className="group/cta h-14 gap-2 rounded-xl px-7 text-[17px] shadow-md shadow-primary/25 transition-[background-color,box-shadow] duration-200 hover:shadow-lg hover:shadow-primary/35">
+            {reading && cvReady && <Loader2 className="size-5 animate-spin" />}
             Continue to preferences
-            <ArrowRight className="size-5" />
+            <ArrowRight className="size-5 transition-transform duration-200 group-hover/cta:translate-x-0.5" />
           </Button>
           <span className="text-[15px] text-text-secondary">Only the CV is needed to continue.</span>
         </div>
       </section>
 
       {/* Right: every other file a job might ask for. */}
-      <section className="flex flex-col gap-3 lg:pt-[106px]">
-        <p className="flex items-center justify-between">
-          <span className="text-[17px] font-semibold">
-            Other documents <span className="font-normal text-text-secondary">(optional)</span>
-          </span>
-          <span className="text-text-secondary">{added} added</span>
-        </p>
+      <section data-tour="onboarding-docs" className="flex flex-col gap-3 lg:pt-[106px]">
+        <div className="flex items-center justify-between gap-3">
+          <SectionHeader
+            icon={FolderOpen}
+            accent="cobalt"
+            title={
+              <>
+                Other documents <span className="font-normal text-text-secondary">(optional)</span>
+              </>
+            }
+          />
+          <span className={cn("type-meta shrink-0 rounded-full px-2.5 py-0.5 font-semibold tabular-nums", added ? "bg-success-soft text-success-ink" : "bg-muted text-text-secondary")}>{added} added</span>
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {TILES.map((t) => {
+          {TILES.map((t, i) => {
             const has = tileDocs(t, docs).length > 0
             return (
-              <div key={t.key} className={cn("flex items-center gap-3 rounded-2xl border p-3.5", has ? "border-success-line bg-[#f3fcf6]" : "bg-card")}>
-                <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl", has ? "bg-success-soft text-success" : "bg-primary-soft text-primary")}>{has ? <Check className="size-5" /> : <t.icon className="size-5" />}</span>
+              <div key={t.key} className="group/tile flex items-center gap-3 rounded-2xl border bg-card p-3.5 shadow-card transition-[border-color,box-shadow] duration-200 animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-both hover:border-primary-line" style={{ animationDelay: `${i * 50}ms` }}>
+                <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors duration-200", has ? "bg-success-soft text-success" : "bg-primary-soft text-primary")}>{has ? <Check className="size-5" /> : <t.icon className="size-5" />}</span>
                 <span className="min-w-0 flex-1">
                   <b className="block text-[16px] leading-tight">{t.title}</b>
                   <span className="block text-[13.5px] leading-snug text-text-secondary">{t.hint}</span>
                 </span>
-                <button type="button" disabled={busy === t.key} onClick={() => (setTileFor(t), tileInput.current?.click())} className="flex h-10 shrink-0 items-center gap-1 rounded-xl border bg-card px-3.5 text-[15px] font-semibold text-primary transition-colors hover:border-primary-line">
+                <button type="button" disabled={busy === t.key} onClick={() => (setTileFor(t), tileInput.current?.click())} className={cn("flex h-10 shrink-0 items-center gap-1 rounded-xl px-3.5 text-[15px] font-semibold transition-colors duration-200", has ? "border bg-card text-success-ink hover:border-primary-line hover:text-primary" : "bg-primary-soft text-primary hover:bg-primary hover:text-primary-foreground")}>
                   {busy === t.key ? <Loader2 className="size-4 animate-spin" /> : has ? "Added" : "+ Add"}
                 </button>
               </div>
             )
           })}
         </div>
-        <p className="flex items-start gap-3 rounded-2xl border bg-card p-4 text-[15px] text-text-secondary">
-          <Lock className="mt-0.5 size-5 shrink-0 text-primary" />
+        <p className="flex items-start gap-3 rounded-2xl border bg-card p-4 text-[15px] text-text-secondary shadow-card">
+          <StatIcon icon={Lock} accent="teal" className="size-8 rounded-lg [&_svg]:size-4" />
           Your documents are encrypted and private. Plato only attaches one when an application asks for it, and you can delete any of them from your profile.
         </p>
       </section>

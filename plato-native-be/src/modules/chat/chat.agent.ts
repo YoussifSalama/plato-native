@@ -2,10 +2,10 @@ import { Agent } from '@openai/agents';
 import { createRankingAgent } from '../discovery/agent/ranking.agent';
 
 const STAGE_NAMES: Record<number, string> = {
-  1: 'Build Profile — uploading a CV (required) and supporting documents like certificates, licenses, or degrees',
+  1: 'Documents — uploading a CV (required) and any other documents an application might ask for (cover letter, certificates, visa or work permit, license, ID, references)',
   2: 'Confirm Information — reviewing the profile Plato extracted from those documents and fixing anything flagged as needing attention',
-  3: 'Preferences — not built yet',
-  4: 'Ready — not built yet',
+  3: 'Preferences — job titles, level, job type, work style, where, salary, companies to follow, answers for application forms, and things to avoid',
+  4: 'Connect — installing the Plato Apply Chrome extension and linking it with a one-time code (or automatically when logged in); can be skipped',
 };
 
 const BASE_INSTRUCTIONS = `# Identity

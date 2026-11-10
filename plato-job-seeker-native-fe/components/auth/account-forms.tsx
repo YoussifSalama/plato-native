@@ -2,13 +2,14 @@
 
 import { useState, type FormEvent, type ReactNode } from "react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { motion, useReducedMotion } from "motion/react"
-import { CheckCircle2, KeyRound, Loader2, MailCheck, TriangleAlert } from "lucide-react"
+import { ArrowLeft, ArrowRight, CheckCircle2, CircleAlert, KeyRound, Loader2, MailCheck, Send, TriangleAlert } from "lucide-react"
 import { cn } from "cn"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
+import { StatIcon, type Accent } from "@/components/plato-ui"
 import { forgotPassword, resetPassword, verifyEmail } from "@/lib/auth/api"
 import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
 import { spring } from "@/lib/motion-system"
@@ -16,14 +17,12 @@ import { spring } from "@/lib/motion-system"
 // Forgot password, choose a new one, confirm the email: the small screens
 // behind the links Plato emails. Same frame and voice as log in.
 
-function Heading({ icon: Icon, title, body }: { icon: typeof KeyRound; title: string; body: ReactNode }) {
+function Heading({ icon: Icon, accent, title, body }: { icon: typeof KeyRound; accent?: Accent; title: string; body: ReactNode }) {
   return (
     <motion.div variants={fadeUpItem} className="flex flex-col gap-3">
-      <span className="flex size-11 items-center justify-center rounded-xl bg-primary-soft text-primary">
-        <Icon className="size-5" />
-      </span>
-      <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
-      <p className="text-sm leading-relaxed text-text-secondary">{body}</p>
+      <StatIcon icon={Icon} accent={accent} className="size-11 rounded-xl [&_svg]:size-5" />
+      <h1 className="type-page-title text-foreground">{title}</h1>
+      <p className="type-body text-text-secondary">{body}</p>
     </motion.div>
   )
 }
@@ -32,24 +31,38 @@ function Done({ title, body, cta, href }: { title: string; body: ReactNode; cta:
   const reduced = !!useReducedMotion()
   return (
     <motion.div initial={reduced ? false : { opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={spring.enter} className="flex flex-col gap-5">
-      <span className="flex size-12 items-center justify-center rounded-full bg-success-soft text-success">
-        <CheckCircle2 className="size-6" />
-      </span>
+      <motion.span initial={reduced ? false : { scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ ...spring.enter, delay: 0.1 }} className="w-fit">
+        <StatIcon icon={CheckCircle2} accent="green" className="size-12 rounded-full [&_svg]:size-6" />
+      </motion.span>
       <div className="flex flex-col gap-1.5">
-        <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
-        <p className="text-sm leading-relaxed text-text-secondary">{body}</p>
+        <h1 className="type-page-title text-foreground">{title}</h1>
+        <p className="type-body text-text-secondary">{body}</p>
       </div>
-      <Link href={href} className={cn(buttonVariants(), "w-full shadow-md shadow-primary/30")}>
+      <Link href={href} className={cn(buttonVariants(), CTA)}>
         {cta}
+        <ArrowRight className={ARROW} />
       </Link>
     </motion.div>
   )
 }
 
+// The one main action per screen, the same lift and arrow nudge as log in.
+const CTA = "group/cta h-11 w-full shadow-md shadow-primary/30 transition-[background-color,box-shadow] duration-200 hover:shadow-lg hover:shadow-primary/40"
+const ARROW = "size-4 transition-transform duration-200 group-hover/cta:translate-x-0.5"
+
 const BackToLogin = () => (
-  <a href="/login" className="block text-center text-sm font-medium text-primary underline-offset-4 hover:underline">
+  <Link href="/login" className="group/back mx-auto flex w-fit items-center gap-1 text-sm font-semibold text-primary transition-colors duration-200 hover:text-primary-hover">
+    <ArrowLeft className="size-3.5 transition-transform duration-200 group-hover/back:-translate-x-0.5" />
     Back to log in
-  </a>
+  </Link>
+)
+
+// A failed request: white with a thin red edge, never a red block.
+const FormError = ({ children }: { children: ReactNode }) => (
+  <p role="alert" className="flex items-start gap-2 rounded-lg border border-l-[3px] border-l-destructive bg-card px-3 py-2.5 text-sm text-destructive animate-in fade-in-0 slide-in-from-top-1 duration-200">
+    <CircleAlert className="mt-0.5 size-4 shrink-0" />
+    <span>{children}</span>
+  </p>
 )
 
 export function ForgotPasswordForm() {
@@ -93,10 +106,10 @@ export function ForgotPasswordForm() {
           <Input id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="eg. john.doe@example.com" />
         </Field>
       </motion.div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormError>{error}</FormError>}
       <motion.div variants={fadeUpItem}>
-        <Button type="submit" disabled={state === "busy" || !email.trim()} className="w-full shadow-md shadow-primary/30">
-          {state === "busy" && <Loader2 className="size-4 animate-spin" />}
+        <Button type="submit" disabled={state === "busy" || !email.trim()} className={CTA}>
+          {state === "busy" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           Send me a link
         </Button>
       </motion.div>
@@ -109,7 +122,6 @@ export function ForgotPasswordForm() {
 
 export function ResetPasswordForm() {
   const token = useSearchParams().get("token") ?? ""
-  const router = useRouter()
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
   const [state, setState] = useState<"idle" | "busy" | "done">("idle")
@@ -132,12 +144,13 @@ export function ResetPasswordForm() {
 
   if (!token)
     return (
-      <div className="flex flex-col gap-5">
-        <Heading icon={TriangleAlert} title="This link is incomplete" body="Open the link from the email again, or ask for a new one." />
-        <Button onClick={() => router.push("/forgot-password")} className="w-full">
+      <motion.div initial="hidden" animate="show" variants={staggerContainer} className="flex flex-col gap-5">
+        <Heading icon={TriangleAlert} accent="amber" title="This link is incomplete" body="Open the link from the email again, or ask for a new one." />
+        <Link href="/forgot-password" className={cn(buttonVariants(), CTA)}>
           Ask for a new link
-        </Button>
-      </div>
+          <ArrowRight className={ARROW} />
+        </Link>
+      </motion.div>
     )
 
   if (state === "done") return <Done title="Your password is changed" body="For your safety, every device that was signed in has been signed out. Log in with your new password." cta="Log in" href="/login" />
@@ -157,15 +170,15 @@ export function ResetPasswordForm() {
         </Field>
       </motion.div>
       {error && (
-        <p className="text-sm text-destructive">
+        <FormError>
           {error}{" "}
-          <a href="/forgot-password" className="font-medium underline">
+          <Link href="/forgot-password" className="font-medium underline underline-offset-2">
             Ask for a new link
-          </a>
-        </p>
+          </Link>
+        </FormError>
       )}
       <motion.div variants={fadeUpItem}>
-        <Button type="submit" disabled={state === "busy" || password.length < 8 || confirm !== password} className="w-full shadow-md shadow-primary/30">
+        <Button type="submit" disabled={state === "busy" || password.length < 8 || confirm !== password} className={CTA}>
           {state === "busy" && <Loader2 className="size-4 animate-spin" />}
           Save new password
         </Button>
@@ -192,17 +205,25 @@ export function VerifyEmailCard() {
     }
   }
 
-  if (state === "done") return <Done title="Email confirmed" body="Thanks. Job alerts and account messages will now reach you by email." cta="Open Plato" href="/jobs" />
+  if (state === "done") return <Done title="Email confirmed" body="Thanks. Job alerts and account messages will now reach you by email." cta="Open Plato" href="/" />
 
   return (
     <motion.div initial="hidden" animate="show" variants={staggerContainer} className="flex w-full flex-col gap-5">
       <Heading icon={MailCheck} title="Confirm your email" body="One press and you're set: job alerts and account messages can reach you by email." />
-      {(error || !token) && <p className="text-sm text-destructive">{error ?? "This link is incomplete. Open it from the email again."} You can ask for a new link from the banner in the app.</p>}
+      {(error || !token) && <FormError>{error ?? "This link is incomplete. Open it from the email again."} You can ask for a new link from the banner in the app.</FormError>}
       <motion.div variants={fadeUpItem}>
-        <Button onClick={confirm} disabled={state === "busy" || !token} className="w-full shadow-md shadow-primary/30">
-          {state === "busy" && <Loader2 className="size-4 animate-spin" />}
-          Confirm my email
-        </Button>
+        {token ? (
+          <Button onClick={confirm} disabled={state === "busy"} className={CTA}>
+            {state === "busy" && <Loader2 className="size-4 animate-spin" />}
+            Confirm my email
+          </Button>
+        ) : (
+          // No token, nothing to confirm: lead to the app, where the banner resends the link.
+          <Link href="/" className={cn(buttonVariants(), CTA)}>
+            Open Plato
+            <ArrowRight className={ARROW} />
+          </Link>
+        )}
       </motion.div>
     </motion.div>
   )

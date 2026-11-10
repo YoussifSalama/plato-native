@@ -40,6 +40,7 @@ import { dropSchema, QueueService } from './queue.service';
 import { ExtensionSettingsService, settingsPatchSchema } from './settings';
 import { OrchestratorService, orchestratorSchema } from './orchestrator.service';
 import { jobsQuerySchema, SearchesService } from './searches.service';
+import { ProofService, proofSchema } from './proof.service';
 
 const MINUTE = 60_000;
 const tooMany = () =>
@@ -418,6 +419,17 @@ export class ExtensionApiController {
     return this.batches.transition(req.extension, id, p.data);
   }
 
+  // Proof of apply: a screenshot of the submitted / thank-you page (PNG or JPEG, <= 5 MB, base64).
+  // Only for an item this device just submitted (within 15 minutes); a re-upload replaces it.
+  @Post('items/:id/proof')
+  @ExtensionScopes('apply:write')
+  async proof(@Req() req: ExtensionRequest, @Param('id') id: string, @Body() body: unknown) {
+    const p = proofSchema.safeParse(body);
+    if (!p.success) throw new BadRequestException('Invalid request');
+    if (!limiter.hit(`proof:${req.extension.deviceId}`, 20, MINUTE)) throw tooMany();
+    return this.proofs.save(req.extension, id, p.data);
+  }
+
   // The seeker's application snapshot, only while this device holds the item.
   @Get('items/:id/candidate')
   @ExtensionScopes('apply:read')
@@ -446,5 +458,6 @@ export class ExtensionApiController {
     private readonly settings: ExtensionSettingsService,
     private readonly queueSvc: QueueService,
     private readonly resumeFiles: ResumeFileService,
+    private readonly proofs: ProofService,
   ) {}
 }

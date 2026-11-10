@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Check, Copy, Loader2, Lock, MoreVertical, MousePointer2, Pin, Puzzle, Star, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/info-tip"
 import { getExtensionProgress, startPairing, type PairingCode } from "@/lib/extension/api"
 import { queueForExtension } from "@/lib/jobs/api"
 import { createApplyBatch } from "@/lib/extension/api"
@@ -187,12 +188,17 @@ function Content({ count, req, onClose }: { count: number; req: Req; onClose: ()
             </section>
 
             <section className="flex flex-col gap-3 rounded-xl border p-5">
-              <h3 className="flex items-center gap-2 font-semibold"><span className="flex size-6 items-center justify-center rounded-md bg-primary-soft text-sm text-primary">2</span>{connected ? "Connected" : "Enter the code in the extension"}</h3>
+              <h3 className="flex items-center gap-2 font-semibold"><span className="flex size-6 items-center justify-center rounded-md bg-primary-soft text-sm text-primary">2</span>{connected ? "Connected" : "Enter the code in the extension"}
+                {!connected && <InfoTip text="A one-time code that links the Plato extension in this browser to your account. It works once, and a fresh one replaces it when the timer runs out." label="What the pairing code is" />}
+              </h3>
               {connected ? (
                 <div className="flex flex-col gap-3 text-sm">
                   <p className="flex items-center gap-2 font-medium text-success"><Check className="size-4" />Your browser is linked to Plato.</p>
                   {queued ? (
-                    <p className="text-text-secondary">{queued} job{queued === 1 ? " is" : "s are"} in your extension&apos;s queue. Open the extension and press <b>Start applying</b>.</p>
+                    <p className="text-text-secondary">
+                      {queued} job{queued === 1 ? " is" : "s are"} in your extension&apos;s queue. Open the extension and press <b>Start applying</b>.{" "}
+                      <InfoTip className="align-[-3px]" text="Queued jobs wait in the extension. Nothing is sent until you press Start applying there; it then fills each form in this browser." label="What the extension queue is" />
+                    </p>
                   ) : (
                     <p className="text-text-secondary">None of these jobs can be applied by the extension.</p>
                   )}

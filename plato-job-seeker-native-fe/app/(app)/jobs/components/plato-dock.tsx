@@ -1,13 +1,15 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
+import { InputGroup, InputGroupTextarea } from "@/components/ui/input-group"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { ArrowUp, BellRing, Briefcase, ClipboardCheck, Compass, FileText, Inbox, Mic, Search, Slash, Sparkles, Wand2, X, type LucideIcon } from "lucide-react"
+import { ArrowRight, ArrowUp, BellRing, Briefcase, ClipboardCheck, Compass, FileText, Inbox, Mic, Search, Slash, Sparkles, Wand2, X, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import type { ThreadMessage } from "@/lib/jobs/api"
 import { PlatoMark } from "@/components/plato-orb"
 import { spring } from "@/lib/motion-system"
+import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
 import { MessageList, type InlineSteps } from "./chat-panel"
 
 // Width of the floating panel.
@@ -22,7 +24,7 @@ const COMMANDS: Command[] = [
   { key: "tailor", label: "Tailor & apply", hint: "Pick jobs, Plato writes a resume for each", icon: Wand2, href: "/jobs" },
   { key: "score", label: "Resume score", hint: "Out of 100, with the quick fixes", icon: ClipboardCheck, href: `/career?prompt=${encodeURIComponent("Score my resume and help me fix the top issues")}` },
   { key: "resume", label: "Build my resume", hint: "From your profile, as a PDF", icon: FileText, href: `/career?prompt=${encodeURIComponent("Build my resume")}` },
-  { key: "interview", label: "Practice an interview", hint: "One question at a time", icon: Mic, href: `/career?prompt=${encodeURIComponent("Practice an interview with me")}` },
+  { key: "interview", label: "Practice an interview", hint: "For a job, a role or a tough situation", icon: Mic, href: "/career/interviews/new" },
   { key: "follow", label: "Follow a company", hint: "Hear when they post a role that fits", icon: BellRing, href: "/following" },
 ]
 
@@ -40,6 +42,11 @@ function PlatoDock({
   status,
   context,
   defaultOpen = false,
+  title = "Plato AI",
+  launcherHint = "Ask anything",
+  width = PANEL_W,
+  headerActions,
+  children,
 }: {
   messages: ThreadMessage[]
   onSend: (text: string) => void
@@ -52,6 +59,13 @@ function PlatoDock({
   // Where the seeker is, shown under the title ("On Applications").
   context?: string
   defaultOpen?: boolean
+  // Coach mode (components/coach-assistant.tsx) renames the panel, may widen it for a resume
+  // preview, adds header buttons and brings its own conversation + composer as `children`.
+  title?: string
+  launcherHint?: string
+  width?: number
+  headerActions?: ReactNode
+  children?: ReactNode
 }) {
   const reduced = !!useReducedMotion()
   const router = useRouter()
@@ -132,23 +146,24 @@ function PlatoDock({
             key="panel"
             data-ai-skip
             role="complementary"
-            aria-label="Plato AI"
+            aria-label={title}
             initial={{ x: "calc(100% + 24px)", opacity: 0.6 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: "calc(100% + 24px)", opacity: 0.6, transition: { duration: 0.2 } }}
             transition={transition}
-            style={{ width: `min(${PANEL_W}px, calc(100vw - 24px))` }}
-            className="fixed top-3 right-3 bottom-3 z-[45] flex flex-col overflow-hidden rounded-2xl border bg-card shadow-[0_30px_80px_-24px_rgba(0,58,110,0.45),0_4px_14px_-4px_rgba(14,27,44,0.12)]"
+            style={{ width: `min(${width}px, calc(100vw - 24px))` }}
+            className="transition-[width] duration-300 fixed top-3 right-3 bottom-3 z-[45] flex flex-col overflow-hidden rounded-2xl border bg-card shadow-[0_30px_80px_-24px_rgba(0,58,110,0.45),0_4px_14px_-4px_rgba(14,27,44,0.12)]"
           >
             <header className="flex h-16 shrink-0 items-center gap-3 border-b px-4">
               <PlatoMark size={32} live={busy || status === "searching"} />
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-1.5 text-[15px] font-bold text-foreground">
-                  Plato AI
+                  {title}
                   <Sparkles className="size-3 fill-primary text-primary" />
                 </p>
                 <p className="truncate text-xs text-text-tertiary">{statusLine}</p>
               </div>
+              {headerActions}
               <button
                 type="button"
                 onClick={() => {
@@ -166,23 +181,25 @@ function PlatoDock({
               </button>
             </header>
 
+            {children ?? (<>
             {empty && !busy ? (
               <div className="flex flex-1 flex-col justify-end gap-4 overflow-y-auto bg-background/60 p-5">
                 <div>
-                  <p className="text-lg font-bold tracking-tight">What should we do?</p>
+                  <p className="type-section-title text-foreground">What should we do?</p>
                   <p className="text-sm text-text-secondary">Ask in your own words, Arabic or English. I can search, open pages, and work through your applications.</p>
                 </div>
                 {quickPrompts.length > 0 && (
-                  <ul className="flex flex-col gap-1.5">
+                  <motion.ul variants={staggerContainer} initial="hidden" animate="show" className="flex flex-col gap-1.5">
                     {quickPrompts.slice(0, 3).map((q) => (
-                      <li key={q}>
-                        <button type="button" onClick={() => submit(q)} className="flex w-full items-center gap-2.5 rounded-xl border bg-card px-3.5 py-2.5 text-left text-sm font-medium transition-colors hover:border-primary-line hover:bg-primary-tint">
+                      <motion.li key={q} variants={fadeUpItem}>
+                        <button type="button" onClick={() => submit(q)} className="group flex w-full items-center gap-2.5 rounded-xl border bg-card px-3.5 py-2.5 text-left text-sm font-medium shadow-card transition-colors duration-200 hover:border-primary-line hover:bg-primary-tint">
                           <Sparkles className="size-3.5 shrink-0 text-primary" />
-                          {q}
+                          <span className="min-w-0 flex-1">{q}</span>
+                          <ArrowRight className="size-3.5 shrink-0 text-text-tertiary transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
                         </button>
-                      </li>
+                      </motion.li>
                     ))}
-                  </ul>
+                  </motion.ul>
                 )}
               </div>
             ) : (
@@ -211,7 +228,7 @@ function PlatoDock({
                         data-ai={`dock.command.${c.key}`}
                         onMouseEnter={() => setActive(i)}
                         onClick={() => run(c)}
-                        className={cn("flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left", i === active ? "bg-primary-tint" : "")}
+                        className={cn("flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors duration-150", i === active ? "bg-primary-tint" : "")}
                       >
                         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
                           <c.icon className="size-4" />
@@ -232,9 +249,9 @@ function PlatoDock({
                   if (menuOpen) run(shown[Math.min(active, shown.length - 1)])
                   else submit(input)
                 }}
-                className="flex flex-col gap-2 rounded-xl border bg-background px-3 pt-2.5 pb-2 transition-colors focus-within:border-primary/50"
               >
-                <textarea
+                <InputGroup className="flex-col items-stretch gap-2 rounded-xl bg-background px-3 pt-2.5 pb-2">
+                  <InputGroupTextarea
                   ref={textareaRef}
                   rows={1}
                   value={input}
@@ -246,7 +263,7 @@ function PlatoDock({
                   disabled={busy}
                   aria-label="Message Plato"
                   placeholder="Ask Plato, or type / for commands"
-                  className="scroll-thin min-h-6 resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-text-tertiary disabled:opacity-60"
+                  className="scroll-thin min-h-6 p-0 leading-6 placeholder:text-text-tertiary disabled:opacity-60"
                 />
                 <div className="flex items-center gap-2">
                   <button
@@ -258,7 +275,7 @@ function PlatoDock({
                     }}
                     aria-expanded={menuOpen}
                     data-ai="dock.commands"
-                    className={cn("flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors", menuOpen ? "border-primary-line bg-primary-soft text-primary" : "bg-card text-text-secondary hover:text-foreground")}
+                    className={cn("flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors", menuOpen ? "border-primary-line bg-primary-soft text-primary" : "bg-card text-text-secondary hover:border-primary-line hover:text-primary")}
                   >
                     <Slash className="size-3.5" />
                     Commands
@@ -270,13 +287,15 @@ function PlatoDock({
                     whileTap={{ scale: 0.94 }}
                     transition={spring.micro}
                     aria-label="Send"
-                    className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40"
+                    className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary-hover disabled:opacity-40"
                   >
                     <ArrowUp className="size-4" />
                   </motion.button>
                 </div>
+                </InputGroup>
               </form>
             </div>
+            </>)}
           </motion.aside>
         )}
       </AnimatePresence>
@@ -293,14 +312,15 @@ function PlatoDock({
           transition={transition}
           whileHover={reduced ? undefined : { y: -2 }}
           whileTap={{ scale: 0.98 }}
-          className="fixed right-6 bottom-6 z-50 flex h-14 items-center gap-3 rounded-2xl border bg-card pr-5 pl-2 shadow-[0_16px_40px_-16px_rgba(0,91,167,0.45),0_2px_6px_-2px_rgba(14,27,44,0.1)]"
+          // Compact pill on desktop, just the mark on phones. The page tour button sits right above it.
+          className="fixed right-4 bottom-4 z-50 flex h-12 items-center gap-2.5 rounded-full border bg-card p-1.5 shadow-float transition-colors duration-200 hover:border-primary-line sm:right-6 sm:bottom-5 sm:pr-4"
         >
-          <PlatoMark size={40} live={status === "searching"} />
-          <span className="text-left">
-            <span className="block text-sm font-bold text-foreground">Plato AI</span>
-            <span className="block text-xs text-text-tertiary">{status === "searching" ? "Searching…" : "Ask anything"}</span>
+          <PlatoMark size={36} live={status === "searching"} />
+          <span className="hidden text-left leading-tight sm:block">
+            <span className="block text-[13px] font-semibold text-foreground">Plato AI</span>
+            <span className="block text-[11.5px] text-text-tertiary">{status === "searching" ? "Searching…" : launcherHint}</span>
           </span>
-          {unread > 0 && <span className="ml-1 flex size-5 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground">{unread}</span>}
+          {unread > 0 && <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-semibold text-primary-foreground tabular-nums ring-2 ring-background">{unread > 9 ? "9+" : unread}</span>}
         </motion.button>
       )}
     </>

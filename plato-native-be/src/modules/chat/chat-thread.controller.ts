@@ -6,15 +6,30 @@ import {
   Param,
   Post,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { z } from 'zod';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ChatThreadService } from './chat-thread.service';
 import { TokensGuard } from '../credits/tokens.guard';
 
 const sendSchema = z.object({
-  content: z.string().trim().min(1).max(2000),
+  // Long enough for a pasted job description (career coaching runs here too).
+  content: z.string().trim().min(1).max(12000),
+  // Documents already uploaded by this seeker (a CV to improve).
+  attachmentIds: z.array(z.string().min(1).max(40)).max(3).optional(),
+  // A job pinned to the message (job card -> tailor / mock interview); must be one of the seeker's matches.
+  reference: z
+    .object({
+      jobId: z.string().regex(/^[0-9a-f]{24}$/),
+      searchId: z
+        .string()
+        .regex(/^[0-9a-f]{24}$/)
+        .optional(),
+    })
+    .optional(),
   context: z
     .object({
       view: z.enum(['chat', 'searching', 'results']).optional(),
@@ -110,6 +125,52 @@ export class ChatThreadController {
       id,
       parsed.data.content,
       parsed.data.context,
+      {
+        attachmentIds: parsed.data.attachmentIds,
+        reference: parsed.data.reference,
+      },
     );
+  }
+
+  // Same as POST messages, but the reply streams in as it is written: `delta`
+  // events with text pieces, `status` while a tool runs, then one `done` with the
+  // saved message and the page events.
+  @Post(':id/messages/stream')
+  @UseGuards(TokensGuard)
+  async stream(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Res() res: Response,
+  ) {
+    const parsed = sendSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    res
+      .setHeader('Content-Type', 'text/event-stream')
+      .setHeader('Cache-Control', 'no-cache, no-transform')
+      .setHeader('X-Accel-Buffering', 'no')
+      .flushHeaders();
+    const emit = (event: string, data: unknown) =>
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    try {
+      const out = await this.threads.send(
+        req.userId,
+        id,
+        parsed.data.content,
+        parsed.data.context,
+        {
+          attachmentIds: parsed.data.attachmentIds,
+          reference: parsed.data.reference,
+          onDelta: (text) => emit('delta', { text }),
+          onStatus: (text) => emit('status', { text }),
+        },
+      );
+      emit('done', out);
+    } catch (e) {
+      emit('error', {
+        message: e instanceof Error ? e.message : 'Something went wrong',
+      });
+    }
+    res.end();
   }
 }

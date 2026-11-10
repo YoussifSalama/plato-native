@@ -1,39 +1,54 @@
 "use client"
 
-import { Breadcrumbs, PAGE } from "@/components/page-header"
+import { liveSource } from "@/lib/live-source"
+import { PAGE } from "@/components/page-header"
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
-import { ExternalLink, Loader2, MapPin, RotateCcw, Search, Trash2 } from "lucide-react"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
+import { ChevronRight, ExternalLink, Loader2, RotateCcw, Trash2 } from "lucide-react"
 import { cn } from "cn"
-import { applicationEventsUrl, getApplication, getApplicationResume, retryApplication, withdrawApplication, type AnswerValue, type ApplicationDetail, type ApplyEvent } from "@/lib/jobs/api"
-import { applicationReason, canRetry, failureLabel, isVerifySubmission, retryLabel, roughly, statusView, STATUS_STAGE, STEP_STAGE } from "@/lib/jobs/application-status"
-import { threadHref, timeAgo } from "@/lib/jobs/links"
-import { CompanyAvatar } from "@/components/company-avatar"
-import { OutcomePicker } from "@/components/outcome-picker"
+import { applicationEventsUrl, getApplication, retryApplication, withdrawApplication, type ApplicationDetail, type ApplyEvent } from "@/lib/jobs/api"
+import { applicationReason, canRetry, isVerifySubmission, retryLabel, roughly, statusView, STATUS_STAGE, STEP_STAGE } from "@/lib/jobs/application-status"
+import { timeAgo } from "@/lib/jobs/links"
+import { CARD, MonoTile, StatusPill, type Tone } from "@/components/plato-ui"
+import { OUTCOME_LABEL } from "@/components/outcome-picker"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { StageStepper } from "../../jobs/components/stage-stepper"
-import { ApplicationProof } from "../application-proof"
+import { DetailsCard, DOT, isExtension, JobCard, OutcomeCard, SentCard, StepsCard } from "./sections"
 import { ApplicationReview } from "../application-review"
 
-const showValue = (v: AnswerValue) => (typeof v === "boolean" ? (v ? "Yes" : "No") : Array.isArray(v) ? v.join(", ") : v)
-const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+// Status accent, aware of the "Please check" (VERIFY) case.
+const statusTone = (app: ApplicationDetail): Tone =>
+  isVerifySubmission(app) ? "warning" : ({ SUBMITTED: "success", FAILED: "danger", NEEDS_INPUT: "warning", NEEDS_USER_VERIFICATION: "warning", IN_PROGRESS: "info", EXTENSION_ACTIVE: "info" } as Partial<Record<ApplicationDetail["status"], Tone>>)[app.status] ?? "neutral"
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// The way back to the list (keeps its tab and filters). data-ai: the assistant clicks it.
+function Back({ href, current }: { href: string; current?: string }) {
   return (
-    <section className="rounded-lg border bg-card p-5">
-      <h2 className="mb-3 text-[11px] font-semibold tracking-[0.08em] text-text-tertiary uppercase">{title}</h2>
-      {children}
-    </section>
+    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 text-[11.5px] font-semibold tracking-[0.08em] uppercase">
+      <Link href={href} data-ai="application.back" className="shrink-0 text-primary transition-colors duration-200 hover:text-primary-hover hover:underline">
+        Applications
+      </Link>
+      {current && (
+        <>
+          <ChevronRight className="size-3 shrink-0 text-text-tertiary" aria-hidden />
+          <span className="min-w-0 truncate text-text-tertiary" aria-current="page">
+            {current}
+          </span>
+        </>
+      )}
+    </nav>
   )
 }
 
-// Everything about one application in one place: where it stands, why, what
-// Plato did step by step, what it sent, the proof, and what you can do next.
+// Everything about one application, most important first: where it stands and
+// the one thing to do next, how it got there, what was sent, the job itself,
+// then outcome tracking and the small print.
 export default function ApplicationPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  // The list's tab and filters (?from=tab%3Dneeds…), so "Applications" goes back to the same view.
+  const from = useSearchParams().get("from")
   const [app, setApp] = useState<ApplicationDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<"retry" | "withdraw" | null>(null)
@@ -51,15 +66,28 @@ export default function ApplicationPage() {
     void load()
     // Live: append this application's steps as they happen; refetch the row
     // whenever its status settles.
-    const source = new EventSource(applicationEventsUrl(), { withCredentials: true })
-    source.onmessage = (msg) => {
-      const event = JSON.parse(msg.data as string) as ApplyEvent
-      if (event.applicationId !== id) return
-      setApp((prev) => (prev ? { ...prev, status: event.status, events: event.step === "claimed" ? [event] : [...prev.events, event] } : prev))
-      if (event.status !== "IN_PROGRESS") void load()
-    }
-    return () => source.close()
+    return liveSource(
+      applicationEventsUrl(),
+      (msg) => {
+        const event = JSON.parse(msg.data as string) as ApplyEvent
+        if (event.applicationId !== id) return
+        setApp((prev) => (prev ? { ...prev, status: event.status, events: event.step === "claimed" ? [event] : [...prev.events, event] } : prev))
+        if (event.status !== "IN_PROGRESS") void load()
+      },
+      () => void load(),
+    )
   }, [id, load])
+
+  // The extension reports to the server, not to this stream: while it is working
+  // on this one in the browser, refresh now and then so new steps appear.
+  const extensionLive = app?.status === "EXTENSION_ACTIVE" && !isVerifySubmission(app)
+  useEffect(() => {
+    if (!extensionLive) return
+    const t = window.setInterval(() => void load(), 5000)
+    return () => window.clearInterval(t)
+  }, [extensionLive, load])
+
+  const listHref = from ? `/applications?${from}` : app?.thread_id ? `/applications?thread=${app.thread_id}` : "/applications"
 
   async function act(kind: "retry" | "withdraw") {
     setBusy(kind)
@@ -68,8 +96,9 @@ export default function ApplicationPage() {
       if (kind === "retry") setApp(await retryApplication(id))
       else {
         await withdrawApplication(id)
-        router.replace(app?.thread_id ? `/applications?thread=${app.thread_id}` : "/applications")
+        router.replace(listHref)
       }
+      window.dispatchEvent(new Event("plato:applications-changed"))
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong")
     } finally {
@@ -81,90 +110,116 @@ export default function ApplicationPage() {
   if (!app)
     return (
       <div className={PAGE}>
-        <Link href="/applications" data-ai="application.back" className="w-fit font-mono text-[11.5px] font-medium tracking-[0.06em] text-primary uppercase hover:underline">
-          Applications
-        </Link>
-        {error ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p> : <Skeleton className="h-40 w-full rounded-lg" />}
+        <Back href={listHref} />
+        {error ? (
+          <p className={cn(CARD, "p-4 text-sm text-destructive")}>{error}</p>
+        ) : (
+          <div aria-busy="true" className="flex flex-col gap-6">
+            <Skeleton className="h-44 w-full rounded-2xl" />
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+              <Skeleton className="h-72 rounded-2xl" />
+              <Skeleton className="h-56 rounded-2xl" />
+            </div>
+          </div>
+        )}
       </div>
     )
 
   const s = statusView(app)
+  const tone = statusTone(app)
   const last = app.events.at(-1)
-  const sent = app.evidence?.sent ?? []
+  const ext = isExtension(app)
+  const verify = isVerifySubmission(app)
+  const needsYou = app.status === "NEEDS_INPUT" || app.status === "NEEDS_USER_VERIFICATION"
   const atsSource = app.job.effective_ats_source ?? app.job.source
   const paused = app.worker.paused?.find((p) => p.source === atsSource)
   const retryable = canRetry(app)
   const canWithdraw = app.status !== "IN_PROGRESS" && app.status !== "SUBMITTED"
+  const posting = app.job.apply_url ?? app.job.url
+  const sent = app.status === "SUBMITTED" && !app.evidence?.dryRun
+  const terminal = app.status === "SUBMITTED" || app.status === "FAILED" || app.status === "EXPIRED" || app.status === "SKIPPED"
+  // Which screen this is, for the page tour (lib/tours.ts).
+  const screen = needsYou ? "needs" : verify ? "verify" : app.status === "SUBMITTED" ? "sent" : terminal ? "failed" : "progress"
+  const when = app.submitted_at ? `Sent ${timeAgo(app.submitted_at)}` : `Updated ${timeAgo(app.batch_item?.updated_at ?? app.updated_at)}`
+
+  // The one sentence that answers "what is going on with this one?"
+  const sentence =
+    app.status === "IN_PROGRESS" && last
+      ? last.message
+      : app.status === "QUEUED" && paused
+        ? `On hold until ${new Date(paused.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}: this site keeps asking "verify you are human", and Plato doesn't bypass that.`
+        : app.status === "QUEUED" && app.place
+          ? `#${app.place.position} in line, done in ${roughly(app.place.etaSeconds)}. Plato applies one at a time.`
+          : app.status === "QUEUED" && !app.worker.enabled
+            ? "Waiting: auto-apply is paused."
+            : sent && app.outcome
+              ? `Sent ${timeAgo(app.submitted_at ?? app.updated_at)}. You marked it: ${OUTCOME_LABEL[app.outcome]}.`
+              : applicationReason(app)
+
+  const primary = buttonVariants({ size: "sm" })
+  // The ONE next step for the seeker, if there is one.
+  const next = needsYou ? (
+    <a href="#review" className={primary}>
+      {app.status === "NEEDS_USER_VERIFICATION" ? "Complete the check" : "Answer what Plato needs"}
+    </a>
+  ) : verify ? (
+    <a href={posting} target="_blank" rel="noreferrer" className={primary}>
+      Check the employer&apos;s site <ExternalLink className="size-3.5" />
+    </a>
+  ) : retryable ? (
+    <Button data-ai="application.retry" size="sm" disabled={busy !== null} onClick={() => void act("retry")}>
+      {busy === "retry" ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
+      {retryLabel(app)}
+    </Button>
+  ) : sent && !app.outcome ? (
+    <a href="#outcome" className={primary}>
+      Heard back? Mark it
+    </a>
+  ) : null
 
   return (
-    <div className={PAGE}>
-      <Breadcrumbs crumbs={[{ label: "Applications", href: app.thread_id ? `/applications?thread=${app.thread_id}` : "/applications" }]} current={app.job.title} />
+    <div data-tour-state={`application.${screen}`} className={PAGE}>
+      <Back href={listHref} current={app.job.title} />
 
-      <header className="flex flex-col gap-4 rounded-lg border bg-card p-5">
-        <div className="flex flex-wrap items-start gap-4">
-          <CompanyAvatar name={app.job.company} size={52} />
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold text-foreground">{app.job.title}</h1>
-            <p className="text-sm text-text-secondary">{app.job.company}</p>
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-tertiary">
-              {app.job.location && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="size-3.5" />
-                  {app.job.location}
-                </span>
-              )}
-              <span>
-                {app.submitted_at ? `Applied ${timeAgo(app.submitted_at)}` : `Queued ${timeAgo(app.created_at)}`}
-                {app.attempts > 0 ? ` · ${app.attempts} attempt${app.attempts === 1 ? "" : "s"}` : ""}
-              </span>
-              {app.thread && (
-                <Link href={threadHref(app.thread.id)} className="flex items-center gap-1 text-primary hover:underline">
-                  <Search className="size-3.5" />
-                  {app.thread.title ?? "From search"}
-                </Link>
-              )}
+      {/* a. Where it stands, and the one thing to do next. */}
+      <header data-tour="application-hero" className={cn(CARD, "relative isolate flex flex-col gap-4 overflow-hidden p-5 pl-6 animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-both duration-500 sm:p-6 sm:pl-7 motion-reduce:animate-none")}>
+        {/* Section light: a faint amber glow top-right (Applications accent), calm enough to sit behind the status. */}
+        <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(55%_120%_at_100%_0%,color-mix(in_oklch,var(--azure)_8%,transparent),transparent_60%),radial-gradient(45%_90%_at_0%_100%,color-mix(in_oklch,var(--primary)_5%,transparent),transparent_65%)]" />
+        <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1", DOT[tone])} />
+        <div className="flex items-start gap-3.5">
+          <MonoTile name={app.job.company} className="hidden sm:flex" />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill tone={tone}>{s.label}</StatusPill>
+              <span className="type-meta text-text-tertiary">{when}</span>
+            </div>
+            <h1 className="type-section-title text-balance break-words text-foreground sm:type-page-title">{app.job.title}</h1>
+            <p className="text-sm text-text-secondary">
+              {app.job.company}
+              <span className="text-text-tertiary"> · {ext ? "Applied by the Plato extension" : "Applied by Plato"}</span>
             </p>
           </div>
-          <span className="flex shrink-0 flex-col items-end gap-1">
-            <span className={cn("rounded-full px-3 py-1.5 text-sm font-semibold", s.tone)}>{s.label}</span>
-            {app.failure_kind && app.status !== "SUBMITTED" && <span className="text-xs text-text-tertiary">{failureLabel(app.failure_kind)}</span>}
-          </span>
         </div>
 
-        {/* The one sentence that answers "what is going on with this one?" */}
-        <p className={cn("rounded-md p-3 text-sm", app.status === "FAILED" ? "bg-destructive/5 text-destructive" : "bg-muted text-foreground")}>
-          {app.status === "IN_PROGRESS" && last
-            ? last.message
-            : app.status === "QUEUED" && paused
-              ? `On hold until ${new Date(paused.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}: this site keeps asking "verify you are human", and Plato doesn't bypass that.`
-              : app.status === "QUEUED" && app.place
-                ? `#${app.place.position} in line, done in ${roughly(app.place.etaSeconds)}. Plato applies one at a time.`
-                : app.status === "QUEUED" && !app.worker.enabled
-                  ? "Waiting: auto-apply is paused."
-                  : applicationReason(app)}
-        </p>
-
+        <p data-tour="application-sentence" className="max-w-[70ch] text-[15px] leading-relaxed text-foreground">{sentence}</p>
         {app.evidence?.diagnosis && (
-          <p className="rounded-md border border-info/20 bg-info-soft/60 p-3 text-sm text-foreground">
-            <span className="font-semibold">What Plato worked out: </span>
+          <p className="max-w-[70ch] text-sm text-text-secondary">
+            <span className="font-semibold text-foreground">What Plato worked out: </span>
             {app.evidence.diagnosis}
             {app.evidence.repairs ? ` (${app.evidence.repairs} automatic fix${app.evidence.repairs === 1 ? "" : "es"} tried)` : ""}
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          {retryable && (
-            <Button data-ai="application.retry" size="sm" disabled={busy !== null} onClick={() => void act("retry")}>
-              {busy === "retry" ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
-              {retryLabel(app)}
-            </Button>
+        <div data-tour="application-actions" className="flex flex-wrap items-center gap-2">
+          {next}
+          {!verify && (
+            <a href={posting} target="_blank" rel="noreferrer" className={cn(buttonVariants({ size: "sm", variant: "outline" }), "group/link transition-colors duration-200 hover:border-primary-line hover:text-primary")}>
+              Open posting <ExternalLink className="size-3.5 transition-transform group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5" />
+            </a>
           )}
-          <a href={app.job.apply_url ?? app.job.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted">
-            Open posting <ExternalLink className="size-3.5" />
-          </a>
           {canWithdraw &&
             (confirmWithdraw ? (
-              <span className="ml-auto flex items-center gap-2 text-sm text-text-secondary">
+              <span className="flex flex-wrap items-center gap-2 text-sm text-text-secondary sm:ml-auto">
                 Remove it from Plato&apos;s list?
                 <Button size="sm" variant="destructive" disabled={busy !== null} onClick={() => void act("withdraw")}>
                   {busy === "withdraw" && <Loader2 className="size-3.5 animate-spin" />}
@@ -175,89 +230,40 @@ export default function ApplicationPage() {
                 </Button>
               </span>
             ) : (
-              <button type="button" data-ai="application.withdraw" onClick={() => setConfirmWithdraw(true)} className="ml-auto flex h-9 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-text-secondary hover:bg-muted hover:text-destructive">
+              <button type="button" data-ai="application.withdraw" onClick={() => setConfirmWithdraw(true)} className="ml-auto flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-text-secondary transition-colors duration-200 hover:bg-muted hover:text-destructive">
                 <Trash2 className="size-3.5" />
                 Remove
               </button>
             ))}
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {app.status === "SUBMITTED" && !app.evidence?.dryRun && (
-          <div className="border-t border-divider pt-4">
-            <OutcomePicker id={app.id} value={app.outcome ?? null} />
+
+        {!terminal && app.worker.sources.includes(atsSource) && (
+          <div data-tour="application-stepper" className="border-t border-divider pt-4">
+            <StageStepper current={last && app.status === "IN_PROGRESS" ? (STEP_STAGE[last.step] ?? STATUS_STAGE[app.status]) : STATUS_STAGE[app.status]} />
           </div>
         )}
       </header>
 
-      {app.status !== "SUBMITTED" && app.status !== "EXPIRED" && app.status !== "SKIPPED" && app.worker.sources.includes(atsSource) && (
-        <div className="rounded-lg border bg-card p-5">
-          <StageStepper current={last && app.status === "IN_PROGRESS" ? (STEP_STAGE[last.step] ?? STATUS_STAGE[app.status]) : STATUS_STAGE[app.status]} />
+      {needsYou && (
+        <div id="review" data-tour="application-review" className="scroll-mt-20">
+          <ApplicationReview app={app} live={app.verificationLive} onDone={() => void load().then(() => window.dispatchEvent(new Event("plato:applications-changed")))} />
         </div>
       )}
 
-      {isVerifySubmission(app) && <p className="rounded-lg border border-warning/40 bg-warning-soft p-4 text-sm text-warning">{applicationReason(app)}</p>}
-
-      {(app.status === "NEEDS_INPUT" || app.status === "NEEDS_USER_VERIFICATION") && <ApplicationReview app={app} live={app.verificationLive} onDone={() => void load()} />}
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <Section title="What happened, step by step">
-          {app.events.length === 0 ? (
-            <p className="text-sm text-text-secondary">{app.status === "QUEUED" ? "Plato hasn't started on this one yet." : "No steps were recorded for this attempt."}</p>
-          ) : (
-            <ol className="flex flex-col gap-2.5 border-l border-divider pl-4">
-              {app.events.map((e, i) => (
-                <li key={`${e.at}-${i}`} className="relative text-sm text-foreground">
-                  <span className={cn("absolute top-1.5 -left-[21px] size-2 rounded-full", e.step === "failed" ? "bg-destructive" : e.step === "submitted" ? "bg-success" : i === app.events.length - 1 ? "bg-primary" : "bg-lavender/60")} />
-                  {e.message}
-                  <span className="ml-2 text-xs text-text-tertiary">{clock(e.at)}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Section>
-
-        <Section title={app.status === "SUBMITTED" && !app.evidence?.dryRun ? "What Plato sent" : "What Plato prepared"}>
-          {sent.length === 0 ? (
-            <p className="text-sm text-text-secondary">{app.evidence?.manual ? "You submitted this one yourself." : "Plato didn't get as far as preparing answers."}</p>
-          ) : (
-            <dl className="flex flex-col gap-3">
-              {sent.map((row, i) => (
-                <div key={i}>
-                  <dt className="text-xs text-text-tertiary">{row.label}</dt>
-                  <dd className="text-sm whitespace-pre-line text-foreground">{showValue(row.value)}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-        </Section>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+        {/* b–c. How it got here, and what was sent. */}
+        <div className="flex min-w-0 flex-col gap-6">
+          <StepsCard app={app} />
+          <SentCard app={app} />
+        </div>
+        {/* d–e. The job, outcome tracking, the small print. */}
+        <aside className="flex min-w-0 flex-col gap-6">
+          <JobCard app={app} />
+          <OutcomeCard app={app} onChange={(outcome) => setApp((prev) => (prev ? { ...prev, outcome } : prev))} />
+          <DetailsCard app={app} />
+        </aside>
       </div>
-
-      {app.resume_key && (
-        <div className="rounded-lg border bg-card p-5">
-          <Button variant="outline" size="sm" onClick={() => void getApplicationResume(app.id).then((url) => window.open(url, "_blank"))}>
-            View the resume Plato wrote for this job
-          </Button>
-          {app.resume_strategy && (
-            <ul className="mt-3 list-disc pl-4 text-xs text-text-secondary">
-              {app.resume_strategy.reasons.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-              {app.resume_strategy.checks.filter((c) => !c.ok).map((c) => (
-                <li key={c.name} className="text-destructive">
-                  Check failed: {c.name}
-                  {c.detail ? ` (${c.detail})` : ""}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {app.evidence?.screenshotKey && (
-        <div className="rounded-lg border bg-card p-5">
-          <ApplicationProof applicationId={app.id} kind={app.evidence.failed ? "failed" : app.evidence.dryRun ? "dryRun" : "submitted"} fileName={`plato-application-${app.job.company.replace(/\W+/g, "-").toLowerCase()}.png`} />
-        </div>
-      )}
     </div>
   )
 }

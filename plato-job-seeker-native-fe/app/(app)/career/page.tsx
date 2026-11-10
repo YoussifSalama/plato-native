@@ -1,247 +1,250 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { BarChart3, Check, ClipboardCheck, ChevronLeft, ChevronRight, FileText, Languages, LayoutTemplate, Lightbulb, Mic, Search, type LucideIcon } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Activity as ActivityIcon, ArrowRight, BadgeCheck, CalendarClock, Compass, Hammer, History, LayoutTemplate, MessageCircle, Mic, Sparkles, TrendingUp, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { PAGE, PageHeader } from "@/components/page-header"
-import { StatusPill } from "@/components/plato-ui"
-import { BAND_LABEL, getResumeScore, listCareerResumes, type ResumeScore, listCareerThreads, type CareerThreadSummary } from "@/lib/career/api"
-import { listInterviews, type InterviewSummary } from "@/lib/interviews/api"
+import { CARD, EmptyState, StatTile, StatusPill } from "@/components/plato-ui"
+import { Skeleton } from "@/components/ui/skeleton"
+import { CareerNav } from "@/components/career-nav"
+import { InfoTip } from "@/components/info-tip"
+import { ActivityRow, CareerGlow, DIMENSION_INFO, DeviceNote, IconTile, LoadError, Meter, OUTLINE_CTA, PartialNote, RecommendationCard, ScoreRing, Section } from "@/components/career-hub"
+import { STAGES, STAGE_HINT, useSnapshot, type CareerData, type Snapshot } from "@/lib/career-hub/snapshot"
 import { timeAgo } from "@/lib/jobs/links"
-import { getMatches, type JobMatch } from "@/lib/jobs/api"
-import { getProfile } from "@/lib/documents/api"
-import { getPreferences } from "@/lib/preferences/api"
-import { getSkillGap, type SkillGap } from "@/lib/skills/api"
-import { CareerChat } from "./career-chat"
+import { openCoach } from "@/components/coach-assistant"
 
-// Career (screen 11): a catalog of tests and practice, your readiness for the role you want,
-// and what to do next. Every card starts the practice in the career coach chat.
-type Cat = "All" | "Interviews" | "Aptitude" | "Skills" | "Language" | "Resume"
-type Practice = { cat: Exclude<Cat, "All">; title: string; body: string; meta: string; icon: LucideIcon; prompt?: string; href?: string }
-const CATALOG: Practice[] = [
-  { cat: "Interviews", title: "Behavioral interview (STAR)", body: "Common “tell me about a time” questions, scored", meta: "20 min · All levels", icon: Mic, prompt: "Give me a behavioral mock interview with STAR questions and score each answer" },
-  { cat: "Interviews", title: "Technical interview for my role", body: "Questions on the tools and projects in your CV", meta: "25 min · Your level", icon: Mic, prompt: "Give me a technical mock interview for the role I'm targeting" },
-  { cat: "Interviews", title: "Client demo pitch", body: "Pitch a solution to a skeptical client, then get scored", meta: "15 min · Senior", icon: Mic, prompt: "Role-play a skeptical client and let me pitch a solution demo for my target role, then score my pitch" },
-  { cat: "Interviews", title: "Case interview: market sizing", body: "Estimate a market out loud; Plato scores your structure", meta: "30 min · Medium", icon: Mic, prompt: "Give me a market sizing case interview and score my structure" },
-  { cat: "Interviews", title: "Case interview: profitability", body: "Find why profits fell, with a structure", meta: "30 min · Hard", icon: Mic, prompt: "Give me a profitability case interview" },
-  { cat: "Interviews", title: "Voice mock interview", body: "Talk it through out loud, like the real thing", meta: "20 min · All levels", icon: Mic, href: "/career/interviews" },
-  { cat: "Interviews", title: "Salary negotiation role-play", body: "Practice asking for more against a tough recruiter", meta: "10 min · All levels", icon: Mic, prompt: "Role-play a salary negotiation with me as a tough recruiter" },
-  { cat: "Aptitude", title: "Numerical reasoning", body: "Timed questions, used by many consulting firms", meta: "18 min · Medium", icon: BarChart3, prompt: "Give me a numerical reasoning practice test, one question at a time" },
-  { cat: "Aptitude", title: "Logical reasoning", body: "Patterns and deductions, one question at a time", meta: "15 min · Medium", icon: BarChart3, prompt: "Give me a logical reasoning practice test, one question at a time" },
-  { cat: "Skills", title: "Close a skill gap", body: "Skills your matches ask for that aren't on your CV", meta: "Your matches", icon: Lightbulb, href: "/career/skills" },
-  { cat: "Language", title: "Business English", body: "Writing and speaking for interviews, scored", meta: "20 min · All levels", icon: Languages, prompt: "Practice business English with me for job interviews and score me" },
-  { cat: "Resume", title: "Resume score", body: "See what to fix before Plato applies", meta: "3 min", icon: FileText, prompt: "Score my resume out of 100 and list the quick fixes" },
-  { cat: "Resume", title: "Build my resume", body: "From your profile, ready as a PDF", meta: "5 min", icon: FileText, prompt: "Build my resume" },
-  { cat: "Resume", title: "Tailor to a job", body: "Paste a posting, get a resume that matches it", meta: "5 min", icon: LayoutTemplate, prompt: "Tailor my resume to a job. I'll paste the posting." },
-]
-const PAGE_SIZE = 6
-// "Add a number to more bullets (users, …): 38% have one" → "add a number to more bullets".
-const shortFix = (t: string) => t.split(/[:(]/)[0].replace(/\.$/, "").trim().replace(/^./, (c) => c.toLowerCase())
-const startHref = (p: Practice) => p.href ?? `/career?prompt=${encodeURIComponent(p.prompt ?? p.title)}`
+// Career overview: where am I, what next, and what I was doing, in that order and nothing more.
+// Every part of Career is one click away in the CareerNav under the header; the full practice
+// catalog lives in its own tab (/career/library). With ?prompt|job|thread|chat it is the coach chat.
+const firstName = (full?: string) => {
+  const f = full?.trim().split(/\s+/)[0]
+  return f ? f[0].toUpperCase() + f.slice(1).toLowerCase() : ""
+}
 
 function CareerHome() {
-  const [cat, setCat] = useState<Cat>("All")
-  const [q, setQ] = useState("")
-  const [page, setPage] = useState(0)
-  const [role, setRole] = useState<string | null>(null)
-  const [resumes, setResumes] = useState<{ approved: boolean }[] | null>(null)
-  const [interviews, setInterviews] = useState<InterviewSummary[] | null>(null)
-  const [gaps, setGaps] = useState<SkillGap[] | null>(null)
-  const [threads, setThreads] = useState<CareerThreadSummary[] | null>(null)
-  // The master resume's score (fixed rules on the server) and what would raise it.
-  const [score, setScore] = useState<ResumeScore | null>(null)
-  const [skills, setSkills] = useState<string[]>([])
-  // The best match right now: the mock interview is built from its job post.
-  const [top, setTop] = useState<JobMatch | null>(null)
-
-  useEffect(() => {
-    getPreferences()
-      .then((p) => setRole(p.roles[0] ?? null))
-      .catch(() => undefined)
-    listCareerResumes()
-      .then(setResumes)
-      .catch(() => setResumes([]))
-    listInterviews()
-      .then(setInterviews)
-      .catch(() => setInterviews([]))
-    getSkillGap()
-      .then((g) => setGaps(g.skills))
-      .catch(() => setGaps([]))
-    listCareerThreads()
-      .then(setThreads)
-      .catch(() => setThreads([]))
-    getResumeScore()
-      .then(setScore)
-      .catch(() => setScore(null))
-    getProfile()
-      .then((p) => setSkills(p.skills ?? []))
-      .catch(() => setSkills([]))
-    getMatches({ tab: "discover", sort: "best", take: 1 })
-      .then((r) => setTop(r.items[0] ?? null))
-      .catch(() => setTop(null))
-  }, [])
-
-  // The technical interview is named after their strongest skills, as on the owner's screen.
-  const catalog = useMemo(() => CATALOG.map((p) => (p.title === "Technical interview for my role" && skills.length ? { ...p, title: `Technical interview: ${(skills.filter((x) => x.length <= 12).length >= 2 ? skills.filter((x) => x.length <= 12) : skills).slice(0, 2).join(" & ")}` } : p)), [skills])
-  // Aptitude and English count as started once a career conversation practised them.
-  const practised = (re: RegExp) => !!threads?.some((t) => re.test(t.title ?? ""))
-  const aptitude = practised(/reasoning|aptitude/i)
-  const english = practised(/english/i)
-  const list = useMemo(() => catalog.filter((p) => (cat === "All" || p.cat === cat) && (!q.trim() || `${p.title} ${p.body}`.toLowerCase().includes(q.trim().toLowerCase()))), [catalog, cat, q])
-  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
-  const shown = list.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
-  const done = interviews?.filter((i) => i.completedAt).length ?? 0
-  const open = interviews?.filter((i) => !i.completedAt) ?? []
-
+  const { data, snap, error, partial, reload } = useSnapshot()
   return (
     <div className={PAGE}>
-      <PageHeader title="Career" description="Tests, practice and new skills that get you ready for the jobs you're applying to." actions={<span className="text-text-secondary"><b className="text-foreground">{CATALOG.length + (gaps?.length ?? 0)}</b> tests and practice sessions</span>} />
+      <PageHeader
+        title="Career"
+        description="Where you stand, what to improve next, and practice that gets you ready for the jobs you want."
+        actions={
+          <Link href="/career?chat=new" data-ai="career.coach" className={cn(OUTLINE_CTA, "h-10 rounded-xl px-3.5")}>
+            <MessageCircle className="size-4 text-primary" />
+            Ask your coach
+          </Link>
+        }
+      />
+      <CareerNav />
+      {partial && data && <PartialNote missing={data.failed} onRetry={reload} />}
+      {error ? <LoadError onRetry={reload} /> : !data || !snap ? <HubSkeleton /> : <Hub data={data} snap={snap} />}
+    </div>
+  )
+}
 
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_350px]">
-        <section className="flex min-w-0 flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-bold tracking-tight">All tests and practice</h2>
-            <label className="surface-panel flex h-10 w-full max-w-[260px] items-center gap-2 rounded-xl px-3">
-              <Search className="size-4 text-text-tertiary" />
-              <span className="sr-only">Search tests</span>
-              <input value={q} onChange={(e) => (setQ(e.target.value), setPage(0))} placeholder="Search tests" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-text-tertiary" />
-            </label>
-          </div>
-          <div role="tablist" aria-label="Category" className="flex flex-wrap gap-2">
-            {(["All", "Interviews", "Aptitude", "Skills", "Language", "Resume"] as Cat[]).map((c) => (
-              <button key={c} type="button" role="tab" aria-selected={cat === c} onClick={() => (setCat(c), setPage(0))} className={cn("rounded-full border px-4 py-1.5 text-sm font-medium transition-colors", cat === c ? "border-primary bg-primary text-white" : "bg-card text-foreground hover:border-primary-line")}>
-                {c}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {shown.map((p) => (
-              <div key={p.title} className="flex min-w-0 flex-col gap-1.5 rounded-2xl border bg-card p-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="flex size-9 items-center justify-center rounded-[10px] bg-primary-soft text-primary">
-                    <p.icon className="size-[18px]" />
-                  </span>
-                  <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-text-secondary">{p.cat}</span>
-                </div>
-                <b className="line-clamp-2 min-h-[2.6em] text-[15px] leading-snug">{p.title}</b>
-                <span className="line-clamp-1 text-[13px] text-text-secondary">{p.body}</span>
-                <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-                  <span className="truncate text-[12.5px] font-medium text-text-secondary">{p.meta}</span>
-                  <Link href={startHref(p)} data-ai={`career.start:${p.title}`} className="shrink-0 rounded-lg border bg-card px-2.5 py-1.5 text-[13.5px] font-semibold hover:border-primary-line">
-                    Start
-                  </Link>
-                </div>
-              </div>
-            ))}
-            {shown.length === 0 && <p className="text-sm text-text-secondary">Nothing matches that search.</p>}
-          </div>
-          <div className="flex items-center justify-between text-[13px] text-text-tertiary">
-            <span>
-              Showing {list.length ? page * PAGE_SIZE + 1 : 0}–{page * PAGE_SIZE + shown.length} of {list.length}
-            </span>
-            <span className="flex items-center gap-2">
-              <button type="button" aria-label="Previous page" disabled={page === 0} onClick={() => setPage((n) => n - 1)} className="flex size-8 items-center justify-center rounded-lg border bg-card disabled:opacity-40">
-                <ChevronLeft className="size-4" />
-              </button>
-              <span className="tabular-nums">
-                {page + 1} of {pages}
-              </span>
-              <button type="button" aria-label="Next page" disabled={page >= pages - 1} onClick={() => setPage((n) => n + 1)} className="flex size-8 items-center justify-center rounded-lg border bg-card disabled:opacity-40">
-                <ChevronRight className="size-4" />
-              </button>
-            </span>
-          </div>
-        </section>
-
-        <aside className="flex flex-col gap-5">
-          <div className="flex flex-col gap-2.5 rounded-2xl border bg-card p-4">
-            <p className="eyebrow">Your readiness for</p>
-            <b className="-mt-1.5 text-base">{role ? `${role} roles` : "the roles you want"}</b>
-            <div className="flex flex-wrap gap-2">
-              {score ? (
-                <StatusPill tone={score.score >= 75 ? "success" : score.score >= 60 ? "warning" : "danger"}>
-                  {score.score >= 75 && <Check className="size-3.5" />}
-                  Resume {score.score}/100
-                </StatusPill>
-              ) : resumes?.some((r) => r.approved) ? (
-                <StatusPill tone="success">
-                  <Check className="size-3.5" />
-                  Resume ready
-                </StatusPill>
-              ) : resumes !== null ? (
-                <StatusPill tone="neutral">Resume · not built</StatusPill>
-              ) : null}
-              {interviews !== null && <StatusPill tone={done ? "primary" : "neutral"}>{done ? `Interview practice ${Math.min(done, 3)} of 3` : "Interview practice · not started"}</StatusPill>}
-              {threads !== null && <StatusPill tone={aptitude ? "primary" : "neutral"}>{aptitude ? "Aptitude · practised" : "Aptitude · not started"}</StatusPill>}
-              {threads !== null && <StatusPill tone={english ? "primary" : "neutral"}>{english ? "English · practised" : "English · not started"}</StatusPill>}
-              {!!gaps?.length && <StatusPill tone="warning">{`${gaps.length} skill gap${gaps.length === 1 ? "" : "s"}`}</StatusPill>}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            <h2 className="text-xl font-bold tracking-tight">Recommended for you</h2>
-            {gaps?.[0] && (
-              <Row icon={Lightbulb} title={`Learn ${gaps[0].skill}`} sub={`${gaps[0].missingIn} of your matches ask for it`} href="/career/skills" primary />
-            )}
-            {top ? (
-              <Row icon={Mic} title={`Mock interview: ${top.job.company} ${top.job.title}`} sub="Voice · 20 min · built from the job post and your CV" href={`/career?job=${top.job.id}&jt=${encodeURIComponent(top.job.title)}&jc=${encodeURIComponent(top.job.company)}`} primary={!gaps?.[0]} />
-            ) : (
-              <Row icon={Mic} title={role ? `Mock interview: ${role}` : "Mock interview"} sub="Voice · 20 min · built from your target role" href="/career/interviews" primary={!gaps?.[0]} />
-            )}
-            {threads !== null && !aptitude && <Row icon={BarChart3} title="Numerical reasoning" sub="Timed · 18 min · used by many consulting firms" href={`/career?prompt=${encodeURIComponent("Give me a numerical reasoning practice test, one question at a time")}`} />}
-            {!resumes?.length && <Row icon={FileText} title="Build my resume" sub="From your profile, ready as a PDF" href={`/career?prompt=${encodeURIComponent("Build my resume")}`} />}
-          </div>
-
-          {(open.length > 0 || !!threads?.length || !!score) && (
-            <div className="flex flex-col gap-2.5">
-              <h2 className="text-xl font-bold tracking-tight">Continue where you left off</h2>
-              {open.slice(0, 1).map((i) => (
-                <Row key={i.id} icon={Mic} title={`Interview: ${i.jobTitle}`} sub={`${i.company} · not finished`} href={`/career/interviews/${i.id}`} action="Resume" />
-              ))}
-              {threads?.slice(0, 2).map((t) => (
-                <Row key={t.id} icon={LayoutTemplate} title={t.title ?? "Career conversation"} sub={`Last active ${timeAgo(t.updated_at)}`} href={`/career?thread=${t.id}`} action="Resume" />
-              ))}
-              {score && (
-                <Row
-                  icon={ClipboardCheck}
-                  title={`Resume score · ${score.score}/100`}
-                  sub={score.topFixes.length ? `${score.topFixes.length} quick fix${score.topFixes.length === 1 ? "" : "es"} left: ${shortFix(score.topFixes[0])}` : `${BAND_LABEL[score.band]}. Nothing quick left to fix.`}
-                  href={`/career?prompt=${encodeURIComponent(score.topFixes.length ? `Help me raise my resume score. Start with: ${score.topFixes[0]}` : "Score my resume")}`}
-                  action={score.topFixes.length ? "Fix" : "Open"}
-                />
-              )}
-            </div>
-          )}
-        </aside>
+function HubSkeleton() {
+  return (
+    <div className="flex flex-col gap-6" aria-busy="true" aria-label="Loading your career overview">
+      <Skeleton className="h-60 rounded-2xl" />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <Skeleton className="h-44 rounded-2xl" />
+        <Skeleton className="h-44 rounded-2xl" />
+        <Skeleton className="h-44 rounded-2xl" />
       </div>
     </div>
   )
 }
 
-function Row({ icon: Icon, title, sub, href, primary, action = "Start" }: { icon: LucideIcon; title: string; sub: string; href: string; primary?: boolean; action?: string }) {
+function Hub({ data, snap }: { data: CareerData; snap: Snapshot }) {
+  const name = firstName(data.name)
+  const own = snap.skills.filter((s) => s.status !== "gap")
+  const proven = own.filter((s) => s.status === "proven").length
+  const continueRows = [
+    ...snap.continueItems.slice(0, 3).map((c) => ({ id: c.id, icon: c.href.startsWith("/career/interviews") ? Mic : Hammer, title: c.title, sub: c.sub, href: c.href })),
+    ...data.threads.slice(0, 2).map((t) => ({ id: t.id, icon: LayoutTemplate, title: t.title ?? "Career conversation", sub: `Coach chat · last active ${timeAgo(t.updated_at)}`, href: `/career?thread=${t.id}` })),
+  ]
   return (
-    <div className="flex items-center gap-3 rounded-2xl border bg-card px-3.5 py-3">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-primary-soft text-primary">
-        <Icon className="size-[18px]" />
-      </span>
+    <>
+      {/* 1. Where am I: stage, readiness and the four dimensions, with what Plato knows beside it. */}
+      <section data-tour="career-overview" data-tour-state={snap.history.length ? "career.results" : "career.new"} aria-label="Career development overview" className={cn(CARD, "relative isolate grid grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_320px]")}>
+        <CareerGlow />
+        <div className="flex min-w-0 flex-col gap-5 p-5 sm:p-6">
+          <div className="flex flex-wrap items-center gap-5">
+            <div className="min-w-0 flex-1 basis-[260px]">
+              <p className="eyebrow">Your career development</p>
+              <h2 className="mt-1 text-[22px] leading-tight font-extrabold tracking-tight text-balance">
+                {name ? `${name}, you're at ` : "You're at "}
+                <span className="text-primary">{STAGES[snap.stage]}</span>{" "}
+                <InfoTip text="Your stage follows your scores: Get started until your first scored activity, then Build evidence while readiness is under 55, Practise interviews under 75, and Stand out from 75." label="How your stage is set" />
+              </h2>
+              <p className="mt-1.5 text-sm text-text-secondary">{STAGE_HINT[snap.stage]}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <ScoreRing value={snap.readiness} size={84} />
+              <span className="max-w-[140px] text-[13px] leading-snug text-text-secondary">
+                Readiness for <b className="text-foreground">{data.role ? `${data.role} roles` : "the roles you want"}</b>{" "}
+                <InfoTip text="A 0–100 estimate of how ready you look to employers for this role: your resume score, interview practice, skills you've proven and your work samples. It rises as you complete the steps below." label="What readiness means" />
+              </span>
+            </div>
+          </div>
+          <ol className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4" aria-label="Your journey">
+            {STAGES.map((s, i) => (
+              <li key={s} aria-current={i === snap.stage ? "step" : undefined} className="flex min-w-0 flex-col gap-1.5 text-[13px]">
+                <span className={cn("h-1.5 rounded-full", i < snap.stage ? "bg-primary" : i === snap.stage ? "bg-primary/60" : "bg-divider")} />
+                <span className={cn("truncate font-semibold", i === snap.stage ? "text-primary" : i < snap.stage ? "text-foreground" : "text-text-tertiary")}>
+                  {i + 1}. {s}
+                </span>
+              </li>
+            ))}
+          </ol>
+          <div data-tour="career-dimensions" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {snap.dimensions.map((d) => (
+              <Meter key={d.key} label={d.label} value={d.value} hint={d.hint} href={d.href} info={DIMENSION_INFO[d.key]} tone />
+            ))}
+          </div>
+        </div>
+
+        <div data-tour="career-snapshot" aria-label="Profile snapshot" className="flex min-w-0 flex-col gap-3 border-t border-divider bg-card/60 p-5 lg:border-t-0 lg:border-l">
+          <div className="flex items-center justify-between gap-2">
+            <p className="eyebrow">Profile snapshot</p>
+            <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <span>
+                <b className="text-success-ink tabular-nums">{proven}</b> proven · <b className="tabular-nums text-foreground">{own.length - proven}</b> to prove
+              </span>
+              <InfoTip text="Proven: your latest assessment or challenge score is 65 or more, or you have a verified certificate. Unproven skills are on your CV with no score yet; a Gap is a skill your matches ask for that your CV doesn't show." label="What proven and unproven mean" />
+            </span>
+          </div>
+          <ul className="flex flex-col gap-2.5">
+            {snap.skills.slice(0, 5).map((s) => (
+              <li key={s.key}>
+                {s.level !== null ? (
+                  <Meter label={s.name} value={s.level} tone />
+                ) : (
+                  <span className="flex items-center justify-between gap-2 text-[13.5px]">
+                    <b className="min-w-0 truncate">{s.name}</b>
+                    <StatusPill tone={s.status === "gap" ? "warning" : "neutral"}>{s.status === "gap" ? "Gap" : "Unproven"}</StatusPill>
+                  </span>
+                )}
+              </li>
+            ))}
+            {!snap.skills.length && <li className="text-sm text-text-secondary">Add skills to your profile so Plato can assess them.</li>}
+          </ul>
+          <Link href="/career/snapshot" data-ai="career.snapshot" className="group mt-auto inline-flex items-center gap-1 text-[13px] font-semibold text-primary transition-colors duration-200 hover:text-primary-hover">
+            Full snapshot
+            <ArrowRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
+          </Link>
+        </div>
+      </section>
+
+      {/* 2. What next: three steps ranked by impact; the first is the one solid action. */}
+      {snap.recommendations.length > 0 && (
+        <Section
+          title={
+            <span className="inline-flex items-center gap-1.5">
+              Recommended next
+            </span>
+          }
+          icon={Compass} tour="career-recommendations" action={
+            <span className="type-meta flex items-center gap-1.5 text-text-secondary">
+              Ranked by how much each raises your readiness
+              <InfoTip text="High impact: your first interview, scoring a CV skill that has no level yet, a skill your matches ask for, or rehearsing your best match once you've practised. Retakes, resume fixes and extra practice are Medium." label="What impact means" />
+            </span>
+          }>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {snap.recommendations.slice(0, 3).map((r, i) => (
+              <RecommendationCard key={r.id} r={r} index={i} primary={i === 0} />
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* 3. Continue | Recent results */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        <Section title="Continue where you left off" icon={History} tour="career-continue">
+          <div className={cn(CARD, "p-2")}>
+            {continueRows.length ? (
+              continueRows.map((c) => <ContinueRow key={c.id} {...c} />)
+            ) : (
+              <EmptyState icon={CalendarClock} className="m-2 border-none" title="Nothing in progress" hint="Unfinished interviews, proof drafts and coach chats wait here for you." />
+            )}
+          </div>
+        </Section>
+
+        <Section
+          title={
+            <span className="inline-flex items-center gap-1.5">
+              Recent results
+              <InfoTip text="Scored counts every finished assessment, interview and challenge. Skills improved counts skills whose latest score beats the first time you measured them." label="What these numbers mean" />
+            </span>
+          }
+          icon={TrendingUp}
+          tour="career-results"
+          action={
+            snap.history.length > 0 ? (
+              <Link href="/career/snapshot#history" data-ai="career.results.all" className="group inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:text-primary-hover">
+                All results
+                <ArrowRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
+              </Link>
+            ) : undefined
+          }
+        >
+          <div className="grid grid-cols-3 gap-2">
+            <StatTile value={snap.activities} label="Scored" icon={ActivityIcon} accent="cobalt" index={0} className="min-w-0 px-3" />
+            <StatTile value={snap.recent30} label="Last 30 days" icon={CalendarClock} accent="azure" index={1} className="min-w-0 px-3" />
+            <StatTile value={snap.improvements.length} label="Skills improved" icon={BadgeCheck} accent="cobalt" index={2} className="min-w-0 px-3" />
+          </div>
+          <div className={cn(CARD, "p-2")}>
+            {snap.history.length ? (
+              [...snap.history].reverse().slice(0, 5).map((a) => <ActivityRow key={a.id} a={a} />)
+            ) : (
+              <EmptyState icon={Sparkles} className="m-2 border-none" title="No results yet" hint="Scores and reports show up here after your first assessment, interview or challenge." />
+            )}
+          </div>
+          <DeviceNote />
+        </Section>
+      </div>
+    </>
+  )
+}
+
+function ContinueRow({ icon, title, sub, href }: { icon: LucideIcon; title: string; sub: string; href: string }) {
+  return (
+    <Link href={href} className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors duration-200 hover:bg-muted/60">
+      <IconTile icon={icon} accent="cobalt" />
       <span className="min-w-0 flex-1">
         <b className="block truncate text-[14.5px]">{title}</b>
         <span className="block truncate text-xs text-text-secondary">{sub}</span>
       </span>
-      <Link href={href} className={cn("shrink-0 rounded-lg border px-3 py-1.5 text-sm font-semibold", primary ? "border-primary bg-primary text-white" : "bg-card hover:border-primary-line")}>
-        {action}
-      </Link>
-    </div>
+      <span className="shrink-0 text-[13px] font-semibold text-primary">Resume</span>
+      <ArrowRight className="size-4 shrink-0 text-text-tertiary transition-[transform,color] duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
+    </Link>
   )
 }
 
-// The chat opens when something was started (?prompt, ?job, ?thread, ?chat); otherwise the catalog.
+// The chat opens when something was started (?prompt, ?job, ?thread, ?chat); otherwise the hub.
+// The coach lives in the side panel now. Old coach links (/career?prompt=…, ?job=…, ?thread=…, ?chat=new),
+// from the command palette, job cards, the Plato AI agent and other pages, still work: they open the
+// coach panel with the same request and the address is cleaned back to /career.
 function CareerPageContent() {
   const params = useSearchParams()
-  const chat = ["prompt", "job", "thread", "chat"].some((k) => params.has(k))
-  return chat ? <CareerChat /> : <CareerHome />
+  const router = useRouter()
+  useEffect(() => {
+    const prompt = params.get("prompt")
+    const job = params.get("job")
+    const thread = params.get("thread")
+    const chat = params.get("chat")
+    if (!prompt && !job && !thread && !chat) return
+    openCoach({
+      ...(prompt && { prompt, newConversation: true }),
+      ...(job && { jobRef: { jobId: job, searchId: params.get("search"), title: params.get("jt") ?? "This job", company: params.get("jc") ?? "" } }),
+      ...(thread && { threadId: thread }),
+      ...(chat && !prompt && !thread && { newConversation: true }),
+    })
+    router.replace("/career", { scroll: false })
+  }, [params, router])
+  return <CareerHome />
 }
 
 export default function CareerPage() {
@@ -251,3 +254,4 @@ export default function CareerPage() {
     </Suspense>
   )
 }
+

@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Plus, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import {
   createThread,
   getRun,
@@ -21,6 +22,7 @@ import {
   type OrchestratorEvent,
   type ThreadMessage,
   type UiCommand,
+  type ChatUiContext,
 } from "@/lib/jobs/api"
 import { JOBS_HOME, PAGE_PATH, threadHref } from "@/lib/jobs/links"
 import { getMe, type AuthUser } from "@/lib/auth/api"
@@ -29,17 +31,16 @@ import type { Preferences } from "@/lib/preferences/schema"
 import { ChatHero } from "../components/chat-hero"
 import { buildPageMap, needsMore, runPageEvent, settle } from "@/lib/page-map"
 import { cursorTo } from "@/components/agent-cursor"
-import { PlatoDock } from "../components/plato-dock"
+import { setSearchHost, type SearchHost } from "@/lib/assistant/search-host"
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
 // The live journey pulls in the flow-diagram library; load it only when a search is running.
-const SearchingView = dynamic(() => import("../components/searching-view").then((m) => m.SearchingView), { loading: () => <Skeleton className="h-[560px] w-full rounded-xl" /> })
+const SearchingView = dynamic(() => import("../components/searching-view").then((m) => m.SearchingView), { loading: () => <Skeleton className="h-[560px] w-full rounded-2xl" /> })
 import { useJourneyLog } from "../components/journey/use-journey-log"
 import { ResultsView } from "../components/results-view"
 import { PillTabs } from "@/components/pill-tabs"
+import { InfoTip } from "@/components/info-tip"
 
-const RESULTS_PROMPTS = ["Which of these fit me best?", "Find remote jobs", "Show me more options"]
-const SEARCHING_PROMPTS = ["How far along is it?", "Why is it taking long?", "What are you searching for?"]
 const TABS: { key: MatchTab; label: string }[] = [
   { key: "discover", label: "Discover" },
   { key: "saved", label: "Saved" },
@@ -175,6 +176,8 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
     if (view === "results" && !tabParam) setTab("discover")
   }, [view, tabParam, setTab])
   const messages = thread?.messages ?? []
+  // Which screen the page tour explains: the first chat, the chat under way, the live search, or the results (by tab, or failed).
+  const screen = !thread ? undefined : view === "chat" ? (messages.some((m) => m.role === "USER") ? "search.chat" : "search.start") : view === "searching" ? "search.running" : run?.status === "FAILED" ? "search.failed" : tab === "discover" ? "search.results" : `search.${tab}`
   const journey = useJourneyLog(view === "searching" ? progress : null, run?.query)
 
   // What the assistant asked the app to do. Navigation first; list commands wait for the results view.
@@ -198,6 +201,59 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
     }
   }
 
+  // What the results list shows right now, for the assistant.
+  function uiContext(): ChatUiContext {
+    return {
+      view,
+      tab: view === "results" ? tab : undefined,
+      q: view === "results" && q ? q : undefined,
+      ...(view === "results" &&
+        onScreen.current && {
+          visible: onScreen.current.items.slice(0, 10).map((m) => ({
+            title: m.job.title,
+            company: m.job.company,
+            location: m.job.location,
+            remote: m.job.remote_type,
+          })),
+          filters: Object.fromEntries(Object.entries(onScreen.current.filters).filter(([, v]) => v !== undefined && v !== false)) as Record<string, string | number | boolean>,
+          sort: onScreen.current.sort,
+        }),
+    }
+  }
+
+  async function adoptStarted(events: OrchestratorEvent[]) {
+    const started = events.find((e) => e.type === "search_started")
+    if (!started) return
+    const r = await getRun(started.runId)
+    setJourneyDone(false)
+    setRun(r)
+    setProgress(r.progress)
+  }
+
+  // The one Plato AI panel (components/global-assistant.tsx) works in this search's thread while
+  // the page is open: it reads the list from here and hands the list commands back.
+  const host = useRef<SearchHost | null>(null)
+  useEffect(() => {
+    host.current = thread
+    ? {
+        threadId: thread.id,
+        view,
+        context: uiContext,
+        act: async (events) => {
+          await runAssistantActions(events)
+          await adoptStarted(events)
+        },
+        refresh: () => void getThread(thread.id).then((t) => setThread((cur) => (cur ? { ...cur, messages: t.messages } : t))).catch(() => {}),
+      }
+    : null
+  })
+  const threadKey = thread?.id
+  useEffect(() => {
+    if (!threadKey) return
+    setSearchHost({ threadId: threadKey, view, context: () => host.current!.context(), act: (e) => host.current!.act(e), refresh: () => host.current?.refresh() })
+    return () => setSearchHost(null)
+  }, [threadKey, view])
+
   async function send(content: string) {
     if (!thread) return
     const optimistic: ThreadMessage = {
@@ -210,23 +266,7 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
     setSending(true)
     setChatError(null)
     try {
-      const { message, events } = await sendThreadMessage(thread.id, content, {
-        view,
-        pageMap: buildPageMap(),
-        tab: view === "results" ? tab : undefined,
-        q: view === "results" && q ? q : undefined,
-        ...(view === "results" &&
-          onScreen.current && {
-            visible: onScreen.current.items.slice(0, 10).map((m) => ({
-              title: m.job.title,
-              company: m.job.company,
-              location: m.job.location,
-              remote: m.job.remote_type,
-            })),
-            filters: Object.fromEntries(Object.entries(onScreen.current.filters).filter(([, v]) => v !== undefined && v !== false)) as Record<string, string | number | boolean>,
-            sort: onScreen.current.sort,
-          }),
-      })
+      const { message, events } = await sendThreadMessage(thread.id, content, { ...uiContext(), pageMap: buildPageMap() })
       setThread((t) => (t ? { ...t, messages: [...t.messages, message] } : t))
       await runAssistantActions(events)
       // A multi-step task carries on in the layout-level assistant, which survives page changes.
@@ -234,13 +274,7 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
         await settle()
         window.dispatchEvent(new CustomEvent("plato:continue", { detail: { threadId: thread.id, step: 1 } }))
       }
-      const started = events.find((e) => e.type === "search_started")
-      if (started) {
-        const r = await getRun(started.runId)
-        setJourneyDone(false)
-        setRun(r)
-        setProgress(r.progress)
-      }
+      await adoptStarted(events)
     } catch (e) {
       setChatError(e instanceof Error ? e.message : "Something went wrong")
     } finally {
@@ -258,7 +292,7 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
   }
 
   return (
-    <div className={PAGE_DOCK}>
+    <div className={PAGE_DOCK} data-tour-state={screen}>
       <PageHeader
         crumbs={[{ label: "Jobs", href: JOBS_HOME }]}
         title={thread?.title ?? "Search"}
@@ -266,10 +300,12 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
         actions={
           <>
             {view === "results" && (
-              <label data-tour="results-search" className="hidden h-10 w-72 items-center gap-2.5 rounded-full border bg-card px-3.5 md:flex">
-                <Search className="size-4 text-lavender" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by title, company, or keyword" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-lavender" />
-              </label>
+              <InputGroup data-tour="results-search" className="w-72 max-w-full rounded-full bg-card">
+                <InputGroupAddon>
+                  <Search />
+                </InputGroupAddon>
+                <InputGroupInput value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search results" placeholder="Search by title, company, or keyword" />
+              </InputGroup>
             )}
             <Button variant="outline" onClick={newSearch} className="gap-1.5 rounded-full">
               <Plus className="size-4" />
@@ -279,14 +315,15 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
         }
       >
         {view === "results" && (
-          <div data-tour="results-tabs">
+          <div data-tour="results-tabs" className="flex flex-wrap items-center gap-2">
             <PillTabs id="results-tabs" tabs={TABS} value={tab} onChange={setTab} label="Results" dataAi="results.tab" />
+            <InfoTip text="Recommended for you gathers jobs at 75% match or more from all your searches, leaving out ones you hid or already applied to." label="What Recommended for you shows" />
           </div>
         )}
       </PageHeader>
 
-      {loadError && <p className="rounded-sm border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{loadError}</p>}
-      {!thread && !loadError && <Skeleton className="h-[calc(100dvh-220px)] min-h-[420px] w-full rounded-xl" />}
+      {loadError && <p role="alert" className="rounded-xl border border-l-4 border-l-destructive bg-card px-4 py-3 text-sm text-foreground shadow-card">{loadError}</p>}
+      {!thread && !loadError && <Skeleton className="h-[calc(100dvh-220px)] min-h-[420px] w-full rounded-2xl" />}
 
       {thread && view === "chat" && <ChatHero firstName={me?.full_name.split(" ")[0] ?? null} preferences={preferences} messages={messages} onSend={send} busy={sending} error={chatError} />}
 
@@ -294,22 +331,11 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
 
       {thread && run && view === "results" && (
         <>
-          {run.status === "FAILED" && <p className="rounded-sm border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">The last search failed: {run.error}. Ask Plato to try again.</p>}
+          {run.status === "FAILED" && <p data-tour="search-failed" role="alert" className="rounded-xl border border-l-4 border-l-destructive bg-card px-4 py-3 text-sm text-foreground shadow-card">The last search failed: {run.error}. Ask Plato to try again.</p>}
           <ResultsView run={run} threadId={thread.id} tab={tab} q={q} command={command} onState={reportScreen} />
         </>
       )}
-
-      {thread && run && view !== "chat" && (
-        <PlatoDock
-          messages={messages}
-          onSend={send}
-          busy={sending}
-          error={chatError}
-          quickPrompts={view === "searching" ? SEARCHING_PROMPTS : RESULTS_PROMPTS}
-          steps={view === "searching" ? { journey, startedAt: run.started_at } : undefined}
-          status={view === "searching" ? "searching" : "done"}
-        />
-      )}
+      {/* Searching and results: the one Plato AI panel (layout) takes over this thread. */}
     </div>
   )
 }

@@ -68,7 +68,7 @@ export interface CareerDeps {
   research(question: string): Promise<unknown>;
 }
 
-const INSTRUCTIONS = `You are Plato's career assistant. You help a job seeker become job-ready: a strong resume, an honest view of their strengths and gaps, and a resume tailored to a target job.
+export const CAREER_INSTRUCTIONS = `You are Plato's career assistant. You help a job seeker become job-ready: a strong resume, an honest view of their strengths and gaps, and a resume tailored to a target job.
 
 How you talk:
 - Reply in the language of the seeker's latest real message. Ignore a stray character, and ignore the language of pasted text: an Italian job posting does not make you answer in Italian.
@@ -141,11 +141,9 @@ const quote = z
     "A short phrase copied EXACTLY from the seeker's own message that supports this. Required.",
   );
 
-export function createCareerAgent(
-  model: string,
-  seeker: { firstName: string; context?: string },
-  deps: CareerDeps,
-) {
+// The career tools, as closures over the deps. Shared by the career agent and the
+// one Plato AI orchestrator (chat/orchestrator.agent.ts), which imports them directly.
+export function careerTools(deps: CareerDeps) {
   // A refused save goes back to the model as an error it can act on.
   const guarded = async (fn: () => Promise<void>) => {
     try {
@@ -155,7 +153,7 @@ export function createCareerAgent(
       return JSON.stringify({ saved: false, error: (e as Error).message });
     }
   };
-  const tools = [
+  return [
     tool({
       name: 'get_plato_tokens',
       description:
@@ -309,10 +307,17 @@ export function createCareerAgent(
       execute: async (d) => JSON.stringify(await deps.buildResume(d)),
     }),
   ];
+}
 
+export function createCareerAgent(
+  model: string,
+  seeker: { firstName: string; context?: string },
+  deps: CareerDeps,
+) {
+  const tools = careerTools(deps);
   return new Agent({
     name: 'Plato Career Assistant',
-    instructions: `${INSTRUCTIONS}\n\n# ${TOKENS_RULES}\n\n# Seeker\nFirst name: ${seeker.firstName}${seeker.context ?? ''}`,
+    instructions: `${CAREER_INSTRUCTIONS}\n\n# ${TOKENS_RULES}\n\n# Seeker\nFirst name: ${seeker.firstName}${seeker.context ?? ''}`,
     model,
     tools,
   });

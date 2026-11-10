@@ -125,8 +125,10 @@ export class ApplyController {
   ) {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
     const png = await this.applyService.screenshot(jobSeekerId, id);
+    // The extension's proof may be JPEG (smaller); the worker's is PNG.
+    const jpeg = png[0] === 0xff && png[1] === 0xd8;
     res
-      .setHeader('Content-Type', 'image/png')
+      .setHeader('Content-Type', jpeg ? 'image/jpeg' : 'image/png')
       .setHeader('Cache-Control', 'private, max-age=3600')
       .send(png);
   }

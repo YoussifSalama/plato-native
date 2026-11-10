@@ -207,8 +207,8 @@ export function TokensChip() {
   if (!acc) return null
   const low = acc.monthly > 0 && acc.balance / acc.monthly < 0.15
   return (
-    <Link href="/tokens" data-ai="nav.tokens-chip" className={cn("flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold tabular-nums", low ? "border border-warning-line bg-warning-soft text-warning-ink" : "surface-panel text-foreground")}>
-      <Coins className="size-4 text-primary" />
+    <Link href="/tokens" data-ai="nav.tokens-chip" title={`${formatTokens(Math.max(0, acc.balance))} Plato tokens left. Your monthly tokens refill on ${resetLabel(acc.resetsAt)}.`} className={cn("flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold tabular-nums transition-colors", low ? "border border-warning-line bg-warning-soft text-warning-ink" : "surface-panel text-foreground hover:border-primary-line")}>
+      <Coins className="size-4 text-primary" strokeWidth={1.8} />
       {formatTokens(Math.max(0, acc.balance))}
     </Link>
   )

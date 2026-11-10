@@ -6,6 +6,12 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { matchLabel, toMatchPercent } from '../discovery/discovery-run.helpers';
+import {
+  matchReasons,
+  seekerReferenceScore,
+  seekerTerms,
+} from '../discovery/match-reasons';
 import { ConfigService } from '@nestjs/config';
 import { JobApplication, Prisma } from '@prisma/client';
 import {
@@ -1510,9 +1516,24 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
 
   async resume(jobSeekerId: string, id: string): Promise<Buffer> {
     const app = await this.own(jobSeekerId, id);
-    if (!app.resume_key)
+    const key =
+      app.resume_key ?? (await this.approvedResumeKey(jobSeekerId, app.job_id));
+    if (!key)
       throw new NotFoundException('No tailored resume for this application');
-    return this.storage.getObjectBuffer(app.resume_key);
+    return this.storage.getObjectBuffer(key);
+  }
+
+  // The resume made for this job and approved on the review screen: what the
+  // extension uploads when the seeker chose "tailored" (it never sets resume_key).
+  private async approvedResumeKey(jobSeekerId: string, jobId: string) {
+    const r = await this.prisma.careerResume
+      .findFirst({
+        where: { job_seeker_id: jobSeekerId, job_id: jobId, approved: true },
+        orderBy: { created_at: 'desc' },
+        select: { storage_key: true },
+      })
+      .catch(() => null);
+    return r?.storage_key ?? null;
   }
 
   // Everything the single-application page shows.
@@ -1522,7 +1543,7 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
       include: { job: true },
     });
     if (!app) throw new NotFoundException('Application not found');
-    const [thread, queue] = await Promise.all([
+    const [thread, queue, item] = await Promise.all([
       app.thread_id
         ? this.prisma.chatThread.findUnique({
             where: { id: app.thread_id },
@@ -1530,7 +1551,72 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
           })
         : null,
       this.queueStatus(jobSeekerId),
+      // Extension engine: the latest batch item holds the steps it took. Items
+      // are tied to the application by (seeker, job), like mirror() does;
+      // application_id is not written by the batch service.
+      this.prisma.applyBatchItem.findFirst({
+        where: {
+          job_seeker_id: jobSeekerId,
+          OR: [{ application_id: id }, { job_id: app.job_id }],
+        },
+        orderBy: { created_at: 'desc' },
+        select: {
+          state: true,
+          provider: true,
+          resume_choice: true,
+          detail: true,
+          created_at: true,
+          updated_at: true,
+        },
+      }),
     ]);
+    const itemDetail = (item?.detail ?? {}) as {
+      last?: unknown;
+      history?: unknown[];
+      resume_choice?: string;
+      verify_reason?: string;
+    };
+    const batch_item = item
+      ? {
+          state: item.state,
+          provider: item.provider,
+          resume_choice: item.resume_choice ?? itemDetail.resume_choice ?? null,
+          last: itemDetail.last ?? null,
+          history: Array.isArray(itemDetail.history) ? itemDetail.history : [],
+          verify_reason: itemDetail.verify_reason ?? null,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+        }
+      : null;
+    // GET :id/resume serves it (resume_key, else the approved tailored resume).
+    const has_tailored_resume =
+      !!app.resume_key ||
+      (batch_item?.resume_choice === 'tailored' &&
+        !!(await this.approvedResumeKey(jobSeekerId, app.job_id)));
+    // Why this job was a match: the same percent and reasons the job cards show.
+    const [matchRow, reference, terms] = await Promise.all([
+      this.prisma.jobSeekerJobMatch.findUnique({
+        where: {
+          job_seeker_id_job_id: {
+            job_seeker_id: jobSeekerId,
+            job_id: app.job_id,
+          },
+        },
+        select: { match_score: true },
+      }),
+      seekerReferenceScore(this.prisma, jobSeekerId),
+      seekerTerms(this.prisma, jobSeekerId),
+    ]);
+    const match = matchRow?.match_score
+      ? (() => {
+          const percent = toMatchPercent(matchRow.match_score, reference);
+          return {
+            percent,
+            label: matchLabel(percent),
+            reasons: matchReasons(app.job, terms),
+          };
+        })()
+      : null;
     // Drop the heavy fields the page never renders (raw payload, full text).
     // effective_ats_source: which ATS is actually handling this job, since
     // it may differ from job.source (a Dice-discovered Greenhouse job, say).
@@ -1551,6 +1637,9 @@ export class ApplyService implements OnModuleInit, OnModuleDestroy {
       // The application window is open right now, waiting for a person.
       verificationLive: this.awaitingHuman.has(id),
       worker: queue.worker,
+      batch_item,
+      has_tailored_resume,
+      match,
     };
   }
 

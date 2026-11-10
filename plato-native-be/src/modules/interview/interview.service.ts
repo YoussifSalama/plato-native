@@ -12,29 +12,97 @@ import { profileBrief } from '../career/career-voice';
 import { PrismaService } from '../prisma/prisma.service';
 import { ResumeProfileService } from '../resume/resume-profile.service';
 import {
+  coachFor,
+  Ctx,
   current,
+  defaultLength,
+  FOCUSES,
   followUpFor,
+  FORMATS,
   generateQuestions,
   MAX_ANSWER,
+  MIN_ANSWER_WORDS,
+  ROUNDS,
   scorecardFor,
+  Setup,
+  setupOf,
+  STYLES,
+  tooShort,
   Turn,
 } from './interview';
 
-// Cost guard until credits exist (TODO section 8).
+// Cost guard on new sessions (resuming one is free).
 const STARTS_PER_DAY = 10;
+// A pasted post has to be a real post, and is capped so one paste cannot run up the bill.
+export const MIN_PASTE_WORDS = 30;
+export const MAX_PASTE_CHARS = 12000;
+const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
 export const startSchema = z
   .object({
-    jobId: z.string().min(1).max(40).optional(),
     // Repeat an earlier session with the same questions.
     retryOf: z.string().min(1).max(40).optional(),
+    jobId: z.string().min(1).max(40).optional(),
+    paste: z
+      .object({
+        title: z.string().trim().min(1).max(200),
+        company: z.string().trim().max(200).optional(),
+        description: z
+          .string()
+          .trim()
+          .max(
+            MAX_PASTE_CHARS,
+            `The job post is too long (${MAX_PASTE_CHARS} characters at most).`,
+          )
+          .refine(
+            (d) => words(d) >= MIN_PASTE_WORDS,
+            `Paste the whole job post (at least ${MIN_PASTE_WORDS} words).`,
+          ),
+      })
+      .optional(),
+    general: z
+      .object({
+        role: z.string().trim().min(2).max(120),
+        skill: z.string().trim().min(1).max(80).optional(),
+        // What the seeker is preparing for, in their words (level, team, topics, a job ad…).
+        notes: z.string().trim().max(2000).optional(),
+      })
+      .optional(),
+    format: z.enum(FORMATS).optional(),
+    focus: z.enum(FOCUSES).optional(), // general only
+    round: z.enum(ROUNDS).optional(), // job / paste only
+    style: z.enum(STYLES).optional(),
+    length: z.union([z.literal(3), z.literal(5), z.literal(6)]).optional(),
   })
-  .refine((b) => !!b.jobId !== !!b.retryOf, 'Send jobId or retryOf');
+  .refine(
+    (b) =>
+      [b.jobId, b.paste, b.general, b.retryOf].filter((x) => x !== undefined)
+        .length === 1,
+    'Send exactly one of jobId, paste, general or retryOf',
+  );
 export const answerSchema = z.object({
   answer: z.string().trim().min(1).max(MAX_ANSWER),
 });
 
 type Row = Prisma.MockInterviewGetPayload<object>;
+
+const ctxOf = (r: Row, turns: Turn[]): Ctx => ({
+  title: r.job_title,
+  company: r.company,
+  description: r.job_description,
+  setup: setupOf(r.setup, turns.length),
+});
+
+// What history and the run page show about how a session was set up.
+const setupView = (s: Setup) => ({
+  target: s.target,
+  style: s.style,
+  format: s.format,
+  round: s.round,
+  focus: s.focus,
+  role: s.role,
+  skill: s.skill,
+});
 
 @Injectable()
 export class InterviewService {
@@ -72,6 +140,7 @@ export class InterviewService {
       id: r.id,
       jobTitle: r.job_title,
       company: r.company,
+      ...setupView(setupOf(r.setup, turns.length)),
       retryOfId: r.retry_of_id,
       createdAt: r.created_at,
       completedAt: r.completed_at,
@@ -87,6 +156,29 @@ export class InterviewService {
 
   async start(userId: string, req: z.infer<typeof startSchema>) {
     const seekerId = await this.seekerId(userId);
+    const style = req.style ?? 'real';
+    const format = req.format ?? 'standard';
+    // Starting the same job again continues its unfinished interview when it was set up
+    // the same way (style, format, round): no duplicate rows, no second set of questions
+    // to pay for, and it doesn't count against the daily limit. Anything else is new.
+    if (req.jobId) {
+      const round = req.round ?? 'manager';
+      const open = await this.prisma.mockInterview.findMany({
+        where: { job_seeker_id: seekerId, job_id: req.jobId, completed_at: null },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+      });
+      const same = open.find((r) => {
+        const s = setupOf(r.setup);
+        return (
+          s.target === 'job' &&
+          s.style === style &&
+          s.format === format &&
+          s.round === round
+        );
+      });
+      if (same) return this.view(same);
+    }
     const today = await this.prisma.mockInterview.count({
       where: {
         job_seeker_id: seekerId,
@@ -102,44 +194,75 @@ export class InterviewService {
       company: string;
       job_description: string;
       turns: Turn[];
+      setup: Setup;
       retry_of_id?: string;
     };
     if (req.retryOf) {
       const prev = await this.owned(userId, req.retryOf);
+      const prevTurns = prev.turns as unknown as Turn[];
+      const was = setupOf(prev.setup, prevTurns.length);
       base = {
         job_id: prev.job_id,
         job_title: prev.job_title,
         company: prev.company,
         job_description: prev.job_description,
-        // Same questions, clean slate.
-        turns: (prev.turns as unknown as Turn[]).map((t) => ({
-          kind: t.kind,
-          question: t.question,
-        })),
+        // Same questions, clean slate; the style may change (try it with coaching).
+        turns: prevTurns.map((t) => ({ kind: t.kind, question: t.question })),
+        setup: { ...was, style: req.style ?? was.style },
         retry_of_id: prev.id,
       };
     } else {
-      const job = await this.prisma.job.findUnique({
-        where: { id: req.jobId! },
-        select: { id: true, title: true, company: true, description: true },
-      });
-      if (!job) throw new NotFoundException('Job not found');
-      if (!job.description?.trim())
-        throw new BadRequestException(
-          'This job has no description to build an interview from.',
-        );
+      const target = req.jobId ? 'job' : req.paste ? 'paste' : 'general';
+      const setup: Setup = {
+        target,
+        style,
+        format,
+        round: target === 'general' ? null : (req.round ?? 'manager'),
+        focus: target === 'general' ? (req.focus ?? 'mixed') : null,
+        role: req.general?.role ?? null,
+        skill: req.general?.skill ?? null,
+        length: req.length ?? defaultLength(style, target),
+      };
+      let subject: { id: string | null; title: string; company: string; description: string };
+      if (req.jobId) {
+        const job = await this.prisma.job.findUnique({
+          where: { id: req.jobId },
+          select: { id: true, title: true, company: true, description: true },
+        });
+        if (!job) throw new NotFoundException('Job not found');
+        if (!job.description?.trim())
+          throw new BadRequestException(
+            'This job has no description to build an interview from.',
+          );
+        subject = { ...job, description: job.description ?? '' };
+      } else if (req.paste)
+        subject = {
+          id: null,
+          title: req.paste.title,
+          company: req.paste.company ?? '',
+          description: req.paste.description,
+        };
+      else
+        subject = {
+          id: null,
+          title: req.general!.role,
+          company: '',
+          description: req.general!.notes ?? '',
+        };
       const brief = profileBrief(await this.profiles.load(seekerId));
       base = {
-        job_id: job.id,
-        job_title: job.title,
-        company: job.company,
-        job_description: job.description,
+        job_id: subject.id,
+        job_title: subject.title,
+        company: subject.company,
+        job_description: subject.description,
+        setup,
         turns: await generateQuestions(
           this.model,
           {
-            title: job.title,
-            company: job.company,
-            description: job.description,
+            title: subject.title,
+            company: subject.company,
+            description: subject.description,
+            setup,
           },
           brief,
         ),
@@ -149,6 +272,7 @@ export class InterviewService {
       data: {
         ...base,
         turns: base.turns as unknown as Prisma.InputJsonValue,
+        setup: base.setup as unknown as Prisma.InputJsonValue,
         job_seeker_id: seekerId,
       },
     });
@@ -156,6 +280,10 @@ export class InterviewService {
   }
 
   async answer(userId: string, id: string, text: string) {
+    if (tooShort(text))
+      throw new BadRequestException(
+        `Answer in a few sentences (at least ${MIN_ANSWER_WORDS} words) so Plato can follow up and score it.`,
+      );
     const row = await this.owned(userId, id);
     if (row.completed_at)
       throw new BadRequestException('Interview is finished');
@@ -163,29 +291,26 @@ export class InterviewService {
     const cur = current(turns);
     if (!cur) throw new BadRequestException('Interview is finished');
     const turn = turns[cur.index];
+    const ctx = ctxOf(row, turns);
     if (cur.followUp) turn.followUpAnswer = text;
-    else {
-      turn.answer = text;
+    else turn.answer = text;
+    if (ctx.setup.style === 'coach') {
+      // One call: feedback on this answer (and the follow-up answer with it), plus the
+      // follow-up decision. Still at most one follow-up per question.
+      const c = await coachFor(this.model, ctx, turn, !cur.followUp).catch(
+        () => null,
+      );
+      if (c) {
+        turn.feedback = c.feedback;
+        if (c.followUp) turn.followUp = c.followUp;
+      }
+    } else if (!cur.followUp) {
       // One follow-up per question at most.
-      const f = await followUpFor(
-        this.model,
-        { title: row.job_title, company: row.company },
-        turn,
-      ).catch(() => null);
+      const f = await followUpFor(this.model, ctx, turn).catch(() => null);
       if (f) turn.followUp = f;
     }
     const done = !current(turns);
-    const card = done
-      ? await scorecardFor(
-          this.model,
-          {
-            title: row.job_title,
-            company: row.company,
-            description: row.job_description,
-          },
-          turns,
-        )
-      : null;
+    const card = done ? await scorecardFor(this.model, ctx, turns) : null;
     const saved = await this.prisma.mockInterview.update({
       where: { id },
       data: {
@@ -216,6 +341,7 @@ export class InterviewService {
         company: true,
         score: true,
         retry_of_id: true,
+        setup: true,
         created_at: true,
         completed_at: true,
       },
@@ -224,6 +350,7 @@ export class InterviewService {
       id: r.id,
       jobTitle: r.job_title,
       company: r.company,
+      ...setupView(setupOf(r.setup)),
       score: r.score,
       retryOfId: r.retry_of_id,
       createdAt: r.created_at,

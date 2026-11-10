@@ -1,6 +1,7 @@
 import { ApiError, createApi } from '../core/api';
 import { createOrchestrator, OrchestratorError, type Session } from '../core/orchestrator';
 import { createOutbox } from '../core/outbox';
+import { captureProof, type ProofShot } from '../core/proof';
 import { BatchError, createBatchRunner, MAX_BATCH_JOBS, pickToggle, type BatchRun, type JobMeta, type Live } from '../core/batch-runner';
 import { blockingError, type FormReview } from '../core/form-review';
 import { NEEDS_YOU, V3 } from '../core/messages';
@@ -60,7 +61,37 @@ const orch = createOrchestrator({
     log('warn', `Lost hold on “${t}”: the server no longer has this browser as its owner.`);
     void refresh();
   },
+  // Proof of apply: shoot the confirmation page now, upload in the background (core/proof.ts). Never blocks or fails a run.
+  onSubmitted: async (s) => {
+    const tabId = s.tabId ?? (await recallTab(s.item.id));
+    const { uploaded } = await captureProof({ capture: shootTab, upload: (id, body) => api.proof(id, body), log: (m) => jot(s.item.id, m) }, s.item.id, tabId);
+    void uploaded.then((ok) => ok && jot(s.item.id, 'Proof of apply saved: a screenshot of the confirmation page.'));
+  },
 });
+
+// The visible page as JPEG (quality 80 keeps it well under the 5 MB cap). The tab comes to the front first: Chrome
+// does not paint a background tab. The run's debugger when attached, else a short attach of our own, else
+// captureVisibleTab (needs a host grant this extension may not have; its failure is only logged).
+async function shootTab(tabId: number): Promise<ProofShot | null> {
+  const tab = await chrome.tabs.get(tabId);
+  await chrome.tabs.update(tabId, { active: true });
+  await sleep(300);
+  const jpeg = { format: 'jpeg' as const, quality: 80 };
+  const cdpShot = async () => ((await limit(chrome.debugger.sendCommand({ tabId }, 'Page.captureScreenshot', jpeg), 4000, 'proof screenshot')) as { data: string }).data;
+  let data = await cdpShot().catch(() => null);
+  if (!data)
+    data = await limit(chrome.debugger.attach({ tabId }, '1.3'), 3000, 'debugger attach')
+      .then(async () => {
+        try {
+          return await cdpShot();
+        } finally {
+          await chrome.debugger.detach({ tabId }).catch(() => undefined);
+        }
+      })
+      .catch(() => null);
+  if (!data) data = await chrome.tabs.captureVisibleTab(tab.windowId, jpeg);
+  return { data, url: tab.url };
+}
 
 // tab ids survive a panel reload for the browser session only
 const tabKey = (id: string) => `tab:${id}`;

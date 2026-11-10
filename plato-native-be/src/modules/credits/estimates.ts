@@ -13,7 +13,7 @@ const ACTIONS: Record<
   { label: string; parts?: Part[]; fallback: number }
 > = {
   search_message: {
-    label: 'A message in the job search chat',
+    label: 'A message to Plato AI',
     parts: [['chat.orchestrator', 1]],
     fallback: 1,
   },
@@ -40,6 +40,27 @@ const ACTIONS: Record<
     ],
     fallback: 30,
   },
+  // Per step, so the interview flow can show what a session will take.
+  interview_start: {
+    label: 'Starting a written mock interview (writing the questions)',
+    parts: [['interview.plan', 1]],
+    fallback: 6,
+  },
+  interview_answer: {
+    label: 'An answer in a written mock interview',
+    parts: [['interview.followup', 1]],
+    fallback: 2,
+  },
+  interview_answer_coach: {
+    label: 'An answer with coaching feedback in a written mock interview',
+    parts: [['interview.coach', 1]],
+    fallback: 4,
+  },
+  interview_scorecard: {
+    label: 'The scorecard after a written mock interview',
+    parts: [['interview.score', 1]],
+    fallback: 10,
+  },
   research: {
     label: 'A web lookup in the career chat',
     parts: [
@@ -57,6 +78,11 @@ const ACTIONS: Record<
     fallback: 25,
   },
   voice_minute: { label: 'One minute of voice interview', fallback: 0 },
+  voice_scorecard: {
+    label: 'The written scorecard after a voice interview',
+    parts: [['career.voice.score', 1]],
+    fallback: 5,
+  },
 };
 export interface Estimate {
   action: string;

@@ -351,7 +351,7 @@ const navigateParams = z.object({
 export const navigateTool = tool<typeof navigateParams, OrchestratorContext>({
   name: 'navigate',
   description:
-    'Take the seeker to a page of the app: home, jobs (search results), applications, career (resume, interview practice), messages, notifications or profile. Use when they ask to go somewhere or open a section ("take me to my profile", "show my saved jobs").',
+    'Take the seeker to a main page of the app: home, jobs, applications, following (companies/roles they follow, alerts), career (overview), tokens (Plan & credits), extension, messages, notifications or profile. For a sub-page or a tab (an assessment, the interview flow, a profile tab, one application…) use open_path with its path instead.',
   parameters: navigateParams,
   execute: (input, runContext) => {
     runContext!.context.events.push({
@@ -519,7 +519,7 @@ export const proposeApplyTool = tool<
 // Paths the assistant may open. Anything else is refused.
 // A short query string is allowed for tabs and filters (?tab=answers, ?company=PwC).
 export const APP_PATH =
-  /^\/(jobs(\/review|\/[0-9a-f]{24})?|applications(\/[0-9a-f]{24})?|career(\/interviews(\/[0-9a-f]{24})?|\/skills)?|following|extension|tokens|messages|notifications|profile)?(\?[A-Za-z0-9_=&%.,+:-]{1,300})?$/;
+  /^\/(jobs(\/review|\/[0-9a-f]{24})?|applications(\/[0-9a-f]{24})?|career(\/interviews(\/new|\/[0-9a-f]{24})?|\/skills|\/library|\/snapshot|\/assessments(\/[a-z0-9-]{1,60})?|\/proof(\/[a-z0-9-]{1,60})?|\/results\/[A-Za-z0-9-]{1,60})?|following|insights|extension|tokens|messages|notifications|profile)?(\?[A-Za-z0-9_=&%.,+:-]{1,600})?$/;
 
 const gotoParams = z.object({
   more: z
@@ -621,7 +621,7 @@ export const describePageTool = tool<
 >({
   name: 'describe_page',
   description:
-    'Read the map of any page of the app: what it is for and every control with its exact name (like career.new-conversation). Use it before acting on a page you are not on, or to answer "what can I do in X". It does not move the user.',
+    'Read the map of any page of the app: what it is for and every control with its exact name (like assistant.new-conversation). Use it before acting on a page you are not on, or to answer "what can I do in X". It does not move the user.',
   parameters: describeParams,
   execute: (input) => JSON.stringify(PAGES[input.page]),
 });

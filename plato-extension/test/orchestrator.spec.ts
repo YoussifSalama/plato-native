@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../src/core/api';
-import { createOrchestrator, HEARTBEAT_MS, OrchestratorError } from '../src/core/orchestrator';
+import { createOrchestrator, HEARTBEAT_MS, OrchestratorError, type OrchestratorDeps } from '../src/core/orchestrator';
 import { createOutbox } from '../src/core/outbox';
 import { canMove, TRANSITIONS } from '../src/core/contract';
 import { planReconcile } from '../src/core/reconcile';
@@ -41,7 +41,7 @@ const spyAdapter = (over: Partial<ProviderAdapter> = {}) => {
   const a = { prepare: vi.fn(async () => ({ kind: 'ready' as const })), inspectOutcome: vi.fn(async (): Promise<Evidence> => ({ kind: 'unknown' })), ...over };
   return a as ProviderAdapter & { prepare: ReturnType<typeof vi.fn>; inspectOutcome: ReturnType<typeof vi.fn> };
 };
-const setup = (opts: { initial?: Partial<ApiItem>; adapter?: ProviderAdapter | null; policy?: Record<string, 'FILL_ONLY' | 'BLOCKED'> | undefined } = {}) => {
+const setup = (opts: { initial?: Partial<ApiItem>; adapter?: ProviderAdapter | null; policy?: Record<string, 'FILL_ONLY' | 'BLOCKED'> | undefined; onSubmitted?: OrchestratorDeps['onSubmitted'] } = {}) => {
   const be = backend(opts.initial);
   const adapter = opts.adapter === undefined ? spyAdapter() : opts.adapter;
   const def: ProviderDefinition = { id: 'fx', label: 'Fx', hosts: ['fx.test'], policy: 'FILL_ONLY', urlPatterns: ['https://fx.test/*'], capabilities: { fillForms: true, detectsOutcome: true, accountRequired: false, externalRedirects: false }, classify: () => ({ provider: 'fx', page: 'apply-form', applyVia: 'internal-form' }), ...(adapter && { adapter: async () => adapter }) };
@@ -51,7 +51,7 @@ const setup = (opts: { initial?: Partial<ApiItem>; adapter?: ProviderAdapter | n
   const orch = createOrchestrator({
     api: be.api as never, outbox, registry: createRegistry([def]),
     policy: () => ('policy' in opts ? opts.policy : { fx: 'FILL_ONLY' }),
-    setInterval: ((fn: () => void) => (timers.push(fn), timers.length)) as never, clearInterval: (() => undefined) as never, onLost: lost,
+    setInterval: ((fn: () => void) => (timers.push(fn), timers.length)) as never, clearInterval: (() => undefined) as never, onLost: lost, onSubmitted: opts.onSubmitted,
   });
   return { be, orch, adapter, outbox, timers, lost };
 };
@@ -325,5 +325,31 @@ describe('orchestrator and reconcile only ever ask for moves the contract allows
       if (p.action === 'confirm') expect(canMove(st, 'SUBMITTED_CONFIRMED')).toBe(true);
       if (p.action === 'to-verify') expect(canMove(st, 'VERIFY')).toBe(true);
     }
+  });
+});
+
+describe('proof of apply hook', () => {
+  it('runs once after an acknowledged submit, with the session, and its failure never fails the submit', async () => {
+    const onSubmitted = vi.fn(async () => { throw new Error('capture broke'); });
+    const { be, orch } = setup({ onSubmitted });
+    const s = await orch.claim(be.item, 9);
+    await orch.prepare(s, 'https://fx.test/1');
+    await orch.armForSubmit(s);
+    expect(onSubmitted).not.toHaveBeenCalled(); // not for the earlier steps
+    await expect(orch.confirm(s, 'Thank you')).resolves.toBeUndefined();
+    expect(be.item.state).toBe('SUBMITTED_CONFIRMED');
+    expect(onSubmitted).toHaveBeenCalledTimes(1);
+    expect(onSubmitted).toHaveBeenCalledWith(expect.objectContaining({ tabId: 9 }), 'SUBMITTED_CONFIRMED');
+  });
+
+  it('not for a submit that only reached the outbox (the server would refuse proof before it knows)', async () => {
+    const onSubmitted = vi.fn(async () => undefined);
+    const { be, orch } = setup({ onSubmitted });
+    const s = await orch.claim(be.item, 9);
+    await orch.prepare(s, 'https://fx.test/1');
+    await orch.armForSubmit(s);
+    be.state.offline = true;
+    await orch.attest(s);
+    expect(onSubmitted).not.toHaveBeenCalled();
   });
 });

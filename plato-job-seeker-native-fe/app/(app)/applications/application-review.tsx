@@ -3,24 +3,21 @@
 import { useState } from "react"
 import Link from "next/link"
 import { ExternalLink, Loader2 } from "lucide-react"
-import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { PlatoMark } from "@/components/plato-orb"
+import { FilterChip } from "@/components/filter-controls"
 import { continueApplication, markApplicationSubmitted, submitApplicationAnswers, type AnswerValue, type JobApplication, type PendingQuestion } from "@/lib/jobs/api"
-
-const pill = (on: boolean) =>
-  cn("rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors", on ? "border-primary bg-primary-soft text-primary" : "border-border text-text-secondary hover:bg-muted")
 
 function QuestionField({ q, value, onChange }: { q: PendingQuestion; value: AnswerValue | undefined; onChange: (v: AnswerValue) => void }) {
   if (q.type === "boolean")
     return (
       <div className="flex gap-2">
         {[true, false].map((b) => (
-          <button key={String(b)} type="button" onClick={() => onChange(b)} className={pill(value === b)}>
+          <FilterChip key={String(b)} on={value === b} onClick={() => onChange(b)}>
             {b ? "Yes" : "No"}
-          </button>
+          </FilterChip>
         ))}
       </div>
     )
@@ -29,14 +26,9 @@ function QuestionField({ q, value, onChange }: { q: PendingQuestion; value: Answ
     return (
       <div className="flex flex-wrap gap-2">
         {(q.options ?? []).map((o) => (
-          <button
-            key={o}
-            type="button"
-            onClick={() => onChange(q.type === "choice" ? o : picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o])}
-            className={pill(picked.includes(o))}
-          >
+          <FilterChip key={o} on={picked.includes(o)} onClick={() => onChange(q.type === "choice" ? o : picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o])}>
             {o}
-          </button>
+          </FilterChip>
         ))}
       </div>
     )
@@ -78,7 +70,7 @@ function ApplicationReview({ app, live = false, onDone }: { app: JobApplication;
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-4 rounded-lg border border-warning/25 bg-warning-soft/40 p-4">
+    <div className="mt-3 flex flex-col gap-4 rounded-xl border border-l-[3px] border-l-warning bg-card p-4 shadow-card animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
       <div className="flex items-start gap-3">
         <PlatoMark size={28} />
         <p className="text-sm text-foreground">{needs.message}</p>
@@ -86,7 +78,7 @@ function ApplicationReview({ app, live = false, onDone }: { app: JobApplication;
 
       {needs.reason === "profile" ? (
         // Asked once for every job, not per application: fix it at the source.
-        <Link href="/onboarding?step=2" className="inline-flex h-9 w-fit items-center rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground">
+        <Link href="/onboarding?step=2" className="inline-flex h-9 w-fit items-center rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-colors duration-200 hover:bg-primary-hover">
           Complete my application details
         </Link>
       ) : app.status === "NEEDS_USER_VERIFICATION" ? (
@@ -121,7 +113,7 @@ function ApplicationReview({ app, live = false, onDone }: { app: JobApplication;
               {busy && <Loader2 className="size-3.5 animate-spin" />}
               {live ? "I completed it, continue" : "Continue"}
             </Button>
-            <a href={app.job.apply_url ?? app.job.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted">
+            <a href={app.job.apply_url ?? app.job.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary-line hover:bg-muted">
               Open the posting <ExternalLink className="size-3.5" />
             </a>
             {!live && (
@@ -135,7 +127,7 @@ function ApplicationReview({ app, live = false, onDone }: { app: JobApplication;
         </div>
       ) : needs.reason !== "questions" && needs.reason !== "resume" ? (
         <div className="flex flex-wrap items-center gap-2">
-          <a href={app.job.apply_url ?? app.job.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground">
+          <a href={app.job.apply_url ?? app.job.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-colors duration-200 hover:bg-primary-hover">
             Open the posting <ExternalLink className="size-3.5" />
           </a>
           <Button variant="outline" size="sm" disabled={busy} onClick={() => void run(() => markApplicationSubmitted(app.id))}>

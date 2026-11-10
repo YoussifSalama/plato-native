@@ -2,13 +2,16 @@
 
 import { useMemo, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { ChevronDown, Leaf } from "lucide-react"
+import { ChevronDown, Leaf, PieChart, ReceiptText } from "lucide-react"
 import { cn } from "cn"
 import { PillTabs } from "@/components/pill-tabs"
 import { Skeleton } from "@/components/ui/skeleton"
+import { CARD, EmptyState, SectionHeader } from "@/components/plato-ui"
+import { CountUp } from "@/components/count-up"
 import { formatTokens, type TokenMove } from "@/lib/credits/api"
 import { timeAgo } from "@/lib/jobs/links"
 import { ease, spring } from "@/lib/motion-system"
+import { InfoTip } from "@/components/info-tip"
 import { CATEGORIES, categoryOf, dayLabel, describeMove } from "./token-ui"
 
 // Holds and their releases are bookkeeping for a voice call: the call's own charge is the line people care about.
@@ -21,7 +24,7 @@ const FILTERS = [
 type FilterKey = (typeof FILTERS)[number]["key"]
 const amount = (n: number) => (Math.abs(n) < 1 ? Math.abs(n).toFixed(1) : formatTokens(Math.abs(n)))
 
-// This month's spending by kind of work: one bar, one colour per kind.
+// This month's spending by kind of work: ranked rows, one thin cobalt bar each, biggest first.
 export function SpendingBreakdown({ history, periodStart }: { history: TokenMove[] | null; periodStart: string | null }) {
   const reduced = !!useReducedMotion()
   const parts = useMemo(() => {
@@ -32,68 +35,71 @@ export function SpendingBreakdown({ history, periodStart }: { history: TokenMove
     const total = [...sums.values()].reduce((a, b) => a + b, 0)
     return { total, rows: CATEGORIES.map((c) => ({ ...c, value: sums.get(c.key) ?? 0 })).filter((c) => c.value > 0).sort((a, b) => b.value - a.value) }
   }, [history, periodStart])
+  const top = parts?.rows[0]?.value ?? 1
 
   return (
-    <section className="flex flex-col gap-4 rounded-xl border bg-card p-6">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-bold text-foreground">Where your tokens went</h2>
-          <p className="text-sm text-text-secondary">This month, by the kind of work Plato did for you.</p>
+    <section data-tour="tokens-spending" className={cn(CARD, "flex flex-col gap-4 p-5 sm:p-6")}>
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        <div className="flex flex-col gap-1.5">
+          <SectionHeader title="Where your tokens went" icon={PieChart} accent="cobalt" />
+          <p className="flex items-center gap-1.5 text-sm text-text-secondary">
+            This month, by the kind of work Plato did for you.
+            <InfoTip text="Tokens spent since your last monthly refill, grouped by feature. Refills, top-ups and gifts are not counted here." label="What counts as spent" />
+          </p>
         </div>
         {parts && parts.total > 0 && (
           <span className="text-sm text-text-tertiary">
-            <span className="font-bold text-foreground tabular-nums">{formatTokens(parts.total)}</span> used so far
+            <span className="type-section-title text-foreground tabular-nums">
+              <CountUp value={formatTokens(parts.total)} />
+            </span>{" "}
+            used so far
           </span>
         )}
       </div>
       {!parts ? (
-        <div className="flex flex-col gap-3">
-          <Skeleton className="h-3 w-full rounded-full" />
-          <div className="flex gap-4">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-20" />
-          </div>
-        </div>
+        <ul aria-busy="true" className="flex flex-col gap-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <li key={i} className="flex items-center gap-3">
+              <Skeleton className="size-8 rounded-lg" />
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-1.5 flex-1 rounded-full" />
+              <Skeleton className="h-4 w-16" />
+            </li>
+          ))}
+        </ul>
       ) : parts.total === 0 ? (
-        <div className="flex items-center gap-3 rounded-lg bg-primary-tint p-4">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-success-soft text-success">
-            <Leaf className="size-4" />
-          </span>
-          <p className="text-sm text-text-secondary">
-            <span className="font-semibold text-foreground">Nothing spent yet this month.</span> Your first search or career chat will show up here.
-          </p>
-        </div>
+        <EmptyState icon={Leaf} title="Nothing spent yet this month" hint="Your first search or career chat will show up here." />
       ) : (
-        <>
-          <div className="flex h-3 w-full gap-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={parts.rows.map((r) => `${r.label} ${Math.round((r.value / parts.total) * 100)}%`).join(", ")}>
-            {parts.rows.map((r, i) => (
-              <motion.span
-                key={r.key}
-                className={cn("h-full rounded-full", r.bar)}
-                initial={{ width: reduced ? `${(r.value / parts.total) * 100}%` : 0 }}
-                whileInView={{ width: `${(r.value / parts.total) * 100}%` }}
-                viewport={{ once: true }}
-                transition={{ duration: reduced ? 0 : 0.8, ease: ease.out, delay: reduced ? 0 : 0.1 + i * 0.08 }}
-              />
-            ))}
-          </div>
-          <ul className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-            {parts.rows.map(({ key, label, icon: Icon, tone, value }) => (
-              <li key={key} className="flex items-center gap-3">
-                <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", tone)}>
+        <ul className="flex flex-col" aria-label="Tokens spent this month by kind of work">
+          {parts.rows.map(({ key, label, icon: Icon, value }, i) => {
+            const pct = Math.round((value / parts.total) * 100)
+            return (
+              <li
+                key={key}
+                className="-mx-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 rounded-lg px-2 py-2 transition-colors duration-200 animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-both hover:bg-muted/60 motion-reduce:animate-none sm:grid-cols-[auto_10rem_minmax(0,1fr)_7.5rem]"
+                style={{ animationDelay: `${i * 70}ms` }}
+              >
+                <span className="row-span-2 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary sm:row-span-1">
                   <Icon className="size-4" />
                 </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium text-foreground">{label}</span>
-                  <span className="text-xs text-text-tertiary tabular-nums">
-                    {formatTokens(value)} tokens · {Math.round((value / parts.total) * 100)}%
-                  </span>
+                <span className="truncate text-sm font-medium text-foreground">{label}</span>
+                <span className="col-start-2 col-end-4 h-1.5 overflow-hidden rounded-full bg-muted sm:col-start-3 sm:col-end-4 sm:row-start-1" aria-hidden>
+                  <motion.span
+                    className="block h-full rounded-full bg-primary"
+                    initial={{ width: reduced ? `${(value / top) * 100}%` : 0 }}
+                    whileInView={{ width: `${(value / top) * 100}%` }}
+                    viewport={{ once: true }}
+                    transition={{ duration: reduced ? 0 : 0.7, ease: ease.out, delay: reduced ? 0 : 0.1 + i * 0.06 }}
+                  />
+                </span>
+                <span className="col-start-3 row-start-1 text-right text-sm tabular-nums sm:col-start-4">
+                  <span className="font-semibold text-foreground">{formatTokens(value)}</span>
+                  <span className="inline-block w-12 text-text-tertiary">{pct < 1 ? "<1" : pct}%</span>
                 </span>
               </li>
-            ))}
-          </ul>
-        </>
+            )
+          })}
+        </ul>
       )}
     </section>
   )
@@ -104,7 +110,10 @@ export function History({ history }: { history: TokenMove[] | null }) {
   const reduced = !!useReducedMotion()
   const [filter, setFilter] = useState<FilterKey>("all")
   const [limit, setLimit] = useState(12)
-  const moves = (history ?? []).filter(visible).filter((m) => (filter === "all" ? true : filter === "spent" ? m.amount < 0 : m.amount > 0))
+  const all = (history ?? []).filter(visible)
+  const counts = { all: all.length, spent: all.filter((m) => m.amount < 0).length, added: all.filter((m) => m.amount > 0).length }
+  const tabs = FILTERS.map((f) => ({ ...f, count: history ? counts[f.key] : undefined }))
+  const moves = all.filter((m) => (filter === "all" ? true : filter === "spent" ? m.amount < 0 : m.amount > 0))
   const shown = moves.slice(0, limit)
   const days = shown.reduce<{ day: string; items: TokenMove[] }[]>((acc, m) => {
     const d = dayLabel(m.at)
@@ -115,17 +124,20 @@ export function History({ history }: { history: TokenMove[] | null }) {
   }, [])
 
   return (
-    <section className="flex flex-col gap-4 rounded-xl border bg-card p-6">
+    <section data-tour="tokens-history" className={cn(CARD, "flex flex-col gap-4 p-5 sm:p-6")}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-bold text-foreground">History</h2>
-        <PillTabs id="history-filter" tabs={FILTERS} value={filter} onChange={(k) => (setFilter(k), setLimit(12))} label="Filter history" dataAi="tokens.history" />
+        <span className="flex items-center gap-1.5">
+          <SectionHeader title="History" icon={ReceiptText} accent="cobalt" />
+          <InfoTip text="Every charge, refill and top-up, newest first. A voice call first reserves tokens, then returns them and charges what the call really used; only that charge is listed." label="What the history shows" />
+        </span>
+        <PillTabs id="history-filter" tabs={tabs} value={filter} onChange={(k) => (setFilter(k), setLimit(12))} label="Filter history" dataAi="tokens.history" />
       </div>
 
       {history === null ? (
         <ul aria-busy="true" className="flex flex-col">
           {Array.from({ length: 5 }, (_, i) => (
-            <li key={i} className="flex items-center gap-3 border-b border-divider py-3.5 last:border-b-0">
-              <Skeleton className="size-9 rounded-lg" />
+            <li key={i} className="flex items-center gap-3 border-b border-divider py-3 last:border-b-0">
+              <Skeleton className="size-8 rounded-lg" />
               <div className="flex flex-1 flex-col gap-1.5">
                 <Skeleton className="h-4 w-40" />
                 <Skeleton className="h-3 w-20" />
@@ -135,14 +147,21 @@ export function History({ history }: { history: TokenMove[] | null }) {
           ))}
         </ul>
       ) : moves.length === 0 ? (
-        <p className="py-10 text-center text-sm text-text-secondary">{filter === "added" ? "Nothing added yet." : "Nothing spent yet. Your first search or career chat will show up here."}</p>
+        <EmptyState
+          icon={ReceiptText}
+          title={filter === "added" ? "Nothing added yet" : filter === "spent" ? "Nothing spent yet" : "No activity yet"}
+          hint={filter === "added" ? "Refills and top-ups show up here." : "Your first search or career chat will show up here."}
+        />
       ) : (
         <div className="flex flex-col gap-5">
           <AnimatePresence mode="popLayout" initial={false}>
             {days.map(({ day, items }) => (
               <motion.div key={`${filter}-${day}`} layout={!reduced} initial={reduced ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={spring.settle} className="flex flex-col">
-                <span className="sticky top-0 pb-1.5 text-xs font-semibold tracking-wide text-text-tertiary uppercase">{day}</span>
-                <ul className="flex flex-col">
+                <div className="flex items-center justify-between border-b border-divider pb-1.5">
+                  <span className="eyebrow">{day}</span>
+                  <span className="eyebrow hidden w-28 text-right sm:block">Balance after</span>
+                </div>
+                <ul className="flex flex-col divide-y divide-divider">
                   {items.map((m, i) => {
                     const { title, icon: Icon, tone } = describeMove(m)
                     const gain = m.amount > 0
@@ -152,19 +171,20 @@ export function History({ history }: { history: TokenMove[] | null }) {
                         initial={reduced ? false : { opacity: 0, x: -6 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.25, ease: ease.out, delay: reduced ? 0 : Math.min(i, 8) * 0.03 }}
-                        className="group flex items-center gap-3 rounded-lg px-2 py-2.5 -mx-2 transition-colors hover:bg-primary-tint"
+                        className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors duration-200 hover:bg-muted/60"
                       >
-                        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", tone)}>
+                        <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", tone)}>
                           <Icon className="size-4" />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium text-foreground">{title}</span>
-                          <span className="block text-xs text-text-tertiary">{timeAgo(m.at)}</span>
+                          <span className="type-meta block text-text-tertiary">{timeAgo(m.at)}</span>
                         </span>
-                        <span className={cn("text-sm font-semibold tabular-nums", gain ? "text-success" : "text-foreground")}>
+                        <span className={cn("w-16 text-right text-sm font-semibold tabular-nums", gain ? "text-success" : "text-foreground")}>
                           {gain ? "+" : "−"}
                           {amount(m.amount)}
                         </span>
+                        <span className="type-meta hidden w-28 text-right text-text-tertiary tabular-nums sm:block">{formatTokens(Math.max(0, m.balanceAfter))}</span>
                       </motion.li>
                     )
                   })}
@@ -173,7 +193,7 @@ export function History({ history }: { history: TokenMove[] | null }) {
             ))}
           </AnimatePresence>
           {moves.length > limit && (
-            <button type="button" onClick={() => setLimit((l) => l + 20)} className="mx-auto flex items-center gap-1.5 rounded-full border bg-card px-4 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:border-primary/30 hover:text-primary">
+            <button type="button" onClick={() => setLimit((l) => l + 20)} className="mx-auto flex items-center gap-1.5 rounded-full border bg-card px-4 py-1.5 text-sm font-medium text-text-secondary transition-colors duration-200 hover:border-primary-line hover:bg-primary-tint hover:text-primary">
               Show more
               <ChevronDown className="size-4" />
             </button>

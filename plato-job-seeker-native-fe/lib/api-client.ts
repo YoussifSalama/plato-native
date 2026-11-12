@@ -17,6 +17,9 @@ if (typeof window !== "undefined") {
     (error) => {
       const res = error?.response
       if (res?.status === 402 && res.data?.code === "insufficient_tokens") window.dispatchEvent(new CustomEvent("plato:out-of-tokens", { detail: res.data }))
+      // Dead session (expired, or the account is gone): back to login. Auth calls
+      // own their 401s (a wrong password is a 401 too).
+      if (res?.status === 401 && !String(error.config?.url ?? "").includes("/auth/") && window.location.pathname !== "/login") window.location.assign("/login")
       return Promise.reject(error)
     },
   )

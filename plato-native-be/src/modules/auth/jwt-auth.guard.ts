@@ -21,7 +21,8 @@ export function forgetSessions(userId: string) {
   cutoffs.delete(userId);
 }
 
-async function sessionsValidAfter(userId: string): Promise<number> {
+// null = the user row is gone (account deleted, DB reset): the token is dead.
+async function sessionsValidAfter(userId: string): Promise<number | null> {
   const hit = cutoffs.get(userId);
   if (hit && hit.until > Date.now()) return hit.after;
   const prisma = PrismaService.instance;
@@ -30,7 +31,8 @@ async function sessionsValidAfter(userId: string): Promise<number> {
     where: { id: userId },
     select: { sessions_valid_after: true },
   });
-  const after = user?.sessions_valid_after?.getTime() ?? 0;
+  if (!user) return null;
+  const after = user.sessions_valid_after?.getTime() ?? 0;
   if (cutoffs.size > 50_000) cutoffs.clear();
   cutoffs.set(userId, { after, until: Date.now() + SESSION_CACHE_MS });
   return after;
@@ -59,7 +61,7 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid or expired session');
     }
     const after = await sessionsValidAfter(payload.sub);
-    if (after && (payload.iat ?? 0) * 1000 < after)
+    if (after === null || (after && (payload.iat ?? 0) * 1000 < after))
       throw new UnauthorizedException('Invalid or expired session');
     request.userId = payload.sub;
     return true;

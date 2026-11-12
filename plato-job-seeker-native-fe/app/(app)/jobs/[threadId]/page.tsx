@@ -301,11 +301,11 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
         actions={
           <>
             {view === "results" && (
-              <InputGroup data-tour="results-search" className="w-72 max-w-full rounded-full bg-card">
+              <InputGroup data-tour="results-search" className="w-80 max-w-full rounded-full bg-card">
                 <InputGroupAddon>
                   <Search />
                 </InputGroupAddon>
-                <InputGroupInput value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search results" placeholder="Search by title, company, or keyword" />
+                <InputGroupInput value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search results" placeholder="Search title, company, place or skill" />
               </InputGroup>
             )}
             {/* On results the sidebar has New search; one button, not two. */}

@@ -318,7 +318,7 @@ async function exportMatches(params: MatchFilters, filename = "plato-jobs.xlsx")
   a.click()
   URL.revokeObjectURL(url)
 }
-const getFacets = (threadId: string, tab: MatchTab) =>
+const getFacets = (threadId: string | undefined, tab: MatchTab) =>
   request<Facets>(apiClient.get("/job-seeker/discovered-jobs/facets", { params: { threadId, tab } }))
 const setSaved = (jobId: string, value: boolean) =>
   request<{ job_id: string; saved: boolean }>(apiClient.post(`/job-seeker/matches/${jobId}/saved`, { value }))

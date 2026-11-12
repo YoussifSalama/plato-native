@@ -46,6 +46,7 @@ import { LocalIndexAdapter } from './adapters/local-index.adapter';
 import { PublicBoardsAdapter } from './adapters/public-boards.adapter';
 import { buildJobSeekerSnapshot, residenceOf } from './job-seeker-snapshot';
 import { MatchingService } from './matching.service';
+import { textWhere } from './match-text';
 import { buildDiscoveryQuery } from './query-builder';
 import { DiscoveryQueryOverrides, mergeDiscoveryQuery } from './query-merge';
 import { RunProgressBus } from './run-progress.bus';
@@ -1200,13 +1201,7 @@ export class DiscoveryService implements OnModuleInit {
     if (filters.level) and.push(levelWhere(filters.level));
     if (filters.jobType) and.push(jobTypeWhere(filters.jobType));
     if (filters.location) and.push(locationWhere(filters.location));
-    if (filters.q)
-      and.push({
-        OR: [
-          { title: { contains: filters.q, mode: 'insensitive' } },
-          { company: { contains: filters.q, mode: 'insensitive' } },
-        ],
-      });
+    and.push(...textWhere(filters.q));
     if (and.length) job.AND = and;
 
     // Results belong to the conversation: any of its runs, old or new

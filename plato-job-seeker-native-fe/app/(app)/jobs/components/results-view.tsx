@@ -296,7 +296,14 @@ type Query = { filters: MatchFilters; sort: MatchSort; page: number }
 const EMPTY_QUERY: Query = { filters: {}, sort: "best", page: 0 }
 
 // `tabs`: the list switcher (Discover, Saved…) from the page, shown in the toolbar.
-function ResultsView({ run, threadId, tab, q, command, onState, tabs }: { run: DiscoveryRun; threadId: string; tab: MatchTab; q: string; command: UiCommand | null; onState?: (s: { items: JobMatch[]; filters: MatchFilters; sort: MatchSort }) => void; tabs?: React.ReactNode }) {
+// No run / threadId: All jobs, every search at once.
+function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: { run?: DiscoveryRun; threadId?: string; tab: MatchTab; q: string; command: UiCommand | null; onState?: (s: { items: JobMatch[]; filters: MatchFilters; sort: MatchSort }) => void; tabs?: React.ReactNode }) {
+  // The search box, settled: one request after typing stops, not one per key.
+  const [q, setQ] = useState(typed)
+  useEffect(() => {
+    const t = setTimeout(() => setQ(typed.trim()), 300)
+    return () => clearTimeout(t)
+  }, [typed])
   // Rows or cards, remembered per browser; the same choice as All jobs.
   const [cards, setCards] = useState(false)
   useEffect(() => {
@@ -451,6 +458,8 @@ function ResultsView({ run, threadId, tab, q, command, onState, tabs }: { run: D
     patchItem(m.job.id, { hidden: !m.hidden })
     try {
       await setHidden(m.job.id, !m.hidden)
+      // Shown again: it leaves the Hidden list.
+      if (m.hidden && tab === "hidden") setData((d) => (d ? { ...d, total: d.total - 1, items: d.items.filter((x) => x.job.id !== m.job.id) } : d))
       if (!m.hidden && (tab === "discover" || tab === "recommended")) {
         setData((d) => (d ? { ...d, total: d.total - 1, items: d.items.filter((x) => x.job.id !== m.job.id) } : d))
         setSelected((prev) => {
@@ -488,7 +497,7 @@ function ResultsView({ run, threadId, tab, q, command, onState, tabs }: { run: D
   const from = stats.total ? page * PAGE_SIZE + 1 : 0
   const to = Math.min((page + 1) * PAGE_SIZE, stats.total)
   const hiddenElsewhere = tab === "discover" && filters.acceptsCountry && elsewhere > stats.total ? elsewhere - stats.total : 0
-  const heroTitle = tab === "saved" ? `${stats.total} saved job${stats.total === 1 ? "" : "s"}` : tab === "applied" ? `${stats.total} application${stats.total === 1 ? "" : "s"} with Plato` : tab === "recommended" ? `${stats.total} recommendations across all your searches` : `${stats.total} matches for you`
+  const heroTitle = tab === "saved" ? `${stats.total} saved job${stats.total === 1 ? "" : "s"}` : tab === "applied" ? `${stats.total} application${stats.total === 1 ? "" : "s"} with Plato` : tab === "recommended" ? `${stats.total} recommendations across all your searches` : tab === "hidden" ? `${stats.total} hidden job${stats.total === 1 ? "" : "s"}` : `${stats.total} matches for you`
 
   return (
     <motion.div variants={staggerContainer} initial="hidden" animate="show" className="flex flex-col gap-4">
@@ -500,7 +509,7 @@ function ResultsView({ run, threadId, tab, q, command, onState, tabs }: { run: D
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 font-bold text-foreground">
             {heroTitle}
-            <InfoTip text={`Plato read ${run.fetched.toLocaleString()} postings for this search and kept the ones that fit your profile. The % on each job is how well its title and description match your roles, skills and experience. Listings link to the original posting; Plato is not the employer.`} label="How these were picked" />
+            <InfoTip text={`${run ? `Plato read ${run.fetched.toLocaleString()} postings for this search` : "Jobs from all your searches"} and kept the ones that fit your profile. The % on each job is how well its title and description match your roles, skills and experience. Listings link to the original posting; Plato is not the employer.`} label="How these were picked" />
           </p>
           <p className="text-[13px] text-text-secondary">Best matches first. Tick the ones you want, or let Plato apply to the top {TOP_N}.</p>
         </div>

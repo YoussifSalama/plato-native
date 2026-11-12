@@ -14,10 +14,8 @@ import {
   ChevronRight,
   CircleCheck,
   ClipboardList,
-  Clock,
   Copy,
   Inbox,
-  ListChecks,
   ExternalLink,
   EyeOff,
   FileSpreadsheet,
@@ -41,8 +39,9 @@ import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
 import { CompanyAvatar } from "@/components/company-avatar"
 import { APPLICATION_STATUS, applicationHref, applicationReason } from "@/lib/jobs/application-status"
 import { Skeleton } from "@/components/ui/skeleton"
-import { CARD, EmptyState, Kpi, SectionHeader, StatIcon } from "@/components/plato-ui"
+import { CARD, EmptyState, Kpi, StatIcon } from "@/components/plato-ui"
 import { InfoTip } from "@/components/info-tip"
+import { getProfile } from "@/lib/documents/api"
 
 const PAGE_SIZE = 10
 const TOP_N = 15
@@ -281,8 +280,14 @@ function JobRow({ match, selected, highlight, position, onToggle, onSave, onHide
         <IconButton data-ai={`results.mock-interview:${position}`} aria-label="Practise the interview for this job" title={prepping ? "Opening the interview practice…" : "Practise the interview for this job"} disabled={prepping} onClick={mock}>
           {prepping ? <Loader2 className="size-4 animate-spin" /> : <Bot className="size-4" />}
         </IconButton>
+        <a href={job.url} target="_blank" rel="noreferrer" data-ai={`results.open:${position}`} aria-label={`Open the ${job.title} posting`} title="Open the original posting" className="flex size-[30px] items-center justify-center rounded-md text-lavender transition-colors duration-200 hover:bg-primary-soft hover:text-primary">
+          <ExternalLink className="size-4" />
+        </a>
         <IconButton data-ai={`results.save:${position}`} aria-label={match.saved ? "Remove from saved" : "Save job"} aria-pressed={match.saved} active={match.saved} onClick={onSave}>
           <Bookmark className={cn("size-4", match.saved && "fill-current")} />
+        </IconButton>
+        <IconButton data-ai={`results.hide:${position}`} aria-label={match.hidden ? "Show again" : "Not interested"} title={match.hidden ? "Show again" : "Not interested"} onClick={onHide}>
+          {match.hidden ? <Undo2 className="size-4" /> : <EyeOff className="size-4" />}
         </IconButton>
         <RowMenu match={match} onSave={onSave} onHide={onHide} />
       </div>
@@ -311,8 +316,20 @@ function ResultsView({ run, threadId, tab, q, command, onState }: { run: Discove
   const [data, setData] = useState<{ total: number; items: JobMatch[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [facets, setFacets] = useState<Facets | null>(null)
+  // Where the seeker lives: "Can apply from <country>" starts on, as on All jobs.
+  // undefined = not known yet; the list waits for it so it loads once.
+  const [country, setCountry] = useState<string | null | undefined>(undefined)
+  const [elsewhere, setElsewhere] = useState(0)
+  useEffect(() => {
+    getProfile()
+      .then((p) => p.location?.country ?? null)
+      .catch(() => null)
+      .then((c) => {
+        setCountry(c)
+        if (c) setQuery((prev) => ({ ...prev, filters: { acceptsCountry: c, ...prev.filters } }))
+      })
+  }, [])
   const [selected, setSelected] = useState<Map<string, JobMatch>>(new Map())
-  const [showAllSelected, setShowAllSelected] = useState(false)
   const applying = null // "Apply" only opens the connect modal now; the extension does the applying
   const [notice, setNotice] = useState<string | null>(null)
   // 1-based row the assistant pointed at; cleared after a few seconds.
@@ -353,7 +370,9 @@ function ResultsView({ run, threadId, tab, q, command, onState }: { run: Discove
     return () => clearTimeout(t)
   }, [focusPos])
   const setFilter = <K extends keyof MatchFilters>(key: K, value: MatchFilters[K]) => update({ filters: { ...filters, [key]: value } })
-  const activeFilterCount = Object.values(filters).filter((v) => v !== undefined && v !== false).length
+  const activeFilterCount = Object.entries(filters).filter(([k, v]) => k !== "acceptsCountry" && v !== undefined && v !== false).length
+  const clearFilters = () => update({ filters: filters.acceptsCountry ? { acceptsCountry: filters.acceptsCountry } : {} })
+  const fromCountry = filters.acceptsCountry ?? country
 
   // Options come from the data itself: only values that exist, with the
   // count the filter will return.
@@ -369,7 +388,6 @@ function ResultsView({ run, threadId, tab, q, command, onState }: { run: Discove
   const postedOptions = [opt(ANY, "Posted"), ...(facets?.posted ?? []).filter((p) => p.count > 0).map((p) => opt(String(p.value), postedLabel(p.value), p.count))]
   const salaryOptions = [
     opt(ANY, "Salary"),
-    ...(facets && facets.salary.hasSalary > 0 ? [opt("has", "Has salary info", facets.salary.hasSalary)] : []),
     ...(facets?.salary.atLeast ?? []).filter((s) => s.count > 0).map((s) => opt(String(s.value), `≥ ${s.value / 1000}K`, s.count)),
   ]
 
@@ -386,6 +404,7 @@ function ResultsView({ run, threadId, tab, q, command, onState }: { run: Discove
   }, [tab, q])
 
   useEffect(() => {
+    if (country === undefined) return
     let cancelled = false
     getMatches({ ...filters, sort, tab, q: q || undefined, threadId, skip: page * PAGE_SIZE, take: PAGE_SIZE })
       .then((d) => {
@@ -394,10 +413,15 @@ function ResultsView({ run, threadId, tab, q, command, onState }: { run: Discove
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
+    // How many the country filter hides, for "3 hidden because they don't accept applicants from Egypt".
+    if (filters.acceptsCountry)
+      getMatches({ ...filters, acceptsCountry: undefined, sort, tab, q: q || undefined, threadId, take: 1 })
+        .then((d) => !cancelled && setElsewhere(d.total))
+        .catch(() => undefined)
     return () => {
       cancelled = true
     }
-  }, [filters, sort, tab, q, page, threadId])
+  }, [filters, sort, tab, q, page, threadId, country])
 
   const stats = useMemo(() => {
     const items = data?.items ?? []
@@ -462,6 +486,7 @@ function ResultsView({ run, threadId, tab, q, command, onState }: { run: Discove
   const selectedList = [...selected.values()]
   const from = stats.total ? page * PAGE_SIZE + 1 : 0
   const to = Math.min((page + 1) * PAGE_SIZE, stats.total)
+  const hiddenElsewhere = tab === "discover" && filters.acceptsCountry && elsewhere > stats.total ? elsewhere - stats.total : 0
   const heroTitle = tab === "saved" ? `${stats.total} saved job${stats.total === 1 ? "" : "s"}` : tab === "applied" ? `${stats.total} application${stats.total === 1 ? "" : "s"} with Plato` : tab === "recommended" ? `${stats.total} recommendations across all your searches` : `I found ${stats.total} great matches for you!`
 
   return (
@@ -536,23 +561,23 @@ function ResultsView({ run, threadId, tab, q, command, onState }: { run: Discove
         )}
       </AnimatePresence>
 
-      <div className="flex flex-col items-start gap-5 xl:flex-row">
-        <div className="flex min-w-0 flex-1 flex-col gap-4 self-stretch">
-          <motion.div variants={fadeUpItem} data-ai="results.filters" className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <FilterSelect label="Location" value={filters.location ?? ANY} options={locationOptions} onChange={(v) => setFilter("location", v === ANY ? undefined : v)} className="max-w-56" />
-              <FilterSelect label="Job type" value={filters.jobType ?? ANY} options={jobTypeOptions} onChange={(v) => setFilter("jobType", v === ANY ? undefined : (v as JobTypeKey))} />
-              <FilterSelect label="Source" value={filters.source ?? ANY} options={sourceOptions} onChange={(v) => setFilter("source", v === ANY ? undefined : (v as JobSourceName))} />
-              <FilterSelect label="Posted" value={filters.postedWithinDays ? String(filters.postedWithinDays) : ANY} options={postedOptions} onChange={(v) => setFilter("postedWithinDays", v === ANY ? undefined : Number(v))} />
-              <FilterSelect label="Experience level" value={filters.level ?? ANY} options={levelOptions} onChange={(v) => setFilter("level", v === ANY ? undefined : (v as MatchLevel))} />
-              <FilterSelect
-                label="Salary"
-                value={filters.hasSalary ? "has" : filters.salaryMin ? String(filters.salaryMin) : ANY}
-                options={salaryOptions}
-                onChange={(v) => update({ filters: { ...filters, hasSalary: v === "has" ? true : undefined, salaryMin: v !== ANY && v !== "has" ? Number(v) : undefined } })}
-              />
+      <div className="flex min-w-0 flex-col gap-4">
+          <motion.div variants={fadeUpItem} data-ai="results.filters" className={cn(CARD, "flex flex-col gap-3 p-3")}>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* One click: the filters people flip most. */}
+              {fromCountry && (
+                <span className="flex items-center gap-1">
+                  <FilterChip on={!!filters.acceptsCountry} onClick={() => setFilter("acceptsCountry", filters.acceptsCountry ? undefined : fromCountry)}>
+                    Can apply from {fromCountry}
+                  </FilterChip>
+                  <InfoTip text={`Hides jobs whose posting says it only takes applicants from regions that leave out ${fromCountry}. Jobs that state no restriction stay in.`} label={`What Can apply from ${fromCountry} does`} />
+                </span>
+              )}
               <FilterChip on={filters.remoteType === "REMOTE"} onClick={() => setFilter("remoteType", filters.remoteType === "REMOTE" ? undefined : "REMOTE")}>
-                Remote{facets ? ` (${facets.remote})` : ""}
+                Remote{facets ? ` · ${facets.remote}` : ""}
+              </FilterChip>
+              <FilterChip on={!!filters.hasSalary} onClick={() => update({ filters: { ...filters, hasSalary: filters.hasSalary ? undefined : true, salaryMin: undefined } })}>
+                Shows salary{facets ? ` · ${facets.salary.hasSalary}` : ""}
               </FilterChip>
               {filters.salaryCurrency && (
                 <span title="Only jobs that show pay in these currencies">
@@ -561,40 +586,49 @@ function ResultsView({ run, threadId, tab, q, command, onState }: { run: Discove
                   </FilterChip>
                 </span>
               )}
-              {filters.acceptsCountry && (
-                <span className="flex items-center gap-1">
-                  <FilterChip on onClick={() => setFilter("acceptsCountry", undefined)}>
-                    Open to {filters.acceptsCountry} <X className="size-3.5" />
-                  </FilterChip>
-                  <InfoTip text={`Hides jobs whose posting says it only takes applicants from regions that leave out ${filters.acceptsCountry}. Jobs that state no restriction stay in.`} label={`What Open to ${filters.acceptsCountry} does`} />
-                </span>
-              )}
+              <span className="ml-auto flex items-center gap-2 text-[13px] whitespace-nowrap text-muted-foreground">
+                Sort by
+                <FilterSelect label="Sort by" value={sort} options={SORT_OPTIONS} defaultValue={SORT_OPTIONS[0].value} onChange={(v) => update({ sort: v })} />
+                <button
+                  type="button"
+                  disabled={exporting || !data?.total}
+                  onClick={() => {
+                    setExporting(true)
+                    exportMatches({ ...filters, sort, tab, q: q || undefined, threadId }, `plato-jobs-${tab}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+                      .catch(() => {})
+                      .finally(() => setExporting(false))
+                  }}
+                  title="Download this list as an Excel sheet"
+                  className={cn(PILL, "gap-1.5 disabled:opacity-50")}
+                >
+                  {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
+                  Export
+                </button>
+              </span>
+            </div>
+            {/* Narrow down: every option shows how many jobs it keeps. */}
+            <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-3">
+              <FilterSelect label="Location" value={filters.location ?? ANY} options={locationOptions} onChange={(v) => setFilter("location", v === ANY ? undefined : v)} className="max-w-56" />
+              <FilterSelect label="Experience level" value={filters.level ?? ANY} options={levelOptions} onChange={(v) => setFilter("level", v === ANY ? undefined : (v as MatchLevel))} />
+              <FilterSelect label="Job type" value={filters.jobType ?? ANY} options={jobTypeOptions} onChange={(v) => setFilter("jobType", v === ANY ? undefined : (v as JobTypeKey))} />
+              <FilterSelect label="Posted" value={filters.postedWithinDays ? String(filters.postedWithinDays) : ANY} options={postedOptions} onChange={(v) => setFilter("postedWithinDays", v === ANY ? undefined : Number(v))} />
+              <FilterSelect label="Salary" value={filters.salaryMin ? String(filters.salaryMin) : ANY} options={salaryOptions} onChange={(v) => update({ filters: { ...filters, hasSalary: undefined, salaryMin: v === ANY ? undefined : Number(v) } })} />
+              <FilterSelect label="Source" value={filters.source ?? ANY} options={sourceOptions} onChange={(v) => setFilter("source", v === ANY ? undefined : (v as JobSourceName))} />
               {activeFilterCount > 0 && (
-                <button type="button" onClick={() => update({ filters: {} })} className={cn(PILL, "text-primary")}>
+                <button type="button" onClick={clearFilters} className={cn(PILL, "text-primary")}>
                   <X className="size-3.5" />
                   Clear {activeFilterCount}
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2 text-[13px] whitespace-nowrap text-muted-foreground">
-              <button
-                type="button"
-                disabled={exporting || !data?.total}
-                onClick={() => {
-                  setExporting(true)
-                  exportMatches({ ...filters, sort, tab, q: q || undefined, threadId }, `plato-jobs-${tab}-${new Date().toISOString().slice(0, 10)}.xlsx`)
-                    .catch(() => {})
-                    .finally(() => setExporting(false))
-                }}
-                title="Download this list as an Excel sheet"
-                className={cn(PILL, "gap-1.5 disabled:opacity-50")}
-              >
-                {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
-                Export
-              </button>
-              Sort by:
-              <FilterSelect label="Sort by" value={sort} options={SORT_OPTIONS} defaultValue={SORT_OPTIONS[0].value} onChange={(v) => update({ sort: v })} />
-            </div>
+            {hiddenElsewhere > 0 && (
+              <p className="px-1 text-[13px] text-text-secondary">
+                {hiddenElsewhere} hidden because they don&apos;t accept applicants from {filters.acceptsCountry}.{" "}
+                <button type="button" onClick={() => setFilter("acceptsCountry", undefined)} className="font-semibold text-primary hover:underline">
+                  Show them
+                </button>
+              </p>
+            )}
           </motion.div>
 
           <motion.div data-tour="results-list" variants={fadeUpItem} className={cn(CARD, "px-5 py-1")}>
@@ -626,6 +660,28 @@ function ResultsView({ run, threadId, tab, q, command, onState }: { run: Discove
             )}
           </motion.div>
 
+          {/* What is ticked, always in reach while scrolling the list. */}
+          <AnimatePresence>
+            {selected.size > 0 && (
+              <motion.div data-tour="results-selection" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }} className="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-primary-line bg-card px-4 py-3 shadow-[0_18px_44px_-24px_rgba(0,91,167,0.45)]">
+                <span className="flex -space-x-2">
+                  {selectedList.slice(0, 3).map((m) => (
+                    <CompanyAvatar key={m.job.id} name={m.job.company} domain={m.job.company_domain} size={28} />
+                  ))}
+                </span>
+                <span className="text-sm font-semibold text-foreground">
+                  {selected.size} job{selected.size === 1 ? "" : "s"} selected
+                </span>
+                <button type="button" onClick={() => setSelected(new Map())} className="text-[13px] font-semibold text-text-secondary transition-colors duration-200 hover:text-foreground">
+                  Clear
+                </button>
+                <button type="button" data-ai="results.apply-selected-bar" onClick={() => askApply("selected")} className="ml-auto rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-colors duration-200 hover:bg-primary-hover">
+                  Apply to {selected.size} selected
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <motion.div variants={fadeUpItem} className="flex flex-wrap items-center justify-between gap-3 px-1 pb-5">
             <span className="text-[13px] text-muted-foreground">
               Showing {from} to {to} of {stats.total} jobs
@@ -648,72 +704,6 @@ function ResultsView({ run, threadId, tab, q, command, onState }: { run: Discove
               </button>
             </div>
           </motion.div>
-        </div>
-
-        <motion.aside variants={fadeUpItem} className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-6 xl:w-[320px]">
-          <div className="flex flex-col gap-3.5 rounded-2xl bg-primary p-5 text-primary-foreground shadow-brand">
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-[34px] items-center justify-center rounded-lg bg-white/15">
-                <Bot className="size-[17px]" />
-              </span>
-              <span className="text-base font-bold">Plato AI</span>
-              <Sparkles className="-ml-0.5 size-3.5 fill-current" />
-            </div>
-            <div className="flex flex-col gap-2 rounded-lg bg-white/12 p-4">
-              <p className="text-[15px] font-bold">I can apply to these jobs for you.</p>
-              <p className="text-[13px] leading-[1.5] text-white/85">I&apos;ll tailor your application, write custom answers, and track everything.</p>
-            </div>
-            <button type="button" disabled={!!applying || !stats.total} onClick={() => askApply("top")} className="rounded-full bg-white py-2.5 text-sm font-bold text-primary transition-colors duration-200 hover:bg-white/90 disabled:opacity-60">
-              Apply to top {TOP_N} jobs
-            </button>
-            <button type="button" disabled={!!applying || !selectedIds.length} onClick={() => askApply("selected")} className="rounded-full bg-white/14 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white/20 disabled:opacity-60">
-              {selectedIds.length ? `Apply to ${selectedIds.length} selected` : "Choose jobs to apply"}
-            </button>
-          </div>
-
-          <div data-tour="results-selection" className={cn(CARD, "flex flex-col gap-3 p-4")}>
-            <div className="flex items-center justify-between">
-              <SectionHeader as="h3" title="Your selection" icon={ListChecks} accent="azure" className="[&_h3]:type-card-title" />
-              {selected.size > 0 && (
-                <button type="button" onClick={() => setSelected(new Map())} className="text-[13px] font-semibold text-primary transition-colors duration-200 hover:text-primary-hover">
-                  Clear
-                </button>
-              )}
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[13px] text-text-tertiary">{selected.size} jobs selected</span>
-              {selected.size > 3 && (
-                <button type="button" onClick={() => setShowAllSelected((s) => !s)} className="text-[13px] font-semibold text-primary transition-colors duration-200 hover:text-primary-hover">
-                  {showAllSelected ? "Show less" : "View all"}
-                </button>
-              )}
-            </div>
-            {(showAllSelected ? selectedList : selectedList.slice(0, 3)).map((m) => (
-              <div key={m.job.id} className="-mx-2 flex items-center gap-2.5 rounded-lg px-2 py-1 transition-colors duration-200 hover:bg-muted/60">
-                <CompanyAvatar name={m.job.company} domain={m.job.company_domain} size={34} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-bold text-foreground">{m.job.title}</p>
-                  <p className="truncate text-xs text-text-tertiary">{m.job.company}</p>
-                </div>
-                <span className="shrink-0 text-xs font-bold whitespace-nowrap text-success-ink tabular-nums">{m.match_percent}% match</span>
-                <button type="button" aria-label="Remove" onClick={() => toggleSelected(m)} className="rounded-md p-0.5 text-lavender transition-colors duration-200 hover:text-destructive">
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            ))}
-            {selected.size === 0 && <p className="text-xs text-text-tertiary">Tick jobs in the list, or let Plato pick the top {TOP_N}.</p>}
-          </div>
-
-          <div className={cn(CARD, "flex flex-col gap-3.5 p-4")}>
-            <SectionHeader as="h3" title="How it works" icon={Clock} accent="azure" className="[&_h3]:type-card-title" />
-            {["You select jobs (or I'll pick the best ones)", "I review requirements & prepare applications", "I'll ask for anything I need from you", "I apply and keep you updated"].map((s, i) => (
-              <div key={s} className="flex items-start gap-2.5">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[11px] font-bold text-primary">{i + 1}</span>
-                <span className="text-[13px] leading-[1.4] text-text-secondary">{s}</span>
-              </div>
-            ))}
-          </div>
-        </motion.aside>
       </div>
     </motion.div>
   )

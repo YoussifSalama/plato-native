@@ -38,6 +38,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 const SearchingView = dynamic(() => import("../components/searching-view").then((m) => m.SearchingView), { loading: () => <Skeleton className="h-[560px] w-full rounded-2xl" /> })
 import { useJourneyLog } from "../components/journey/use-journey-log"
 import { ResultsView } from "../components/results-view"
+import { SearchesSidebar } from "../components/searches-sidebar"
 import { PillTabs } from "@/components/pill-tabs"
 import { InfoTip } from "@/components/info-tip"
 
@@ -329,11 +330,15 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
 
       {thread && run && view === "searching" && progress && <SearchingView run={run} progress={progress} journey={journey} onFinished={finishJourney} />}
 
+      {/* Results share the Jobs sidebar: every search, All jobs and Following one click away. */}
       {thread && run && view === "results" && (
-        <>
-          {run.status === "FAILED" && <p data-tour="search-failed" role="alert" className="rounded-xl border border-l-4 border-l-destructive bg-card px-4 py-3 text-sm text-foreground shadow-card">The last search failed: {run.error}. Ask Plato to try again.</p>}
-          <ResultsView run={run} threadId={thread.id} tab={tab} q={q} command={command} onState={reportScreen} />
-        </>
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <SearchesSidebar activeId={thread.id} />
+          <div className="flex min-w-0 flex-col gap-5">
+            {run.status === "FAILED" && <p data-tour="search-failed" role="alert" className="rounded-xl border border-l-4 border-l-destructive bg-card px-4 py-3 text-sm text-foreground shadow-card">The last search failed: {run.error}. Ask Plato to try again.</p>}
+            <ResultsView run={run} threadId={thread.id} tab={tab} q={q} command={command} onState={reportScreen} />
+          </div>
+        </div>
       )}
       {/* Searching and results: the one Plato AI panel (layout) takes over this thread. */}
     </div>

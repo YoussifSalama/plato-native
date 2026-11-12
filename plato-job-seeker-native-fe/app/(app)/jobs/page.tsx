@@ -1,15 +1,13 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
-import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "motion/react"
-import { Bookmark, Briefcase, Building2, LayoutGrid, Rows3, X, ChevronLeft, ChevronRight, EyeOff, Loader2, Plus, Send, Sparkles } from "lucide-react"
+import { Bookmark, ExternalLink, LayoutGrid, Rows3, X, ChevronLeft, ChevronRight, EyeOff, Plus, Send, Sparkles } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { PAGE } from "@/components/page-header"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PillTabs, type PillTab } from "@/components/pill-tabs"
 import { FilterChip, FilterSelect } from "@/components/filter-controls"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -17,21 +15,18 @@ import { ExtensionApplyModal } from "@/components/extension-apply-modal"
 import { InfoTip } from "@/components/info-tip"
 import { EmptyState, MatchPill, MonoTile, PlatoNote } from "@/components/plato-ui"
 import { getProfile } from "@/lib/documents/api"
-import { getDigests, getInsights } from "@/lib/insights/api"
-import { createThread, getDiscoveryStats, getMatches, listThreads, setHidden, setSaved, type DiscoveryStats, type JobMatch, type MatchFilters, type MatchTab, type ThreadSummary } from "@/lib/jobs/api"
+import { createThread, getDiscoveryStats, getMatches, setHidden, setSaved, type DiscoveryStats, type JobMatch, type MatchFilters, type MatchTab, type ThreadSummary } from "@/lib/jobs/api"
 import { APPLICATION_STATUS } from "@/lib/jobs/application-status"
-import { runTitle, threadHref, timeAgo } from "@/lib/jobs/links"
+import { threadHref, timeAgo } from "@/lib/jobs/links"
+import { SearchesSidebar } from "./components/searches-sidebar"
 import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
 
 // Jobs (owner screen 06): your searches on the left, every match across them on the right.
 // Each search is a Plato chat thread (/jobs/[threadId]); "New search" starts one.
 const PAGE_SIZE = 10
-const ALL_SEARCHES = "all" // the mobile search picker's "no search" value
-const searchLabel = (t: ThreadSummary) => (t.title ?? (t.discovery_runs[0] ? runTitle(t.discovery_runs[0]) : "New search")) + (jobsIn(t) ? ` · ${jobsIn(t)}` : "")
 const REMOTE: Record<string, string> = { REMOTE: "Remote", HYBRID: "Hybrid", ONSITE: "On-site", UNKNOWN: "" }
 // Sources send FULL_TIME / Full Time / Full-time; show one form.
 const jobType = (t: string | null) => (t ? t.replace(/[_\s]+/g, "-").toLowerCase().replace(/^(full|part)time/, "$1-time").replace(/^./, (c) => c.toUpperCase()) : null)
-const GROUPS = ["Today", "Yesterday", "Previous 7 days", "Older"] as const
 const POSTED = [
   [0, "Posted: any time"],
   [1, "Posted: past day"],
@@ -39,27 +34,6 @@ const POSTED = [
   [7, "Posted: past week"],
   [30, "Posted: past month"],
 ] as const
-const groupOf = (iso: string) => {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const diff = (today.getTime() - new Date(iso).setHours(0, 0, 0, 0)) / 864e5
-  return diff <= 0 ? "Today" : diff <= 1 ? "Yesterday" : diff <= 7 ? "Previous 7 days" : "Older"
-}
-// Sidebar rows share the main sidebar's item look: 36px, white card when selected.
-const SIDE_ITEM = "flex h-9 w-full items-center gap-2.5 rounded-lg border px-2.5 text-[13.5px] font-medium transition-colors"
-const SIDE_ON = "border-primary-line bg-primary-tint font-semibold text-foreground"
-const SIDE_OFF = "border-transparent text-text-secondary hover:bg-muted/60 hover:text-foreground"
-// What tells two searches with the same title apart: where they looked.
-const searchWhere = (run: ThreadSummary["discovery_runs"][number]) => {
-  const q = run.query
-  const places = (q?.locations?.length ? q.locations : (q?.countries ?? [])).filter(Boolean)
-  const remote = q?.remoteTypes?.includes("REMOTE") ? "Remote" : null
-  return [remote, places.slice(0, 2).join(", ") + (places.length > 2 ? ` +${places.length - 2}` : "")].filter(Boolean).join(" · ")
-}
-const jobsIn = (t: ThreadSummary) => {
-  const run = t.discovery_runs[0]
-  return run ? (run.progress?.ranked ?? run.matched) : 0
-}
 const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`)
 type Filters = { local: boolean; remote: boolean; senior: boolean; posted: number; salary: boolean }
 
@@ -77,7 +51,6 @@ function JobsContent() {
     else q.set("tab", next)
     router.replace(q.toString() ? `/jobs?${q}` : "/jobs", { scroll: false })
   }
-  // A search picked in the sidebar filters this table (/jobs?search=<threadId>); the chat lives at /jobs/[threadId].
   // List or cards, remembered per browser (a personal layout choice).
   const [cards, setCards] = useState(false)
   useEffect(() => {
@@ -92,19 +65,14 @@ function JobsContent() {
       localStorage.setItem("plato.jobs.view", v)
     } catch {}
   }
+  // Old links (/jobs?search=<id>) open the search's own page, the one place a search lives.
   const searchId = params.get("search")
-  const setSearch = (id: string | null) => {
-    const q = new URLSearchParams(params.toString())
-    if (id) q.set("search", id)
-    else q.delete("search")
-    router.replace(q.toString() ? `/jobs?${q}` : "/jobs", { scroll: false })
-  }
+  useEffect(() => {
+    if (searchId) router.replace(threadHref(searchId))
+  }, [searchId, router])
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null)
   const [stats, setStats] = useState<DiscoveryStats | null>(null)
-  const [following, setFollowing] = useState<string[]>([])
-  const [digestJobs, setDigestJobs] = useState<{ company: string; closed?: boolean }[]>([])
   const [appliedTotal, setAppliedTotal] = useState<number | null>(null)
-  const [followedRoles, setFollowedRoles] = useState(0)
   const [country, setCountry] = useState<string | null>(null)
   const [filters, setFilters] = useState<Filters>({ local: true, remote: false, senior: false, posted: 0, salary: false })
   const [items, setItems] = useState<JobMatch[] | null>(null)
@@ -117,21 +85,9 @@ function JobsContent() {
   const [apply, setApply] = useState<string[] | null>(null)
 
   useEffect(() => {
-    listThreads()
-      .then(setThreads)
-      .catch(() => setThreads([]))
     getDiscoveryStats()
       .then(setStats)
       .catch(() => setStats(null))
-    getInsights()
-      .then((i) => {
-        setFollowing(i.alerts.filter((a) => a.kind === "COMPANY" && a.company).map((a) => a.company as string))
-        setFollowedRoles(i.alerts.filter((a) => a.kind === "FIELD").length)
-      })
-      .catch(() => setFollowing([]))
-    getDigests(1)
-      .then((d) => setDigestJobs(d[0]?.jobs ?? []))
-      .catch(() => setDigestJobs([]))
     // The Applied tab's count is what that tab lists (every status), not only the sent ones.
     getMatches({ tab: "applied", take: 1 })
       .then((r) => setAppliedTotal(r.total))
@@ -152,9 +108,8 @@ function JobsContent() {
       ...(filters.posted > 0 && { postedWithinDays: filters.posted }),
       ...(filters.salary && { hasSalary: true }),
       ...(company && { q: company }),
-      ...(searchId && { threadId: searchId }),
     }),
-    [tab, filters, country, company, searchId],
+    [tab, filters, country, company],
   )
   useEffect(() => {
     let alive = true
@@ -181,12 +136,6 @@ function JobsContent() {
     setPage(0)
     setItems(null)
     setSelected(new Set())
-  }
-  // A search with no ranked jobs (not started, running, failed) has nothing to filter: open its chat.
-  function pickSearch(id: string | null) {
-    const t = threads?.find((x) => x.id === id)
-    if (t && !jobsIn(t)) router.push(threadHref(t.id))
-    else change(() => setSearch(id))
   }
   async function newSearch() {
     setCreating(true)
@@ -220,10 +169,6 @@ function JobsContent() {
     setSelected(new Set((r?.items ?? items ?? []).filter(open).slice(0, 10).map((m) => m.job.id)))
   }
   const hidden = query.acceptsCountry && elsewhere > total ? elsewhere - total : 0
-  const grouped = GROUPS.map((g) => ({ g, ts: (threads ?? []).filter((t) => groupOf(t.updated_at) === g) })).filter((x) => x.ts.length)
-  // Same count as the Following page: open roles in the latest digest at companies you follow.
-  const followed = new Set(following.map((c) => c.toLowerCase()))
-  const followingNew = digestJobs.filter((j) => !j.closed && followed.has(j.company.toLowerCase())).length
   const TABS: PillTab<MatchTab>[] = [
     { key: "discover", label: "For you" },
     { key: "saved", label: "Saved", count: stats?.saved },
@@ -231,24 +176,17 @@ function JobsContent() {
     { key: "hidden", label: "Hidden" },
   ]
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const activeThread = threads?.find((t) => t.id === searchId)
   // Which screen the page tour explains: no searches yet, an empty tab, or a tab with jobs.
   const screen = items === null ? undefined : items.length === 0 ? (tab === "discover" && threads?.length === 0 ? "jobs.new" : `jobs.${tab}.empty`) : `jobs.${tab}`
-  const searchTitle = activeThread ? (activeThread.title ?? (activeThread.discovery_runs[0] ? runTitle(activeThread.discovery_runs[0]) : "Search")) : "Search"
 
   return (
     // Same partition as the review page: the page title across the top, then two cards (searches | jobs).
     <div className={PAGE} data-tour-state={screen}>
         <header data-tour="page-header" className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-[260px] flex-1">
-            <h1 className="text-[28px] leading-tight font-extrabold tracking-tight">{company ? `Jobs at ${company}` : searchId ? searchTitle : "All jobs"}</h1>
+            <h1 className="text-[28px] leading-tight font-extrabold tracking-tight">{company ? `Jobs at ${company}` : "All jobs"}</h1>
             <p className="mt-1.5 text-[15px] text-text-secondary">
-              {searchId && (
-                <Link href={threadHref(searchId)} className="mr-2 font-semibold text-primary hover:underline">
-                  Refine with Plato →
-                </Link>
-              )}
-              {items === null && !error ? "Loading your matches…" : tab === "discover" ? `${total} strong matches ${searchId ? "in this search" : "across all your searches"}, best first.` : tab === "hidden" ? "Jobs you marked not interested. Bring one back with the eye button." : `${total} jobs.`}
+              {items === null && !error ? "Loading your matches…" : tab === "discover" ? `${total} strong matches across all your searches, best first.` : tab === "hidden" ? "Jobs you marked not interested. Bring one back with the eye button." : `${total} jobs.`}
               {items !== null && tab !== "hidden" && (
                 <InfoTip
                   className="mx-1"
@@ -275,87 +213,7 @@ function JobsContent() {
           </span>
         </header>
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
-      {/* Searches: each one is a Plato conversation that keeps running. */}
-      <aside data-tour="jobs-toolbar" className="no-scrollbar flex flex-col gap-4 rounded-2xl border bg-card p-3 shadow-card lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto">
-        {/* Pinned while the searches list scrolls under it. */}
-        <div className="z-10 -mx-3 -mt-3 flex flex-col gap-4 rounded-t-2xl border-b border-divider bg-card px-3 pt-3 pb-3 lg:sticky lg:-top-3 lg:shadow-[0_10px_12px_-12px_rgb(14_27_44/0.18)]">
-          <Button data-ai="jobs.new-search" onClick={newSearch} disabled={creating} className="w-full gap-2">
-            {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-            New search
-          </Button>
-          <nav aria-label="Job lists" className="flex flex-col gap-0.5">
-            <button type="button" aria-current={!searchId || undefined} onClick={() => change(() => setSearch(null))} className={cn(SIDE_ITEM, !searchId ? SIDE_ON : SIDE_OFF)}>
-              <Briefcase className={cn("size-4 shrink-0", !searchId ? "text-primary" : "text-text-tertiary")} strokeWidth={1.8} />
-              <span className="flex-1 truncate text-left">All jobs</span>
-              {stats?.newThisWeek ? <span className="rounded-full bg-primary-soft px-1.5 text-[11px] font-semibold text-primary tabular-nums">+{stats.newThisWeek}</span> : null}
-            </button>
-            <Link href="/following" data-ai="jobs.following" className={cn(SIDE_ITEM, SIDE_OFF)}>
-              <Building2 className="size-4 shrink-0 text-text-tertiary" strokeWidth={1.8} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate">Following</span>
-                <span className="block truncate text-[11.5px] font-normal text-text-tertiary">{following.length ? `${following.length} compan${following.length === 1 ? "y" : "ies"}${followedRoles ? ` · ${followedRoles} role${followedRoles === 1 ? "" : "s"}` : ""}` : "Hear when companies hire"}</span>
-              </span>
-              {followingNew > 0 && <span className="rounded-full bg-primary px-1.5 text-[11px] font-semibold text-white tabular-nums">{followingNew} new</span>}
-            </Link>
-          </nav>
-        </div>
-        {/* Below lg the list would push the jobs down a screen; a picker opens a search instead. */}
-        {!!threads?.length && (
-          <Select
-            items={[{ value: ALL_SEARCHES, label: `All jobs · your searches (${threads.length})` }, ...threads.map((t) => ({ value: t.id, label: searchLabel(t) }))]}
-            value={searchId ?? ALL_SEARCHES}
-            onValueChange={(v) => v != null && pickSearch(v === ALL_SEARCHES ? null : v)}
-          >
-            <SelectTrigger aria-label="Open one of your searches" className="h-11 w-full rounded-xl bg-card text-[15px] lg:hidden">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="start" alignItemWithTrigger={false}>
-              <SelectItem value={ALL_SEARCHES}>All jobs · your searches ({threads.length})</SelectItem>
-              {threads.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {searchLabel(t)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <nav data-tour="jobs-searches" aria-label="Your searches" className="hidden flex-col gap-3 border-t border-divider pt-4 lg:flex">
-          <p className="flex items-center justify-between px-2.5">
-            <span className="flex items-center gap-1.5">
-              <span className="eyebrow">Your searches</span>
-              <InfoTip text="Each search is a conversation with Plato. The number is how many jobs it ranked; pick one to see only its jobs here, or open it to refine it with Plato." label="What your searches are" side="right" />
-            </span>
-            {!!threads?.length && <span className="text-[11px] font-semibold text-text-tertiary tabular-nums">{threads.length}</span>}
-          </p>
-          {threads === null && (
-            <div className="flex flex-col gap-1.5 px-1">
-              {Array.from({ length: 4 }, (_, i) => (
-                <Skeleton key={i} className="h-11 rounded-lg" />
-              ))}
-            </div>
-          )}
-          {grouped.map(({ g, ts }) => (
-            <div key={g} className="flex flex-col gap-0.5">
-              <p className="px-2.5 pb-1 text-[11px] font-medium text-text-tertiary">{g}</p>
-              {ts.map((t) => {
-                const run = t.discovery_runs[0]
-                const n = jobsIn(t)
-                const on = t.id === searchId
-                return (
-                  <button key={t.id} type="button" aria-current={on || undefined} onClick={() => pickSearch(t.id)} data-ai={`jobs.search:${t.id}`} className={cn(SIDE_ITEM, "h-auto items-start py-2", on ? SIDE_ON : SIDE_OFF)}>
-                    <span className="min-w-0 flex-1 text-left">
-                      <span className={cn("block truncate", on && "text-primary")}>{(t.title ?? (run ? runTitle(run) : "New search")).replace(/ search$/i, "")}</span>
-                      <span className="block truncate text-[11.5px] font-normal text-text-tertiary">{[run && searchWhere(run), timeAgo(t.updated_at)].filter(Boolean).join(" · ")}</span>
-                    </span>
-                    {run?.status === "RUNNING" ? <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" /> : n > 0 && <span className={cn("mt-0.5 rounded-full px-1.5 text-[11px] font-semibold tabular-nums", on ? "bg-primary-soft text-primary" : "bg-muted text-text-secondary")}>{n}</span>}
-                  </button>
-                )
-              })}
-            </div>
-          ))}
-          {threads?.length === 0 && <p className="px-2.5 text-sm text-text-secondary">No searches yet. Start one and Plato ranks every posting for you.</p>}
-        </nav>
-      </aside>
+      <SearchesSidebar activeId={null} onThreads={setThreads} />
 
       <main className="flex min-w-0 flex-col gap-4">
 
@@ -404,11 +262,7 @@ function JobsContent() {
             title={tab === "saved" ? "Nothing saved yet" : tab === "applied" ? "No applications yet" : tab === "hidden" ? "Nothing hidden" : "No matches here yet"}
             hint={tab === "saved" ? "Bookmark a job to keep it here." : tab === "applied" ? "Select jobs and Plato applies for you." : tab === "hidden" ? "Jobs you mark not interested land here." : "Start a search and Plato ranks every posting against your profile."}
             action={
-              tab === "discover" && searchId ? (
-                <Button onClick={() => router.push(threadHref(searchId))} className="gap-2 rounded-xl">
-                  Open this search
-                </Button>
-              ) : tab === "discover" && (
+              tab === "discover" && (
                 <Button onClick={newSearch} disabled={creating} className="gap-2 rounded-xl">
                   <Plus className="size-4" />
                   New search
@@ -441,6 +295,9 @@ function JobsContent() {
               )
               const actions = (
                 <span className="ml-auto flex items-center gap-1">
+                  <a href={m.job.url} target="_blank" rel="noreferrer" aria-label={`Open the ${m.job.title} posting`} title="Open the original posting" className="flex size-9 items-center justify-center rounded-full text-lavender transition-colors hover:bg-muted hover:text-primary">
+                    <ExternalLink className="size-4" />
+                  </a>
                   <button type="button" onClick={() => toggleSave(m)} aria-pressed={m.saved} aria-label={m.saved ? "Unsave job" : "Save job"} className={cn("flex size-9 items-center justify-center rounded-full transition-[colors,opacity] hover:bg-muted focus-visible:opacity-100", m.saved ? "text-primary" : "text-lavender hover:text-text-secondary [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100")}>
                     <Bookmark className={cn("size-4", m.saved && "fill-current")} />
                   </button>

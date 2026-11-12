@@ -214,6 +214,11 @@ export class DiscoveryService implements OnModuleInit {
       jobSeekerId,
     );
     let query = mergeDiscoveryQuery(buildDiscoveryQuery(snapshot), overrides);
+    // Checked after the merge: titles asked for in chat count, not only saved roles.
+    if (!query.titles.length)
+      throw new BadRequestException(
+        'Set at least one desired job title before discovering jobs',
+      );
     // Places the rules can't place ("Kitchener", "Lyon") go to the model, so
     // country detection covers the world, not just the names we listed.
     // An explicit country list from chat is never second-guessed.
@@ -287,6 +292,18 @@ export class DiscoveryService implements OnModuleInit {
     threadId?: string,
   ) {
     const query = await this.buildQuery(jobSeekerId, overrides);
+    // The search is named by what was asked, so the sidebar and token history tell searches apart.
+    if (threadId)
+      await this.prisma.chatThread.update({
+        where: { id: threadId },
+        data: {
+          title:
+            `${(query.requestedTitles ?? query.titles).slice(0, 2).join(', ')} search`.slice(
+              0,
+              60,
+            ),
+        },
+      });
     const run = await this.prisma.discoveryRun.create({
       data: {
         job_seeker_id: jobSeekerId,

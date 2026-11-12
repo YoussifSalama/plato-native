@@ -484,18 +484,47 @@ export function createOrchestratorAgent(
   memory = '',
   // Career tools for this turn (CareerService.toolkit); get_plato_tokens is ours already.
   extraTools: Tool<OrchestratorContext>[] = [],
+  // The panel docked on other pages: answers and directions only, never runs a feature.
+  assistantOnly = false,
 ) {
   const own = new Set(
     [...orchestratorTools, ...rankingTools].map((t) => t.name),
   );
+  const tools = [
+    ...orchestratorTools,
+    ...rankingTools,
+    ...extraTools.filter((t) => !own.has(t.name)),
+  ];
   return new Agent<OrchestratorContext>({
     name: 'Plato AI',
-    instructions: `${INSTRUCTIONS}\n\n# ${TOKENS_RULES}\n\n# Seeker\n${describeSeeker(seeker.firstName, seeker.snapshot)}\n\n# Where you are\n${describeLive(live)}${memory}`,
+    instructions: `${INSTRUCTIONS}\n\n# ${TOKENS_RULES}\n\n# Seeker\n${describeSeeker(seeker.firstName, seeker.snapshot)}\n\n# Where you are\n${describeLive(live)}${memory}${assistantOnly ? ASSISTANT_ONLY : ''}`,
     model,
-    tools: [
-      ...orchestratorTools,
-      ...rankingTools,
-      ...extraTools.filter((t) => !own.has(t.name)),
-    ],
+    tools: assistantOnly
+      ? tools.filter((t) => ASSISTANT_TOOLS.has(t.name))
+      : tools,
   });
 }
+
+// Read-only tools plus open_path: the panel explains and points the way.
+export const ASSISTANT_TOOLS = new Set([
+  'get_plato_tokens',
+  'get_extension_progress',
+  'describe_page',
+  'open_path',
+  'get_search_status',
+  'get_application_readiness',
+  'check_salary_expectation',
+  'get_profile',
+  'list_shortlisted_jobs',
+  'get_job_details',
+]);
+
+const ASSISTANT_ONLY = `
+
+# Assistant mode (this panel)
+Here you are an assistant only: answer questions, explain the app, and open
+pages. You cannot start a job search, a mock interview, a resume, applications,
+or change any data, and the sections above about doing those do not apply.
+When the seeker wants one of those, say in one sentence where it's done and
+open that page with open_path (new search: /jobs, interviews and resumes:
+/career). Never mention errors or missing tools.`;

@@ -214,6 +214,7 @@ export function TopUps({ packs, monthlyPricePer1k }: { packs: TokenPrices["topup
               disabled={!!busy}
               onClick={() => void go(key, { pack: key }, { what: `${formatTokens(p.tokens)} tokens`, detail: `$${p.priceUsd}, one time, never expire` })}
               data-ai={`tokens.topup.${key}`}
+              aria-label={`Buy ${formatTokens(p.tokens)} tokens for $${p.priceUsd}`}
               className="group relative flex items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-card transition-[box-shadow,border-color] duration-200 hover:border-primary-line hover:shadow-[0_18px_44px_-28px_rgba(0,91,167,0.45)] disabled:opacity-60"
             >
               <span className="relative flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
@@ -232,6 +233,10 @@ export function TopUps({ packs, monthlyPricePer1k }: { packs: TokenPrices["topup
               <span className="flex flex-col items-end">
                 <span className="text-lg font-semibold text-foreground tabular-nums">${p.priceUsd}</span>
                 <span className="type-meta text-text-tertiary">one time</span>
+              </span>
+              {/* ponytail: the whole card is the button; this is its visible label */}
+              <span aria-hidden className="inline-flex h-9 shrink-0 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors group-hover:bg-primary/90">
+                Buy
               </span>
             </motion.button>
           )

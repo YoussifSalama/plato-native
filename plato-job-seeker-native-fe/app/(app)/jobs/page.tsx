@@ -182,6 +182,12 @@ function JobsContent() {
     setItems(null)
     setSelected(new Set())
   }
+  // A search with no ranked jobs (not started, running, failed) has nothing to filter: open its chat.
+  function pickSearch(id: string | null) {
+    const t = threads?.find((x) => x.id === id)
+    if (t && !jobsIn(t)) router.push(threadHref(t.id))
+    else change(() => setSearch(id))
+  }
   async function newSearch() {
     setCreating(true)
     try {
@@ -298,7 +304,7 @@ function JobsContent() {
           <Select
             items={[{ value: ALL_SEARCHES, label: `All jobs · your searches (${threads.length})` }, ...threads.map((t) => ({ value: t.id, label: searchLabel(t) }))]}
             value={searchId ?? ALL_SEARCHES}
-            onValueChange={(v) => v != null && change(() => setSearch(v === ALL_SEARCHES ? null : v))}
+            onValueChange={(v) => v != null && pickSearch(v === ALL_SEARCHES ? null : v)}
           >
             <SelectTrigger aria-label="Open one of your searches" className="h-11 w-full rounded-xl bg-card text-[15px] lg:hidden">
               <SelectValue />
@@ -336,7 +342,7 @@ function JobsContent() {
                 const n = jobsIn(t)
                 const on = t.id === searchId
                 return (
-                  <button key={t.id} type="button" aria-current={on || undefined} onClick={() => change(() => setSearch(t.id))} data-ai={`jobs.search:${t.id}`} className={cn(SIDE_ITEM, "h-auto items-start py-2", on ? SIDE_ON : SIDE_OFF)}>
+                  <button key={t.id} type="button" aria-current={on || undefined} onClick={() => pickSearch(t.id)} data-ai={`jobs.search:${t.id}`} className={cn(SIDE_ITEM, "h-auto items-start py-2", on ? SIDE_ON : SIDE_OFF)}>
                     <span className="min-w-0 flex-1 text-left">
                       <span className={cn("block truncate", on && "text-primary")}>{(t.title ?? (run ? runTitle(run) : "New search")).replace(/ search$/i, "")}</span>
                       <span className="block truncate text-[11.5px] font-normal text-text-tertiary">{[run && searchWhere(run), timeAgo(t.updated_at)].filter(Boolean).join(" · ")}</span>
@@ -398,7 +404,11 @@ function JobsContent() {
             title={tab === "saved" ? "Nothing saved yet" : tab === "applied" ? "No applications yet" : tab === "hidden" ? "Nothing hidden" : "No matches here yet"}
             hint={tab === "saved" ? "Bookmark a job to keep it here." : tab === "applied" ? "Select jobs and Plato applies for you." : tab === "hidden" ? "Jobs you mark not interested land here." : "Start a search and Plato ranks every posting against your profile."}
             action={
-              tab === "discover" && (
+              tab === "discover" && searchId ? (
+                <Button onClick={() => router.push(threadHref(searchId))} className="gap-2 rounded-xl">
+                  Open this search
+                </Button>
+              ) : tab === "discover" && (
                 <Button onClick={newSearch} disabled={creating} className="gap-2 rounded-xl">
                   <Plus className="size-4" />
                   New search

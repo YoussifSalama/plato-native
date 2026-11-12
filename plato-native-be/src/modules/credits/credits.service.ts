@@ -143,7 +143,11 @@ export class CreditsService implements OnModuleInit {
           balance_after: acc.balance,
           feature: row.feature,
           usage_event_id: usageEventId ?? null,
-          ...(row.model && { meta: { model: row.model } }),
+          // meta.thread names the search a chat charge belongs to (history label).
+          meta: {
+            ...(row.meta as object | undefined),
+            ...(row.model && { model: row.model }),
+          },
         },
       });
     } catch (e) {
@@ -340,7 +344,12 @@ export class CreditsService implements OnModuleInit {
         balanceAfter: shown(r.balance_after),
         feature: r.feature,
         label: r.feature
-          ? (FEATURE_LABELS[r.feature] ?? r.feature)
+          ? [
+              FEATURE_LABELS[r.feature] ?? r.feature,
+              (r.meta as { thread?: string } | null)?.thread,
+            ]
+              .filter(Boolean)
+              .join(' · ')
           : r.kind === 'grant'
             ? 'Monthly tokens'
             : r.kind === 'topup'

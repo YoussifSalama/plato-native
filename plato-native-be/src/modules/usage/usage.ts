@@ -55,14 +55,19 @@ export function metered<
   R extends {
     rawResponses: { usage: { inputTokens: number; outputTokens: number } }[];
   },
->(feature: string, model: string, result: R): R {
+>(
+  feature: string,
+  model: string,
+  result: R,
+  meta?: Prisma.InputJsonObject,
+): R {
   let input_tokens = 0;
   let output_tokens = 0;
   for (const r of result.rawResponses) {
     input_tokens += r.usage.inputTokens;
     output_tokens += r.usage.outputTokens;
   }
-  recordUsage({ feature, model, input_tokens, output_tokens });
+  recordUsage({ feature, model, input_tokens, output_tokens, meta });
   return result;
 }
 

@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { onboardingOptions } from '../../common/onboarding-options';
 import { DiscoveryQuery } from './adapters/types';
 import { JobSeekerSnapshot } from './job-seeker-snapshot';
@@ -25,11 +24,6 @@ export function buildDiscoveryQuery(
   const titles = [
     ...new Set(snapshot.roles.map((r) => r.trim()).filter(Boolean)),
   ];
-  if (!titles.length) {
-    throw new BadRequestException(
-      'Set at least one desired job title before discovering jobs',
-    );
-  }
 
   const locations = [
     ...new Set(

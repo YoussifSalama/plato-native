@@ -303,6 +303,8 @@ export class ChatThreadService {
       await elsewhereMemory(this.prisma, jobSeeker.id, 'search'),
       // Resumes built here have no career thread (this is a chat thread).
       careerTools(kit.deps) as Tool<OrchestratorContext>[],
+      // ui.page is only sent by the panel docked outside a search page.
+      !!ui.page,
     );
     const events: OrchestratorEvent[] = [];
     const context: OrchestratorContext = {
@@ -335,7 +337,17 @@ export class ChatThreadService {
       }
     }
     await streamed.completed;
-    const result = metered('chat.orchestrator', model, streamed);
+    // Read after the run: starting a search renames the thread.
+    const named = await this.prisma.chatThread.findUnique({
+      where: { id: threadId },
+      select: { title: true },
+    });
+    const result = metered(
+      'chat.orchestrator',
+      model,
+      streamed,
+      named?.title ? { thread: named.title } : undefined,
+    );
     // A control named from another page's map is not on this screen: go to its
     // page first (the app then sends the new page and the assistant clicks it).
     const onScreen = new Set(ui.pageMap?.elements.map((e) => e.id) ?? []);

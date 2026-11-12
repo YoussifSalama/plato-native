@@ -112,6 +112,22 @@ describe('country in the query', () => {
     expect(q.countries).toEqual(['CA', 'US']);
   });
 
+  it('takes titles from chat when no roles are saved', () => {
+    const q = buildDiscoveryQuery({
+      roles: [],
+      preferredLocations: [],
+      workSetup: [],
+      preferredIndustries: [],
+      jobTypes: [],
+      yearsExperience: null,
+      willingToRelocate: false,
+      visaSponsorshipRequired: false,
+    } as never);
+    expect(
+      mergeDiscoveryQuery(q, { titles: ['Full Stack Developer'] }).titles,
+    ).toEqual(['Full Stack Developer']);
+  });
+
   it('follows new places from chat, and an explicit list wins', () => {
     expect(mergeDiscoveryQuery(base, {}).countries).toEqual(['EG']);
     expect(

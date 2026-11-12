@@ -1,7 +1,7 @@
 {
   "name": "plato-extension",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs --flavor=production",
@@ -11,7 +11,8 @@
     "test:runtime": "node scripts/build.mjs --flavor=fixtures && node test/runtime/run.mjs",
     "test:runtime:v3": "node scripts/build.mjs --flavor=fixtures --engine=v3 --out=dist/fixtures-v3 && node test/runtime/v3.mjs",
     "lint": "eslint .",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "build:live": "PLATO_API_ORIGIN=https://api.platohiring.com PLATO_WEB_ORIGIN=https://jobs.platohiring.com node scripts/build.mjs --flavor=production"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

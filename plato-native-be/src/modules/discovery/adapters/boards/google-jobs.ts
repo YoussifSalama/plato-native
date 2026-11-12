@@ -27,9 +27,23 @@ interface GoogleJobItem {
   googleJobsUrl?: string;
 }
 
+// Google's panel also lists large employers' career-site postings, so it runs
+// for Egypt and the Gulf too, not only North America.
+export const GOOGLE_JOBS_COUNTRIES = [
+  'CA',
+  'US',
+  'EG',
+  'AE',
+  'SA',
+  'QA',
+  'KW',
+  'BH',
+  'OM',
+] as const;
+
 export const googleJobs = defineBoard<GoogleJobItem>({
   source: JobSource.GOOGLE_JOBS,
-  countries: ['CA', 'US'],
+  countries: [...GOOGLE_JOBS_COUNTRIES],
   actorId: 'scrapesage~google-jobs-scraper',
   input: ({ title, location, country, limit, query }) => ({
     queries: [title],

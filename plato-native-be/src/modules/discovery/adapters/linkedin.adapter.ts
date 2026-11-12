@@ -6,8 +6,9 @@ import { MAX_POSTING_AGE_DAYS } from '../discovery-run.helpers';
 import { primaryPlaces } from '../countries';
 
 // Apify actor: curious_coder/linkedin-jobs-scraper — replays LinkedIn's own
-// job-search URL filters (we bake `f_AL=true`, LinkedIn's native "Easy Apply"
-// filter, into every URL we build). https://apify.com/curious_coder/linkedin-jobs-scraper
+// job-search URL. Every job, Easy Apply or not: large employers mostly post
+// "Apply on company website", and an Easy Apply filter hid them all.
+// https://apify.com/curious_coder/linkedin-jobs-scraper
 const ACTOR_ID = 'curious_coder~linkedin-jobs-scraper';
 // Titles are planned from the seeker's background (up to 8). Runs are
 // parallel and the per-title limit shrinks with the budget, so more titles
@@ -28,7 +29,7 @@ const LINKEDIN_WINDOW =
       ? 'pastWeek'
       : 'pastMonth';
 
-interface LinkedInJobItem {
+export interface LinkedInJobItem {
   id: number | string;
   link: string;
   title: string;
@@ -57,12 +58,27 @@ function toRemoteType(
   return JobRemoteType.UNKNOWN;
 }
 
+// Easy Apply happens on LinkedIn itself. LinkedIn names the methods
+// SimpleOnsiteApply / ComplexOnsiteApply (Easy Apply) and OffsiteApply (the
+// company's site); without a method, an apply link off LinkedIn means offsite.
+export function isEasyApply(
+  item: Pick<LinkedInJobItem, 'applyMethod' | 'applyUrl'>,
+): boolean {
+  if (item.applyMethod) return !/offsite|external/i.test(item.applyMethod);
+  if (!item.applyUrl) return false;
+  try {
+    return /(^|\.)linkedin\.com$/i.test(new URL(item.applyUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
 function buildSearchUrl(
   title: string,
   query: DiscoveryQuery,
   location?: string,
 ): string {
-  const params = new URLSearchParams({ keywords: title, f_AL: 'true' });
+  const params = new URLSearchParams({ keywords: title });
   if (location) params.set('location', location);
   else if (query.remoteTypes.includes('remote')) params.set('f_WT', '2');
   return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
@@ -129,11 +145,7 @@ export class LinkedInAdapter implements DiscoveryAdapter {
       location: item.location ?? null,
       remote_type: toRemoteType(item.workplaceTypes, item.title),
       job_type: item.employmentType ?? null,
-      // We only ever query `f_AL=true` (Easy Apply) URLs, so treat as true
-      // unless the item itself reports an offsite/external apply method.
-      easy_apply: !(
-        item.applyMethod && /offsite|external/i.test(item.applyMethod)
-      ),
+      easy_apply: isEasyApply(item),
       url: item.link,
       apply_url: item.applyUrl ?? item.link,
       description: item.descriptionText ?? null,

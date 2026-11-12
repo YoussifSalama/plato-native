@@ -8,6 +8,7 @@ type Source = JobSourceName | "BOARDS"
 const LETTER_TILES: Partial<Record<Source, { bg: string; glyph: string; label: string }>> = {
   GREENHOUSE: { bg: "bg-[#24A47F]", glyph: "g", label: "Greenhouse" },
   ASHBY: { bg: "bg-[#5A45E5]", glyph: "A", label: "Ashby" },
+  CAREER_SITE: { bg: "bg-[#334155]", glyph: "C", label: "Company site" },
   INDEED: { bg: "bg-[#2557A7]", glyph: "i", label: "Indeed" },
   GOOGLE_JOBS: { bg: "bg-[#4285F4]", glyph: "G", label: "Google Jobs" },
   ZIPRECRUITER: { bg: "bg-[#2C8C3E]", glyph: "Z", label: "ZipRecruiter" },

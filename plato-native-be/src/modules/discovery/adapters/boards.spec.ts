@@ -299,8 +299,9 @@ describe('BoardsAdapter', () => {
     );
     expect(us).toContain(JobSource.DICE);
     expect(us).not.toContain(JobSource.JOBBANK);
-    // Egypt: Wuzzuf, and Bayt (it serves Egypt too)
+    // Egypt: Google Jobs (large employers' own postings), Wuzzuf, and Bayt (it serves Egypt too)
     expect(a.sourcesFor(query({ countries: ['EG'] }))).toEqual([
+      JobSource.GOOGLE_JOBS,
       JobSource.WUZZUF,
       JobSource.BAYT,
     ]);

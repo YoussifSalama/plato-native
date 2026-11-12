@@ -6,6 +6,8 @@ enum JobSource {
     LINKEDIN
     GREENHOUSE
     ASHBY
+    // A company's own career site on any other hiring system (Workday, SuccessFactors, Oracle...).
+    CAREER_SITE
     INDEED
     GOOGLE_JOBS
     ZIPRECRUITER

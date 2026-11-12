@@ -13,6 +13,8 @@ export const SOURCES: SourceDef[] = [
   { key: "greenhouse", label: "Greenhouse" },
   { key: "ashby", label: "Ashby" },
   { key: "lever", label: "Lever" },
+  // Runs from before company career sites were searched have no entry: hidden there.
+  { key: "career_site", label: "Company sites", optional: true },
   ...BOARDS.map((b): SourceDef => ({ key: b.toLowerCase() as SourceKey, label: SOURCE_LABEL[b], optional: true })),
 ]
 

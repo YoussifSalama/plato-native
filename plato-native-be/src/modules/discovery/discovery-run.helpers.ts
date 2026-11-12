@@ -12,6 +12,7 @@ export type SourceKey =
   | 'lever'
   | 'greenhouse'
   | 'ashby'
+  | 'career_site'
   | Lowercase<BoardSource>
   | Lowercase<FeedSource>;
 
@@ -21,6 +22,7 @@ export const ATS_SOURCES = [
   ['lever', JobSource.LEVER],
   ['greenhouse', JobSource.GREENHOUSE],
   ['ashby', JobSource.ASHBY],
+  ['career_site', JobSource.CAREER_SITE],
 ] as const;
 
 // Apify job boards; each gets its own card, but only the ones searched
@@ -92,6 +94,7 @@ export function initialProgress(
     lever: { ...running },
     greenhouse: { ...running },
     ashby: { ...running },
+    career_site: { ...running },
   } as Record<SourceKey, SourceProgress>;
   for (const b of boards) sources[sourceKey(b)] = { ...running };
   for (const f of feeds) sources[sourceKey(f)] = { ...running };

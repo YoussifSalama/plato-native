@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { JobRemoteType, JobSource, Prisma } from '@prisma/client';
+import { detectAtsHost } from '../../apply/ats-detect';
 import { ApifyService } from '../apify.service';
 import { expandTitle } from './title-expansion';
 import { postedCutoff } from '../discovery-run.helpers';
 import { searchPlaces } from '../countries';
 import { DiscoveryAdapter, DiscoveryQuery, NormalizedJob } from './types';
 
-// Apify actor: fantastic-jobs/career-site-job-listing-api.
+// Apify actor: fantastic-jobs/career-site-job-listing-api: company career sites
+// on every hiring system it covers (Workday, SuccessFactors... as well as
+// Greenhouse, Lever, Ashby), so large employers' own postings are found too.
 // Empirically (see PLAN.md decisions): every search term is a hard filter,
 // `timeRange: 7d` is too thin for smaller markets, and titles are phrase
 // matched — so we backfill all active jobs and search title prefixes.
@@ -73,8 +76,9 @@ const SOURCES: Record<string, JobSource> = {
   greenhouse: JobSource.GREENHOUSE,
   ashby: JobSource.ASHBY,
 };
-function toSource(source: string | undefined): JobSource {
-  return SOURCES[source ?? ''] ?? JobSource.WORKABLE;
+// Any other hiring system is the company's own career site.
+export function toSource(source: string | undefined): JobSource {
+  return SOURCES[source ?? ''] ?? JobSource.CAREER_SITE;
 }
 
 @Injectable()
@@ -86,9 +90,6 @@ export class AtsAggregatorAdapter implements DiscoveryAdapter {
     if (process.env.DISCOVERY_APIFY_ATS === 'false') return [];
     const base: Record<string, unknown> = {
       titleSearch: [...new Set(query.titles.flatMap(expandTitle))],
-      // Workable has a public cross-company search (public-boards adapter);
-      // the actor covers the ATSs that only publish per-company feeds.
-      ats: ['lever.co', 'greenhouse', 'ashby'],
       timeRange: '6m',
       // Backfill everything active, but only postings inside the freshness window.
       datePostedAfter: postedCutoff().toISOString().slice(0, 10),
@@ -165,7 +166,8 @@ export class AtsAggregatorAdapter implements DiscoveryAdapter {
       remote_type: toRemoteType(item.ai_work_arrangement),
       job_type:
         item.employment_type?.[0] ?? item.ai_employment_type?.[0] ?? null,
-      easy_apply: true,
+      // Plato fills the form itself only on the hiring systems it knows.
+      easy_apply: detectAtsHost(item.url) !== null,
       url: item.url,
       apply_url: item.url,
       description: item.description_text ?? null,

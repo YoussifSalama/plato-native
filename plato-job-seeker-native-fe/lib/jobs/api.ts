@@ -30,6 +30,8 @@ export const SOURCE_LABEL = {
   LEVER: "Lever",
   GREENHOUSE: "Greenhouse",
   ASHBY: "Ashby",
+  // Any other hiring system (Workday, SuccessFactors...): the employer's own career site.
+  CAREER_SITE: "Company site",
   INDEED: "Indeed",
   GOOGLE_JOBS: "Google Jobs",
   ZIPRECRUITER: "ZipRecruiter",
@@ -64,7 +66,7 @@ export type JobSourceName = keyof typeof SOURCE_LABEL
 // the employer. A board gets a small "via" credit only when we cannot be sure its terms allow
 // showing a posting without one; company career systems (ATS) are the employer's own page.
 // ponytail: conservative default; set a board to false once its terms are checked (see TODO section 2).
-const OWN_PAGE: JobSourceName[] = ["GREENHOUSE", "LEVER", "WORKABLE", "ASHBY"]
+const OWN_PAGE: JobSourceName[] = ["GREENHOUSE", "LEVER", "WORKABLE", "ASHBY", "CAREER_SITE"]
 export const attributionLabel = (s: JobSourceName) => (OWN_PAGE.includes(s) ? null : SOURCE_LABEL[s])
 
 // Whether this seeker can take the job, worked out by the server from the posting's stated regions.

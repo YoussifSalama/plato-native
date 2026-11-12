@@ -13,6 +13,7 @@ export type SourceKey =
   | 'greenhouse'
   | 'ashby'
   | 'career_site'
+  | 'fantastic_jobs'
   | Lowercase<BoardSource>
   | Lowercase<FeedSource>;
 
@@ -80,6 +81,19 @@ export interface RunProgress {
   filtered: number | null;
   ranked: number | null;
   error?: string;
+}
+
+// Fantastic.jobs mode: the run has one source card, Fantastic itself.
+export function fantasticProgress(): RunProgress {
+  return {
+    stage: 'crawling',
+    sources: {
+      fantastic_jobs: { status: 'RUNNING', fetched: 0 },
+    } as Record<SourceKey, SourceProgress>,
+    merged: null,
+    filtered: null,
+    ranked: null,
+  };
 }
 
 export function initialProgress(

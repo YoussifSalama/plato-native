@@ -1,3 +1,4 @@
+import { COUNTRY_CODES } from './countries';
 import {
   BadRequestException,
   Body,
@@ -24,9 +25,13 @@ import { buildMatchesWorkbook } from './match-export';
 import { ApplyService } from '../apply/apply.service';
 import { TokensGuard } from '../credits/tokens.guard';
 
+// The same overrides the chat's start_job_search passes, so a search can be replayed exactly.
 const startRunSchema = z.object({
   threadId: z.string().optional(),
-  titles: z.array(z.string().min(1)).max(3).optional(),
+  titles: z.array(z.string().min(1)).max(8).optional(),
+  strictTitles: z.boolean().optional(),
+  countries: z.array(z.enum(COUNTRY_CODES)).optional(),
+  visaSponsorshipRequired: z.boolean().optional(),
   locations: z.array(z.string().min(1)).optional(),
   remoteTypes: z
     .array(z.enum(['onsite', 'hybrid', 'remote', 'any']))

@@ -17,6 +17,12 @@ import { wuzzuf } from './boards/wuzzuf';
 import { annual, locationText, toDate } from './boards/util';
 import { ziprecruiter } from './boards/ziprecruiter';
 
+// @prisma/client loads the local .env: pin the board switches these tests rely on.
+beforeEach(() => {
+  process.env.DISABLED_BOARDS = '';
+  delete process.env.BOARD_MAX_RUNS;
+});
+
 describe('Indeed board', () => {
   const item = {
     title: 'Senior Software Engineer',

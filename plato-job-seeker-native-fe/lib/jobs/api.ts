@@ -48,6 +48,7 @@ export const SOURCE_LABEL = {
   REMOTEOK: "Remote OK",
   HIMALAYAS: "Himalayas",
   JOOBLE: "Jooble",
+  FANTASTIC_JOBS: "Fantastic.jobs",
   ADZUNA: "Adzuna",
   BAYT: "Bayt",
   NAUKRIGULF: "Naukrigulf",

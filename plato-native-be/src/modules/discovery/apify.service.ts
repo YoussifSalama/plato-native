@@ -8,7 +8,14 @@ import { recordUsage } from '../usage/usage';
 // you will exceed the memory limit..."). One search starts up to 8 LinkedIn runs
 // plus the boards, so runs queue for a slot instead of failing.
 // ponytail: in-process queue, fine for one API instance; raise with the Apify plan.
-const MAX_CONCURRENT_RUNS = Number(process.env.APIFY_MAX_CONCURRENT_RUNS ?? 3);
+const MAX_CONCURRENT_RUNS = Math.max(
+  1,
+  Math.floor(Number(process.env.APIFY_MAX_CONCURRENT_RUNS) || 5),
+);
+const RUN_TIMEOUT_SECS = Math.max(
+  30,
+  Math.floor(Number(process.env.APIFY_RUN_TIMEOUT_SECS) || 180),
+);
 
 @Injectable()
 export class ApifyService {
@@ -48,7 +55,11 @@ export class ApifyService {
     actorId: string,
     input: Record<string, unknown>,
   ): Promise<T[]> {
-    const run = await this.client.actor(actorId).call(input);
+    // A run that hangs would hold its slot forever and freeze every search behind it:
+    // Apify aborts it after RUN_TIMEOUT_SECS; what it already found is still read below.
+    const run = await this.client
+      .actor(actorId)
+      .call(input, { timeout: RUN_TIMEOUT_SECS });
     let results: number | null = null;
     try {
       const { items } = await this.client

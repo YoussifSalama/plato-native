@@ -34,13 +34,16 @@ import { ziprecruiter } from './boards/ziprecruiter';
 import { DiscoveryAdapter, DiscoveryQuery, NormalizedJob } from './types';
 
 // Add a board = add its def here. Order is irrelevant; runs are parallel.
-// DISABLED_BOARDS=WELLFOUND,WEWORKREMOTELY switches boards off without a deploy of code.
-const OFF = new Set(
-  (process.env.DISABLED_BOARDS ?? '')
-    .split(',')
-    .map((s) => s.trim().toUpperCase())
-    .filter(Boolean),
-);
+// DISABLED_BOARDS=WELLFOUND,WEWORKREMOTELY switches boards off without a deploy of code;
+// BOARD:COUNTRY (GOOGLE_JOBS:EG) switches one board off in one market only.
+// Read at plan time, so a test (or a changed env) sees its own value.
+const offList = () =>
+  new Set(
+    (process.env.DISABLED_BOARDS ?? '')
+      .split(',')
+      .map((s) => s.replace(/\s+/g, '').toUpperCase())
+      .filter(Boolean),
+  );
 
 export const BOARDS: BoardDef[] = [
   indeed,
@@ -64,13 +67,20 @@ export const BOARDS: BoardDef[] = [
   dynamitejobs,
   jobgether,
   nodesk,
-].filter((b) => !OFF.has(b.source));
+];
 
 // Boards get half the remaining budget (LinkedIn takes the other half's
 // share); one actor run per board × country × title.
 const MAX_TITLES = 3;
 const MAX_PER_RUN = 40;
-const MIN_PER_RUN = 5;
+// Every Apify run pays a container start (5-10s, and money) whatever it returns:
+// fewer, fuller runs. A run never asks for fewer than this.
+const MIN_PER_RUN = 10;
+// Runs per search, all boards together. Every board in every market gets its best
+// title first; second and third titles only while runs are left. BOARD_MAX_RUNS overrides.
+// ponytail: fixed cap; per-board yield stats could pick which boards earn the extra titles.
+const maxRuns = () =>
+  Math.max(1, Math.floor(Number(process.env.BOARD_MAX_RUNS) || 16));
 const DEFAULT_BUDGET = 200;
 const REMOTE_MARKETS: Country[] = ['US', 'CA'];
 // Marker country for boards that are not tied to one.
@@ -105,29 +115,58 @@ export class BoardsAdapter implements DiscoveryAdapter {
   // remote seekers search, in the big English-speaking remote markets.
   // ponytail: fixed list; make it a preference if remote seekers want more.
   private marketsFor(query: DiscoveryQuery): Country[] {
-    if (query.countries.length) return query.countries;
+    // "us", "US" and a repeated "US" are one market.
+    const countries = [
+      ...new Set(query.countries.map((c) => c.trim().toUpperCase())),
+    ].filter(Boolean);
+    if (countries.length) return countries;
     return query.remoteTypes.includes('remote') ? REMOTE_MARKETS : [];
   }
 
-  // board × country × title for this seeker; empty when no market applies.
+  // board × country × title for this seeker, at most BOARD_MAX_RUNS; empty when
+  // no market applies. Fair order under the cap:
+  // - title by title: every market gets the best title before any gets a second;
+  // - within a title, markets take turns (US, AE, EG, then each one's next board),
+  //   so one market's many boards never crowd another market out;
+  // - remote-work boards are one more market in that rotation.
   plan(query: DiscoveryQuery): BoardRun[] {
-    const titles = query.titles.slice(0, MAX_TITLES);
-    const perCountry = this.marketsFor(query).flatMap((country) =>
-      BOARDS.filter((b) => b.countries.includes(country)).flatMap((board) =>
-        titles.map((title) => ({ board, country, title })),
-      ),
-    );
-    // Remote-work boards have no country: one set of runs, only for seekers who want remote.
-    const wantsRemote =
-      query.remoteTypes.includes('remote') || query.remoteTypes.includes('any');
-    const anywhere = wantsRemote
-      ? BOARDS.filter((b) => b.anywhere).flatMap((board) =>
-          (board.perTitle === false ? titles.slice(0, 1) : titles).map(
-            (title) => ({ board, country: ANYWHERE, title }),
-          ),
+    const off = offList();
+    const titles = query.titles
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, MAX_TITLES);
+    const usable = BOARDS.filter((b) => !off.has(b.source));
+    const lanes: { board: BoardDef; country: Country }[][] = this.marketsFor(
+      query,
+    ).map((country) =>
+      usable
+        .filter(
+          (b) =>
+            b.countries.includes(country) && !off.has(`${b.source}:${country}`),
         )
-      : [];
-    return [...perCountry, ...anywhere];
+        .map((board) => ({ board, country })),
+    );
+    // Remote-work boards have no country: only for seekers who want remote.
+    if (
+      query.remoteTypes.includes('remote') ||
+      query.remoteTypes.includes('any')
+    )
+      lanes.push(
+        usable
+          .filter((b) => b.anywhere)
+          .map((board) => ({ board, country: ANYWHERE })),
+      );
+    // Round-robin across markets: each one's 1st board, then each one's 2nd...
+    const pairs: { board: BoardDef; country: Country }[] = [];
+    for (let k = 0; lanes.some((l) => k < l.length); k++)
+      for (const lane of lanes) if (k < lane.length) pairs.push(lane[k]);
+    const runs = titles.flatMap((title, i) =>
+      pairs
+        // Some remote boards ignore the keyword: one run is all they need.
+        .filter(({ board }) => i === 0 || board.perTitle !== false)
+        .map(({ board, country }) => ({ board, country, title })),
+    );
+    return runs.slice(0, maxRuns());
   }
 
   // Which boards this run will search: the cards the seeker sees.

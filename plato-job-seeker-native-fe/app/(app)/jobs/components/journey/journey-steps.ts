@@ -4,7 +4,7 @@ type SourceDef = { key: SourceKey; label: string; optional?: boolean }
 
 // Job boards searched per seeker country: a run only reports the ones it
 // searched, so they show up only when present in `progress.sources`.
-const BOARDS: JobSourceName[] = ["INDEED", "GOOGLE_JOBS", "ZIPRECRUITER", "GLASSDOOR", "TALENT", "JOBBANK", "JOBILLICO", "DICE", "HANDSHAKE", "BUILTIN", "WUZZUF", "REMOTIVE", "JOBICY", "REMOTEOK", "HIMALAYAS", "JOOBLE", "ADZUNA", "BAYT", "NAUKRIGULF", "GULFTALENT", "WEWORKREMOTELY", "WORKINGNOMADS", "WELLFOUND", "ARC", "DYNAMITEJOBS", "JOBGETHER", "NODESK"]
+const BOARDS: JobSourceName[] = ["INDEED", "GOOGLE_JOBS", "ZIPRECRUITER", "GLASSDOOR", "TALENT", "JOBBANK", "JOBILLICO", "DICE", "HANDSHAKE", "BUILTIN", "WUZZUF", "REMOTIVE", "JOBICY", "REMOTEOK", "HIMALAYAS", "JOOBLE", "ADZUNA", "FANTASTIC_JOBS", "BAYT", "NAUKRIGULF", "GULFTALENT", "WEWORKREMOTELY", "WORKINGNOMADS", "WELLFOUND", "ARC", "DYNAMITEJOBS", "JOBGETHER", "NODESK"]
 
 export const SOURCES: SourceDef[] = [
   { key: "index", label: "Plato index" },
@@ -18,7 +18,9 @@ export const SOURCES: SourceDef[] = [
   ...BOARDS.map((b): SourceDef => ({ key: b.toLowerCase() as SourceKey, label: SOURCE_LABEL[b], optional: true })),
 ]
 
-export const visibleSources = (progress: RunProgress) => SOURCES.filter((s) => !s.optional || progress.sources[s.key])
+// Only what this run searched: a Fantastic.jobs run has just its own card, not empty LinkedIn / ATS ones.
+// Runs from before a source existed simply lack its entry.
+export const visibleSources = (progress: RunProgress) => SOURCES.filter((s) => progress.sources[s.key])
 
 // Runs from before the local index existed have no `index` entry.
 export const sourceOf = (progress: RunProgress, key: SourceKey) => progress.sources[key] ?? { status: "DONE" as const, fetched: 0 }

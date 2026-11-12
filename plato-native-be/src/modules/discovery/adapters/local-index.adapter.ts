@@ -43,6 +43,9 @@ export function indexFilter(query: IndexQuery): Record<string, unknown> {
     posted_at: { $gte: { $date: postedCutoff().toISOString() } },
     // Found closed by the freshness check: not part of the index.
     expired_at: null,
+    // Fantastic.jobs is trialled as a separate discovery (USE_FANTASTIC_JOBS):
+    // its jobs never surface in a normal search, so the two compare cleanly.
+    source: { $ne: 'FANTASTIC_JOBS' },
     $or: query.titles.map((t) => ({
       title: { $regex: titlePattern(t), $options: 'i' },
     })),

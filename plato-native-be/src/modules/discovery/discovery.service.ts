@@ -33,6 +33,7 @@ import {
   applyFeedsResult,
   applyIndexResult,
   applyLinkedInResult,
+  fantasticProgress,
   initialProgress,
   isFresh,
   matchLabel,
@@ -46,6 +47,7 @@ import { LocalIndexAdapter } from './adapters/local-index.adapter';
 import { PublicBoardsAdapter } from './adapters/public-boards.adapter';
 import { buildJobSeekerSnapshot, residenceOf } from './job-seeker-snapshot';
 import { MatchingService } from './matching.service';
+import { fantasticEnabled, loadFantastic } from './adapters/fantastic-jobs';
 import { textWhere } from './match-text';
 import { buildDiscoveryQuery } from './query-builder';
 import { DiscoveryQueryOverrides, mergeDiscoveryQuery } from './query-merge';
@@ -310,9 +312,9 @@ export class DiscoveryService implements OnModuleInit {
         job_seeker_id: jobSeekerId,
         thread_id: threadId ?? null,
         query: query as unknown as Prisma.InputJsonValue,
-        progress: initialProgress(
-          this.boardsAdapter.sourcesFor(query),
-          this.feedsAdapter.sourcesFor(query),
+        progress: this.progressFor(
+          query,
+          fantasticEnabled(),
         ) as unknown as Prisma.InputJsonValue,
       },
     });
@@ -320,6 +322,16 @@ export class DiscoveryService implements OnModuleInit {
       this.logger.error(`Run ${run.id} crashed`, err),
     );
     return run;
+  }
+
+  // The source cards a run starts with: Fantastic alone in its trial mode.
+  private progressFor(query: DiscoveryQuery, fantastic: boolean) {
+    return fantastic
+      ? fantasticProgress()
+      : initialProgress(
+          this.boardsAdapter.sourcesFor(query),
+          this.feedsAdapter.sourcesFor(query),
+        );
   }
 
   // The chat and the visual journey are one system: the run's conclusion
@@ -368,10 +380,8 @@ export class DiscoveryService implements OnModuleInit {
     query: DiscoveryQuery,
     threadId?: string,
   ) {
-    let progress = initialProgress(
-      this.boardsAdapter.sourcesFor(query),
-      this.feedsAdapter.sourcesFor(query),
-    );
+    const fantastic = fantasticEnabled();
+    let progress = this.progressFor(query, fantastic);
     const publish = async (next: Partial<RunProgress>) => {
       progress = { ...progress, ...next };
       await this.prisma.discoveryRun.update({
@@ -382,120 +392,151 @@ export class DiscoveryService implements OnModuleInit {
     };
 
     try {
-      // Phase 0: our own index (jobs crawled in the last 7 days). Instant, and
-      // whatever it covers is subtracted from the Apify budget.
-      const indexResult = await this.localIndex.discover(query).then(
-        (v) => ({ status: 'fulfilled', value: v }) as const,
-        (reason: unknown) => ({ status: 'rejected', reason }) as const,
-      );
-      await publish(applyIndexResult(progress, indexResult));
-      const indexJobs =
-        indexResult.status === 'fulfilled' ? indexResult.value : [];
-      const budget = await this.affordableBudget(
-        jobSeekerId,
-        remainingBudget(indexJobs.length),
-        threadId,
-      );
-      const remoteQuery: DiscoveryQuery = { ...query, budget };
+      let jobs: NormalizedJob[];
+      if (fantastic) {
+        // Fantastic.jobs mode: it alone, so its results compare cleanly.
+        jobs = await loadFantastic(query).then(
+          async (v) => {
+            await publish({
+              sources: {
+                fantastic_jobs: { status: 'DONE', fetched: v.length },
+              } as RunProgress['sources'],
+            });
+            return v;
+          },
+          async (reason: unknown) => {
+            await publish({
+              sources: {
+                fantastic_jobs: {
+                  status: 'FAILED',
+                  fetched: 0,
+                  error:
+                    reason instanceof Error ? reason.message : String(reason),
+                },
+              } as RunProgress['sources'],
+            });
+            throw reason;
+          },
+        );
+      } else {
+        // Phase 0: our own index (jobs crawled in the last 7 days). Instant, and
+        // whatever it covers is subtracted from the Apify budget.
+        const indexResult = await this.localIndex.discover(query).then(
+          (v) => ({ status: 'fulfilled', value: v }) as const,
+          (reason: unknown) => ({ status: 'rejected', reason }) as const,
+        );
+        await publish(applyIndexResult(progress, indexResult));
+        const indexJobs =
+          indexResult.status === 'fulfilled' ? indexResult.value : [];
+        const budget = await this.affordableBudget(
+          jobSeekerId,
+          remainingBudget(indexJobs.length),
+          threadId,
+        );
+        const remoteQuery: DiscoveryQuery = { ...query, budget };
 
-      const [ats, linkedin, boards, feeds] = await Promise.allSettled([
-        // ATS jobs: free public endpoints + the Apify actor, as one phase.
-        Promise.allSettled([
-          this.publicBoards.discover(remoteQuery),
-          this.atsAdapter.discover(remoteQuery),
-        ])
-          .then((parts) => {
-            if (parts.every((r) => r.status === 'rejected'))
-              throw (parts[0] as PromiseRejectedResult).reason;
-            for (const r of parts)
-              if (r.status === 'rejected')
-                this.logger.warn(`ATS source failed: ${String(r.reason)}`);
-            return parts.flatMap((r) =>
-              r.status === 'fulfilled' ? r.value : [],
-            );
-          })
-          .then(
+        const [ats, linkedin, boards, feeds] = await Promise.allSettled([
+          // ATS jobs: free public endpoints + the Apify actor, as one phase.
+          Promise.allSettled([
+            this.publicBoards.discover(remoteQuery),
+            this.atsAdapter.discover(remoteQuery),
+          ])
+            .then((parts) => {
+              if (parts.every((r) => r.status === 'rejected'))
+                throw (parts[0] as PromiseRejectedResult).reason;
+              for (const r of parts)
+                if (r.status === 'rejected')
+                  this.logger.warn(`ATS source failed: ${String(r.reason)}`);
+              return parts.flatMap((r) =>
+                r.status === 'fulfilled' ? r.value : [],
+              );
+            })
+            .then(
+              async (v) => {
+                await publish(
+                  applyAtsResult(progress, { status: 'fulfilled', value: v }),
+                );
+                return v;
+              },
+              async (reason: unknown) => {
+                await publish(
+                  applyAtsResult(progress, { status: 'rejected', reason }),
+                );
+                throw reason;
+              },
+            ),
+          this.linkedinAdapter.discover(remoteQuery).then(
             async (v) => {
               await publish(
-                applyAtsResult(progress, { status: 'fulfilled', value: v }),
+                applyLinkedInResult(progress, {
+                  status: 'fulfilled',
+                  value: v,
+                }),
               );
               return v;
             },
             async (reason: unknown) => {
               await publish(
-                applyAtsResult(progress, { status: 'rejected', reason }),
+                applyLinkedInResult(progress, { status: 'rejected', reason }),
               );
               throw reason;
             },
           ),
-        this.linkedinAdapter.discover(remoteQuery).then(
-          async (v) => {
-            await publish(
-              applyLinkedInResult(progress, { status: 'fulfilled', value: v }),
-            );
-            return v;
-          },
-          async (reason: unknown) => {
-            await publish(
-              applyLinkedInResult(progress, { status: 'rejected', reason }),
-            );
-            throw reason;
-          },
-        ),
-        this.boardsAdapter.discoverDetailed(remoteQuery).then(
-          async (v) => {
-            await publish(
-              applyBoardsResult(progress, { status: 'fulfilled', value: v }),
-            );
-            return v.jobs;
-          },
-          async (reason: unknown) => {
-            await publish(
-              applyBoardsResult(progress, { status: 'rejected', reason }),
-            );
-            throw reason;
-          },
-        ),
-        // Free official feeds (Remotive, Jobicy, Remote OK, Himalayas, Jooble, Adzuna).
-        this.feedsAdapter.discoverDetailed(remoteQuery).then(
-          async (v) => {
-            await publish(
-              applyFeedsResult(progress, { status: 'fulfilled', value: v }),
-            );
-            return v.jobs;
-          },
-          async (reason: unknown) => {
-            await publish(
-              applyFeedsResult(progress, { status: 'rejected', reason }),
-            );
-            throw reason;
-          },
-        ),
-      ]);
-      const jobs = [
-        ...indexJobs,
-        ...[ats, linkedin, boards, feeds].flatMap((r) =>
-          r.status === 'fulfilled' ? r.value : [],
-        ),
-      ];
+          this.boardsAdapter.discoverDetailed(remoteQuery).then(
+            async (v) => {
+              await publish(
+                applyBoardsResult(progress, { status: 'fulfilled', value: v }),
+              );
+              return v.jobs;
+            },
+            async (reason: unknown) => {
+              await publish(
+                applyBoardsResult(progress, { status: 'rejected', reason }),
+              );
+              throw reason;
+            },
+          ),
+          // Free official feeds (Remotive, Jobicy, Remote OK, Himalayas, Jooble, Adzuna).
+          this.feedsAdapter.discoverDetailed(remoteQuery).then(
+            async (v) => {
+              await publish(
+                applyFeedsResult(progress, { status: 'fulfilled', value: v }),
+              );
+              return v.jobs;
+            },
+            async (reason: unknown) => {
+              await publish(
+                applyFeedsResult(progress, { status: 'rejected', reason }),
+              );
+              throw reason;
+            },
+          ),
+        ]);
+        jobs = [
+          ...indexJobs,
+          ...[ats, linkedin, boards, feeds].flatMap((r) =>
+            r.status === 'fulfilled' ? r.value : [],
+          ),
+        ];
 
-      // Per-source health for every run: how many each source gave and whether it
-      // failed. (What Apify charged is recorded separately, per actor run.)
-      for (const [key, s] of Object.entries(progress.sources))
-        recordUsage({
-          feature: 'discovery.source',
-          model: key,
-          cost_usd: 0,
-          meta: {
-            runId,
-            status: s.status,
-            fetched: s.fetched,
-            error: s.error ?? null,
-          },
-        });
+        // Per-source health for every run: how many each source gave and whether it
+        // failed. (What Apify charged is recorded separately, per actor run.)
+        for (const [key, s] of Object.entries(progress.sources))
+          recordUsage({
+            feature: 'discovery.source',
+            model: key,
+            cost_usd: 0,
+            meta: {
+              runId,
+              status: s.status,
+              fetched: s.fetched,
+              error: s.error ?? null,
+            },
+          });
 
-      if (allSourcesFailed(progress)) {
-        throw new Error('All job sources failed');
+        if (allSourcesFailed(progress)) {
+          throw new Error('All job sources failed');
+        }
       }
 
       await publish({ stage: 'merging' });

@@ -25,6 +25,8 @@ enum JobSource {
     HIMALAYAS
     JOOBLE
     ADZUNA
+    // Fantastic.jobs: employers' own hiring systems, an opt-in paid feed (USE_FANTASTIC_JOBS).
+    FANTASTIC_JOBS
     BAYT
     NAUKRIGULF
     GULFTALENT

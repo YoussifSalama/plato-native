@@ -25,6 +25,7 @@ const LETTER_TILES: Partial<Record<Source, { bg: string; glyph: string; label: s
   REMOTEOK: { bg: "bg-[#F23F37]", glyph: "R", label: "Remote OK" },
   HIMALAYAS: { bg: "bg-[#1E8E5A]", glyph: "H", label: "Himalayas" },
   JOOBLE: { bg: "bg-[#2D6BFF]", glyph: "J", label: "Jooble" },
+  FANTASTIC_JOBS: { bg: "bg-[#0E1B2C]", glyph: "F", label: "Fantastic.jobs" },
   ADZUNA: { bg: "bg-[#0F6FDE]", glyph: "A", label: "Adzuna" },
   BAYT: { bg: "bg-[#0A66C2]", glyph: "B", label: "Bayt" },
   NAUKRIGULF: { bg: "bg-[#2457C5]", glyph: "N", label: "Naukrigulf" },

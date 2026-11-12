@@ -14,6 +14,12 @@ import { weworkremotely } from './boards/weworkremotely';
 import { workingnomads } from './boards/workingnomads';
 import { DiscoveryQuery } from './types';
 
+// @prisma/client loads the local .env: pin the board switches these tests rely on.
+beforeEach(() => {
+  process.env.DISABLED_BOARDS = '';
+  delete process.env.BOARD_MAX_RUNS;
+});
+
 // Items shaped like the real actor output (Naukrigulf and Working Nomads were
 // captured from live runs; the others follow each actor's documented example).
 const q = (over: Partial<DiscoveryQuery> = {}): DiscoveryQuery => ({
@@ -180,7 +186,8 @@ it('plans Gulf boards for Gulf seekers and remote boards only for remote seekers
   expect(remote).toEqual(
     expect.arrayContaining(['WEWORKREMOTELY', 'WORKINGNOMADS', 'WELLFOUND']),
   );
-  // the title-blind board runs once, not once per title
+  // the title-blind board runs once, not once per title (cap lifted to see every title)
+  process.env.BOARD_MAX_RUNS = '100';
   const runs = adapter.plan(q({ remoteTypes: ['remote'] }));
   expect(runs.filter((r) => r.board.source === 'WELLFOUND')).toHaveLength(1);
   expect(runs.filter((r) => r.board.source === 'WORKINGNOMADS')).toHaveLength(

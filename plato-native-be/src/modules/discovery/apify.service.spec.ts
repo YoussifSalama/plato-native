@@ -4,7 +4,7 @@ jest.mock('../usage/usage', () => ({ recordUsage: jest.fn() }));
 jest.mock('apify-client', () => ({ ApifyClient: jest.fn() }));
 jest.mock('@nestjs/config', () => ({ ConfigService: class {} }));
 
-it('never runs more than 3 Apify actors at once', async () => {
+it('never runs more than 5 Apify actors at once', async () => {
   const svc = new ApifyService({
     get: () => ({ apifyToken: 'x' }),
   } as never);
@@ -25,5 +25,5 @@ it('never runs more than 3 Apify actors at once', async () => {
     Array.from({ length: 10 }, () => svc.runActor('a', {})),
   );
   expect(out).toHaveLength(10);
-  expect(peak).toBe(3);
+  expect(peak).toBe(5);
 });

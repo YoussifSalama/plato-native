@@ -46,7 +46,7 @@ const TABS: { key: MatchTab; label: string }[] = [
   { key: "discover", label: "Discover" },
   { key: "saved", label: "Saved" },
   { key: "applied", label: "Applied" },
-  { key: "recommended", label: "Recommended for you" },
+  { key: "recommended", label: "Recommended" },
 ]
 const POLL_MS = 4000
 
@@ -297,7 +297,7 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
       <PageHeader
         crumbs={[{ label: "Jobs", href: JOBS_HOME }]}
         title={thread?.title ?? "Search"}
-        description={view === "results" ? "Ranked against your profile. Save the ones you like, then apply to the best in one go." : view === "searching" ? "Plato is searching every board. You can leave and come back; it keeps going." : "Tell Plato the role you want in your own words."}
+        description={view === "results" ? undefined : view === "searching" ? "Plato is searching every board. You can leave and come back; it keeps going." : "Tell Plato the role you want in your own words."}
         actions={
           <>
             {view === "results" && (
@@ -308,20 +308,16 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
                 <InputGroupInput value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search results" placeholder="Search by title, company, or keyword" />
               </InputGroup>
             )}
-            <Button variant="outline" onClick={newSearch} className="gap-1.5 rounded-full">
-              <Plus className="size-4" />
-              New search
-            </Button>
+            {/* On results the sidebar has New search; one button, not two. */}
+            {view !== "results" && (
+              <Button variant="outline" onClick={newSearch} className="gap-1.5 rounded-full">
+                <Plus className="size-4" />
+                New search
+              </Button>
+            )}
           </>
         }
-      >
-        {view === "results" && (
-          <div data-tour="results-tabs" className="flex flex-wrap items-center gap-2">
-            <PillTabs id="results-tabs" tabs={TABS} value={tab} onChange={setTab} label="Results" dataAi="results.tab" />
-            <InfoTip text="Recommended for you gathers jobs at 75% match or more from all your searches, leaving out ones you hid or already applied to." label="What Recommended for you shows" />
-          </div>
-        )}
-      </PageHeader>
+      />
 
       {loadError && <p role="alert" className="rounded-xl border border-l-4 border-l-destructive bg-card px-4 py-3 text-sm text-foreground shadow-card">{loadError}</p>}
       {!thread && !loadError && <Skeleton className="h-[calc(100dvh-220px)] min-h-[420px] w-full rounded-2xl" />}
@@ -336,7 +332,20 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
           <SearchesSidebar activeId={thread.id} />
           <div className="flex min-w-0 flex-col gap-5">
             {run.status === "FAILED" && <p data-tour="search-failed" role="alert" className="rounded-xl border border-l-4 border-l-destructive bg-card px-4 py-3 text-sm text-foreground shadow-card">The last search failed: {run.error}. Ask Plato to try again.</p>}
-            <ResultsView run={run} threadId={thread.id} tab={tab} q={q} command={command} onState={reportScreen} />
+            <ResultsView
+              run={run}
+              threadId={thread.id}
+              tab={tab}
+              q={q}
+              command={command}
+              onState={reportScreen}
+              tabs={
+                <div data-tour="results-tabs" className="flex items-center gap-1.5">
+                  <PillTabs id="results-tabs" tabs={TABS} value={tab} onChange={setTab} label="Results" dataAi="results.tab" />
+                  <InfoTip text="Discover is this search. Saved and Applied gather jobs from all your searches. Recommended for you: 75% match or more across all searches, minus ones you hid or applied to." label="What these lists show" />
+                </div>
+              }
+            />
           </div>
         </div>
       )}

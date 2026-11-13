@@ -66,6 +66,8 @@ describe('packaging guard', () => {
     };
     refuses(edit((m) => m.permissions.push('tabs')), /permissions/);
     refuses(edit((m) => (m.host_permissions = ['https://*/*'])), /host_permissions/);
+    refuses(edit((m) => m.optional_host_permissions.push('file:///*')), /optional_host_permissions/);
+    refuses(edit((m) => (m.optional_permissions = ['tabs'])), /optional_permissions/);
     refuses(edit((m) => (m.externally_connectable = { matches: ['https://*/*'] })), /externally_connectable/);
     refuses(edit((m) => (m.externally_connectable = { matches: ['https://jobs.plato.test/*'], ids: ['*'] })), /externally_connectable/);
     refuses(edit((m) => (m.externally_connectable = { matches: ['https://jobs.plato.test/*', 'https://other.test/*'] })), /externally_connectable/);

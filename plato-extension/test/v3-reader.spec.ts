@@ -184,3 +184,19 @@ describe('changed and typed: values the page set since the model last read them'
     expect(handle(document, { op: 'changed' })).toEqual({ active: refOf(t, 'Phone'), fields: [] });
   });
 });
+
+describe('file_upload finds the hidden input behind an Upload button (LinkedIn Easy Apply, 2026-11-13)', () => {
+  it('inside an open shadow-root dialog, away from the button the model pointed at', async () => {
+    const { fileInputFor } = await import('../src/content/v3-reader');
+    document.body.innerHTML = '<div id="interop-outlet"></div>';
+    const root = document.getElementById('interop-outlet')!.attachShadow({ mode: 'open' });
+    root.innerHTML = '<div role="dialog"><section><div><button id="up">Upload resume</button></div></section><div class="hidden"><input type="file" id="cover" name="cover-letter"><input type="file" id="jobs-document-upload-file-input-upload-resume"></div></div>';
+    const button = root.getElementById('up')!;
+    expect(fileInputFor(button, document)?.id).toBe('jobs-document-upload-file-input-upload-resume');
+  });
+  it('a label names its input with for=', async () => {
+    const { fileInputFor } = await import('../src/content/v3-reader');
+    document.body.innerHTML = '<label for="cv" id="l">Attach CV</label><div><input type="file" id="other"></div><input type="file" id="cv">';
+    expect(fileInputFor(document.getElementById('l')!, document)?.id).toBe('cv');
+  });
+});

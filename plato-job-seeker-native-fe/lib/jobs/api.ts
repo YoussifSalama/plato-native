@@ -93,7 +93,7 @@ export type DiscoveryRun = {
   status: "RUNNING" | "DONE" | "FAILED"
   // titles: everything searched (planned from the seeker's background).
   // requestedTitles: what they asked for. titlePlan: why each title is there.
-  query: { titles: string[]; locations: string[]; countries?: string[]; remoteTypes: string[]; requestedTitles?: string[]; titlePlan?: { title: string; reason: string }[] }
+  query: { titles: string[]; locations: string[]; countries?: string[]; remoteTypes: string[]; jobTypes?: string[]; sentence?: string; requestedTitles?: string[]; titlePlan?: { title: string; reason: string }[] }
   progress: RunProgress | null
   fetched: number
   matched: number
@@ -105,6 +105,8 @@ export type DiscoveryRun = {
 }
 
 export type ThreadSummary = {
+  // Open matches right now, counted like the Discover list (older servers: absent)
+  open_matches?: number
   id: string
   title: string | null
   created_at: string
@@ -168,6 +170,8 @@ export type JobMatch = {
     // One company, one spelling (the server normalises it) and, when the posting gave its own
     // website, the domain for its logo.
     company_domain?: string | null
+    // The logo image the job source gave (LinkedIn), shown before the website icon.
+    company_logo?: string | null
     eligibility?: JobEligibility
   }
 }
@@ -262,6 +266,59 @@ const sendThreadMessage = (id: string, content: string, context?: ChatUiContext)
   )
 
 const getRun = (id: string) => request<DiscoveryRun>(apiClient.get(`/job-seeker/discovery-runs/${id}`))
+// "New search" modal: one sentence fills the form (POST discover/parse), Start runs it on a thread (POST discover).
+export type ParsedSearch = {
+  polished: string // the sentence rewritten clearly, for the "Polish with AI" assistant
+  roles: string[]
+  seniority: "entry" | "mid" | "senior" | "lead" | null
+  jobTypes: string[]
+  countries: string[]
+  remoteTypes: ("remote" | "hybrid" | "onsite")[]
+  visaSponsorshipRequired: boolean | null
+  salary: { amount: number; currency: string; period: "MONTHLY" | "YEARLY" } | null
+  postedWithinDays: number | null
+  includeKeywords: string[]
+  excludeKeywords: string[]
+  excludeCompanies: string[]
+  salaryShownOnly: boolean
+  willingToRelocate: boolean | null
+}
+const parseSearch = (text: string, polish = false) => request<ParsedSearch>(apiClient.post("/job-seeker/discover/parse", { text, ...(polish && { polish }) }))
+export type StartSearch = SearchRules & { threadId: string; sentence?: string; titles: string[]; strictTitles?: boolean; countries?: string[]; remoteTypes?: string[]; jobTypes?: string[]; visaSponsorshipRequired?: boolean }
+const startSearch = (body: StartSearch) => request<DiscoveryRun>(apiClient.post("/job-seeker/discover", body))
+// On Start: does the search fit the profile? If not, why, and the closest search that does (one AI call).
+// New search rules, all enforced by the search on every job (server: fitsSearch).
+export type SearchRules = {
+  level?: "entry" | "mid" | "senior" | null
+  salary?: { amount: number; currency: string; period: "MONTHLY" | "YEARLY" } | null
+  residenceCountry?: string | null
+  postedWithinDays?: number | null
+  includeKeywords?: string[]
+  excludeKeywords?: string[]
+  excludeCompanies?: string[]
+  salaryShownOnly?: boolean
+  willingToRelocate?: boolean
+  remoteAnywhere?: boolean // remote jobs abroad that hire from where the seeker lives
+}
+export type SearchDraft = {
+  sentence: string
+  roles: string[]
+  level: "entry" | "mid" | "senior" | null
+  employment: string[]
+  countries: string[]
+  remoteTypes: string[]
+  visaSponsorshipRequired: boolean
+  salary: { amount: number; currency: string; period: "MONTHLY" | "YEARLY" } | null
+  advanced?: Omit<SearchRules, "level" | "salary">
+}
+export type SearchFit = { fits: boolean; reasons: string[]; suggestion: (Omit<SearchDraft, "advanced"> & { level: "entry" | "mid" | "senior"; postedWithinDays: number | null; includeKeywords: string[]; excludeKeywords: string[]; excludeCompanies: string[]; salaryShownOnly: boolean; willingToRelocate: boolean }) | null }
+// The titles a search will cover, planned from the profile (the same planner the search runs), with why.
+const planSearchTitles = (roles: string[]) => request<{ title: string; reason: string }[]>(apiClient.post("/job-seeker/discover/plan-titles", { roles }))
+const checkSearch = (body: SearchDraft) => request<SearchFit>(apiClient.post("/job-seeker/discover/check", body))
+// Live preview of the New search form over Plato's own index: what each rule removes, the best few left. No tokens.
+export type SearchPreview = { found: number; relocate: number; payBelow: number; noVisa: number; other: number; canTake: number; top: { id: string; title: string; company: string; location: string | null; fit: number }[] }
+const previewSearch = (body: SearchRules & { titles: string[]; countries: string[]; remoteTypes: string[]; jobTypes: string[]; visaSponsorshipRequired: boolean }) =>
+  request<SearchPreview>(apiClient.post("/job-seeker/discover/preview", body))
 const listRuns = () => request<DiscoveryRun[]>(apiClient.get("/job-seeker/discovery-runs"))
 const runEventsUrl = (id: string) => `${apiClient.defaults.baseURL}/job-seeker/discovery-runs/${id}/events`
 
@@ -319,8 +376,8 @@ async function exportMatches(params: MatchFilters, filename = "plato-jobs.xlsx")
   a.click()
   URL.revokeObjectURL(url)
 }
-const getFacets = (threadId: string | undefined, tab: MatchTab) =>
-  request<Facets>(apiClient.get("/job-seeker/discovered-jobs/facets", { params: { threadId, tab } }))
+// Counts honour the other active filters, so each option's number is what picking it shows.
+const getFacets = (params: MatchFilters) => request<Facets>(apiClient.get("/job-seeker/discovered-jobs/facets", { params }))
 const setSaved = (jobId: string, value: boolean) =>
   request<{ job_id: string; saved: boolean }>(apiClient.post(`/job-seeker/matches/${jobId}/saved`, { value }))
 const setHidden = (jobId: string, value: boolean) =>
@@ -410,6 +467,11 @@ export {
   getMatches,
   getDiscoveryStats,
   getFacets,
+  parseSearch,
+  startSearch,
+  previewSearch,
+  checkSearch,
+  planSearchTitles,
   exportMatches,
   setSaved,
   setHidden,

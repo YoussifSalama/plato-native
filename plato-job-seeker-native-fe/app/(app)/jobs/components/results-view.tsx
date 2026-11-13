@@ -244,7 +244,7 @@ function JobItem({ match, selected, highlight, position, cards, onToggle, onSave
     return (
       <motion.li id={`job-row-${position}`} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: match.hidden ? 0.55 : 1, y: 0 }} exit={{ opacity: 0, scale: 0.98 }} className={cn(CARD, "flex flex-col gap-3 p-4 transition-colors duration-200 hover:border-primary-line", highlight && "ring-2 ring-primary/40", selected && "border-primary-line bg-primary-tint")}>
         <div className="flex items-start gap-3">
-          <CompanyAvatar name={job.company} domain={job.company_domain} size={40} />
+          <CompanyAvatar name={job.company} domain={job.company_domain} logo={job.company_logo} size={40} />
           <div className="min-w-0 flex-1">
             {title}
             <p className="mt-0.5 truncate text-[13px] text-text-secondary">{facts}</p>
@@ -263,7 +263,7 @@ function JobItem({ match, selected, highlight, position, cards, onToggle, onSave
   return (
     <motion.li id={`job-row-${position}`} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: match.hidden ? 0.55 : 1, y: 0 }} exit={{ opacity: 0, height: 0 }} className={cn("-mx-4 flex items-center gap-3.5 border-b border-divider px-4 py-3.5 transition-colors duration-200 last:border-b-0 hover:bg-primary-tint", highlight && "bg-primary-tint ring-2 ring-primary/40", selected && "bg-primary-tint")}>
       {check}
-      <CompanyAvatar name={job.company} domain={job.company_domain} size={40} />
+      <CompanyAvatar name={job.company} domain={job.company_domain} logo={job.company_logo} size={40} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 overflow-hidden">
           {title}
@@ -384,8 +384,8 @@ function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: {
   // Options come from the data itself: only values that exist, with the
   // count the filter will return.
   useEffect(() => {
-    getFacets(threadId, tab).then(setFacets).catch(() => setFacets(null))
-  }, [threadId, tab])
+    getFacets({ ...filters, sort, tab, q: q || undefined, threadId }).then(setFacets).catch(() => setFacets(null))
+  }, [threadId, tab, filters, sort, q])
   const [exporting, setExporting] = useState(false)
   const locationOptions = [opt(ANY, "Location"), ...(facets?.locations ?? []).map((l) => opt(l.value, l.label, l.count))]
   const sourceOptions = [opt(ANY, "Source"), ...(facets?.sources ?? []).map((s) => opt(s.value, SOURCE_LABEL[s.value] ?? s.value, s.count))]
@@ -497,7 +497,7 @@ function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: {
   const from = stats.total ? page * PAGE_SIZE + 1 : 0
   const to = Math.min((page + 1) * PAGE_SIZE, stats.total)
   const hiddenElsewhere = tab === "discover" && filters.acceptsCountry && elsewhere > stats.total ? elsewhere - stats.total : 0
-  const heroTitle = tab === "saved" ? `${stats.total} saved job${stats.total === 1 ? "" : "s"}` : tab === "applied" ? `${stats.total} application${stats.total === 1 ? "" : "s"} with Plato` : tab === "recommended" ? `${stats.total} recommendations across all your searches` : tab === "hidden" ? `${stats.total} hidden job${stats.total === 1 ? "" : "s"}` : `${stats.total} matches for you`
+  const heroTitle = tab === "saved" ? `${stats.total} saved job${stats.total === 1 ? "" : "s"}` : tab === "applied" ? `${stats.total} application${stats.total === 1 ? "" : "s"} with Plato` : tab === "recommended" ? `${stats.total} recommendations across all your searches` : tab === "hidden" ? `${stats.total} hidden job${stats.total === 1 ? "" : "s"}` : filters.acceptsCountry && hiddenElsewhere > 0 ? `${stats.total} matches you can apply to from ${filters.acceptsCountry}` : `${stats.total} matches for you`
 
   return (
     <motion.div variants={staggerContainer} initial="hidden" animate="show" className="flex flex-col gap-4">
@@ -630,7 +630,7 @@ function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: {
           <motion.div data-tour="results-selection" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }} className="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-primary-line bg-card px-4 py-3 shadow-[0_18px_44px_-24px_rgba(0,91,167,0.45)]">
             <span className="flex -space-x-2">
               {selectedList.slice(0, 3).map((m) => (
-                <CompanyAvatar key={m.job.id} name={m.job.company} domain={m.job.company_domain} size={28} />
+                <CompanyAvatar key={m.job.id} name={m.job.company} domain={m.job.company_domain} logo={m.job.company_logo} size={28} />
               ))}
             </span>
             <span className="text-sm font-semibold text-foreground">

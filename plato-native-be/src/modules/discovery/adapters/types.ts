@@ -7,6 +7,19 @@ export interface DiscoveryQuery {
   titles: string[];
   // What the seeker asked for, before planning (names the search in the UI).
   requestedTitles?: string[];
+  // The seeker's own sentence from New search, kept so reopening the search shows it as written.
+  sentence?: string;
+  // New search rules, enforced on every job whatever the source (fitsSearch). Absent = no rule.
+  level?: 'entry' | 'mid' | 'senior';
+  minMonthlyUsd?: number; // lower pay is dropped; unstated pay is kept
+  residenceCountry?: string; // remote jobs open only to other regions are dropped
+  postedWithinDays?: number;
+  includeKeywords?: string[]; // at least one, in the title or description
+  excludeKeywords?: string[]; // none, in the title
+  excludeCompanies?: string[];
+  salaryShownOnly?: boolean;
+  // Remote jobs abroad count when they hire from where the seeker lives (not limited to a region that leaves it out).
+  remoteAnywhere?: boolean;
   // Why each searched title is there, shown to the seeker.
   titlePlan?: { title: string; reason: string }[];
   locations: string[];

@@ -6,6 +6,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  HttpCode,
   Post,
   Query,
   Req,
@@ -22,14 +23,66 @@ import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JobSeekerService } from '../user/job-seeker.service';
 import { DiscoveryService } from './discovery.service';
 import { buildMatchesWorkbook } from './match-export';
+import { parseSearchSentence } from './search-sentence';
+import { monthlyUsd } from './salary-sanity';
 import { ApplyService } from '../apply/apply.service';
 import { TokensGuard } from '../credits/tokens.guard';
+
+// New search rules: every one is enforced on each job by the search gate (fitsSearch). Shared by start, preview, check.
+const words = z.array(z.string().trim().min(1).max(60)).max(10);
+const searchRulesShape = {
+  level: z.enum(['entry', 'mid', 'senior']).nullable().optional(),
+  salary: z
+    .object({
+      amount: z.number().positive(),
+      currency: z.string().length(3),
+      period: z.enum(['MONTHLY', 'YEARLY']),
+    })
+    .nullable()
+    .optional(),
+  residenceCountry: z.enum(COUNTRY_CODES).nullable().optional(),
+  postedWithinDays: z.number().int().min(1).max(60).nullable().optional(),
+  includeKeywords: words.optional(),
+  excludeKeywords: words.optional(),
+  excludeCompanies: words.optional(),
+  salaryShownOnly: z.boolean().optional(),
+  willingToRelocate: z.boolean().optional(),
+  remoteAnywhere: z.boolean().optional(),
+};
+type SearchRulesInput = {
+  level?: 'entry' | 'mid' | 'senior' | null;
+  salary?: {
+    amount: number;
+    currency: string;
+    period: 'MONTHLY' | 'YEARLY';
+  } | null;
+  residenceCountry?: string | null;
+  postedWithinDays?: number | null;
+};
+/** The request's rules as the query stores them (pay as monthly USD, nulls dropped). */
+const toRules = <T extends SearchRulesInput>({
+  level,
+  salary,
+  residenceCountry,
+  postedWithinDays,
+  ...rest
+}: T) => ({
+  ...rest,
+  ...(level && { level }),
+  ...(salary && {
+    minMonthlyUsd:
+      monthlyUsd(salary.amount, salary.currency, salary.period) ?? undefined,
+  }),
+  ...(residenceCountry && { residenceCountry }),
+  ...(postedWithinDays && { postedWithinDays }),
+});
 
 // The same overrides the chat's start_job_search passes, so a search can be replayed exactly.
 const startRunSchema = z.object({
   threadId: z.string().optional(),
   titles: z.array(z.string().min(1)).max(8).optional(),
   strictTitles: z.boolean().optional(),
+  sentence: z.string().trim().max(600).optional(),
   countries: z.array(z.enum(COUNTRY_CODES)).optional(),
   visaSponsorshipRequired: z.boolean().optional(),
   locations: z.array(z.string().min(1)).optional(),
@@ -38,6 +91,7 @@ const startRunSchema = z.object({
     .optional(),
   jobTypes: z.array(z.string().min(1)).optional(),
   industries: z.array(z.string().min(1)).optional(),
+  ...searchRulesShape,
 });
 
 const bool = z
@@ -132,7 +186,8 @@ export class DiscoveryController {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
     const parsed = startRunSchema.safeParse(body ?? {});
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
-    const { threadId, ...overrides } = parsed.data;
+    const { threadId, ...request } = parsed.data;
+    const overrides = toRules(request);
     if (threadId) {
       const { run } = await this.discoveryService.startRunForThread(
         jobSeekerId,
@@ -142,6 +197,116 @@ export class DiscoveryController {
       return run;
     }
     return this.discoveryService.startRun(jobSeekerId, overrides);
+  }
+
+  // "New search": one sentence fills the search form; the seeker edits it, then starts with POST discover.
+  @Post('discover/parse')
+  @HttpCode(200)
+  async parseSearch(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    const jobSeekerId = await this.requireJobSeekerId(req.userId);
+    const parsed = z
+      .object({
+        text: z.string().trim().min(3).max(600),
+        polish: z.boolean().optional(),
+      })
+      .safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    // Polish: the CV fills what a short sentence leaves out (level, skills, nearby roles).
+    if (parsed.data.polish)
+      return this.discoveryService.polishSentence(
+        jobSeekerId,
+        parsed.data.text,
+      );
+    // ponytail: same env-chosen model as the title planner; one small structured call, metered.
+    return parseSearchSentence(
+      process.env.TITLE_PLANNER_MODEL ?? 'gpt-4.1-mini',
+      parsed.data.text,
+    );
+  }
+
+  // "New search": the titles the search will cover (planned from the profile), before Start.
+  @Post('discover/plan-titles')
+  @HttpCode(200)
+  async planTitles(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    const jobSeekerId = await this.requireJobSeekerId(req.userId);
+    const parsed = z
+      .object({
+        roles: z.array(z.string().trim().min(1).max(120)).min(1).max(8),
+      })
+      .safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    return this.discoveryService.planSearchTitles(
+      jobSeekerId,
+      parsed.data.roles,
+    );
+  }
+
+  // "New search", on Start: whether the search fits the profile, and if not the closest search that does.
+  @Post('discover/check')
+  @HttpCode(200)
+  async checkSearch(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    const jobSeekerId = await this.requireJobSeekerId(req.userId);
+    const parsed = z
+      .object({
+        sentence: z.string().max(600).default(''),
+        roles: z.array(z.string().trim().min(1).max(120)).min(1).max(8),
+        level: z.enum(['entry', 'mid', 'senior']).nullable().default(null),
+        employment: z.array(z.string().max(30)).max(8).default([]),
+        countries: z.array(z.enum(COUNTRY_CODES)).max(30).default([]),
+        remoteTypes: z
+          .array(z.enum(['onsite', 'hybrid', 'remote']))
+          .default([]),
+        visaSponsorshipRequired: z.boolean().default(false),
+        advanced: z
+          .object({
+            residenceCountry: z.enum(COUNTRY_CODES).nullable().optional(),
+            postedWithinDays: z
+              .number()
+              .int()
+              .min(1)
+              .max(60)
+              .nullable()
+              .optional(),
+            includeKeywords: words.optional(),
+            excludeKeywords: words.optional(),
+            excludeCompanies: words.optional(),
+            salaryShownOnly: z.boolean().optional(),
+            willingToRelocate: z.boolean().optional(),
+          })
+          .default({}),
+        salary: z
+          .object({
+            amount: z.number().positive(),
+            currency: z.string().length(3),
+            period: z.enum(['MONTHLY', 'YEARLY']),
+          })
+          .nullable()
+          .default(null),
+      })
+      .safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    return this.discoveryService.checkSearch(jobSeekerId, parsed.data);
+  }
+
+  // "New search" live preview: what Plato's own index holds for the form as it stands, and what each rule removes.
+  @Post('discover/preview')
+  @HttpCode(200)
+  async previewSearch(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    await this.requireJobSeekerId(req.userId);
+    const parsed = z
+      .object({
+        titles: z.array(z.string().trim().min(1).max(120)).max(8),
+        countries: z.array(z.enum(COUNTRY_CODES)).max(30).default([]),
+        remoteTypes: z
+          .array(z.enum(['onsite', 'hybrid', 'remote', 'any']))
+          .default([]),
+        visaSponsorshipRequired: z.boolean().default(false),
+        jobTypes: z.array(z.string().max(30)).max(8).default([]),
+        ...searchRulesShape,
+      })
+      .safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    return this.discoveryService.previewSearch(toRules(parsed.data));
   }
 
   // Paste a job link: it becomes a job on the latest search so the extension can apply to it.
@@ -247,21 +412,21 @@ export class DiscoveryController {
       .send(buffer);
   }
 
+  // Same filters as the list, so each count is what picking that option returns.
   @Get('discovered-jobs/facets')
-  async facets(
-    @Req() req: AuthenticatedRequest,
-    @Query('threadId') threadId?: string,
-    @Query('tab') tab?: string,
-  ) {
+  async facets(@Req() req: AuthenticatedRequest, @Query() query: unknown) {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
+    const parsed = exportQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    // shortlistedOnly/runId don't apply: facets always describe the shortlist of the thread.
+    const { threadId, tab, ...rest } = parsed.data;
+    const filters = { ...rest, shortlistedOnly: undefined, runId: undefined };
     const runIds = await this.runIds(jobSeekerId, threadId);
-    const parsedTab = z
-      .enum(['discover', 'saved', 'applied', 'recommended'])
-      .safeParse(tab);
     return this.discoveryService.facetsForSeeker(
       jobSeekerId,
       runIds,
-      parsedTab.success ? parsedTab.data : undefined,
+      tab,
+      filters,
     );
   }
 

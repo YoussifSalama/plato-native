@@ -75,3 +75,35 @@ export function companyDomain(url: string | null | undefined): string | null {
     return null;
   }
 }
+
+// Image hosts a source gives the employer's logo on (LinkedIn's CDN), https only. Anything else is not used.
+const LOGO_HOSTS = /(^|\.)licdn\.com$/i;
+
+/**
+ * The employer's mark for a posting: the logo image the source gave (LinkedIn), and the employer's own website
+ * (the posting's link, else the website the source lists) for the favicon fallback.
+ */
+export function companyMark(job: {
+  company_url?: string | null;
+  raw?: unknown;
+}): { logo: string | null; domain: string | null } {
+  const raw = (job.raw ?? {}) as {
+    companyLogo?: unknown;
+    companyWebsite?: unknown;
+  };
+  let logo: string | null = null;
+  if (typeof raw.companyLogo === 'string') {
+    try {
+      const u = new URL(raw.companyLogo);
+      if (u.protocol === 'https:' && LOGO_HOSTS.test(u.hostname)) logo = u.href;
+    } catch {
+      /* not a URL: no logo */
+    }
+  }
+  const website =
+    typeof raw.companyWebsite === 'string' ? raw.companyWebsite : null;
+  return {
+    logo,
+    domain: companyDomain(job.company_url) ?? companyDomain(website),
+  };
+}

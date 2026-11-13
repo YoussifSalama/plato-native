@@ -94,6 +94,12 @@ export class InsightsController {
     return this.insights.digests(req.userId, Number(limit) || 10);
   }
 
+  /** Companies behind most of the seeker's own matches, not followed yet. */
+  @Get('companies/suggested')
+  suggested(@Req() req: AuthenticatedRequest) {
+    return this.insights.suggested(req.userId);
+  }
+
   /** Companies in the index matching a name, for the follow box. */
   @Get('companies')
   companies(@Query('q') q = '') {

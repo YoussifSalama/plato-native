@@ -35,6 +35,8 @@ const COUNTRIES: Record<CountryCode, { name: string; aliases?: string[] }> = {
   ID: { name: 'Indonesia' },
   JP: { name: 'Japan' },
   KR: { name: 'South Korea', aliases: ['korea'] },
+  HK: { name: 'Hong Kong' },
+  TW: { name: 'Taiwan' },
   AU: { name: 'Australia' },
   BR: { name: 'Brazil' },
   MX: { name: 'Mexico' },
@@ -76,6 +78,17 @@ export const COUNTRY_CODES: [CountryCode, ...CountryCode[]] = (() => {
 })();
 export const isCountryCode = (code: string) =>
   COUNTRY_CODES.includes(code.toUpperCase());
+/** Every name a posting may use for the country ("UAE", "United Arab Emirates"), for text matching. */
+export const countryNames = (code: CountryCode): string[] => [
+  ...new Set(
+    [
+      COUNTRIES[code]?.name,
+      ...(COUNTRIES[code]?.aliases ?? []),
+      REGION_NAMES.of(code),
+    ].filter((n): n is string => !!n && n.length > 2),
+  ),
+];
+
 export const countryName = (code: CountryCode) =>
   COUNTRIES[code]?.name ?? REGION_NAMES.of(code) ?? code;
 
@@ -147,9 +160,16 @@ const US_STATE =
 // "Toronto, Canada" / "Austin, TX" / "Cairo" / "UK" → the country, or null
 // when the text names no place we recognise (e.g. "Remote").
 export function resolveCountry(location: string): CountryCode | null {
+  // "Dubai - United Arab Emirates (UAE)", "Remote; Canada" split the same as commas.
   const parts = location
-    .split(/[,–—]/)
-    .map((p) => p.trim().toLowerCase())
+    .split(/[,;/()–—]|\s-\s/)
+    // "Remote Canada" / "Remote: US" name the country after the tag.
+    .map((p) =>
+      p
+        .trim()
+        .toLowerCase()
+        .replace(/^remote\b[\s:-]*/, ''),
+    )
     .filter(Boolean);
   // "Atlanta, Georgia" is a US state; "Tbilisi, Georgia" is the country.
   if (

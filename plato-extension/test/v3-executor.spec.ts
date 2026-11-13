@@ -182,7 +182,7 @@ describe('executor: members', () => {
     expect(await t.run('file_upload', { ...ref('ref_6'), document_ids: ['resume'] })).toMatchObject({ ok: true, text: 'Uploaded cv.pdf' });
     expect(t.ops.find((o) => o.op === 'set_file')).toMatchObject({ ref: 'ref_6', name: 'cv.pdf', data: 'JVBERi0=' });
     const none = tab({ resume: false });
-    expect((await none.run('file_upload', { ...ref('ref_6'), document_ids: ['resume'] })).error).toMatch(/No resume/);
+    expect((await none.run('file_upload', { ...ref('ref_6'), document_ids: ['resume'] })).error).toMatch(/could not fetch the seeker's resume: no resume was chosen/); // the reason, never a bare "no resume"
   });
   it('screenshot: a tab Chrome did not paint is brought forward once and captured again; zoom clips', async () => {
     const t = tab({ shotFailsFirst: true });

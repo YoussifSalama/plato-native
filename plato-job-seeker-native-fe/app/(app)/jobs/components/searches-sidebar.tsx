@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { InfoTip } from "@/components/info-tip"
 import { getDigests, getInsights } from "@/lib/insights/api"
-import { createThread, getDiscoveryStats, listThreads, type ThreadSummary } from "@/lib/jobs/api"
-import { runTitle, threadHref, timeAgo } from "@/lib/jobs/links"
+import { getDiscoveryStats, listThreads, type ThreadSummary } from "@/lib/jobs/api"
+import { runTitle, timeAgo, searchHref } from "@/lib/jobs/links"
 
 // The Jobs sidebar: New search, All jobs, Following, and every search. Shared by
 // All jobs (/jobs) and a search's results (/jobs/<id>); a search always opens its own page.
@@ -35,7 +35,7 @@ const searchWhere = (run: ThreadSummary["discovery_runs"][number]) => {
 }
 const jobsIn = (t: ThreadSummary) => {
   const run = t.discovery_runs[0]
-  return run ? (run.progress?.ranked ?? run.matched) : 0
+  return run ? (t.open_matches ?? run.progress?.ranked ?? run.matched) : 0 // the live count, the same as the list
 }
 const titleOf = (t: ThreadSummary) => (t.title ?? (t.discovery_runs[0] ? runTitle(t.discovery_runs[0]) : "New search")).replace(/ search$/i, "")
 
@@ -46,7 +46,6 @@ export function SearchesSidebar({ activeId, onThreads }: { activeId: string | nu
   const [following, setFollowing] = useState<string[]>([])
   const [followedRoles, setFollowedRoles] = useState(0)
   const [followingNew, setFollowingNew] = useState(0)
-  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     listThreads()
@@ -71,22 +70,16 @@ export function SearchesSidebar({ activeId, onThreads }: { activeId: string | nu
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; onThreads is a setter
   }, [])
 
-  async function newSearch() {
-    setCreating(true)
-    try {
-      router.push(threadHref((await createThread()).id))
-    } finally {
-      setCreating(false)
-    }
-  }
+  // New search is its own page (no chat); Start there creates the search and runs it.
+  const newSearch = () => router.push("/jobs/new")
   const grouped = GROUPS.map((g) => ({ g, ts: (threads ?? []).filter((t) => groupOf(t.updated_at) === g) })).filter((x) => x.ts.length)
 
   return (
     <aside data-tour="jobs-toolbar" className="no-scrollbar flex flex-col gap-4 rounded-2xl border bg-card p-3 shadow-card lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto">
       {/* Pinned while the searches list scrolls under it. */}
       <div className="z-10 -mx-3 -mt-3 flex flex-col gap-4 rounded-t-2xl border-b border-divider bg-card px-3 pt-3 pb-3 lg:sticky lg:-top-3 lg:shadow-[0_10px_12px_-12px_rgb(14_27_44/0.18)]">
-        <Button data-ai="jobs.new-search" onClick={newSearch} disabled={creating} className="w-full gap-2">
-          {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+        <Button data-ai="jobs.new-search" onClick={newSearch} className="w-full gap-2">
+          <Plus className="size-4" />
           New search
         </Button>
         <nav aria-label="Job lists" className="flex flex-col gap-0.5">
@@ -110,7 +103,7 @@ export function SearchesSidebar({ activeId, onThreads }: { activeId: string | nu
         <Select
           items={[{ value: ALL, label: `All jobs · your searches (${threads.length})` }, ...threads.map((t) => ({ value: t.id, label: titleOf(t) + (jobsIn(t) ? ` · ${jobsIn(t)}` : "") }))]}
           value={activeId ?? ALL}
-          onValueChange={(v) => v != null && router.push(v === ALL ? "/jobs" : threadHref(v))}
+          onValueChange={(v) => v != null && router.push(v === ALL ? "/jobs" : searchHref((threads ?? []).find((t) => t.id === v) ?? { id: v }))}
         >
           <SelectTrigger aria-label="Open one of your searches" className="h-11 w-full rounded-xl bg-card text-[15px] lg:hidden">
             <SelectValue />
@@ -148,7 +141,7 @@ export function SearchesSidebar({ activeId, onThreads }: { activeId: string | nu
               const n = jobsIn(t)
               const on = t.id === activeId
               return (
-                <Link key={t.id} href={threadHref(t.id)} aria-current={on || undefined} data-ai={`jobs.search:${t.id}`} className={cn(SIDE_ITEM, "h-auto items-start py-2", on ? SIDE_ON : SIDE_OFF)}>
+                <Link key={t.id} href={searchHref(t)} aria-current={on || undefined} data-ai={`jobs.search:${t.id}`} className={cn(SIDE_ITEM, "h-auto items-start py-2", on ? SIDE_ON : SIDE_OFF)}>
                   <span className="min-w-0 flex-1 text-left">
                     <span className={cn("block truncate", on && "text-primary")}>{titleOf(t)}</span>
                     <span className="block truncate text-[11.5px] font-normal text-text-tertiary">{[run && searchWhere(run), timeAgo(t.updated_at)].filter(Boolean).join(" · ")}</span>

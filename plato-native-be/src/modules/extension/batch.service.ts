@@ -22,6 +22,7 @@ import {
   TERMINAL,
 } from './batch-state';
 import { limiter } from './extension-auth.guard';
+import { roleKey } from '../apply/eligibility';
 import { ExtensionPrincipal } from './extension.service';
 import { extensionProvider, policyFor, ProviderPolicy } from './provider-policy';
 
@@ -175,8 +176,13 @@ export class ExtensionBatchService {
       const bt = batches.find((x) => x.id === r.batch_id);
       return {
         ...dto(r),
-        // false = another linked browser is working on it right now: never take it over from here
-        mine: !r.device_id || r.device_id === p.deviceId,
+        // false = another linked browser is working on it right now (holds a live lease): never take
+        // it over from here. No lease (VERIFY, or the sweep released it) = any linked browser may settle it.
+        mine:
+          !r.device_id ||
+          r.device_id === p.deviceId ||
+          !r.lease_expires_at ||
+          r.lease_expires_at < now(),
         batch: bt ? { label: bt.label ?? null, created_at: bt.created_at } : null,
         job: j
           ? { title: j.title, company: j.company, url: j.url, apply_url: j.apply_url }
@@ -194,6 +200,26 @@ export class ExtensionBatchService {
     const prev = (item.detail ?? {}) as Detail & { stops?: unknown[] };
     const stops = [...(prev.stops ?? []), { at: new Date().toISOString(), ...stop }].slice(-20);
     await this.prisma.applyBatchItem.update({ where: { id: item.id }, data: { detail: { ...prev, stops } as object } });
+  }
+
+  /**
+   * The site says this application was already sent: did Plato send one before? The same posting, or the same role
+   * at the same company found on another board. Only applications Plato knows were sent count.
+   */
+  async priorApplication(p: ExtensionPrincipal, itemId: string) {
+    const item = await this.item(p, itemId);
+    const job = await this.prisma.job.findUnique({ where: { id: item.job_id }, select: { company: true, title: true } });
+    const sent = await this.prisma.jobApplication.findMany({
+      where: { job_seeker_id: p.jobSeekerId, status: 'SUBMITTED' },
+      select: { job_id: true, submitted_at: true, updated_at: true, job: { select: { company: true, title: true } } },
+      orderBy: { updated_at: 'desc' },
+      take: 500,
+    });
+    const key = job ? roleKey(job.company, job.title) : null;
+    const hit = sent.find((a) => a.job_id === item.job_id) ?? (key ? sent.find((a) => roleKey(a.job.company, a.job.title) === key) : undefined);
+    return hit
+      ? { applied: true, at: (hit.submitted_at ?? hit.updated_at).toISOString(), same_posting: hit.job_id === item.job_id }
+      : { applied: false };
   }
 
   /** Every stop for this seeker, grouped by site and reason, most frequent first. */

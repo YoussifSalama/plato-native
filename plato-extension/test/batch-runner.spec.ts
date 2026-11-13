@@ -67,6 +67,13 @@ describe('rows and settle: the batch seen through the server list and what this 
     const rows = r.rows(items, live({ c: { step: 'review' }, n: { step: 'needs-user' }, a: { step: 'armed' } }));
     expect(Object.fromEntries(rows.map((x) => [x.itemId, x.status]))).toEqual({ p: 'queued', c: 'running', n: 'needs', a: 'running', v: 'verify', e: 'elsewhere', i: 'interrupted', g: 'gone' });
   });
+  it('a VERIFY item armed by another (since unlinked) browser is "verify", not "elsewhere": it never holds the batch open', () => {
+    const r = createBatchRunner(mem().store, clock);
+    r.start(pick(['v']), 'x', true);
+    const rows = r.settle([item('v', 'VERIFY', { mine: false })], quiet);
+    expect(rows.map((x) => x.status)).toEqual(['verify']);
+    expect(r.isActive()).toBe(false);
+  });
   it('an armed item is "needs you" when the person presses Submit (auto-submit off) or when Plato could not press it', () => {
     const r = createBatchRunner(mem().store, clock);
     r.start(pick(['a', 'b']), 'x', false);

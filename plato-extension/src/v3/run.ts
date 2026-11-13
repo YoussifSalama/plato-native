@@ -16,7 +16,9 @@ export type V3Result =
   | { kind: 'needs-user'; why: string; resume?: 'seeker_answer' | 'solved'; stop?: StopKind; ask?: AskQuestion[] }; // resume: the event that continues this conversation; stop: what kind of stop, so the panel draws the right card
 // Why a run stopped for the person: a question (a form to answer), a human check on the page, the site's refusal, the
 // brain giving up, Plato's own failure (server, network), or the job's tab gone. Each gets its own card and buttons.
-export type StopKind = 'ask' | 'captcha' | 'refused' | 'blocked' | 'error' | 'lost';
+export type StopKind = 'ask' | 'captcha' | 'refused' | 'blocked' | 'error' | 'lost' | 'duplicate';
+/** The site's own words that this person already applied ("This email ... has already been used to apply for this job"). */
+export const ALREADY_APPLIED = /already (been )?(used to )?appl(y|ied)|already (submitted|sent) (an |your )?application|(you|you've|you have) (already )?applied (to|for) this|duplicate application|application (for this (job|position|role) )?already exists/i;
 export const askFallback = (question: string): AskQuestion[] => [{ id: 'answer', label: question, type: 'textarea', required: true }];
 
 export interface V3RunDeps {

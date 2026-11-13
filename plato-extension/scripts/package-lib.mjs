@@ -44,10 +44,12 @@ export function assertProductionDir(dir) {
   assertAllowedNames(listFiles(dir), hasContent);
 
   if (/fixture/i.test(manifest.name)) fail(`manifest name marks a fixtures build: ${manifest.name}`);
-  if (JSON.stringify(manifest.permissions) !== JSON.stringify(['sidePanel', 'storage', 'tabGroups', 'debugger'])) fail(`unexpected permissions: ${JSON.stringify(manifest.permissions)}`);
+  if (JSON.stringify(manifest.permissions) !== JSON.stringify(['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting'])) fail(`unexpected permissions: ${JSON.stringify(manifest.permissions)}`);
+  // Any-site access exists only as OPTIONAL (asked once at Start batch, owner 2026-11-13), and exactly this pair.
+  if (JSON.stringify(manifest.optional_host_permissions) !== JSON.stringify(['https://*/*', 'http://*/*'])) fail(`unexpected optional_host_permissions: ${JSON.stringify(manifest.optional_host_permissions)}`);
   // host_permissions only for the Plato web app's own origins: https, exact host, no wildcard, not local.
   for (const h of manifest.host_permissions ?? []) if (!/^https:\/\/[^*/]+\/\*$/.test(h) || LOCAL.test(new URL(h.replace('/*', '')).hostname)) fail(`host_permissions must be exact https origins of the Plato web app: ${h}`);
-  for (const k of ['optional_host_permissions', 'optional_permissions', 'web_accessible_resources'])
+  for (const k of ['optional_permissions', 'web_accessible_resources'])
     if (k in manifest) fail(`manifest must not declare ${k}`);
   // externally_connectable: only the Plato web app (one exact https origin, not local) may message the
   // extension, to hand over a pairing code. No other extensions, no wildcards, no TLS channel ids.

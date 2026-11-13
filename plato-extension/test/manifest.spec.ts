@@ -11,7 +11,7 @@ const CSP = (api: string) =>
 describe('production manifest (pinned exactly)', () => {
   const m = buildManifest({ flavor: 'production', apiOrigin: 'https://api.plato.test', webOrigin: 'https://jobs.plato.test', registry: createRegistry(DEFINITIONS) });
 
-  it('equals the approved shape: four permissions, no hosts, only the Plato web app may message it, one content script for the enabled platforms only', () => {
+  it('equals the approved shape: five permissions, any-site access only as optional (asked once, 2026-11-13), only the Plato web app may message it, one content script for the enabled platforms only', () => {
     expect(m).toEqual({
       manifest_version: 3,
       name: 'Plato Apply',
@@ -20,7 +20,8 @@ describe('production manifest (pinned exactly)', () => {
       icons: { '16': 'icon16.png', '32': 'icon32.png', '48': 'icon48.png', '128': 'icon128.png' },
       minimum_chrome_version: '116',
       key: key.key,
-      permissions: ['sidePanel', 'storage', 'tabGroups', 'debugger'],
+      permissions: ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting'],
+      optional_host_permissions: ['https://*/*', 'http://*/*'],
       action: { default_title: 'Plato Apply', default_icon: { '16': 'icon16.png', '32': 'icon32.png', '48': 'icon48.png', '128': 'icon128.png' } },
       side_panel: { default_path: 'panel.html' },
       externally_connectable: { matches: ['https://jobs.plato.test/*'] },
@@ -38,10 +39,11 @@ describe('production manifest (pinned exactly)', () => {
   });
 
   it('has none of the privileges we promised not to take', () => {
-    for (const k of ['host_permissions', 'optional_host_permissions', 'optional_permissions', 'web_accessible_resources', 'declarative_net_request', 'sandbox'])
+    for (const k of ['host_permissions', 'optional_permissions', 'web_accessible_resources', 'declarative_net_request', 'sandbox'])
       expect(m).not.toHaveProperty(k);
     // debugger is taken on purpose (owner, 2026-10-21): trusted mouse / key events for custom dropdowns, boxes and Submit
-    for (const p of ['tabs', 'scripting', 'cookies', 'webRequest', 'activeTab', 'history', 'identity', 'nativeMessaging', 'downloads'])
+    // scripting (owner, 2026-11-13): the page reader is loaded into a tab the job's own run led to (off-board apply)
+    for (const p of ['tabs', 'cookies', 'webRequest', 'activeTab', 'history', 'identity', 'nativeMessaging', 'downloads'])
       expect(m.permissions).not.toContain(p);
   });
 
@@ -69,7 +71,7 @@ describe('content scripts follow the registry', () => {
   it('fixtures flavor matches the local fixture origin only, with the probe first', () => {
     const m = buildManifest({ flavor: 'fixtures', apiOrigin: 'http://127.0.0.1:4011', registry: createRegistry([...DEFINITIONS, fixtureProvider]) });
     expect(m.content_scripts).toEqual([{ matches: ['http://127.0.0.1:4012/*'], js: ['probe.js', 'content.js'], run_at: 'document_start', all_frames: false }]);
-    expect(m.permissions).toEqual(['sidePanel', 'storage', 'tabGroups', 'debugger']);
+    expect(m.permissions).toEqual(['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting']);
   });
 });
 

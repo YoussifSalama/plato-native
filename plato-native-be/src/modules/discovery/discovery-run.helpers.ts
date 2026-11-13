@@ -1,5 +1,9 @@
 import { JobSource } from '@prisma/client';
-import { NormalizedJob } from './adapters/types';
+import { DiscoveryQuery, NormalizedJob } from './adapters/types';
+import { excludesCountry } from '../apply/eligibility';
+import { countryName, resolveCountry } from './countries';
+import { jobTypeOf, type JobTypeKey } from './match-facets';
+import { jobMonthlyUsd } from './salary-sanity';
 
 export type RunStage =
   'crawling' | 'merging' | 'filtering' | 'ranking' | 'done' | 'failed';
@@ -285,4 +289,171 @@ export function isFresh(
   now = new Date(),
 ) {
   return !!job.posted_at && job.posted_at >= postedCutoff(days, now);
+}
+
+// Location text that places a remote job nowhere in particular.
+const ANYWHERE =
+  /^\s*$|\b(remote|worldwide|anywhere|global|international|emea|mena|middle east|gcc|gulf|distributed)\b/i;
+
+// A posting that says it will not sponsor a visa.
+export const NO_SPONSOR =
+  /\b(no|not|unable to|cannot|can't|won't|will not|do not|don't)\b[^.]{0,40}\b(visa )?sponsor(ship)?\b|\bwithout (visa )?sponsorship\b|\bmust (already )?(have|hold|possess) (the )?(right|authori[sz]ation) to work\b/i;
+
+// New search's employment values -> what a posting says (match-facets jobTypeOf).
+const EMPLOYMENT: Record<string, JobTypeKey[]> = {
+  full_time: ['full'],
+  part_time: ['part'],
+  contract: ['contract', 'temporary'],
+  freelance: ['contract'],
+  internship: ['intern'],
+  temporary: ['temporary'],
+};
+// The level a title states (levelOf), and the levels each choice rules out. An unlabelled title is kept.
+const LEVEL_OUT: Record<NonNullable<DiscoveryQuery['level']>, RegExp> = {
+  entry:
+    /\b(senior|sr\.?|lead|principal|staff|head|director|manager|vp|chief)\b/i,
+  mid: /\b(intern(ship)?|trainee|graduate|principal|director|head of|vp|chief)\b/i,
+  senior: /\b(junior|jr\.?|intern(ship)?|trainee|graduate|entry[ -]level)\b/i,
+};
+const words = (s: string) => s.toLowerCase();
+const has = (text: string, word: string) =>
+  new RegExp(
+    `(^|[^a-z0-9])${word.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`,
+    'i',
+  ).test(text);
+
+export type SearchMiss =
+  | 'place' // work mode or country
+  | 'level'
+  | 'employment'
+  | 'pay'
+  | 'visa'
+  | 'posted'
+  | 'keywords'
+  | 'company'
+  | 'salary';
+
+type GateJob = Pick<
+  NormalizedJob,
+  'title' | 'location' | 'remote_type' | 'description'
+> &
+  Partial<
+    Pick<
+      NormalizedJob,
+      'company' | 'job_type' | 'salary_max' | 'salary_currency' | 'posted_at'
+    >
+  >;
+type GateQuery = Pick<DiscoveryQuery, 'remoteTypes' | 'countries'> &
+  Partial<
+    Pick<
+      DiscoveryQuery,
+      | 'jobTypes'
+      | 'visaSponsorshipRequired'
+      | 'level'
+      | 'minMonthlyUsd'
+      | 'residenceCountry'
+      | 'postedWithinDays'
+      | 'includeKeywords'
+      | 'excludeKeywords'
+      | 'excludeCompanies'
+      | 'salaryShownOnly'
+      | 'remoteAnywhere'
+    >
+  >;
+
+// The search's own rules, applied to every job whatever source it came from: adapters search loosely (titles
+// across all of Ashby, remote feeds from everywhere), so this is where every New search detail is enforced.
+// Returns the first rule the job breaks, or null when it fits.
+export function searchMiss(
+  job: GateJob,
+  query: GateQuery,
+  now = Date.now(),
+): SearchMiss | null {
+  if (!fitsPlace(job, query)) return 'place';
+  if (query.level && LEVEL_OUT[query.level].test(job.title)) return 'level';
+  const wanted = (query.jobTypes ?? []).flatMap((t) => EMPLOYMENT[t] ?? []);
+  // Every kind asked for (or none) is no rule; a posting that does not say its kind is kept.
+  if (wanted.length && new Set(wanted).size < 5) {
+    const kind = jobTypeOf({
+      job_type: job.job_type ?? null,
+      title: job.title,
+    });
+    if (kind && !wanted.includes(kind)) return 'employment';
+  }
+  const pay = jobMonthlyUsd(job);
+  if (query.salaryShownOnly && pay === null) return 'salary';
+  if (query.minMonthlyUsd && pay !== null && pay < query.minMonthlyUsd)
+    return 'pay';
+  if (query.visaSponsorshipRequired && NO_SPONSOR.test(job.description ?? ''))
+    return 'visa';
+  // ponytail: an undated posting is kept (many boards give no date; the freshness cap already applies).
+  if (
+    query.postedWithinDays &&
+    job.posted_at &&
+    now - new Date(job.posted_at).getTime() >
+      query.postedWithinDays * 86_400_000
+  )
+    return 'posted';
+  const text = `${job.title}\n${job.description ?? ''}`;
+  if (
+    query.includeKeywords?.length &&
+    !query.includeKeywords.some((k) => has(text, k))
+  )
+    return 'keywords';
+  if (query.excludeKeywords?.some((k) => has(job.title, k))) return 'keywords';
+  if (
+    query.excludeCompanies?.some((c) =>
+      words(job.company ?? '').includes(words(c).trim()),
+    )
+  )
+    return 'company';
+  return null;
+}
+
+export const fitsSearch = (job: GateJob, query: GateQuery, now?: number) =>
+  searchMiss(job, query, now) === null;
+
+function fitsPlace(job: GateJob, query: GateQuery): boolean {
+  const modes = query.remoteTypes;
+  if (modes.length && !modes.includes('any')) {
+    const mode = { REMOTE: 'remote', HYBRID: 'hybrid', ONSITE: 'onsite' }[
+      job.remote_type as string
+    ] as 'remote' | 'hybrid' | 'onsite' | undefined;
+    // Unstated work mode is usually on-site: keep it only when on-site or hybrid is wanted.
+    if (mode ? !modes.includes(mode) : !modes.some((m) => m !== 'remote'))
+      return false;
+  }
+  const where = job.location?.trim() ?? '';
+  // A remote job that only takes people from elsewhere is out for someone who lives here.
+  if (
+    job.remote_type === 'REMOTE' &&
+    query.residenceCountry &&
+    excludesCountry(
+      { title: job.title, description: `${where}. ${job.description ?? ''}` },
+      [countryName(query.residenceCountry).toLowerCase()],
+    )
+  )
+    return false;
+  // Remote abroad: a company anywhere that hires from where the seeker lives. Region-limited ones that leave the
+  // seeker out are already gone above (residence); without a residence, the target countries stand in for it.
+  if (job.remote_type === 'REMOTE' && query.remoteAnywhere) {
+    if (query.residenceCountry) return true;
+    if (query.countries.length)
+      return !excludesCountry(
+        { title: job.title, description: `${where}. ${job.description ?? ''}` },
+        query.countries.map((c) => countryName(c).toLowerCase()),
+      );
+  }
+  if (!query.countries.length) return true;
+  const country = where ? resolveCountry(where) : null;
+  if (country) return query.countries.includes(country);
+  // ponytail: an unplaced on-site location (a city we don't list) is kept; the country search put it there.
+  if (job.remote_type !== 'REMOTE') return true;
+  // Remote and placed nowhere: keep "Remote"/"Worldwide"/"MENA"-style ones
+  // unless the text limits them to a region the target countries are not in.
+  if (!ANYWHERE.test(where)) return false;
+  return !excludesCountry(
+    { title: job.title, description: `${where}. ${job.description ?? ''}` },
+    query.countries.map((c) => countryName(c).toLowerCase()),
+  );
 }

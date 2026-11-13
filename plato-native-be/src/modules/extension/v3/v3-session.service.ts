@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { resultContent } from './v3-results';
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { recordUsage } from '../../usage/usage';
@@ -51,6 +52,9 @@ How to work:
 - Never invent a fact. For work authorization, residence in a specific state/country, background, licences, demographics and anything not in the profile: pick "prefer not to say"/"decline" if offered, otherwise leave it and ask.
 - Upload the resume with file_upload using document_ids: ["resume"] on the resume field; if the form asks for a cover letter and the settings allow it, write a short one from the profile.
 - You cannot press Submit until the seeker allows it. When every required field holds a correct value and only Submit remains, stop and answer exactly: SUBMIT_READY followed by a one-line summary.
+- The way to the form can take several pages: a board listing, its "Apply" (or "Apply on company site" / "Continue"), the company's own job page with ITS own "Apply" / "Apply now", maybe a choice like "Apply manually" or "Apply with resume", then the form. Walk it like a person: after each press, read the page you are on (read_page; the URL and title are in the tab state), work out what it is, and press the control that moves the application forward. Pages that would open in a new tab open in this same tab, so the next page is always here. Reach other sites only through the pages' own links, never by typing a URL.
+- Never answer BLOCKED because a press "did nothing" until you have read the page again after it: the page may have changed, loaded below, or moved to another site. A dialog asking to share your profile or confirm leaving the board: continue through it.
+- If that site needs the seeker to sign in or create an account (a password), stop and answer: BLOCKED <the site, and that the seeker signs in there, then presses Try again>.
 - If a captcha / human check appears, stop and answer: CAPTCHA <which check it is and where it appeared, one line>.
 - If the posting is closed or already applied, answer: CLOSED <the page's own words>.
 - If you are stuck after honest attempts, answer: BLOCKED <what you tried, what stops you, and what the seeker could do about it>, one short paragraph a person can act on.
@@ -189,15 +193,12 @@ export class V3SessionService {
     const carry = (s as Session & { carry?: Anthropic.Beta.BetaToolResultBlockParam[] }).carry ?? [];
     for (const [id, call] of s.pending) {
       const r = results.find((x) => x.call_id === id);
-      const content: Anthropic.Beta.BetaToolResultBlockParam['content'] = [];
-      let isError = false;
-      if (!r) { content.push({ type: 'text', text: 'Not executed: the browser gave no result for this action.' }); isError = true; }
-      else if (!r.ok) { content.push({ type: 'text', text: r.error ?? 'The action failed.' }); isError = true; }
-      else {
-        if (r.image) content.push({ type: 'image', source: { type: 'base64', media_type: r.image.media_type, data: r.image.data } });
-        if (r.text !== undefined) content.push({ type: 'text', text: r.text || '(empty)' });
-        if (!r.image && r.text === undefined) content.push({ type: 'text', text: `${call.name}: done` });
-        if (r.state) (content as unknown[]).push({ type: 'browser_state', tabs: r.state.tabs.map((t) => ({ tab_id: t.tab_id, title: t.title, url: t.url, ...(t.active && { active: true }) })), ...(r.state.state_changes?.length && { state_changes: r.state.state_changes }) });
+      const { content, isError } = r ? resultContent(call.name, r) : { content: [{ type: 'text' as const, text: 'Not executed: the browser gave no result for this action.' }], isError: true };
+      // A site the page itself led to (an Apply link to the company's own site) is part of this application from now on.
+      const at = r?.ok ? r.state?.tabs.find((t) => t.active)?.url : undefined;
+      if (at && URL.canParse(at)) {
+        const h = new URL(at).hostname;
+        if (!s.hosts.some((x) => h === x || h.endsWith(`.${x}`))) s.hosts.push(h, registrable(h));
       }
       if (call.name === 'left_click' && s.submitAllowed && r?.ok && /submit/i.test(r.text ?? '')) s.submitPressed = true;
       out.push({ type: 'tool_result', tool_use_id: id, content, ...(isError && { is_error: true }), ...({ toolset_name: 'browser' } as object) });

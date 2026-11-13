@@ -4,11 +4,14 @@ import { createOutbox } from '../core/outbox';
 import { captureProof, type ProofShot } from '../core/proof';
 import { BatchError, createBatchRunner, MAX_BATCH_JOBS, pickToggle, type BatchRun, type JobMeta, type Live } from '../core/batch-runner';
 import { blockingError, type FormReview } from '../core/form-review';
-import { NEEDS_YOU, V3 } from '../core/messages';
-import type { V3Op } from '../content/v3-reader';
+import { NEEDS_YOU, PING, V3 } from '../core/messages';
+import type { PageInfo, V3Op } from '../content/v3-reader';
+import { ANY_SITE, ensureReader, movedNote, NO_ACCESS, noReader, type ReaderDeps } from './handoff';
+import type { CallResult } from '../v3/contract';
 import type { PageState } from '../dom/page-state';
 import { createExecutor } from '../v3/executor';
-import { runV3, type StopKind, type V3Result } from '../v3/run';
+import { SAME_TAB_SOURCE } from '../v3/same-tab';
+import { ALREADY_APPLIED, runV3, type StopKind, type V3Result } from '../v3/run';
 import type { AskQuestion, SeekerAnswer } from '../v3/contract';
 import type { TurnRequest } from '../v3/contract';
 import { runAiApply, type EaResult } from './ai-apply';
@@ -229,7 +232,14 @@ async function refresh() {
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return fail(e);
     state.status = state.status === 'loading' ? 'ready' : state.status;
-    state.error = 'Cannot reach Plato right now. Showing the last known state; nothing was submitted.';
+    // Say what actually failed: no connection, too many requests, or the server's own error.
+    const st = e instanceof ApiError ? e.status : -1;
+    state.error = st === 0 || (st === -1 && !(e instanceof Error && e.message))
+      ? 'Cannot reach Plato right now. Showing the last known state; nothing was submitted.'
+      : st === 429
+        ? 'Plato is getting too many requests from this browser; it slows down and tries again. Nothing was submitted.'
+        : `Plato could not refresh (${st > 0 ? `${st}: ` : ''}${(e instanceof Error ? e.message : String(e)).slice(0, 120)}). Showing the last known state; nothing was submitted.`;
+    log('warn', `refresh failed: ${st > 0 ? st : ''} ${e instanceof Error ? e.message : String(e)}`);
   }
   scheduleDraw();
 }
@@ -667,6 +677,37 @@ const lostResult = (e: unknown): V3Result => {
   return { kind: 'needs-user', stop: 'lost', why: `Plato lost contact with the job's tab (${msg.slice(0, 100)}). Nothing was sent. Open the tab, then press Try again.` };
 };
 const v3Running = new Set<string>();
+// Tabs opened lately (a job's Apply button handing the application to the company's site): followed by the run.
+// LinkedIn's external Apply opens with noopener, and Chrome then leaves openerTabId empty: a tab with no opener, in the
+// job tab's window, created since the run last looked, counts too. ponytail: last 30 tabs, no cleanup needed.
+const created: { id: number; opener?: number; win: number; at: number }[] = [];
+chrome.tabs.onCreated.addListener((t) => {
+  if (t.id === undefined) return;
+  created.push({ id: t.id, opener: t.openerTabId, win: t.windowId, at: Date.now() });
+  if (created.length > 30) created.shift();
+});
+const openedFrom = (tabId: number, win: number, since: number) => created.find((c) => c.at >= since && c.opener === tabId) ?? created.find((c) => c.at >= since && c.opener === undefined && c.win === win && c.id !== tabId);
+const readerDeps: ReaderDeps = {
+  ping: (tabId) => limit(chrome.tabs.sendMessage(tabId, { type: PING }) as Promise<unknown>, 3000, 'page ping').then((r) => !!r, () => false),
+  granted: () => chrome.permissions.contains(ANY_SITE).catch(() => false),
+  inject: async (tabId) => void (await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] })),
+  wait: (ms) => sleep(ms),
+};
+// Everything the job's page would open in a new tab opens in this one (src/v3/same-tab.ts): the run reads each next
+// page where it already works. Through the debugger the run holds: on this page now and on every page it loads next.
+const pinTab = async (tabId: number) => {
+  const cdp = (m: string, p: Record<string, unknown>) => limit(chrome.debugger.sendCommand({ tabId }, m, p), 5000, `CDP ${m}`);
+  await cdp('Page.enable', {}).catch(() => undefined);
+  await cdp('Page.addScriptToEvaluateOnNewDocument', { source: SAME_TAB_SOURCE }).catch((e) => log('warn', `same-tab script (new pages): ${String(e)}`));
+  await cdp('Runtime.evaluate', { expression: SAME_TAB_SOURCE }).catch((e) => log('warn', `same-tab script (this page): ${String(e)}`));
+};
+// The page reader can't load on the site the application moved to: the seeker has not allowed other sites. A stop with
+// a clear action, never a model left guessing from screenshots.
+class NeedsSiteAccess extends Error {}
+// "It was already sent": attested once the job is armed for Submit; earlier in the form the server only allows a skip,
+// recorded with the true reason (already applied), so the job never comes back as new.
+const markApplied = (s: Session, why: string) => orch.attest(s).catch(() => orch.skip(s, 'already_applied', why));
+const tabUrl = async (tabId: number) => (await chrome.tabs.get(tabId).catch(() => undefined))?.url || 'another site';
 // The tab finished loading: Chrome's own event, not a poll. Resolves at once if it already has.
 const tabLoaded = (tabId: number, capMs: number) =>
   new Promise<boolean>((resolve) => {
@@ -687,21 +728,78 @@ async function runV3Item(item: ApiItem) {
   if (v3Running.has(item.id)) return;
   v3Running.add(item.id);
   const s = sessionOf(item);
-  const tabId = s.tabId;
-  if (tabId === undefined) return void v3Running.delete(item.id);
+  if (s.tabId === undefined) return void v3Running.delete(item.id);
+  let tabId: number = s.tabId; // the job's tab; moves when its Apply button hands the application to another site
+  let lookedAt = Date.now(); // tabs created after this are candidates for the hand-off
+  let noAccess: NeedsSiteAccess | null = null;
+  // Every page the job's tab loads (an Apply link to the company's site, the next step of a form): Plato's page reader
+  // and the same-tab rule go onto it at once, so the run reads the new page instead of guessing from screenshots.
+  const onLoaded = (id: number, info: { status?: string }) => {
+    if (id !== tabId || info.status !== 'complete') return;
+    void (async () => {
+      await sleep(300); // a known site's own script loads at idle, just after "complete"
+      const r = await ensureReader(readerDeps, id);
+      if (r === 'no-access') noAccess ??= new NeedsSiteAccess(NO_ACCESS(await tabUrl(id)));
+      else if (r === 'ready') jot(item.id, `Reading the new page: ${await tabUrl(id)}`);
+      await pinTab(id);
+    })();
+  };
+  chrome.tabs.onUpdated.addListener(onLoaded);
   const auto = submitOverride.has(item.id) || (__FLAVOR__ === 'fixtures' ? !!state.autoSubmit : __AUTO_SUBMIT__); // see runAi
-  const send = <T>(msg: V3Op) => timedTab(tabId, `v3 ${msg.op}`, limit(chrome.tabs.sendMessage(tabId, { type: V3, ...msg }) as Promise<T>, 15_000, `page ${msg.op}`));
+  const sendOnce = <T>(msg: V3Op) => timedTab(tabId, `v3 ${msg.op}`, limit(chrome.tabs.sendMessage(tabId, { type: V3, ...msg }) as Promise<T>, 15_000, `page ${msg.op}`));
+  // The page moved to a site Plato's reader is not on yet (an Apply link to the company's site): load it there and ask again.
+  const send = async <T>(msg: V3Op): Promise<T> => {
+    try {
+      return await sendOnce<T>(msg);
+    } catch (e) {
+      if (!noReader(e)) throw e;
+      await tabLoaded(tabId, 30_000);
+      await sleep(300); // a known site's own script loads at idle, just after "complete": let it answer first
+      const r = await ensureReader(readerDeps, tabId);
+      if (r === 'no-access') throw (noAccess = new NeedsSiteAccess(NO_ACCESS(await tabUrl(tabId)), { cause: e }));
+      if (r !== 'ready') throw e;
+      return sendOnce<T>(msg);
+    }
+  };
   // the page says when it is loaded and quiet; while its script is not there yet (mid-navigation) ask again
   const settle = async () => {
     for (let i = 0; i < 20; i++) {
       const r = await (chrome.tabs.sendMessage(tabId, { type: PAGE_SETTLE, capMs: 20_000 }) as Promise<{ settled: boolean } | undefined>).catch(() => undefined);
       if (r) return;
+      if (i === 4) await ensureReader(readerDeps, tabId); // still no answer after a load: the page is on a site our reader is not on yet
       await sleep(500);
     }
   };
   let resumeFile: { name: string; mime: string; data: string } | null = null;
   try {
     if (!(await trusted.attach(tabId))) return await finishRun(item, s, { kind: 'needs-user', why: 'Plato cannot press on this tab (another debugger holds it). Close DevTools on it, then press Try again.' });
+    await pinTab(tabId);
+    // After each action: did the job's tab open another one (its Apply button)? Then the application lives there now.
+    const follow = async (r: CallResult): Promise<CallResult> => {
+      const win = (await chrome.tabs.get(tabId).catch(() => undefined))?.windowId ?? -1;
+      await sleep(400); // a page's window.open lands just after the click settles
+      const child = openedFrom(tabId, win, lookedAt)?.id;
+      lookedAt = Date.now();
+      if (child === undefined || !(await chrome.tabs.get(child).then(() => true, () => false))) return r;
+      await tabLoaded(child, 30_000);
+      await sleep(300);
+      const url = await tabUrl(child);
+      const reader = await ensureReader(readerDeps, child);
+      const add = (note: string): CallResult => (r.ok ? { ...r, text: `${r.text ?? ''}\n${note}`.trim() } : { ...r, error: `${r.error ?? ''}\n${note}`.trim().slice(0, 600) });
+      if (reader === 'no-access') throw (noAccess = new NeedsSiteAccess(NO_ACCESS(url)));
+      if (reader !== 'ready') return add(`The application opened ${url} in a new tab, and Plato cannot work on that page.`);
+      await trusted.detach(tabId).catch(() => undefined);
+      if (!(await trusted.attach(child))) return add(`The application opened ${url} in a new tab, and Plato cannot press on it (another debugger holds it).`);
+      await pinTab(child);
+      tabId = child;
+      s.tabId = child;
+      await rememberTab(item.id, child);
+      await groupTab(child);
+      const info = await send<PageInfo | null>({ op: 'info' }).catch(() => null);
+      jot(item.id, `Followed the Apply link to ${info?.url ?? url}.`);
+      const moved = add(movedNote(info?.url ?? url));
+      return r.ok ? { ...moved, state: { tabs: [{ tab_id: 'tab_1', title: info?.title ?? '', url: info?.url ?? url, active: true }] } } : moved;
+    };
     const executor = createExecutor({
       send,
       cdp: (method, params) => timedTab(tabId, `cdp ${method}`, limit(chrome.debugger.sendCommand({ tabId }, method, params), 8000, `CDP ${method}`)),
@@ -721,13 +819,29 @@ async function runV3Item(item: ApiItem) {
           item.resume_choice = state.settings.resumeMode;
           await api.resumeChoice(item.id, item.resume_choice).catch((e) => jot(item.id, `Resume choice not saved: ${e instanceof Error ? e.message : String(e)}`.slice(0, 160))); // saved BEFORE the file is fetched (race seen 2026-10-23)
         }
-        if (!item.resume_choice) return null;
-        return (resumeFile ??= await api.file(item.id).catch((e) => {
-          jot(item.id, `Resume file: ${e instanceof Error ? e.message : String(e)}`.slice(0, 160));
-          return null;
-        }));
+        if (!item.resume_choice) return 'no resume was chosen for this application (Settings: Resume to upload)';
+        if (resumeFile) return resumeFile;
+        // A network blip, a busy server (429) or a 5xx gets one more try; the reason is kept and shown, never "no resume".
+        for (let attempt = 0; ; attempt++) {
+          try {
+            return (resumeFile = await api.file(item.id));
+          } catch (e) {
+            const status = e instanceof ApiError ? e.status : 0;
+            const why = `${status ? `Plato answered ${status}` : 'no connection to Plato'}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200);
+            jot(item.id, `Resume file: ${why}`);
+            if (attempt === 0 && (status === 0 || status === 429 || status >= 500)) {
+              await sleep(status === 429 ? 5000 : 1500);
+              continue;
+            }
+            return why;
+          }
+        }
       },
       sleep,
+      tabInfo: async () => {
+        const t = await chrome.tabs.get(tabId).catch(() => undefined);
+        return t?.url ? { url: t.url, title: t.title ?? '' } : null;
+      },
       quick: __FLAVOR__ === 'fixtures',
     });
     const next = v3Next.get(item.id);
@@ -757,7 +871,12 @@ async function runV3Item(item: ApiItem) {
             throw e;
           }
         },
-        exec: (call, allowed) => executor.exec(call, allowed),
+        exec: async (call, allowed) => {
+          const r = await executor.exec(call, allowed);
+          const out = /click|key/.test(call.name) ? await follow(r) : r; // only a press can open a tab
+          if (noAccess) throw noAccess; // the site needs the seeker's go-ahead first: stop with that, not a model guessing
+          return out;
+        },
         pageText: () => send<string>({ op: 'page_text' }),
         captcha: async () => !!(await send<{ captcha?: boolean } | undefined>({ op: 'state' }))?.captcha,
         arm: async () => void (s.item.state !== 'AWAITING_SUBMIT' && (await orch.armForSubmit(s))),
@@ -768,13 +887,28 @@ async function runV3Item(item: ApiItem) {
       },
       first,
     );
+    if (result.kind === 'needs-user' && ALREADY_APPLIED.test(result.why)) {
+      // The site says this person already applied. Plato's own history decides: sent by Plato before -> it is applied;
+      // otherwise the seeker is asked (they may have applied by hand).
+      const prior = await api.priorApplication(item.id).catch(() => null);
+      if (prior?.applied) {
+        jot(item.id, `The site says this was already applied to; Plato sent it ${prior.same_posting ? '' : 'for the same role '}on ${prior.at?.slice(0, 10)}. Marked applied.`);
+        await markApplied(s, 'Plato sent this application before.');
+        delete state.sessions[item.id];
+        runner.record(item.id, 'submitted', `Already applied: Plato sent it on ${prior.at?.slice(0, 10)}.`);
+        return void (await refresh());
+      }
+      await finishRun(item, s, { ...result, stop: 'duplicate' });
+      return;
+    }
     if (result.kind === 'needs-user' && result.resume) v3Next.set(item.id, result.resume);
     await finishRun(item, s, result);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     log('error', `apply loop (v3): ${msg}`);
-    await finishRun(item, s, lostResult(e));
+    await finishRun(item, s, e instanceof NeedsSiteAccess ? { kind: 'needs-user', why: `${msg} Press Try again and choose Allow.`, stop: 'blocked' } : lostResult(e));
   } finally {
+    chrome.tabs.onUpdated.removeListener(onLoaded);
     v3Running.delete(item.id);
     await trusted.detach(tabId); // the yellow "debugging" bar goes away between runs
   }
@@ -951,6 +1085,8 @@ async function stopBatch() {
     if (!(await cancelSession(s, 'Stopped before Submit. Nothing was sent.'))) failed++;
   }
   if (failed) toast(`${failed} job${failed === 1 ? '' : 's'} could not be cancelled on the server; the tab was closed. Refresh to see the truth.`, 'err');
+  // A job another browser is working on can't be stopped from here; it leaves this batch so the batch can end.
+  for (const r of state.rows) if (r.status === 'elsewhere') runner.record(r.itemId, 'gone', 'Left to the other linked browser working on it.');
   await refresh();
 }
 // Cancel one open job: the server records CANCELLED, the tab closes so nothing keeps running on it. A cancel the
@@ -1197,7 +1333,14 @@ const actions: Actions = {
       }),
     sheet: (open) => void guard(async () => void ((state.sheet = open), open && !state.settings && (state.settings = await api.settings().catch(() => null)))),
     resumeMode: (mode) => ((state.jobs.resumeMode = mode), draw()),
-    start: () => void guard(startBatch),
+    start: () => {
+      // Any-site access, asked inside the click (Chrome shows the prompt only for a user gesture); no prompt once granted.
+      const ask = __FLAVOR__ === 'fixtures' ? Promise.resolve(false) : chrome.permissions.request(ANY_SITE).catch(() => false);
+      void guard(async () => {
+        await ask;
+        await startBatch();
+      });
+    },
   },
   batch: {
     stop: (what) => {
@@ -1241,7 +1384,13 @@ const actions: Actions = {
         jot(item.id, `The seeker answered: ${text.replace(/\n/g, '; ').slice(0, 160)}`);
         await rerun(item);
       }),
-    retry: (item) => void guard(() => rerun(item)),
+    retry: (item) => {
+      const ask = __FLAVOR__ === 'fixtures' ? Promise.resolve(false) : chrome.permissions.request(ANY_SITE).catch(() => false); // inside the click, like Start batch
+      void guard(async () => {
+        await ask;
+        await rerun(item);
+      });
+    },
     // "Submit for me": the seeker's explicit go-ahead for this job; the loop presses Submit and confirms from the page.
     submitNow: (item) =>
       void guard(async () => {
@@ -1265,7 +1414,7 @@ const actions: Actions = {
     attest: (item) =>
       void guard(async () => {
         const s = orch.session(item.id);
-        if (s) await orch.attest(s);
+        if (s) await markApplied(s, 'The seeker says it was already sent.');
         else await orch.settle(item, 'submitted');
         delete state.sessions[item.id];
         reviews.delete(item.id);

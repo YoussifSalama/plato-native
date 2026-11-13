@@ -4,7 +4,7 @@ import type { Registry } from '../providers/registry';
 import { icon } from './icons';
 import { avatar, banner, btn, h, type Actions, type PanelState } from './view';
 import { renderAskForm } from './ask-form';
-import { askFallback, type StopKind } from '../v3/run';
+import { ALREADY_APPLIED, askFallback, type StopKind } from '../v3/run';
 
 // The Batch view: one batch, its progress, each job's outcome, and what the person has to do. Nothing here is a
 // button that submits by itself: "Submit for me" is the seeker's explicit go-ahead for one armed job.
@@ -140,7 +140,7 @@ function row(doc: Document, r: Row, s: PanelState, a: Actions, registry: Registr
       } else {
         const why = sess?.detail ?? NEEDS_TEXT[sess?.message ?? ''] ?? 'Plato stopped here and needs you on the page.';
         // the kind of stop decides the card: an older engine or backend gives only words, so the words are classified
-        const stop: StopKind = sess?.stop ?? (sess?.ask ? 'ask' : isHumanStep(why) ? 'captcha' : /lost the page|could not be reached|internal server error|network error/i.test(why) ? 'error' : /refused|did not accept/i.test(why) ? 'refused' : 'ask');
+        const stop: StopKind = sess?.stop ?? (sess?.ask ? 'ask' : isHumanStep(why) ? 'captcha' : /lost the page|could not be reached|internal server error|network error/i.test(why) ? 'error' : ALREADY_APPLIED.test(why) ? 'duplicate' : /refused|did not accept/i.test(why) ? 'refused' : 'ask');
         const card = (title: string, text: string, hint: string | null, ...acts: Node[]) => el.append(h(doc, 'div', { class: `qcard ${stop}` }, h(doc, 'p', { class: 'qt', text: title }), h(doc, 'p', { class: 'q', text }, hint ? h(doc, 'small', { text: hint }) : null), acts.length ? h(doc, 'div', { class: 'chips' }, ...acts) : null));
         const open = () => btn(doc, 'Open the tab', () => a.batch.watch(item), 'btn sm', { icon: 'ext', disabled: s.busy });
         const again = (text = 'Try again') => btn(doc, text, () => a.batch.retry(item), 'btn primary sm', { disabled: s.busy, id: `continue-${item.id}` });
@@ -160,6 +160,9 @@ function row(doc: Document, r: Row, s: PanelState, a: Actions, registry: Registr
             break;
           case 'refused':
             card('The site did not accept the submission', why, 'Plato will not send it again by itself. Look at the page; if it is fine to send, press Submit there yourself.', open(), btn(doc, 'I submitted it', () => a.batch.attest(item), 'btn primary sm', { disabled: s.busy }), btn(doc, 'Try again', () => a.batch.retry(item), 'btn sm', { disabled: s.busy }));
+            break;
+          case 'duplicate':
+            card('This site says you already applied', why, 'Plato has no record of sending it. Did you apply to this job yourself before?', btn(doc, 'Yes, mark it applied', () => a.batch.attest(item), 'btn primary sm', { disabled: s.busy }), btn(doc, 'No, look again', () => a.batch.retry(item), 'btn sm', { disabled: s.busy }), open());
             break;
           case 'error':
             card('Plato hit a problem on its own side', why, 'The job site is not involved; nothing was typed or sent since the last step.', again(), open());

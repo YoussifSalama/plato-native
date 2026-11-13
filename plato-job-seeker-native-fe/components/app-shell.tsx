@@ -196,16 +196,17 @@ function Frame({ children }: { children: ReactNode }) {
           <PlatoMark size={30} />
           {!collapsed && <span className="text-[15px] font-extrabold tracking-[0.22em] text-primary">PLATO</span>}
         </Link>
+        {/* Expand / collapse: always right under the logo, open or collapsed. */}
+        <button type="button" onClick={toggleSidebar} aria-expanded={!collapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} className={cn("group/tip relative -mt-3 flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium text-text-secondary transition-colors hover:bg-foreground/[0.04] hover:text-foreground", collapsed && "justify-center px-0")}>
+          {collapsed ? <PanelLeftOpen className="size-4 shrink-0 text-text-tertiary" strokeWidth={1.8} /> : <PanelLeftClose className="size-4 shrink-0 text-text-tertiary" strokeWidth={1.8} />}
+          {collapsed ? <RailTip label="Expand sidebar" /> : "Collapse"}
+        </button>
         <nav data-tour="sidebar-nav" aria-label="Main" className="flex flex-col gap-1">
           {NAV.map((it) => link(it, "main"))}
         </nav>
         <div className="mt-auto flex flex-col gap-3">
           <nav aria-label="Account" className="flex flex-col gap-0.5 border-t border-divider pt-3">
             {ACCOUNT.map((it) => link(it, "sub"))}
-            <button type="button" onClick={toggleSidebar} aria-expanded={!collapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} className={cn("group/tip relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium text-text-secondary transition-colors hover:bg-foreground/[0.04] hover:text-foreground", collapsed && "justify-center px-0")}>
-              {collapsed ? <PanelLeftOpen className="size-4 shrink-0 text-text-tertiary" strokeWidth={1.8} /> : <PanelLeftClose className="size-4 shrink-0 text-text-tertiary" strokeWidth={1.8} />}
-              {collapsed ? <RailTip label="Expand sidebar" /> : "Collapse"}
-            </button>
           </nav>
           {setup && collapsed && (
             <Link href={setup.next?.href ?? "/profile"} aria-label={`Profile strength ${strength}%`} className="group/tip relative mx-auto flex size-10 items-center justify-center rounded-full text-[11px] font-bold text-primary tabular-nums" style={{ background: `conic-gradient(var(--primary) ${strength}%, var(--primary-soft) 0)` }}>

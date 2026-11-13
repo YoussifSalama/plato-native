@@ -122,7 +122,7 @@ export class ChatThreadService {
   async list(userId: string) {
     const jobSeeker = await this.jobSeekerService.getByUserId(userId);
     if (!jobSeeker) throw new NotFoundException('Job seeker profile not found');
-    return this.prisma.chatThread.findMany({
+    const threads = await this.prisma.chatThread.findMany({
       where: { job_seeker_id: jobSeeker.id },
       orderBy: { updated_at: 'desc' },
       take: 20,
@@ -130,6 +130,12 @@ export class ChatThreadService {
         discovery_runs: { orderBy: { started_at: 'desc' }, take: 1 },
       },
     });
+    // The live number of open matches per search, counted like the list itself (not the count saved when it finished).
+    const open = await this.discoveryService.openMatchCounts(
+      jobSeeker.id,
+      threads.filter((t) => t.discovery_runs.length).map((t) => t.id),
+    );
+    return threads.map((t) => ({ ...t, open_matches: open.get(t.id) ?? 0 }));
   }
 
   async get(userId: string, threadId: string) {

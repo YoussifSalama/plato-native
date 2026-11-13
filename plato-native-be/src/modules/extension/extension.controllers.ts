@@ -302,6 +302,13 @@ export class ExtensionApiController {
     return this.resumeFiles.choose(req.extension, id, p.data.choice);
   }
 
+  // The site says "you already applied": whether Plato sent this application (or the same role there) before.
+  @Get('items/:id/prior-application')
+  @ExtensionScopes('apply:read')
+  priorApplication(@Req() req: ExtensionRequest, @Param('id') id: string) {
+    return this.batches.priorApplication(req.extension, id);
+  }
+
   // The chosen resume's bytes, for the page's upload field.
   @Get('items/:id/file')
   @ExtensionScopes('apply:read')

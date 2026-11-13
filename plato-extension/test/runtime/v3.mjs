@@ -56,15 +56,18 @@ const loaded = async (p) => { const tab = await p; await tab.waitForLoadState('d
 console.log(`Runtime tests, engine v3 (fixtures build, extension ${id})`);
 await T('the built manifest is the same approved one (engine is a build define, not a permission)', async () => {
   const m = await sw.evaluate(() => chrome.runtime.getManifest());
-  eq(m.permissions, ['sidePanel', 'storage', 'tabGroups', 'debugger']);
+  eq(m.permissions, ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting']); // scripting: off-board apply (owner, 2026-11-13)
+  eq(m.optional_host_permissions, ['https://*/*', 'http://*/*']); // any-site access only as optional, asked at Start batch
   ok(!m.host_permissions, 'unexpected host access');
 });
 
 let panel = await openPanel();
 globalThis.__panel = panel;
 await T('pairing stores the token and shows the queued jobs, the newest pick ticked for the first batch; the blocked provider cannot be picked', async () => {
-  await panel.locator('#code').fill('ABCD-EFGH');
-  await btn(panel, 'Link this browser').click();
+  // the code screen is eight boxes since 2026-11-09: typing moves box to box
+  await panel.locator('#code-0').click();
+  await panel.keyboard.type('ABCDEFGH');
+  await btn(panel, 'Connect').click();
   await panel.locator('.job').filter({ hasText: 'Engineer 1' }).waitFor({ timeout: 15000 });
   eq(await panel.locator('#picked').textContent(), '5 / 10', 'the five fillable jobs are ticked, the blocked one is not');
   const blocked = panel.locator('.job').filter({ hasText: 'Engineer 9' });

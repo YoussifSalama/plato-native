@@ -82,6 +82,7 @@ export function createApi(cfg: ApiConfig) {
     v3Turn: (itemId: string, body: TurnRequest) => call<TurnResponse>('POST', `/extension/v1/items/${encodeURIComponent(itemId)}/v3/turn`, body),
     resumeChoice: (itemId: string, choice: 'profile' | 'tailored') => call<{ resume_choice: 'profile' | 'tailored' }>('POST', `/extension/v1/items/${encodeURIComponent(itemId)}/resume`, { choice }),
     file: (itemId: string) => call<{ name: string; mime: string; data: string }>('GET', `/extension/v1/items/${encodeURIComponent(itemId)}/file`),
+    priorApplication: (itemId: string) => call<{ applied: boolean; at?: string; same_posting?: boolean }>('GET', `/extension/v1/items/${encodeURIComponent(itemId)}/prior-application`),
     remember: (entries: { question: string; value: string }[]) => call<{ remembered: number }>('POST', '/extension/v1/answers/remember', { entries }),
     stop: (itemId: string, body: { reason: string; message: string }) => call<{ ok: true }>('POST', `/extension/v1/items/${encodeURIComponent(itemId)}/stops`, body),
     answers: (itemId: string, body: { questions: AnswerQuestion[] }) => call<{ answers: { id: string; value: string | null }[]; aiFailed?: boolean }>('POST', `/extension/v1/items/${encodeURIComponent(itemId)}/answers`, body),

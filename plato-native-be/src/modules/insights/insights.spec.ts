@@ -19,6 +19,7 @@ import {
 import { digestEmail } from './digest-email';
 import { DigestService } from './digest.service';
 import { InsightsService } from './insights.service';
+import { normalizeCompany } from '../discovery/company';
 
 const probe = probeListing as jest.MockedFunction<typeof probeListing>;
 const NOW = new Date('2026-10-27T12:00:00Z');
@@ -607,7 +608,10 @@ describe('InsightsService.overview', () => {
         upsert: async () => ({ cadence: 'EVERY_3_DAYS', last_digest_at: null }),
       },
       alertMatch: { groupBy: async () => [], count: async () => 0 },
-      job: { count: jobCount },
+      job: {
+        count: jobCount,
+        findFirst: async () => ({ location: 'Cairo, Egypt' }),
+      },
       jobSeekerJobMatch: { count: matchCount },
     };
     const svc = new InsightsService(
@@ -618,10 +622,45 @@ describe('InsightsService.overview', () => {
       { enabled: false } as never,
     );
     const o = await svc.overview('u1');
-    expect(o.alerts[0]).toMatchObject({ open: 212, for_you: 14 });
+    expect(o.alerts[0]).toMatchObject({
+      open: 212,
+      for_you: 14,
+      where: 'Cairo, Egypt',
+      new_week: 0,
+    });
     expect(o.alerts[1]).not.toHaveProperty('open');
     expect(matchCount.mock.calls[0]).toMatchObject([
       { where: { job_seeker_id: 's1', hidden: false } },
     ]);
+  });
+});
+
+describe('InsightsService.suggested', () => {
+  it('companies behind most of your matches, not followed yet, with a matching role as the reason', async () => {
+    const m = (company: string, title: string) => ({ job: { company, title } });
+    const db = {
+      jobSeekerJobMatch: {
+        findMany: async () => [
+          m('Deloitte', 'SAP Consultant'),
+          m('Deloitte', 'SAP Consultant'),
+          m('Deloitte', 'ERP Lead'),
+          m('PwC', 'SAP Supply Chain Consultant'),
+          m('KPMG', 'Supply Chain Advisor'),
+        ],
+      },
+      jobAlert: {
+        findMany: async () => [{ company_key: normalizeCompany('PwC').key }],
+      },
+    };
+    const svc = new InsightsService(
+      db as never,
+      { getByUserId: async () => ({ id: 's1' }) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const s = await svc.suggested('u1');
+    expect(s.map((c) => c.name)).toEqual(['Deloitte', 'KPMG']);
+    expect(s[0]).toMatchObject({ jobs: 3, example: 'SAP Consultant' });
   });
 });

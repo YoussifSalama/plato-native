@@ -10,6 +10,14 @@ export function threadHref(threadId: string) {
   return `/jobs/${threadId}`
 }
 
+// Where a search opens, with no page in between: under way -> its live search page; never started -> its setup form
+// (the same page); finished -> its results.
+export function searchHref(t: { id: string; discovery_runs?: Pick<DiscoveryRun, "id" | "status">[] }) {
+  const run = t.discovery_runs?.[0]
+  if (!run) return `/jobs/search?thread=${t.id}`
+  return run.status === "RUNNING" ? `/jobs/search?thread=${t.id}&run=${run.id}` : threadHref(t.id)
+}
+
 export function runHref(run: Pick<DiscoveryRun, "id" | "thread_id">) {
   return run.thread_id ? `${threadHref(run.thread_id)}?run=${run.id}` : JOBS_HOME
 }

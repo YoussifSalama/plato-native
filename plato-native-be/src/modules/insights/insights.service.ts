@@ -69,23 +69,32 @@ export class InsightsService {
   /** Everything the alerts page shows. */
   async overview(userId: string) {
     const id = await this.seekerId(userId);
-    const [alerts, settings, account, counts, pending] = await Promise.all([
-      this.prisma.jobAlert.findMany({
-        where: { job_seeker_id: id },
-        orderBy: { created_at: 'asc' },
-      }),
-      this.settingsFor(id),
-      this.credits.account(userId),
-      this.prisma.alertMatch.groupBy({
-        by: ['alert_id'],
-        where: { job_seeker_id: id, sent_at: { not: null } },
-        _count: { _all: true },
-      }),
-      this.prisma.alertMatch.count({
-        where: { job_seeker_id: id, sent_at: null, dropped: null },
-      }),
-    ]);
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+    const [alerts, settings, account, counts, pending, weekly] =
+      await Promise.all([
+        this.prisma.jobAlert.findMany({
+          where: { job_seeker_id: id },
+          orderBy: { created_at: 'asc' },
+        }),
+        this.settingsFor(id),
+        this.credits.account(userId),
+        this.prisma.alertMatch.groupBy({
+          by: ['alert_id'],
+          where: { job_seeker_id: id, sent_at: { not: null } },
+          _count: { _all: true },
+        }),
+        this.prisma.alertMatch.count({
+          where: { job_seeker_id: id, sent_at: null, dropped: null },
+        }),
+        // "6 new this week" on each alert: new jobs it picked up in the last 7 days.
+        this.prisma.alertMatch.groupBy({
+          by: ['alert_id'],
+          where: { job_seeker_id: id, created_at: { gte: weekAgo } },
+          _count: { _all: true },
+        }),
+      ]);
     const sent = new Map(counts.map((c) => [c.alert_id, c._count._all]));
+    const week = new Map(weekly.map((c) => [c.alert_id, c._count._all]));
     const reach = await this.companyReach(
       id,
       alerts.flatMap((a) =>
@@ -115,6 +124,7 @@ export class InsightsService {
         company: a.company,
         paused: a.paused,
         sent: sent.get(a.id) ?? 0,
+        new_week: week.get(a.id) ?? 0,
         ...(a.kind === 'COMPANY' && a.company && reach.get(a.company)),
         created_at: a.created_at,
       })),
@@ -284,14 +294,17 @@ export class InsightsService {
    * this seeker's matches ("14 for you · 212 open").
    */
   private async companyReach(seekerId: string, companies: string[]) {
-    const out = new Map<string, { open: number; for_you: number }>();
+    const out = new Map<
+      string,
+      { open: number; for_you: number; where: string | null }
+    >();
     await Promise.all(
       [...new Set(companies)].map(async (name) => {
         const company = { equals: name, mode: 'insensitive' as const };
         const live = {
           OR: [{ expired_at: null }, { expired_at: { isSet: false } }],
         };
-        const [open, forYou] = await Promise.all([
+        const [open, forYou, latest] = await Promise.all([
           this.prisma.job.count({
             where: { company, source: { not: 'MANUAL' }, ...live },
           }),
@@ -302,11 +315,70 @@ export class InsightsService {
               job: { is: { company, ...live } },
             },
           }),
+          // Where it hires: the place on its newest open role, for the card's sub-line.
+          this.prisma.job.findFirst({
+            where: { company, source: { not: 'MANUAL' }, ...live },
+            orderBy: { created_at: 'desc' },
+            select: { location: true },
+          }),
         ]);
-        out.set(name, { open, for_you: forYou });
+        out.set(name, {
+          open,
+          for_you: forYou,
+          where: latest?.location ?? null,
+        });
       }),
     );
     return out;
+  }
+
+  /**
+   * "More companies to follow": the companies behind most of this seeker's own matches (built from their titles,
+   * level and places), not followed yet, each with one of the matching roles as the reason.
+   */
+  async suggested(userId: string) {
+    const id = await this.seekerId(userId);
+    const [matches, follows] = await Promise.all([
+      this.prisma.jobSeekerJobMatch.findMany({
+        where: {
+          job_seeker_id: id,
+          hidden: false,
+          job: {
+            is: {
+              source: { not: 'MANUAL' },
+              OR: [{ expired_at: null }, { expired_at: { isSet: false } }],
+            },
+          },
+        },
+        select: { job: { select: { company: true, title: true } } },
+        orderBy: { discovered_at: 'desc' },
+        take: 1000,
+      }),
+      this.prisma.jobAlert.findMany({
+        where: { job_seeker_id: id, kind: 'COMPANY' },
+        select: { company_key: true },
+      }),
+    ]);
+    const followed = new Set(follows.map((f) => f.company_key));
+    const by = new Map<
+      string,
+      { name: string; key: string; jobs: number; titles: Map<string, number> }
+    >();
+    for (const { job } of matches) {
+      const c = normalizeCompany(job.company);
+      if (!c.key || followed.has(c.key)) continue;
+      const hit = by.get(c.key) ?? { ...c, jobs: 0, titles: new Map() };
+      hit.jobs++;
+      hit.titles.set(job.title, (hit.titles.get(job.title) ?? 0) + 1);
+      by.set(c.key, hit);
+    }
+    return [...by.values()]
+      .sort((a, b) => b.jobs - a.jobs)
+      .slice(0, 5)
+      .map(({ titles, ...c }) => ({
+        ...c,
+        example: [...titles].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+      }));
   }
 
   /** Company names in the index, for the follow box. */

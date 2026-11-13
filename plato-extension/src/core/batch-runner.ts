@@ -81,9 +81,10 @@ export function createBatchRunner(store: RunStore, now: () => number = () => Dat
     const item = items.find((i) => i.id === id);
     if (!item) return { status: 'gone' };
     const sess = live.sessions[id];
+    // VERIFY waits for the person's word, whichever browser armed it: any linked browser may settle it.
+    if (item.state === 'VERIFY') return { status: 'verify', item };
     if (item.mine === false) return { status: 'elsewhere', item };
     if (item.state === 'PENDING') return { status: 'queued', item };
-    if (item.state === 'VERIFY') return { status: 'verify', item };
     if (!sess) return { status: 'interrupted', item }; // open on the server, not in this panel: a reload or a lost tab
     if (item.state === 'NEEDS_USER' || sess.step === 'needs-user') return { status: 'needs', item };
     if (item.state === 'AWAITING_SUBMIT') return { status: autoSubmit && sess.message !== 'submit_failed' ? 'running' : 'needs', item }; // the person presses Submit, or Plato could not

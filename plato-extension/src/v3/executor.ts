@@ -25,8 +25,9 @@ export interface ExecDeps {
   navigate(url: string): Promise<void>; // 'back' | 'forward' | 'reload' | a URL; resolves when the page is loaded and quiet
   settle(): Promise<void>; // resolves when the page is quiet
   activate(): Promise<void>; // bring the tab to the front (Chrome does not paint a background tab for a screenshot)
-  resume(): Promise<{ name: string; mime: string; data: string } | null>; // the staged resume (base64), or why not
+  resume(): Promise<{ name: string; mime: string; data: string } | string | null>; // the staged resume (base64), or the reason it could not be fetched
   sleep(ms: number): Promise<void>;
+  tabInfo?(): Promise<{ url: string; title: string } | null>; // Chrome's own view of the tab, when the page reader is not on the page
   quick?: boolean; // the test build moves fast; real builds at a human pace
 }
 type Target = { type: 'ref'; ref: string } | { type: 'coordinate'; x: number; y: number };
@@ -60,7 +61,8 @@ export function createExecutor(d: ExecDeps) {
   const pace = (ms: number) => d.sleep(d.quick ? Math.min(ms, 5) : ms);
   // a person's timing: never the same twice, within a calm range
   const human = (min: number, max: number) => pace(min + Math.random() * (max - min));
-  const info = () => d.send<PageInfo | null>({ op: 'info' }).catch(() => null);
+  // Where the tab is: from the page reader, else from Chrome, so the model always knows the page after a hand-off.
+  const info = async (): Promise<Pick<PageInfo, 'url' | 'title'> | null> => (await d.send<PageInfo | null>({ op: 'info' }).catch(() => null)) ?? (await d.tabInfo?.().catch(() => null)) ?? null;
   const state = async () => {
     const i = await info();
     return { tabs: [{ tab_id: TAB, title: i?.title ?? '', url: i?.url ?? '', active: true }] };
@@ -217,7 +219,7 @@ export function createExecutor(d: ExecDeps) {
         const ids = (input.document_ids as string[] | undefined) ?? [];
         if (t?.type !== 'ref' || input.paths || ids.length !== 1 || ids[0] !== 'resume') return { ok: false, error: 'Refused: upload only the staged resume (document_ids: ["resume"]) onto a ref.' };
         const file = await d.resume();
-        if (!file) return { ok: false, error: 'No resume is available for this application.' };
+        if (!file || typeof file === 'string') return { ok: false, error: `Plato could not fetch the seeker's resume: ${file || 'no resume was chosen for this application'}. Do not retry the upload; stop with BLOCKED and quote this reason.` };
         const r = await d.send<{ ok: boolean; message: string }>({ op: 'set_file', ref: t.ref, ...file });
         if (!r.ok) return { ok: false, error: r.message };
         // The page may parse the file and fill fields from it, a few seconds later (Lever: name, email, phone,

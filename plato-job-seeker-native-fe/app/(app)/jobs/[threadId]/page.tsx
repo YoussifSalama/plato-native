@@ -7,11 +7,9 @@ import { Plus, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import {
-  createThread,
   getRun,
   getThread,
   runEventsUrl,
-  sendThreadMessage,
   type ChatThread,
   type DiscoveryRun,
   type RunProgress,
@@ -20,16 +18,11 @@ import {
   type MatchFilters,
   type MatchSort,
   type OrchestratorEvent,
-  type ThreadMessage,
   type UiCommand,
   type ChatUiContext,
 } from "@/lib/jobs/api"
 import { JOBS_HOME, PAGE_PATH, threadHref } from "@/lib/jobs/links"
-import { getMe, type AuthUser } from "@/lib/auth/api"
-import { getPreferences } from "@/lib/preferences/api"
-import type { Preferences } from "@/lib/preferences/schema"
-import { ChatHero } from "../components/chat-hero"
-import { buildPageMap, needsMore, runPageEvent, settle } from "@/lib/page-map"
+import { runPageEvent } from "@/lib/page-map"
 import { cursorTo } from "@/components/agent-cursor"
 import { setSearchHost, type SearchHost } from "@/lib/assistant/search-host"
 import dynamic from "next/dynamic"
@@ -49,6 +42,8 @@ const TABS: { key: MatchTab; label: string }[] = [
   { key: "recommended", label: "Recommended" },
 ]
 const POLL_MS = 4000
+// The live flow diagram of the job sites being read; hidden for now (owner, 2026-11-13), not deleted.
+const SHOW_JOURNEY = false
 
 export default function ThreadPage({ params }: { params: Promise<{ threadId: string }> }) {
   const { threadId } = use(params)
@@ -57,12 +52,8 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
   const runParam = searchParams.get("run")
 
   const [thread, setThread] = useState<ChatThread | null>(null)
-  const [me, setMe] = useState<AuthUser | null>(null)
-  const [preferences, setPreferences] = useState<Preferences | null>(null)
   const [run, setRun] = useState<DiscoveryRun | null>(null)
   const [progress, setProgress] = useState<RunProgress | null>(null)
-  const [sending, setSending] = useState(false)
-  const [chatError, setChatError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [q, setQ] = useState("")
   // A list command from the assistant (filter, open job); ResultsView applies each once.
@@ -92,15 +83,6 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
   // The journey keeps the stage until its payoff beat has played; a run
   // that was already finished when we arrived skips straight to results.
   const [journeyDone, setJourneyDone] = useState(false)
-
-  useEffect(() => {
-    getMe()
-      .then(setMe)
-      .catch(() => {})
-    getPreferences()
-      .then(setPreferences)
-      .catch(() => {})
-  }, [])
 
   // A deep link can name a specific run; otherwise the thread's latest one.
   const adoptThread = useCallback((t: ChatThread, runId?: string | null) => {
@@ -167,12 +149,17 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
     }
   }, [run])
 
-  async function newSearch() {
-    const t = await createThread()
-    router.push(threadHref(t.id))
-  }
+  // New search is its own page (no chat); an empty search is set up there too.
+  const newSearch = () => router.push("/jobs/new")
 
   const view = !run ? "chat" : run.status === "RUNNING" || !journeyDone ? "searching" : "results"
+  // A search under way opens on the search page itself: the sentence, the details and the live side panel.
+  // This page shows results only. A search under way, or one never started, lives on the search page; an old link
+  // that lands here moves on at once, with nothing shown in between.
+  const elsewhere = !SHOW_JOURNEY && !!thread && (!run || run.status === "RUNNING")
+  useEffect(() => {
+    if (elsewhere) router.replace(run ? `/jobs/search?thread=${threadId}&run=${run.id}` : `/jobs/search?thread=${threadId}`)
+  }, [elsewhere, run, router, threadId])
   useEffect(() => {
     if (view === "results" && !tabParam) setTab("discover")
   }, [view, tabParam, setTab])
@@ -190,8 +177,7 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
           setTab(e.tab)
         } else await runPageEvent({ type: "goto", path: PAGE_PATH[e.page] }, router.push)
       } else if (e.type === "click" || e.type === "type_text" || e.type === "goto") {
-        const problem = await runPageEvent(e, router.push)
-        if (problem) setChatError(problem)
+        await runPageEvent(e, router.push)
       } else if (e.type === "open_extension_progress") window.dispatchEvent(new Event("plato:open-extension-progress"))
       else if (e.type !== "search_started") {
         // Point at what is about to change, then change it.
@@ -255,34 +241,6 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
     return () => setSearchHost(null)
   }, [threadKey, view])
 
-  async function send(content: string) {
-    if (!thread) return
-    const optimistic: ThreadMessage = {
-      id: `tmp-${Date.now()}`,
-      role: "USER",
-      content,
-      created_at: new Date().toISOString(),
-    }
-    setThread({ ...thread, messages: [...thread.messages, optimistic] })
-    setSending(true)
-    setChatError(null)
-    try {
-      const { message, events } = await sendThreadMessage(thread.id, content, { ...uiContext(), pageMap: buildPageMap() })
-      setThread((t) => (t ? { ...t, messages: [...t.messages, message] } : t))
-      await runAssistantActions(events)
-      // A multi-step task carries on in the layout-level assistant, which survives page changes.
-      if (needsMore(events)) {
-        await settle()
-        window.dispatchEvent(new CustomEvent("plato:continue", { detail: { threadId: thread.id, step: 1 } }))
-      }
-      await adoptStarted(events)
-    } catch (e) {
-      setChatError(e instanceof Error ? e.message : "Something went wrong")
-    } finally {
-      setSending(false)
-    }
-  }
-
   function finishJourney() {
     setJourneyDone(true)
     // Plato's closing line landed in the thread server-side; pull it in.
@@ -297,7 +255,7 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
       <PageHeader
         crumbs={[{ label: "Jobs", href: JOBS_HOME }]}
         title={thread?.title ?? "Search"}
-        description={view === "results" ? undefined : view === "searching" ? "Plato is searching every board. You can leave and come back; it keeps going." : "Tell Plato the role you want in your own words."}
+        description={view === "results" ? undefined : view === "searching" ? "Plato is searching every board. You can leave and come back; it keeps going." : "Set up this search, then Plato searches every board."}
         actions={
           <>
             {view === "results" && (
@@ -320,11 +278,12 @@ export default function ThreadPage({ params }: { params: Promise<{ threadId: str
       />
 
       {loadError && <p role="alert" className="rounded-xl border border-l-4 border-l-destructive bg-card px-4 py-3 text-sm text-foreground shadow-card">{loadError}</p>}
-      {!thread && !loadError && <Skeleton className="h-[calc(100dvh-220px)] min-h-[420px] w-full rounded-2xl" />}
+      {(!thread || elsewhere) && !loadError && <Skeleton className="h-[calc(100dvh-220px)] min-h-[420px] w-full rounded-2xl" />}
 
-      {thread && view === "chat" && <ChatHero firstName={me?.full_name.split(" ")[0] ?? null} preferences={preferences} messages={messages} onSend={send} busy={sending} error={chatError} />}
+      
 
-      {thread && run && view === "searching" && progress && <SearchingView run={run} progress={progress} journey={journey} onFinished={finishJourney} />}
+      {/* While it runs: the progress card. The flow diagram of the sites being read is hidden (owner, 2026-11-13), kept for later. */}
+      {thread && run && view === "searching" && progress && SHOW_JOURNEY && <SearchingView run={run} progress={progress} journey={journey} onFinished={finishJourney} />}
 
       {/* Results share the Jobs sidebar: every search, All jobs and Following one click away. */}
       {thread && run && view === "results" && (

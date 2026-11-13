@@ -3,22 +3,23 @@
 import { NextSteps } from "@/components/next-steps"
 import { InfoTip } from "@/components/info-tip"
 import { PAGE } from "@/components/page-header"
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { BellRing, Bookmark, Building2, CircleCheck, CircleX, Clock, Hand, MessagesSquare, Plus, Search, Send, Sparkles, Target } from "lucide-react"
+import { ArrowRight, BellRing, Bookmark, Building2, Plus, Search, Send } from "lucide-react"
 import { cn } from "cn"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExtensionApplyModal } from "@/components/extension-apply-modal"
-import { CARD, EmptyState, Kpi, MatchPill, MatchRing, MetaChip, MonoTile, PlatoNote, SectionHeader } from "@/components/plato-ui"
+import { CARD, EmptyState, MatchPill, MatchRing, MetaChip, PlatoNote } from "@/components/plato-ui"
+import { CompanyAvatar } from "@/components/company-avatar"
 import { getMe } from "@/lib/auth/api"
 import { getProfile } from "@/lib/documents/api"
 import { getDigests, getInsights, type Digest } from "@/lib/insights/api"
-import { createThread, getDiscoveryStats, getMatches, listApplications, setSaved, type DiscoveryStats, type JobApplication, type JobMatch } from "@/lib/jobs/api"
+import { getDiscoveryStats, getMatches, listApplications, setSaved, type DiscoveryStats, type JobApplication, type JobMatch } from "@/lib/jobs/api"
 import { statusView } from "@/lib/jobs/application-status"
-import { threadHref, timeAgo } from "@/lib/jobs/links"
+import { timeAgo } from "@/lib/jobs/links"
 import { staggerContainer, fadeUpItem } from "@/lib/motion-variants"
 
 const WEEK_GOAL = 10
@@ -47,7 +48,15 @@ const event = (a: JobApplication) => {
   switch (a.status) {
     case "SUBMITTED":
       // What the seeker marked they heard back, newest news first.
-      return a.outcome === "INTERVIEW" ? <>{c} invited you to interview</> : a.outcome === "OFFER" ? <>{c} made you an offer</> : a.outcome === "VIEWED" ? <>{c} viewed your application</> : <>Applied to {c}</>
+      return a.outcome === "INTERVIEW" ? (
+        <>{c} invited you to interview</>
+      ) : a.outcome === "OFFER" ? (
+        <>{c} made you an offer</>
+      ) : a.outcome === "VIEWED" ? (
+        <>{c} viewed your application</>
+      ) : (
+        <>Applied to {c}</>
+      )
     case "IN_PROGRESS":
     case "EXTENSION_ACTIVE":
       return <>Plato is applying to {c}</>
@@ -107,8 +116,7 @@ export default function Home() {
   async function newSearch() {
     setCreating(true)
     try {
-      const t = await createThread()
-      router.push(threadHref(t.id))
+      router.push("/jobs/new") // New search is its own page; Start there creates the search
     } finally {
       setCreating(false)
     }
@@ -128,90 +136,76 @@ export default function Home() {
   const recent = [...(apps ?? [])].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)).slice(0, 3)
   // The one line under the greeting: what changed and what Plato is doing.
   // The owner's line once there is something to show; a first step before that.
-  const summary = !stats || stats.shortlisted || sent ? "While you were away, Plato kept your job hunt moving. Here’s where things stand." : "Start a search and Plato will rank every posting against your profile."
+  const summary =
+    !stats || stats.shortlisted || sent ? "While you were away, Plato kept your job hunt moving. Here’s where things stand." : "Start a search and Plato will rank every posting against your profile."
 
   return (
     // A brand-new account (no matches, nothing sent) gets the getting-started tour.
     <div className={PAGE} data-tour-state={top?.length === 0 && apps?.length === 0 ? "home.new" : "home.active"}>
       {error && <p className="rounded-xl border border-destructive/30 bg-danger-soft px-4 py-3 text-sm text-destructive">{error}</p>}
 
-      {/* Greeting and the numbers that matter this week: one card, one stat strip inside it. */}
-      <section data-tour="page-header" className={cn(CARD, "relative isolate flex flex-col gap-5 overflow-hidden p-5 sm:p-6 xl:flex-row xl:items-center xl:gap-8")}>
-        {/* Brand light: a soft cobalt-to-azure glow behind the greeting. */}
-        <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_120%_at_0%_0%,color-mix(in_oklch,var(--primary)_9%,transparent),transparent_60%),radial-gradient(50%_90%_at_100%_100%,color-mix(in_oklch,var(--azure)_10%,transparent),transparent_65%)]" />
+      {/* Greeting and the four numbers that matter this week (owner design, 2026-11-13). */}
+      <section data-tour="page-header" className={cn(CARD, "flex flex-col gap-5 p-5 sm:p-6 xl:flex-row xl:items-center xl:gap-8")}>
         <div className="min-w-0 xl:flex-1">
-          <p className="eyebrow">
+          <p className="font-mono text-[13px] tracking-[0.12em] text-text-secondary uppercase">
             {new Date().toLocaleDateString("en-GB", { weekday: "long" })}, {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long" })}
           </p>
           <h1 className="type-page-title mt-2 text-foreground">
             {greeting()}
-            {name && (
-              <>
-                , <span className="text-brand-gradient">{name}</span>
-              </>
-            )}
+            {name && `, ${name}`}
           </h1>
           <p className="mt-1.5 max-w-[60ch] text-[15px] leading-relaxed text-text-secondary">{summary}</p>
         </div>
         {stats ? (
-          <div data-tour="home-kpis" className="grid grid-cols-2 gap-1 sm:grid-cols-[1fr_1fr_1fr_1.3fr] xl:w-[820px] xl:shrink-0">
-            <Link href="/jobs" data-ai="home.matches" className="rounded-xl transition-colors duration-200 hover:bg-muted/70">
-              <Kpi value={stats.newThisWeek ?? stats.shortlisted} label={stats.newThisWeek === undefined ? "Jobs for you" : "New matches"} icon={Sparkles} accent="cobalt" index={0} />
-            </Link>
-            <Link href="/applications" data-ai="home.applied" className="rounded-xl transition-colors duration-200 hover:bg-muted/70">
-              <Kpi value={sent} label="Applications sent" icon={Send} accent="azure" index={1} />
-            </Link>
+          <div data-tour="home-kpis" className="grid grid-cols-2 gap-3 sm:grid-cols-[auto_auto_auto_auto] xl:shrink-0">
+            <StatTile href="/jobs" dataAi="home.matches" value={stats.newThisWeek ?? stats.shortlisted} label={stats.newThisWeek === undefined ? "Jobs for you" : "New matches"} />
+            <StatTile href="/applications" dataAi="home.applied" value={sent} label="Applications sent" />
             {/* Interviews the seeker marked on their applications ("Did you hear back?"). */}
-            <Link href="/applications?tab=applied" data-ai="home.interviews" title="Mark it on an application when an employer gets back to you" className="rounded-xl transition-[filter] hover:brightness-[0.98]">
-              <Kpi value={interviews} label={interviews === 1 ? "Interview" : "Interviews"} tone="hi" icon={MessagesSquare} accent="green" index={2} />
-            </Link>
-            <Kpi
-              value={
-                <>
-                  {sentWeek}
-                  <span className="text-text-tertiary"> / {WEEK_GOAL}</span>
-                </>
-              }
-              label={
-                <span className="flex items-center gap-1.5">
-                  This week’s goal
-                  <InfoTip text={`Applications sent in the last 7 days, against a target of ${WEEK_GOAL} a week. Only applications that actually went through count.`} label="What this week's goal counts" />
-                </span>
-              }
-              index={3}
-              aside={
-                // The ring needs the room of a 4-up strip; on phones the "0 / 10" says it alone.
-                <span className="hidden sm:block">
-                  <MatchRing value={(Math.min(sentWeek, WEEK_GOAL) / WEEK_GOAL) * 100} size={40} stroke={4} label={<Target className="size-4" strokeWidth={2} />} />
-                </span>
-              }
+            <StatTile
+              href="/applications?tab=applied"
+              dataAi="home.interviews"
+              value={interviews}
+              label={interviews === 1 ? "Interview" : "Interviews"}
+              title="Mark it on an application when an employer gets back to you"
+              tone="hi"
             />
+            <div className="col-span-2 flex items-center gap-3 rounded-xl border bg-card px-4 py-3 sm:col-span-1">
+              <MatchRing
+                value={(Math.min(sentWeek, WEEK_GOAL) / WEEK_GOAL) * 100}
+                size={44}
+                stroke={4}
+                label={<span className="sr-only">{Math.round((Math.min(sentWeek, WEEK_GOAL) / WEEK_GOAL) * 100)}%</span>}
+              />
+              <span className="min-w-0">
+                <b className="block text-lg leading-tight font-bold text-foreground tabular-nums">
+                  {sentWeek} / {WEEK_GOAL}
+                </b>
+                <span className="flex items-center gap-1 text-[13px] whitespace-nowrap text-text-secondary">
+                  This week’s goal
+                  <InfoTip
+                    text={`Applications sent in the last 7 days, against a target of ${WEEK_GOAL} a week. Only applications that actually went through count.`}
+                    label="What this week's goal counts"
+                  />
+                </span>
+              </span>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-1 sm:grid-cols-[1fr_1fr_1fr_1.3fr] xl:w-[820px] xl:shrink-0">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:w-[640px] xl:shrink-0">
             {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-[76px] rounded-xl" />
+              <Skeleton key={i} className="h-[74px] rounded-xl" />
             ))}
           </div>
         )}
       </section>
 
-      <NextSteps stats={stats} onNewSearch={newSearch} />
-
       {/* Top matches. */}
       <section data-tour="home-top-matches" className="flex flex-col gap-3">
-        <SectionHeader
-          title={
-            <span className="flex items-center gap-1.5">
-              Top matches for you
-              <InfoTip text="The % is how well a job's title and description match your roles, skills and experience, scaled to your own results: your strongest matches read close to 100%." label="What match % means" />
-            </span>
-          }
-          icon={Sparkles} accent="cobalt" href="/jobs" dataAi="home.all-jobs" action={topTotal ? `See all ${topTotal}` : null} />
+        <PlainHeader title="Top matches for you" href="/jobs" dataAi="home.all-jobs" action={topTotal ? `See all ${topTotal}` : null} />
         {top === null && (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-[248px] rounded-2xl" />
+              <Skeleton key={i} className="h-[268px] rounded-2xl" />
             ))}
           </div>
         )}
@@ -235,30 +229,38 @@ export default function Home() {
           <motion.div variants={staggerContainer} initial="hidden" animate="show" className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {top.slice(0, 3).map((m, i) => (
               // Two columns between md and xl: the third card would sit alone on its own row.
-              <motion.article key={m.id} variants={fadeUpItem} className={cn(CARD, "card-lift flex flex-col gap-4 p-5", i === 2 && "md:max-xl:hidden")}>
+              <motion.article key={m.id} variants={fadeUpItem} className={cn(CARD, "card-lift flex flex-col gap-3.5 p-5", i === 2 && "md:max-xl:hidden")}>
                 <div className="flex items-start justify-between gap-3">
-                  <MonoTile name={m.job.company} />
-                  <MatchRing value={m.match_percent} />
+                  <Mark name={m.job.company} domain={m.job.company_domain} logo={m.job.company_logo} />
+                  <MatchRing value={m.match_percent} size={46} />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="type-card-title line-clamp-2 text-foreground">
+                  <h3 className="line-clamp-2 text-[17px] leading-snug font-bold text-foreground">
                     <a href={m.job.url} target="_blank" rel="noreferrer" data-ai={`home.job:${m.job.id}`} className="transition-colors hover:text-primary">
                       {m.job.title}
                     </a>
                   </h3>
-                  <p className="mt-0.5 truncate text-[13px] text-text-secondary">{m.job.company}</p>
+                  <p className="mt-0.5 truncate text-sm text-text-secondary">{m.job.company}</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {[[m.job.location, REMOTE[m.job.remote_type]].filter(Boolean).join(" · "), m.job.posted_at && timeAgo(m.job.posted_at)].filter(Boolean).map((t) => (
-                    <MetaChip key={t as string}>{t}</MetaChip>
+                    <MetaChip key={t as string} className="rounded-lg px-2.5 py-1 text-[13px]">
+                      {t}
+                    </MetaChip>
                   ))}
                 </div>
                 <PlatoNote variant="inline">{reason(m)}</PlatoNote>
-                <div className="mt-auto flex gap-2">
-                  <Button data-ai={`home.apply:${m.job.id}`} size="sm" className="flex-1 bg-primary-soft text-primary shadow-none hover:bg-primary hover:text-primary-foreground" onClick={() => setApply(m.job.id)}>
+                <div className="mt-auto flex gap-2 pt-1">
+                  <Button data-ai={`home.apply:${m.job.id}`} className="h-11 flex-1 rounded-xl text-[15px] font-semibold" onClick={() => setApply(m.job.id)}>
                     Apply
                   </Button>
-                  <Button variant="outline" size="icon-sm" aria-label={m.saved ? "Remove from saved" : "Save"} aria-pressed={m.saved} onClick={() => toggleSave(m)} className={cn(m.saved && "border-primary-line bg-primary-tint text-primary")}>
+                  <Button
+                    variant="outline"
+                    aria-label={m.saved ? "Remove from saved" : "Save"}
+                    aria-pressed={m.saved}
+                    onClick={() => toggleSave(m)}
+                    className={cn("size-11 shrink-0 rounded-xl p-0", m.saved && "border-primary-line bg-primary-tint text-primary")}
+                  >
                     <Bookmark className={cn("size-4", m.saved && "fill-current")} />
                   </Button>
                 </div>
@@ -271,27 +273,30 @@ export default function Home() {
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Applications: the funnel and the latest moves. */}
         <div data-tour="home-recent" className={cn(CARD, "flex flex-col gap-4 p-5")}>
-          <SectionHeader title="Your applications" icon={Send} accent="azure" href="/applications" action="Open" />
+          <PlainHeader title="Your applications" href="/applications" action="Open" />
           {apps && apps.length > 0 && (
-            <div className="flex flex-col gap-2.5">
-              <div className="flex h-1.5 gap-1" aria-hidden>
-                <span className="rounded-full bg-linear-to-r from-primary to-azure" style={{ flex: Math.max(1, sent) }} />
-                <span className="rounded-full bg-teal" style={{ flex: Math.max(0.4, viewed) }} />
-                <span className="rounded-full bg-success" style={{ flex: Math.max(0.2, interviews) }} />
+            <div className="flex flex-col gap-3">
+              {/* sent -> viewed -> interview, light to dark */}
+              <div className="flex h-2 gap-1" aria-hidden>
+                <span className="rounded-full bg-primary-line" style={{ flex: Math.max(1, sent) }} />
+                <span className="rounded-full bg-primary/60" style={{ flex: Math.max(0.4, viewed) }} />
+                <span className="rounded-full bg-brand-deep" style={{ flex: Math.max(0.2, interviews) }} />
               </div>
-              <p className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-text-secondary tabular-nums">
-                <span className="flex items-center gap-1.5">
-                  <i className="size-2 rounded-full bg-primary" />
-                  <b className="font-semibold text-foreground">{sent}</b> sent
+              <p className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[15px] text-text-secondary tabular-nums">
+                <span>
+                  <b className="font-bold text-foreground">{sent}</b> sent
+                </span>
+                <span>
+                  <b className="font-bold text-foreground">{viewed}</b> viewed
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <i className="size-2 rounded-full bg-teal" />
-                  <b className="font-semibold text-foreground">{viewed}</b> viewed
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <i className="size-2 rounded-full bg-success" />
-                  <b className="font-semibold text-foreground">{interviews}</b> interview{interviews === 1 ? "" : "s"}
-                  <InfoTip text="Viewed and interviews come from what you mark on a sent application (Did you hear back?). Plato can't read employer replies, so they only move when you update them." label="Where viewed and interviews come from" />
+                  <span>
+                    <b className="font-bold text-foreground">{interviews}</b> interview{interviews === 1 ? "" : "s"}
+                  </span>
+                  <InfoTip
+                    text="Viewed and interviews come from what you mark on a sent application (Did you hear back?). Plato can't read employer replies, so they only move when you update them."
+                    label="Where viewed and interviews come from"
+                  />
                 </span>
               </p>
             </div>
@@ -317,34 +322,23 @@ export default function Home() {
             />
           )}
           {!!recent.length && (
-            <ul className="-mx-2 flex flex-col">
-              {recent.map((a) => {
-                const v = statusView(a)
-                return (
-                  <li key={a.id}>
-                    <Link href={`/applications/${a.id}`} title={v.label} className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/70">
-                      <MonoTile name={a.job.company} size="sm" />
-                      <span className="min-w-0 flex-1 truncate text-sm text-text-secondary [&_b]:font-semibold [&_b]:text-foreground">{event(a)}</span>
-                      <RowStatus status={a.status} />
-                      <span className="type-meta shrink-0 text-text-tertiary tabular-nums">{timeAgo(a.submitted_at ?? a.updated_at)}</span>
-                    </Link>
-                  </li>
-                )
-              })}
+            <ul className="flex flex-col divide-y divide-divider">
+              {recent.map((a) => (
+                <li key={a.id}>
+                  <Link href={`/applications/${a.id}`} title={statusView(a).label} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/70">
+                    <Mark name={a.job.company} size="sm" />
+                    <span className="min-w-0 flex-1 truncate text-[15px] text-text-secondary [&_b]:font-semibold [&_b]:text-foreground">{event(a)}</span>
+                    <span className="shrink-0 text-sm text-text-secondary tabular-nums">{shortAge(a.submitted_at ?? a.updated_at)}</span>
+                  </Link>
+                </li>
+              ))}
             </ul>
           )}
         </div>
 
         {/* Companies you follow: the latest alert digest. */}
         <div data-tour="home-following" className={cn(CARD, "flex flex-col gap-4 p-5")}>
-          <SectionHeader
-            title={
-              <span className="flex items-center gap-1.5">
-                Companies you follow are hiring
-                <InfoTip text="Open roles from your latest alert digest at the companies you follow." label="Where these roles come from" />
-              </span>
-            }
-            icon={Building2} accent="teal" href="/following" action="All" />
+          <PlainHeader title="Companies you follow are hiring" href="/following" action="All" />
           {followed === null ? (
             <div className="flex flex-col gap-2">
               {Array.from({ length: 3 }, (_, i) => (
@@ -376,16 +370,16 @@ export default function Home() {
               className="flex-1 justify-center"
             />
           ) : (
-            <ul className="-mx-2 flex flex-col">
+            <ul className="flex flex-col divide-y divide-divider">
               {hiring.slice(0, 3).map((j) => (
-                <li key={j.id} className="flex items-center gap-3 rounded-lg px-2 py-2">
-                  <MonoTile name={j.company} size="sm" />
+                <li key={j.id} className="flex items-center gap-3 py-2.5">
+                  <Mark name={j.company} size="sm" />
                   <span className="min-w-0 flex-1">
-                    <b className="block truncate text-sm font-semibold">{j.title}</b>
-                    <span className="type-meta block truncate text-text-secondary">{[j.company, j.location, j.posted_at && timeAgo(j.posted_at)].filter(Boolean).join(" · ")}</span>
+                    <b className="block truncate text-[15px] font-semibold">{j.title}</b>
+                    <span className="block truncate text-sm text-text-secondary">{[j.company, j.location, j.posted_at && timeAgo(j.posted_at)].filter(Boolean).join(" · ")}</span>
                   </span>
                   {j.match_percent ? (
-                    <MatchPill value={j.match_percent} />
+                    <MatchPill value={j.match_percent} className="px-2.5 py-1 text-[13px]" />
                   ) : (
                     <a href={j.url} target="_blank" rel="noreferrer" className="text-[13px] font-semibold text-primary hover:text-primary-hover">
                       View
@@ -398,20 +392,66 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Plato's add-on, below the owner's sections: the next steps for this account (profile, extension, search). */}
+      <NextSteps stats={stats} onNewSearch={newSearch} />
+
       <ExtensionApplyModal open={!!apply} count={1} req={{ jobIds: apply ? [apply] : [] }} onClose={() => setApply(null)} />
     </div>
   )
 }
 
-// Small coloured status mark on each activity row: sent, needs you, didn't go through, in progress.
-function RowStatus({ status }: { status: string }) {
-  const [Icon, cls, label] =
-    status === "SUBMITTED"
-      ? [CircleCheck, "text-success", "Sent"]
-      : status === "NEEDS_INPUT" || status === "NEEDS_USER_VERIFICATION"
-        ? [Hand, "text-warning", "Needs you"]
-        : status === "FAILED" || status === "SKIPPED" || status === "EXPIRED"
-          ? [CircleX, "text-rose", "Didn't go through"]
-          : [Clock, "text-info", "In progress"]
-  return <Icon aria-label={label} className={cn("size-4 shrink-0", cls)} strokeWidth={2} />
+// One number tile in the greeting card: a bordered box, a big number, a short label. "hi" = tinted (interviews).
+function StatTile({ href, value, label, tone, title, dataAi }: { href: string; value: ReactNode; label: string; tone?: "hi"; title?: string; dataAi?: string }) {
+  return (
+    <Link
+      href={href}
+      data-ai={dataAi}
+      title={title}
+      className={cn(
+        "flex min-w-[120px] flex-col justify-center rounded-xl border px-4 py-3 transition-colors",
+        tone === "hi" ? "border-primary-line bg-primary-soft text-primary hover:bg-primary-soft/80" : "bg-card text-foreground hover:bg-muted/60",
+      )}
+    >
+      <b className="text-[26px] leading-none font-bold tabular-nums">{value}</b>
+      <span className={cn("mt-1.5 text-[13px] whitespace-nowrap", tone === "hi" ? "text-primary" : "text-text-secondary")}>{label}</span>
+    </Link>
+  )
+}
+
+// A section title with its one link, plain like the owner's Home ("See all 122 →").
+function PlainHeader({ title, href, action, dataAi }: { title: string; href: string; action: ReactNode; dataAi?: string }) {
+  return (
+    <div className="flex min-h-7 items-center justify-between gap-3">
+      <h2 className="type-section-title text-foreground">{title}</h2>
+      {action && (
+        <Link href={href} data-ai={dataAi} className="group/see inline-flex shrink-0 items-center gap-1 text-[15px] font-semibold text-primary transition-colors hover:text-primary-hover">
+          {action}
+          {action !== "Open" && action !== "All" && <ArrowRight className="size-4 transition-transform group-hover/see:translate-x-0.5" />}
+        </Link>
+      )}
+    </div>
+  )
+}
+
+// The employer's mark: its logo (source logo, else its website's icon) when known, else neutral initials in a white tile.
+function Mark({ name, domain, logo, size = "md" }: { name: string; domain?: string | null; logo?: string | null; size?: "sm" | "md" }) {
+  const px = size === "sm" ? 36 : 46
+  if (logo || domain) return <CompanyAvatar name={name} domain={domain} logo={logo} size={px} className="rounded-lg" />
+  const ini = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("")
+  return (
+    <span aria-hidden className={cn("flex shrink-0 items-center justify-center rounded-lg border bg-card font-semibold text-foreground/80", size === "sm" ? "size-9 text-xs" : "size-[46px] text-sm")}>
+      {ini || "?"}
+    </span>
+  )
+}
+
+// "2h", "5h", "1d": the right-hand age on an activity row.
+function shortAge(iso: string) {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000))
+  return m < 60 ? `${Math.max(1, m)}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`
 }

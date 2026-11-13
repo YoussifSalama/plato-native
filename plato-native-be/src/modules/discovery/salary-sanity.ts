@@ -110,6 +110,34 @@ export interface SalaryVerdict {
   note: string;
 }
 
+/** Monthly USD for an amount, or null for a currency we have no rate for. */
+export function monthlyUsd(
+  amount: number,
+  currency: string,
+  period: 'MONTHLY' | 'YEARLY',
+) {
+  const fx = USD_PER[currency.toUpperCase()];
+  return fx && amount > 0
+    ? Math.round((period === 'YEARLY' ? amount / 12 : amount) * fx)
+    : null;
+}
+
+// ponytail: the index stores no pay period; >= 20k reads as yearly. A big monthly figure in a weak currency (EGP) is
+// misread as yearly (reads as lower pay); store the period at ingest if that matters.
+/** A posting's top pay as monthly USD, or null when it states none we can convert. */
+export function jobMonthlyUsd(j: {
+  salary_max?: number | null;
+  salary_currency?: string | null;
+}) {
+  return j.salary_max && j.salary_currency
+    ? monthlyUsd(
+        j.salary_max,
+        j.salary_currency,
+        j.salary_max >= 20_000 ? 'YEARLY' : 'MONTHLY',
+      )
+    : null;
+}
+
 export function checkSalary(i: SalaryInput): SalaryVerdict | null {
   const fx = USD_PER[i.currency.toUpperCase()];
   if (!fx || !(i.amount > 0)) return null;

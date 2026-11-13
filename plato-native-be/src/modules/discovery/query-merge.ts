@@ -15,7 +15,23 @@ export type DiscoveryQueryOverrides = Partial<
 > & {
   // The seeker said "only this title": search exactly what was asked.
   strictTitles?: boolean;
-};
+  // New search: the sentence the seeker wrote, stored on the run as written.
+  sentence?: string;
+} & Partial<
+    Pick<
+      DiscoveryQuery,
+      | 'level'
+      | 'minMonthlyUsd'
+      | 'residenceCountry'
+      | 'postedWithinDays'
+      | 'includeKeywords'
+      | 'excludeKeywords'
+      | 'excludeCompanies'
+      | 'salaryShownOnly'
+      | 'willingToRelocate'
+      | 'remoteAnywhere'
+    >
+  >;
 
 // Chat-supplied overrides win field-by-field; empty arrays are treated as
 // "not specified" so the agent can't accidentally blank out preferences.
@@ -43,5 +59,26 @@ export function mergeDiscoveryQuery(
     industries: pick(overrides.industries, base.industries),
     visaSponsorshipRequired:
       overrides.visaSponsorshipRequired ?? base.visaSponsorshipRequired,
+    willingToRelocate: overrides.willingToRelocate ?? base.willingToRelocate,
+    // New search rules: only what was asked for; nothing here comes from saved preferences.
+    ...(overrides.level && { level: overrides.level }),
+    ...(overrides.minMonthlyUsd && { minMonthlyUsd: overrides.minMonthlyUsd }),
+    ...(overrides.residenceCountry && {
+      residenceCountry: overrides.residenceCountry,
+    }),
+    ...(overrides.postedWithinDays && {
+      postedWithinDays: overrides.postedWithinDays,
+    }),
+    ...(overrides.includeKeywords?.length && {
+      includeKeywords: overrides.includeKeywords,
+    }),
+    ...(overrides.excludeKeywords?.length && {
+      excludeKeywords: overrides.excludeKeywords,
+    }),
+    ...(overrides.excludeCompanies?.length && {
+      excludeCompanies: overrides.excludeCompanies,
+    }),
+    ...(overrides.remoteAnywhere && { remoteAnywhere: true }),
+    ...(overrides.salaryShownOnly && { salaryShownOnly: true }),
   };
 }

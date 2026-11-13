@@ -3,7 +3,7 @@ import { apiClient } from "@/lib/api-client"
 // Job alerts: new jobs in a field, or at companies the seeker follows, sent
 // together in one digest on their cadence. Free; how many depends on the plan.
 export type Cadence = "DAILY" | "EVERY_3_DAYS" | "WEEKLY"
-export type JobAlert = { id: string; kind: "FIELD" | "COMPANY"; title: string | null; location: string | null; remote_only: boolean; company: string | null; paused: boolean; sent: number; open?: number; for_you?: number; created_at: string }
+export type JobAlert = { id: string; kind: "FIELD" | "COMPANY"; title: string | null; location: string | null; remote_only: boolean; company: string | null; paused: boolean; sent: number; new_week?: number; open?: number; for_you?: number; where?: string | null; created_at: string }
 export type AlertSettings = { cadence: Cadence; email: boolean; in_app: boolean; emailAvailable: boolean }
 export type InsightsOverview = {
   plan: string
@@ -17,7 +17,7 @@ export type InsightsOverview = {
 }
 export type DigestJob = { id: string; title: string; company: string; location: string | null; remote: boolean; posted_at: string | null; url: string; closed: boolean; match_percent?: number | null }
 export type Digest = { id: string; headline: string; at: string; emailed: boolean; jobs: DigestJob[] }
-export type CompanySuggestion = { name: string; key: string; jobs: number }
+export type CompanySuggestion = { name: string; key: string; jobs: number; example?: string | null }
 export type NewAlert = { kind: "FIELD"; title: string; location?: string | null; remote_only?: boolean } | { kind: "COMPANY"; company: string }
 
 export const CADENCES: { value: Cadence; label: string; hint: string }[] = [
@@ -32,6 +32,8 @@ export const updateAlert = async (id: string, patch: Partial<Pick<JobAlert, "pau
 export const deleteAlert = async (id: string) => (await apiClient.delete(`/job-seeker/insights/alerts/${id}`)).data
 export const saveAlertSettings = async (patch: Partial<Omit<AlertSettings, "emailAvailable">>) => (await apiClient.patch<AlertSettings>("/job-seeker/insights/settings", patch)).data
 export const getDigests = async (limit = 10) => (await apiClient.get<Digest[]>("/job-seeker/insights/digests", { params: { limit } })).data
+// "More companies to follow": the companies behind most of the seeker's own matches, not followed yet.
+export const getSuggestedCompanies = async () => (await apiClient.get<CompanySuggestion[]>("/job-seeker/insights/companies/suggested")).data
 export const searchCompanies = async (q: string) => (await apiClient.get<CompanySuggestion[]>("/job-seeker/insights/companies", { params: { q } })).data
 // The email's unsubscribe link: no login, the token is the proof.
 export const unsubscribe = async (token: string) => (await apiClient.post<{ ok: boolean }>("/insights/unsubscribe", { token })).data

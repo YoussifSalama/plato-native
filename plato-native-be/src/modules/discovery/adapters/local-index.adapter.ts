@@ -3,7 +3,7 @@ import { JobRemoteType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DiscoveryAdapter, DiscoveryQuery, NormalizedJob } from './types';
 import { postedCutoff } from '../discovery-run.helpers';
-import { inCountries } from '../countries';
+import { inCountries, countryNames } from '../countries';
 
 // Every crawled posting already lives in `jobs`; that collection is our
 // cache. Fresh postings that match the query come back instantly and reduce
@@ -30,7 +30,8 @@ export function titlePattern(title: string): string {
 type IndexQuery = Pick<
   DiscoveryQuery,
   'titles' | 'locations' | 'remoteTypes' | 'willingToRelocate'
->;
+> &
+  Partial<Pick<DiscoveryQuery, 'countries'>>;
 
 // The Mongo filter for fresh, open postings that fit a query. Shared by the
 // search itself and by onboarding's "Plato sees about N open jobs".
@@ -50,9 +51,15 @@ export function indexFilter(query: IndexQuery): Record<string, unknown> {
       title: { $regex: titlePattern(t), $options: 'i' },
     })),
   };
-  if (query.locations.length && !query.willingToRelocate) {
-    const near: Record<string, unknown>[] = query.locations.map((l) => ({
-      location: { $regex: escape(l.split(',')[0].trim()), $options: 'i' },
+  // Where: the search's countries (every name a posting may use) when it has them, else the seeker's own places.
+  const places = query.countries?.length
+    ? query.countries.flatMap(countryNames)
+    : query.willingToRelocate
+      ? []
+      : query.locations.map((l) => l.split(',')[0].trim());
+  if (places.length) {
+    const near: Record<string, unknown>[] = places.map((p) => ({
+      location: { $regex: escape(p), $options: 'i' },
     }));
     if (wantsRemote) near.push({ remote_type: JobRemoteType.REMOTE });
     filter.$and = [{ $or: near }];

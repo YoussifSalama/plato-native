@@ -44,17 +44,35 @@ export interface LinkedInJobItem {
   salary?: string;
   postedAt?: string;
   postedAtTimestamp?: number;
+  // The search URL this item came from (echoed by the actor).
+  inputUrl?: string;
 }
+
+// LinkedIn's "workplace type" filter codes.
+const WORKPLACE: Record<string, string> = {
+  onsite: '1',
+  remote: '2',
+  hybrid: '3',
+};
 
 function toRemoteType(
   workplaceTypes: string[] | undefined,
   title: string,
+  inputUrl?: string,
 ): JobRemoteType {
   const hints = [...(workplaceTypes ?? []), title];
   if (hints.some((t) => /remote/i.test(t))) return JobRemoteType.REMOTE;
   if (hints.some((t) => /hybrid/i.test(t))) return JobRemoteType.HYBRID;
   if (workplaceTypes?.some((t) => /on-?site/i.test(t)))
     return JobRemoteType.ONSITE;
+  // The actor often omits workplaceTypes; a search filtered to one type
+  // tells us what every result is.
+  const wt = URL.canParse(inputUrl ?? '')
+    ? new URL(inputUrl!).searchParams.get('f_WT')
+    : null;
+  if (wt === WORKPLACE.remote) return JobRemoteType.REMOTE;
+  if (wt === WORKPLACE.hybrid) return JobRemoteType.HYBRID;
+  if (wt === WORKPLACE.onsite) return JobRemoteType.ONSITE;
   return JobRemoteType.UNKNOWN;
 }
 
@@ -80,7 +98,14 @@ function buildSearchUrl(
 ): string {
   const params = new URLSearchParams({ keywords: title });
   if (location) params.set('location', location);
-  else if (query.remoteTypes.includes('remote')) params.set('f_WT', '2');
+  // Work mode applies with or without a place ("remote jobs in Saudi Arabia").
+  const modes = query.remoteTypes.includes('any')
+    ? []
+    : query.remoteTypes.map((t) => WORKPLACE[t]).filter(Boolean);
+  if (!location && query.remoteAnywhere)
+    params.set('f_WT', WORKPLACE.remote); // the place-free run is remote only
+  else if (modes.length && modes.length < 3)
+    params.set('f_WT', modes.join(','));
   return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
 }
 
@@ -93,7 +118,13 @@ export class LinkedInAdapter implements DiscoveryAdapter {
 
     // One place per country the seeker works in; none = no location filter.
     const places: (string | undefined)[] = primaryPlaces(query, MAX_PLACES);
-    if (!places.length) places.push(undefined);
+    // Remote abroad (New search): one run with no place, remote only, finds companies anywhere; the gate keeps the
+    // ones that hire from where the seeker lives.
+    if (
+      !places.length ||
+      (query.remoteAnywhere && query.remoteTypes.includes('remote'))
+    )
+      places.push(undefined);
     const titles = query.titles.slice(
       0,
       Math.min(MAX_TITLES, Math.floor(MAX_RUNS / places.length)),
@@ -143,7 +174,7 @@ export class LinkedInAdapter implements DiscoveryAdapter {
       company: item.companyName,
       company_url: item.companyLinkedinUrl ?? null,
       location: item.location ?? null,
-      remote_type: toRemoteType(item.workplaceTypes, item.title),
+      remote_type: toRemoteType(item.workplaceTypes, item.title, item.inputUrl),
       job_type: item.employmentType ?? null,
       easy_apply: isEasyApply(item),
       url: item.link,

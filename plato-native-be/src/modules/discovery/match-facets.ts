@@ -53,6 +53,7 @@ export interface FacetJob {
   remote_type: string;
   salary_max: number | null;
   posted_at?: Date | null;
+  source?: string;
 }
 
 export function jobTypeOf(
@@ -182,6 +183,80 @@ export interface Facets {
   salary: { hasSalary: number; atLeast: { value: number; count: number }[] };
   posted: { value: number; count: number }[];
   total: number;
+}
+
+// The list filters a facet dropdown can set. Mirrors the Prisma side in
+// DiscoveryService.matchWhere (same helpers, same precedence).
+export interface FacetFilters {
+  location?: string;
+  jobType?: JobTypeKey;
+  level?: LevelKey;
+  remoteType?: string;
+  source?: string;
+  salaryMin?: number;
+  hasSalary?: boolean;
+  postedWithinDays?: number;
+}
+type FacetGroup =
+  'location' | 'jobType' | 'level' | 'remote' | 'salary' | 'posted' | 'source';
+
+function passes(
+  j: FacetJob,
+  f: FacetFilters,
+  skip: FacetGroup | null,
+  now: Date,
+) {
+  if (
+    skip !== 'location' &&
+    f.location &&
+    !locationMatches(j.location, f.location)
+  )
+    return false;
+  if (skip !== 'jobType' && f.jobType && jobTypeOf(j) !== f.jobType)
+    return false;
+  if (skip !== 'level' && f.level && levelOf(j.title) !== f.level) return false;
+  if (skip !== 'remote' && f.remoteType && j.remote_type !== f.remoteType)
+    return false;
+  if (skip !== 'source' && f.source && j.source !== f.source) return false;
+  if (skip !== 'salary') {
+    if (f.hasSalary && j.salary_max == null) return false;
+    if (f.salaryMin && (j.salary_max ?? -1) < f.salaryMin) return false;
+  }
+  if (skip !== 'posted' && f.postedWithinDays) {
+    const cutoff = now.getTime() - f.postedWithinDays * 86_400_000;
+    if (!j.posted_at || j.posted_at.getTime() < cutoff) return false;
+  }
+  return true;
+}
+
+// Faceted counts: each dropdown counts the jobs every OTHER active filter
+// leaves, so "United Arab Emirates · 18" means 18 rows once picked.
+export function crossFacets(
+  jobs: FacetJob[],
+  f: FacetFilters,
+  now = new Date(),
+): Facets & { sources: { value: string; count: number }[] } {
+  const under = (g: FacetGroup | null) =>
+    buildFacets(
+      jobs.filter((j) => passes(j, f, g, now)),
+      now,
+    );
+  const bySource = new Map<string, number>();
+  for (const j of jobs)
+    if (j.source && passes(j, f, 'source', now))
+      bySource.set(j.source, (bySource.get(j.source) ?? 0) + 1);
+  return {
+    total: under(null).total,
+    locations: under('location').locations,
+    jobTypes: under('jobType').jobTypes,
+    levels: under('level').levels,
+    remote: under('remote').remote,
+    salary: under('salary').salary,
+    posted: under('posted').posted,
+    sources: [...bySource]
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => b.count - a.count),
+  };
 }
 
 export function buildFacets(jobs: FacetJob[], now = new Date()): Facets {

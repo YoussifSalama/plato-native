@@ -34,6 +34,7 @@ import {
   applyIndexResult,
   applyLinkedInResult,
   fantasticProgress,
+  fitsSearch,
   initialProgress,
   isFresh,
   matchLabel,
@@ -43,7 +44,7 @@ import {
   RunProgress,
   toMatchPercent,
 } from './discovery-run.helpers';
-import { LocalIndexAdapter } from './adapters/local-index.adapter';
+import { indexFilter, LocalIndexAdapter } from './adapters/local-index.adapter';
 import { PublicBoardsAdapter } from './adapters/public-boards.adapter';
 import { buildJobSeekerSnapshot, residenceOf } from './job-seeker-snapshot';
 import { MatchingService } from './matching.service';
@@ -56,8 +57,11 @@ import { NotificationsBus } from '../notifications/notifications.bus';
 import { resolvePlaces } from './country-resolver';
 import { countryName, resolveCountry } from './countries';
 import { excludesCountry } from '../apply/eligibility';
-import { companyDomain, normalizeCompany } from './company';
+import { companyDomain, companyMark, normalizeCompany } from './company';
 import { jobEligibility } from './job-eligibility';
+import { previewSearch, type PreviewInput } from './search-preview';
+import { checkSearchFit, type SearchDraft } from './search-fit';
+import { parseSearchSentence } from './search-sentence';
 import { recordUsage } from '../usage/usage';
 import { CreditsService } from '../credits/credits.service';
 import { affordableResults } from '../credits/credit-prices';
@@ -67,7 +71,7 @@ import { mergeTitles, planTitles } from './title-planner';
 import { roleKey } from '../apply/eligibility';
 import { runNotification } from '../notifications/notification-factory';
 import {
-  buildFacets,
+  crossFacets,
   jobTypeWhere,
   levelOf,
   levelWhere,
@@ -217,6 +221,7 @@ export class DiscoveryService implements OnModuleInit {
       jobSeekerId,
     );
     let query = mergeDiscoveryQuery(buildDiscoveryQuery(snapshot), overrides);
+    if (overrides?.sentence) query = { ...query, sentence: overrides.sentence };
     // Checked after the merge: titles asked for in chat count, not only saved roles.
     if (!query.titles.length)
       throw new BadRequestException(
@@ -421,8 +426,14 @@ export class DiscoveryService implements OnModuleInit {
       } else {
         // Phase 0: our own index (jobs crawled in the last 7 days). Instant, and
         // whatever it covers is subtracted from the Apify budget.
+        // Only index jobs that fit the search count: the index matches by title worldwide (plus every remote job),
+        // and before 2026-11-13 its 300 hits used the whole budget, so LinkedIn and the country boards never ran.
         const indexResult = await this.localIndex.discover(query).then(
-          (v) => ({ status: 'fulfilled', value: v }) as const,
+          (v) =>
+            ({
+              status: 'fulfilled',
+              value: v.filter((j) => fitsSearch(j, query)),
+            }) as const,
           (reason: unknown) => ({ status: 'rejected', reason }) as const,
         );
         await publish(applyIndexResult(progress, indexResult));
@@ -547,7 +558,13 @@ export class DiscoveryService implements OnModuleInit {
         this.logger.log(
           `Run ${runId}: dropped ${jobs.length - fresh.length} posting(s) older than ${MAX_POSTING_AGE_DAYS}d`,
         );
-      const matched = await this.persistJobs(jobSeekerId, runId, fresh);
+      // Work mode and countries are hard rules of the search, whatever the source returned.
+      const fitting = fresh.filter((j) => fitsSearch(j, query));
+      if (fitting.length !== fresh.length)
+        this.logger.log(
+          `Run ${runId}: dropped ${fresh.length - fitting.length} posting(s) outside [${query.remoteTypes.join(',')}] in [${query.countries.join(',')}]`,
+        );
+      const matched = await this.persistJobs(jobSeekerId, runId, fitting);
       await publish({ stage: 'filtering', merged: matched });
 
       const snapshot = await buildJobSeekerSnapshot(
@@ -592,6 +609,86 @@ export class DiscoveryService implements OnModuleInit {
       await this.notifyRun(jobSeekerId, runId);
       throw err;
     }
+  }
+
+  /**
+   * "New search": the titles a search for these roles will cover, planned from the seeker's background (the same
+   * planner the search runs). Shown before Start so the seeker sees, and can trim, what gets searched.
+   */
+  async planSearchTitles(jobSeekerId: string, roles: string[]) {
+    const snapshot = await buildJobSeekerSnapshot(
+      this.prisma,
+      this.preferenceService,
+      jobSeekerId,
+    );
+    return planTitles(this.titlePlannerModel, {
+      requested: roles,
+      preferenceRoles: snapshot.roles,
+      skills: snapshot.skills,
+      seniority: snapshot.seniority,
+      yearsExperience: snapshot.yearsExperience,
+      experiences: snapshot.experiences,
+    });
+  }
+
+  /** "Polish with AI": the sentence made complete from the seeker's CV (level, skills, nearby roles). */
+  async polishSentence(jobSeekerId: string, text: string) {
+    const s = await buildJobSeekerSnapshot(
+      this.prisma,
+      this.preferenceService,
+      jobSeekerId,
+    );
+    return parseSearchSentence(this.titlePlannerModel, text, 15_000, {
+      roles: s.roles.slice(0, 6),
+      seniority: s.seniority,
+      yearsExperience: s.yearsExperience,
+      skills: s.skills.slice(0, 25),
+    });
+  }
+
+  /** "New search", on Start: does this search fit the seeker's profile? If not, the closest one that does. */
+  async checkSearch(jobSeekerId: string, draft: SearchDraft) {
+    const snapshot = await buildJobSeekerSnapshot(
+      this.prisma,
+      this.preferenceService,
+      jobSeekerId,
+    );
+    return checkSearchFit(this.titlePlannerModel, snapshot, draft);
+  }
+
+  /** "New search" live preview over Plato's own index (fresh, open postings): no AI, no tokens. */
+  async previewSearch(input: PreviewInput) {
+    if (!input.titles.length) return previewSearch([], input);
+    const filter = indexFilter({
+      titles: input.titles,
+      locations: [],
+      remoteTypes: ['any'],
+      willingToRelocate: true,
+    });
+    const raw = (await this.prisma.job.findRaw({
+      filter: filter as Prisma.InputJsonValue,
+      options: {
+        projection: { _id: 1 },
+        sort: { updated_at: -1 },
+        limit: 2000,
+      },
+    })) as unknown as { _id: { $oid: string } }[];
+    const rows = await this.prisma.job.findMany({
+      where: { id: { in: raw.map((r) => r._id.$oid) } },
+      select: {
+        id: true,
+        title: true,
+        company: true,
+        location: true,
+        remote_type: true,
+        job_type: true,
+        salary_max: true,
+        salary_currency: true,
+        description: true,
+        posted_at: true,
+      },
+    });
+    return previewSearch(rows, input);
   }
 
   // Seeker-wide signal (bell, toasts) that a search settled.
@@ -1002,6 +1099,30 @@ export class DiscoveryService implements OnModuleInit {
     };
   }
 
+  /**
+   * Open matches in each search right now: the Discover list's own rules (shortlisted, still open, recent, not
+   * applied to, not hidden), with none of the seeker's list filters. The sidebar shows this, so it matches the list.
+   */
+  async openMatchCounts(jobSeekerId: string, threadIds: string[]) {
+    const reference = await this.referenceScore(jobSeekerId);
+    const counts = await Promise.all(
+      threadIds.map(async (id) => {
+        const runIds = await this.runIdsForThread(jobSeekerId, id);
+        if (!runIds?.length) return [id, 0] as const;
+        const n = await this.prisma.jobSeekerJobMatch.count({
+          where: this.matchWhere(
+            jobSeekerId,
+            { runIds, tab: 'discover' },
+            true,
+            reference,
+          ),
+        });
+        return [id, n] as const;
+      }),
+    );
+    return new Map<string, number>(counts);
+  }
+
   async runIdsForThread(jobSeekerId: string, threadId: string) {
     const runs = await this.prisma.discoveryRun.findMany({
       where: { thread_id: threadId, job_seeker_id: jobSeekerId },
@@ -1108,7 +1229,10 @@ export class DiscoveryService implements OnModuleInit {
           ...rawJob,
           company: co.name || rawJob.company,
           company_key: co.key,
-          company_domain: companyDomain(rawJob.company_url),
+          ...(() => {
+            const mark = companyMark(rawJob);
+            return { company_domain: mark.domain, company_logo: mark.logo };
+          })(),
           eligibility: jobEligibility(rawJob, countries),
         };
         return {
@@ -1286,14 +1410,24 @@ export class DiscoveryService implements OnModuleInit {
   }
 
   // Filter options with counts, derived from the pool the tab is showing.
+  // The pool takes the filters that have no dropdown (text, country, currency);
+  // crossFacets applies the dropdown ones, each group skipping its own.
   async facetsForSeeker(
     jobSeekerId: string,
     runIds?: string[],
     tab?: MatchTab,
+    filters: Omit<MatchFilters, 'runIds' | 'tab'> = {},
   ) {
     const reference = await this.referenceScore(jobSeekerId);
+    const { q, acceptsCountry, salaryCurrency, sort, ...dropdowns } = filters;
+    const base = await this.withCountryFilter(
+      jobSeekerId,
+      { runIds, tab, q, acceptsCountry, salaryCurrency },
+      true,
+      reference,
+    );
     const rows = await this.prisma.jobSeekerJobMatch.findMany({
-      where: this.matchWhere(jobSeekerId, { runIds, tab }, true, reference),
+      where: this.matchWhere(jobSeekerId, base, true, reference),
       select: {
         job: {
           select: {
@@ -1309,16 +1443,10 @@ export class DiscoveryService implements OnModuleInit {
       },
       take: 3000,
     });
-    // Which boards the jobs came from, for the Source filter.
-    const bySource = new Map<string, number>();
-    for (const r of rows)
-      bySource.set(r.job.source, (bySource.get(r.job.source) ?? 0) + 1);
-    return {
-      ...buildFacets(rows.map((r) => r.job)),
-      sources: [...bySource]
-        .map(([value, count]) => ({ value, count }))
-        .sort((a, b) => b.count - a.count),
-    };
+    return crossFacets(
+      rows.map((r) => r.job),
+      { ...dropdowns, hasSalary: dropdowns.hasSalary || sort === 'salary' },
+    );
   }
 
   private async requireMatch(jobSeekerId: string, jobId: string) {

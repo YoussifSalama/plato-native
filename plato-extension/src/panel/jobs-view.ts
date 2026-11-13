@@ -167,9 +167,10 @@ export function renderSheet(doc: Document, s: PanelState, a: Actions): Node[] {
       h(doc, 'button', { class: 'ibtn', type: 'button', onclick: () => a.jobs.toggle(p.key), attrs: { 'aria-label': `Remove ${p.meta?.title ?? 'job'}` } }, icon(doc, 'close'))));
   const fact = (ico: Parameters<typeof icon>[1], strong: string, text: string) => h(doc, 'div', { class: 'fact' }, icon(doc, ico), h(doc, 'span', {}, h(doc, 'b', { text: strong }), ` ${text}`));
   const tabs = Math.min(s.settings?.tabs ?? 4, n || 1);
-  const resume = h(doc, 'select', { id: 'resume-mode', attrs: { 'aria-label': 'Resume to upload' } }, h(doc, 'option', { text: 'My profile resume', attrs: { value: 'profile' } }), h(doc, 'option', { text: 'One built per job', attrs: { value: 'tailored' } }));
-  resume.value = s.jobs.resumeMode;
-  resume.addEventListener('change', () => a.jobs.resumeMode(resume.value as 'profile' | 'tailored'));
+  // Two choices: a segmented toggle, not a dropdown (both visible, one tap, styled like the Jobs | Batch tabs).
+  const choice = (mode: 'profile' | 'tailored', text: string) =>
+    h(doc, 'button', { type: 'button', text, onclick: () => a.jobs.resumeMode(mode), attrs: { role: 'radio', 'aria-checked': String(s.jobs.resumeMode === mode) } });
+  const resume = h(doc, 'div', { class: 'seg seg-in', id: 'resume-mode', attrs: { role: 'radiogroup', 'aria-label': 'Resume to upload' } }, choice('profile', 'My profile resume'), choice('tailored', 'One built per job'));
   const sheet = h(doc, 'div', { class: 'sheet', id: 'sheet', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'sheet-title' } },
     h(doc, 'div', { class: 'grab' }),
     h(doc, 'div', { class: 'sh' }, h(doc, 'h2', { id: 'sheet-title', text: 'Start this batch?' }), h(doc, 'p', { text: 'Plato applies to these jobs together, one batch, in your browser.' })),
@@ -181,7 +182,7 @@ export function renderSheet(doc: Document, s: PanelState, a: Actions): Node[] {
         fact('layers', 'One batch at a time.', `These ${n} run together, up to ${tabs} open tab${tabs === 1 ? '' : 's'} at once. Another batch can start once this one finishes.`),
         fact('sparkle', s.autoSubmitPreview ? 'Plato fills and submits.' : 'Plato fills the form.', s.autoSubmitPreview ? 'It presses Submit once per job and records the page’s own confirmation.' : 'It stops when the form is complete; you press Submit.'),
         fact('hand', 'You step in only when asked.', 'A sign-in, a human check, or a fact only you know.')),
-      h(doc, 'label', { class: 'setrow' }, icon(doc, 'file'), h(doc, 'span', { class: 'l' }, 'Resume to upload', h(doc, 'small', { text: 'Uploaded first on every form.' })), resume)),
+      h(doc, 'div', { class: 'setrow stack' }, h(doc, 'div', { class: 'hd' }, icon(doc, 'file'), h(doc, 'span', { class: 'l' }, 'Resume to upload', h(doc, 'small', { text: 'Uploaded first on every form.' }))), resume)),
     h(doc, 'div', { class: 'sf' },
       btn(doc, `Start batch · ${n} job${n === 1 ? '' : 's'}`, a.jobs.start, 'btn primary block', { disabled: !n || s.busy, id: 'start-batch' }),
       btn(doc, 'Keep editing', () => a.jobs.sheet(false), 'btn block')));

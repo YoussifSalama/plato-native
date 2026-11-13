@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Award, Bell, BellRing, BookOpen, Briefcase, ClipboardCheck, Coins, Compass, FileCheck2, FileText, GraduationCap, Home, MessageCircle, MessagesSquare, Mic, Plus, Puzzle, Search, Sparkles, Target, User, UserRound } from "lucide-react"
-import { createThread, listApplications, listThreads } from "@/lib/jobs/api"
-import { PAGE_PATH, threadHref } from "@/lib/jobs/links"
+import { listApplications, listThreads } from "@/lib/jobs/api"
+import { PAGE_PATH, searchHref } from "@/lib/jobs/links"
 import { hasOwnAssistant } from "@/components/global-assistant"
 import { Input } from "@/components/ui/input"
 
@@ -29,7 +29,7 @@ function CommandPalette() {
     loaded.current = true
     Promise.allSettled([listThreads(), listApplications()]).then(([t, a]) =>
       setFound([
-        ...(t.status === "fulfilled" ? t.value.filter((x) => x.title).map((x) => ({ id: "s:" + x.id, label: x.title!, to: threadHref(x.id), kind: "search" as const })) : []),
+        ...(t.status === "fulfilled" ? t.value.filter((x) => x.title).map((x) => ({ id: "s:" + x.id, label: x.title!, to: searchHref(x), kind: "search" as const })) : []),
         ...(a.status === "fulfilled" ? a.value.map((x) => ({ id: "a:" + x.id, label: [x.job?.title, x.job?.company].filter(Boolean).join(" · "), to: `/applications/${x.id}`, kind: "application" as const })) : []),
       ]),
     )
@@ -98,7 +98,7 @@ function CommandPalette() {
       { id: "profile", label: "Profile", hint: "Go to", icon: User, run: go(PAGE_PATH.profile), words: "resume cv experience documents answers preferences" },
       { id: "extension", label: "Extension", hint: "Go to", icon: Puzzle, run: go("/extension"), words: "chrome link code browser" },
       { id: "tokens", label: "Plan & credits", hint: "Go to", icon: Coins, run: go("/tokens"), words: "tokens billing balance top up upgrade" },
-      { id: "new-search", label: "New job search", hint: "Action", icon: Plus, run: () => void createThread().then((t) => router.push(threadHref(t.id))), words: "find jobs" },
+      { id: "new-search", label: "New job search", hint: "Action", icon: Plus, run: () => router.push("/jobs/new"), words: "find jobs" },
       { id: "practice", label: "Practise an interview", hint: "Action", icon: MessagesSquare, run: go("/career/interviews/new"), words: "mock chat" },
       { id: "mock", label: "Voice interview", hint: "Action", icon: Mic, run: go("/career/interviews/new?how=voice"), words: "call speak out loud" },
       { id: "resume", label: "Build my resume", hint: "Action", icon: FileText, run: ask("Build my resume"), words: "cv" },

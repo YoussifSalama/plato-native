@@ -3,6 +3,7 @@
 // form values, answers where a ref is to press, and says what a ref is (the Submit gate). Nothing here
 // presses a control, submits, or sends anything. Ported from the v3 spike driver (scripts/v3-spike/cdp-browser.ts).
 import { pageState, type PageState } from '../dom/page-state';
+import { deepQueryAll } from '../dom/deep';
 
 export interface Point {
   x: number;
@@ -323,12 +324,33 @@ export function describeAt(doc: Document, q: { ref?: string; x?: number; y?: num
   el = el?.closest('button, a, input, [role=button], [role=link]') ?? el;
   return el ? describeElement(el) : null;
 }
+const isFile = (e: Element | null | undefined): e is Ctl => !!e && e.tagName === 'INPUT' && (e as Ctl).type === 'file';
+/**
+ * The file input behind what the model pointed at. Sites hide it behind a styled "Upload" button or label, often in a
+ * dialog inside a shadow root (LinkedIn Easy Apply): the input itself, the label's control, the nearest ancestor that
+ * holds one (resume before cover letter), then any on the page including open shadow roots.
+ */
+export function fileInputFor(el: Element, doc: Document): Ctl | null {
+  if (isFile(el)) return el;
+  const label = el.closest('label') as HTMLLabelElement | null;
+  if (isFile(label?.control)) return label.control as Ctl;
+  const forId = (el.closest('[for]') as HTMLLabelElement | null)?.htmlFor;
+  const byFor = forId ? (el.getRootNode() as Document | ShadowRoot).getElementById?.(forId) : null;
+  if (isFile(byFor)) return byFor;
+  const pick = (all: Ctl[]) => all.find((i) => /resume|cv/i.test(`${i.name} ${i.id} ${i.accept} ${i.getAttribute('aria-label') ?? ''}`)) ?? all[0] ?? null;
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const near = deepQueryAll<Ctl>(p, 'input[type=file]', 20);
+    if (near.length) return pick(near);
+  }
+  return pick(deepQueryAll<Ctl>(el.getRootNode() as Document | ShadowRoot, 'input[type=file]', 20)) ?? pick(deepQueryAll<Ctl>(doc, 'input[type=file]', 20));
+}
+
 /** The staged resume into the file input the ref names (or the nearest one: sites hide the input behind a styled button). */
 export function setFile(doc: Document, ref: string, file: { name: string; mime: string; data: string }): { ok: boolean; message: string } {
   const el = elOf(ref);
   if (!el) return { ok: false, message: STALE(ref) };
-  const input = el.tagName === 'INPUT' && (el as Ctl).type === 'file' ? (el as Ctl) : ((el.closest('form, fieldset, div') ?? doc).querySelector<Ctl>('input[type=file]') ?? doc.querySelector<Ctl>('input[type=file]'));
-  if (!input) return { ok: false, message: 'file_upload: no file input at or near that ref' };
+  const input = fileInputFor(el, doc);
+  if (!input) return { ok: false, message: 'file_upload: no file input on this page. If an "Upload" button opens a file picker, the form has not loaded its upload field yet: read the page again.' };
   const w = doc.defaultView!;
   const dt = new w.DataTransfer();
   dt.items.add(new w.File([Uint8Array.from(atob(file.data), (ch) => ch.charCodeAt(0)) as BlobPart], file.name, { type: file.mime }));

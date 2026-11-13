@@ -14,13 +14,19 @@ const initials = (name: string) =>
     .map((w) => w[0]?.toUpperCase())
     .join("")
 
-// The employer's mark: its logo when we know its own website, otherwise initials.
+// The employer's mark: the logo the job source gave (LinkedIn), else its own website's icon, else initials.
 // (The domain is never a job board's, so a logo can't be LinkedIn's by mistake.)
 // ponytail: logos come from the public favicon service, so the browser asks it for that domain; self-host or proxy later if that matters.
-function CompanyAvatar({ name, domain, size = 44, className }: { name: string; domain?: string | null; size?: number; className?: string }) {
+function CompanyAvatar({ name, domain, logo, size = 44, className }: { name: string; domain?: string | null; logo?: string | null; size?: number; className?: string }) {
   const [failed, setFailed] = useState(false)
+  const [logoFailed, setLogoFailed] = useState(false) // a source's logo link can expire: fall back to the website icon
   const radius = Math.max(6, Math.round(size * 0.24))
   const style = { width: size, height: size, borderRadius: radius }
+  if (logo && !logoFailed)
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={logo} alt={`${name} logo`} width={size} height={size} loading="lazy" referrerPolicy="no-referrer" onError={() => setLogoFailed(true)} className={cn("shrink-0 border bg-white object-contain", className)} style={style} />
+    )
   if (domain && !failed)
     return (
       // eslint-disable-next-line @next/next/no-img-element

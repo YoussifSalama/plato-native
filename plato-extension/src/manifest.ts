@@ -19,9 +19,13 @@ export function buildManifest(o: { flavor: Flavor; apiOrigin: string; webOrigin?
     // package ("key field is not allowed in manifest") and assigns its own id: the store build leaves it out, and the
     // backend's EXTENSION_ORIGIN lists both ids.
     ...(o.store ? {} : { key: key.key }),
-    // tabGroups only labels the tabs Plato opens ("Plato" group). No host_permissions, no tabs/scripting/cookies/webRequest.
+    // tabGroups only labels the tabs Plato opens ("Plato" group). No host_permissions, no tabs/cookies/webRequest.
     // debugger: real mouse / key events into the job's tab (custom dropdowns, boxes, Submit), the same way a person presses.
-    permissions: ['sidePanel', 'storage', 'tabGroups', 'debugger'],
+    // scripting + optional any-site access (owner, 2026-11-13): a job's Apply button can hand the application to the
+    // company's own site. The seeker grants "any site" once (Start batch); Plato then loads its page reader only into a
+    // tab its own run led to (the job's tab, or a tab that tab opened), never into anything else.
+    permissions: ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting'],
+    optional_host_permissions: ['https://*/*', 'http://*/*'],
     icons: ICONS,
     action: { default_title: 'Plato Apply', default_icon: ICONS },
     side_panel: { default_path: 'panel.html' },

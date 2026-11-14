@@ -23,8 +23,19 @@ import { Digests } from "../insights/digests"
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Try again in a moment.")
 
 // A company's logo tile: white, bordered, its monogram in ink (the design's tiles carry no colour).
-function Tile({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
-  return <span aria-hidden className={cn("flex shrink-0 items-center justify-center rounded-xl border bg-card font-bold tracking-tight text-foreground", size === "sm" ? "size-10 text-[13px]" : "size-12 text-[17px]")}>{monogram(name)}</span>
+// The company's mark: its real logo (the job source's, else its website's icon), else its initials in a white tile.
+function Tile({ name, logo, domain, size = "md" }: { name: string; logo?: string | null; domain?: string | null; size?: "sm" | "md" }) {
+  const [bad, setBad] = useState<string[]>([])
+  const src = [logo, domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` : null].find((u): u is string => !!u && !bad.includes(u))
+  const box = cn("flex shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-card", size === "sm" ? "size-10" : "size-12")
+  if (src)
+    return (
+      <span aria-hidden className={box}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" onError={() => setBad((b) => [...b, src])} className={cn("object-contain", src === logo ? "size-full" : "size-2/3")} />
+      </span>
+    )
+  return <span aria-hidden className={cn(box, "font-bold tracking-tight text-foreground", size === "sm" ? "text-[13px]" : "text-[17px]")}>{monogram(name)}</span>
 }
 
 // Section title with a right-aligned aside, as in the design (no icon chips).
@@ -63,14 +74,25 @@ function FollowingContent() {
       .then(setDigests)
       .catch(() => setDigests([]))
   }, [refresh])
+  // The follow box: a dropdown that opens on focus. Empty: your suggested companies, then the ones hiring most now;
+  // typing filters (server search). Picking one follows it at once.
+  const [boxOpen, setBoxOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const [popular, setPopular] = useState<CompanySuggestion[] | null>(null)
+  useEffect(() => {
+    if (!boxOpen || popular) return
+    searchCompanies("")
+      .then(setPopular)
+      .catch(() => setPopular([]))
+  }, [boxOpen, popular])
   useEffect(() => {
     const term = q.trim()
-    if (term.length < 2) return
+    if (!term) return
     const t = setTimeout(() => {
       searchCompanies(term)
         .then(setResults)
         .catch(() => setResults([]))
-    }, 250)
+    }, 200)
     return () => clearTimeout(t)
   }, [q])
 
@@ -80,8 +102,19 @@ function FollowingContent() {
   const latest = digests?.[0]
   const newRoles = latest?.jobs.filter((j) => !j.closed && followed.has(j.company.toLowerCase())) ?? []
   const newAt = (company: string | null) => newRoles.filter((j) => j.company.toLowerCase() === company?.toLowerCase()).length
-  const searching = q.trim().length >= 2
-  const toFollow = (searching ? results : (suggested ?? [])).filter((s) => !followed.has(s.name.toLowerCase())).slice(0, 5)
+  const searching = false // the dropdown owns searching; the list below always shows Plato's picks
+  const toFollow = (suggested ?? []).filter((s) => !followed.has(s.name.toLowerCase())).slice(0, 5)
+  const typed = q.trim()
+  const unique = (xs: CompanySuggestion[]) => [...new Map(xs.map((x) => [x.key, x])).values()]
+  const options = unique(typed ? results : [...(suggested ?? []), ...(popular ?? [])]).filter((o) => !followed.has(o.name.toLowerCase())).slice(0, 8)
+  const exact = !typed || options.some((o) => o.name.toLowerCase() === typed.toLowerCase())
+  const choices: { key: string; name: string; o?: CompanySuggestion }[] = [...options.map((o) => ({ key: o.key, name: o.name, o })), ...(exact ? [] : [{ key: "__typed", name: typed }])]
+  function pick(name: string) {
+    void run(() => createAlert({ kind: "COMPANY", company: name }))
+    setQ("")
+    setBoxOpen(false)
+    setActive(0)
+  }
 
   async function run(fn: () => Promise<unknown>) {
     setError(null)
@@ -147,7 +180,7 @@ function FollowingContent() {
                   return (
                     <li key={c.id} className={cn(CARD, "group relative flex min-w-0 flex-col p-4", c.paused && "opacity-70")}>
                       <div className="flex items-start justify-between gap-2">
-                        <Tile name={c.company ?? "?"} />
+                        <Tile name={c.company ?? "?"} logo={c.logo} domain={c.domain} />
                         {c.paused ? (
                           <span className="rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-text-secondary">Paused</span>
                         ) : n > 0 ? (
@@ -196,7 +229,7 @@ function FollowingContent() {
               </div>
               {newRoles.map((j) => (
                 <div key={j.id} className="flex flex-wrap items-center gap-3 rounded-xl border bg-card px-4 py-3 sm:flex-nowrap">
-                  <Tile name={j.company} size="sm" />
+                  <Tile name={j.company} logo={j.company_logo} domain={j.company_domain} size="sm" />
                   <span className="min-w-0 flex-1">
                     <b className="block truncate text-[16px] font-bold text-foreground">{j.title}</b>
                     <span className="block truncate text-[14px] text-text-secondary">{[j.company, j.location, j.posted_at && `posted ${timeAgo(j.posted_at)}`].filter(Boolean).join(" · ")}</span>
@@ -287,12 +320,65 @@ function FollowingContent() {
               <h2 className="text-[19px] font-bold tracking-tight text-foreground">More companies to follow</h2>
               <p className="mt-0.5 text-[13px] text-text-secondary">Picked by Plato from your titles, level and locations</p>
             </div>
-            <InputGroup className="h-12 rounded-xl bg-card">
-              <InputGroupAddon>
-                <Search />
-              </InputGroupAddon>
-              <InputGroupInput data-ai="following.company-search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search any company to follow" placeholder="Search any company to follow" className="text-[15px]" />
-            </InputGroup>
+            <div className="relative">
+              <InputGroup className="h-12 rounded-xl bg-card">
+                <InputGroupAddon>
+                  <Search />
+                </InputGroupAddon>
+                <InputGroupInput
+                  data-ai="following.company-search"
+                  value={q}
+                  onChange={(e) => (setQ(e.target.value), setBoxOpen(true), setActive(0))}
+                  onFocus={() => setBoxOpen(true)}
+                  onBlur={() => setTimeout(() => setBoxOpen(false), 120)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault()
+                      setBoxOpen(true)
+                      setActive((a) => Math.min(a + 1, choices.length - 1))
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault()
+                      setActive((a) => Math.max(a - 1, 0))
+                    } else if (e.key === "Enter" && boxOpen && choices[active]) {
+                      e.preventDefault()
+                      pick(choices[active].name)
+                    } else if (e.key === "Escape") setBoxOpen(false)
+                  }}
+                  role="combobox"
+                  aria-expanded={boxOpen}
+                  aria-controls="company-options"
+                  aria-autocomplete="list"
+                  aria-label="Search any company to follow"
+                  placeholder="Search any company to follow"
+                  className="text-[15px]"
+                />
+              </InputGroup>
+              {boxOpen && (
+                <ul id="company-options" role="listbox" className="absolute inset-x-0 top-full z-30 mt-1.5 max-h-80 overflow-y-auto rounded-xl border bg-card p-1.5 shadow-lg">
+                  {!typed && popular === null && suggested === null && <li className="px-3 py-2.5 text-[13px] text-text-tertiary">Loading companies…</li>}
+                  {!typed && <li className="px-3 pt-1.5 pb-1 text-[11px] font-semibold tracking-[0.08em] text-text-tertiary uppercase">Suggested and hiring now</li>}
+                  {choices.map((c, i) => (
+                    <li key={c.key} role="option" aria-selected={i === active}>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onMouseEnter={() => setActive(i)}
+                        onClick={() => pick(c.name)}
+                        className={cn("flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors", i === active ? "bg-primary-tint" : "hover:bg-muted")}
+                      >
+                        {c.o ? <Tile name={c.name} logo={c.o.logo} domain={c.o.domain} size="sm" /> : <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-dashed text-primary"><Plus className="size-4" /></span>}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[15px] font-semibold text-foreground">{c.o ? c.name : `Follow “${c.name}”`}</span>
+                          <span className="block truncate text-[13px] text-text-tertiary">{c.o ? (c.o.example ? `Matches you, like ${c.o.example}` : `${c.o.jobs} open job${c.o.jobs === 1 ? "" : "s"} Plato knows`) : "Plato watches for new roles there"}</span>
+                        </span>
+                        <span className="shrink-0 text-[13px] font-semibold text-primary">Follow</span>
+                      </button>
+                    </li>
+                  ))}
+                  {typed && !choices.length && <li className="px-3 py-2.5 text-[13px] text-text-tertiary">Searching…</li>}
+                </ul>
+              )}
+            </div>
             <div className={cn(CARD, "flex flex-col divide-y divide-divider overflow-hidden")}>
               {suggested === null && !searching && (
                 <div className="flex items-center gap-3 px-4 py-3">
@@ -302,7 +388,7 @@ function FollowingContent() {
               )}
               {toFollow.map((s) => (
                 <div key={s.key} className="flex items-center gap-3 px-4 py-3">
-                  <Tile name={s.name} size="sm" />
+                  <Tile name={s.name} logo={s.logo} domain={s.domain} size="sm" />
                   <span className="min-w-0 flex-1">
                     <b className="block truncate text-[16px] font-bold text-foreground">{s.name}</b>
                     <span className="block truncate text-[14px] text-text-secondary">{s.example ? `${s.jobs} role${s.jobs === 1 ? "" : "s"} that match you, like ${s.example}` : `${s.jobs} open job${s.jobs === 1 ? "" : "s"}`}</span>
@@ -313,12 +399,6 @@ function FollowingContent() {
                   </button>
                 </div>
               ))}
-              {searching && !results.some((s) => s.name.toLowerCase() === q.trim().toLowerCase()) && (
-                <button type="button" onClick={() => (void run(() => createAlert({ kind: "COMPANY", company: q.trim() })), setQ(""))} className="flex items-center gap-2 px-4 py-3 text-left text-[14px] font-semibold text-primary transition-colors duration-200 hover:bg-primary-tint">
-                  <Plus className="size-4" />
-                  Follow “{q.trim()}”
-                </button>
-              )}
               {!searching && suggested !== null && !toFollow.length && <p className="px-4 py-3 text-[13px] text-text-tertiary">Run a search and Plato suggests the companies behind your best matches. Or type any company above.</p>}
             </div>
           </div>

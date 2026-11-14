@@ -4,10 +4,12 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { AlertCadence, JobRemoteType } from '@prisma/client';
 import { randomBytes } from 'crypto';
-import { normalizeCompany } from '../discovery/company';
+import { companyMark, normalizeCompany } from '../discovery/company';
+import { CompanyCatalogService } from './company-catalog.service';
 import { CreditsService } from '../credits/credits.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -46,6 +48,8 @@ export class InsightsService {
     private readonly credits: CreditsService,
     private readonly matcher: AlertMatcherService,
     private readonly mail: MailService,
+    // Optional so specs that build the service by hand still work; Nest always provides it.
+    @Optional() private readonly catalog?: CompanyCatalogService,
   ) {}
 
   private async seekerId(userId: string) {
@@ -264,6 +268,7 @@ export class InsightsService {
       seekerReferenceScore(this.prisma, id),
     ]);
     const byId = new Map(jobs.map((j) => [j.id, j]));
+    const marks = await this.marks(jobs.map((j) => j.company));
     const scoreOf = new Map(matches.map((m) => [m.job_id, m.match_score]));
     return digests.map((d) => ({
       id: d.id,
@@ -277,6 +282,8 @@ export class InsightsService {
           id: j.id,
           title: j.title,
           company: j.company,
+          company_logo: this.markOf(marks, j.company).logo,
+          company_domain: this.markOf(marks, j.company).domain,
           location: j.location,
           remote: j.remote_type === JobRemoteType.REMOTE,
           posted_at: j.posted_at,
@@ -293,11 +300,82 @@ export class InsightsService {
    * For each followed company: open roles Plato knows of, and how many of them are in
    * this seeker's matches ("14 for you · 212 open").
    */
+  /**
+   * Each company's logo, from its newest job in the index that carries one: the logo the source gave (LinkedIn) or
+   * the company's own website (for its icon). Keyed by lower-cased name.
+   */
+  private async marks(names: string[]) {
+    const out = new Map<
+      string,
+      { logo: string | null; domain: string | null }
+    >();
+    await Promise.all(
+      [...new Set(names.filter(Boolean))].slice(0, 40).map(async (name) => {
+        // A logo is cosmetic: a failed lookup shows the initials, never breaks the page.
+        const rows = ((await this.prisma.job
+          ?.findRaw?.({
+            filter: {
+              company: {
+                $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+                $options: 'i',
+              },
+              source: { $ne: 'MANUAL' },
+              $or: [
+                { 'raw.companyLogo': { $type: 'string' } },
+                { 'raw.companyWebsite': { $type: 'string' } },
+                { company_url: { $type: 'string' } },
+              ],
+            },
+            options: {
+              projection: {
+                company_url: 1,
+                'raw.companyLogo': 1,
+                'raw.companyWebsite': 1,
+              },
+              sort: { created_at: -1 },
+              limit: 5,
+            },
+          })
+          .catch(() => [])) ?? []) as unknown as {
+          company_url?: string;
+          raw?: unknown;
+        }[];
+        const found = rows.map((r) => companyMark(r));
+        const logo = found.find((m) => m.logo)?.logo ?? null;
+        const domain = found.find((m) => m.domain)?.domain ?? null;
+        if (logo || domain) out.set(name.toLowerCase(), { logo, domain });
+      }),
+    );
+    // No mark in the index (a company nobody's search found yet): the catalogue's website gives its logo.
+    const missing = [
+      ...new Set(names.filter((n) => n && !out.has(n.toLowerCase()))),
+    ];
+    const sites = await this.catalog
+      ?.websites(missing.map((n) => normalizeCompany(n).key).filter(Boolean))
+      .catch(() => null);
+    for (const n of missing) {
+      const site = sites?.get(normalizeCompany(n).key);
+      if (site) out.set(n.toLowerCase(), { logo: null, domain: site });
+    }
+    return out;
+  }
+  private markOf = (
+    m: Map<string, { logo: string | null; domain: string | null }>,
+    name: string | null | undefined,
+  ) => (name && m.get(name.toLowerCase())) || { logo: null, domain: null };
+
   private async companyReach(seekerId: string, companies: string[]) {
     const out = new Map<
       string,
-      { open: number; for_you: number; where: string | null }
+      {
+        open: number;
+        for_you: number;
+        where: string | null;
+        logo: string | null;
+        domain: string | null;
+      }
     >();
+    const marks = await this.marks(companies);
     await Promise.all(
       [...new Set(companies)].map(async (name) => {
         const company = { equals: name, mode: 'insensitive' as const };
@@ -326,6 +404,7 @@ export class InsightsService {
           open,
           for_you: forYou,
           where: latest?.location ?? null,
+          ...this.markOf(marks, name),
         });
       }),
     );
@@ -372,29 +451,28 @@ export class InsightsService {
       hit.titles.set(job.title, (hit.titles.get(job.title) ?? 0) + 1);
       by.set(c.key, hit);
     }
-    return [...by.values()]
-      .sort((a, b) => b.jobs - a.jobs)
-      .slice(0, 5)
-      .map(({ titles, ...c }) => ({
-        ...c,
-        example: [...titles].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
-      }));
+    const top = [...by.values()].sort((a, b) => b.jobs - a.jobs).slice(0, 5);
+    const marks = await this.marks(top.map((c) => c.name));
+    return top.map(({ titles, ...c }) => ({
+      ...c,
+      ...this.markOf(marks, c.name),
+      example: [...titles].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+    }));
   }
 
-  /** Company names in the index, for the follow box. */
+  /** Companies in the index for the follow box: matching what was typed, or (nothing typed) the ones hiring most now. */
   async companies(q: string) {
     const term = q.trim();
-    if (term.length < 2) return [];
     const rows = await this.prisma.job.findMany({
       where: {
-        company: { contains: term, mode: 'insensitive' },
+        ...(term && { company: { contains: term, mode: 'insensitive' } }),
         expired_at: null,
         // A pasted link's "company" is just its host name: never shown to others.
         source: { not: 'MANUAL' },
       },
       select: { company: true },
       orderBy: { created_at: 'desc' },
-      take: 400,
+      take: term ? 400 : 2000,
     });
     const seen = new Map<string, { name: string; key: string; jobs: number }>();
     for (const r of rows) {
@@ -404,7 +482,19 @@ export class InsightsService {
       if (hit) hit.jobs++;
       else seen.set(c.key, { ...c, jobs: 1 });
     }
-    return [...seen.values()].sort((a, b) => b.jobs - a.jobs).slice(0, 8);
+    const fromIndex = [...seen.values()].sort((a, b) => b.jobs - a.jobs);
+    // The catalogue first: companies Plato tracks even when no search has found them yet (Amazon, PwC...).
+    const listed = (await this.catalog?.search(term, 8).catch(() => [])) ?? [];
+    const top = [
+      ...listed.map((c) => ({
+        name: c.name,
+        key: c.key,
+        jobs: seen.get(c.key)?.jobs ?? 0,
+      })),
+      ...fromIndex.filter((c) => !listed.some((l) => l.key === c.key)),
+    ].slice(0, 8);
+    const marks = await this.marks(top.map((c) => c.name));
+    return top.map((c) => ({ ...c, ...this.markOf(marks, c.name) }));
   }
 
   /** The link in every email. No login: the token is the proof. */

@@ -15,6 +15,8 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
+# The company catalogue sheet (data/company_sources.csv), read by CompanyCatalogService.
+COPY --from=build /app/data ./data
 COPY --from=build /app/package.json ./
 USER node
 EXPOSE 3000

@@ -3,7 +3,7 @@ import { apiClient } from "@/lib/api-client"
 // Job alerts: new jobs in a field, or at companies the seeker follows, sent
 // together in one digest on their cadence. Free; how many depends on the plan.
 export type Cadence = "DAILY" | "EVERY_3_DAYS" | "WEEKLY"
-export type JobAlert = { id: string; kind: "FIELD" | "COMPANY"; title: string | null; location: string | null; remote_only: boolean; company: string | null; paused: boolean; sent: number; new_week?: number; open?: number; for_you?: number; where?: string | null; created_at: string }
+export type JobAlert = { id: string; kind: "FIELD" | "COMPANY"; title: string | null; location: string | null; remote_only: boolean; company: string | null; paused: boolean; sent: number; new_week?: number; open?: number; for_you?: number; where?: string | null; logo?: string | null; domain?: string | null; created_at: string }
 export type AlertSettings = { cadence: Cadence; email: boolean; in_app: boolean; emailAvailable: boolean }
 export type InsightsOverview = {
   plan: string
@@ -15,9 +15,9 @@ export type InsightsOverview = {
   lastDigestAt: string | null
   nextDigestAt: string | null
 }
-export type DigestJob = { id: string; title: string; company: string; location: string | null; remote: boolean; posted_at: string | null; url: string; closed: boolean; match_percent?: number | null }
+export type DigestJob = { id: string; title: string; company: string; company_logo?: string | null; company_domain?: string | null; location: string | null; remote: boolean; posted_at: string | null; url: string; closed: boolean; match_percent?: number | null }
 export type Digest = { id: string; headline: string; at: string; emailed: boolean; jobs: DigestJob[] }
-export type CompanySuggestion = { name: string; key: string; jobs: number; example?: string | null }
+export type CompanySuggestion = { name: string; key: string; jobs: number; example?: string | null; logo?: string | null; domain?: string | null }
 export type NewAlert = { kind: "FIELD"; title: string; location?: string | null; remote_only?: boolean } | { kind: "COMPANY"; company: string }
 
 export const CADENCES: { value: Cadence; label: string; hint: string }[] = [

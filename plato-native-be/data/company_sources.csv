@@ -1,0 +1,443 @@
+name,aliases,countries,website,source_type,source_ref,verified,notes
+PwC Middle East,PwC;PricewaterhouseCoopers,EG;SA;AE;QA;KW,pwc.com,workday,https://pwc.wd3.myworkdayjobs.com/Global_Experienced_Careers,yes,Global PwC tenant; filter Middle East countries
+PwC Middle East,PwC;PricewaterhouseCoopers,EG;SA;AE;QA;KW,pwc.com,successfactors,https://careers.pwc.com,yes,careers.pwc.com SuccessFactors site linked from PwC global careers
+Deloitte Middle East,Deloitte;Deloitte & Touche,EG;SA;AE;QA;KW,deloitte.com,careers_page,https://www.deloitte.com/middle-east/en/careers.html,yes,Deloitte Middle East careers hub; ATS not identified
+EY,Ernst & Young;EY MENA,EG;SA;AE;QA;KW,ey.com,successfactors,https://careers.ey.com/ey/search/?q=&locationsearch=Egypt,yes,EY global SF RMK site; change locationsearch for UAE/Saudi/Qatar
+KPMG,KPMG Lower Gulf;KPMG Hazem Hassan;KPMG Al Fozan,EG;SA;AE;QA;KW,kpmg.com,careers_page,https://kpmg.com/ae/en/careers.html,yes,KPMG Lower Gulf careers; EG/SA member firms run separate pages
+Accenture,Accenture Middle East,EG;SA;AE;QA,accenture.com,workday,https://accenture.wd103.myworkdayjobs.com/AccentureCareers,yes,Global tenant; filter EG/SA/AE
+McKinsey & Company,McKinsey,EG;SA;AE;QA,mckinsey.com,careers_page,https://www.mckinsey.com/careers/search-jobs,yes,Own job search; filter Middle East offices
+Boston Consulting Group,BCG,EG;SA;AE;QA,bcg.com,careers_page,https://careers.bcg.com/global/en/search-results,yes,Phenom site; filter Middle East
+Bain & Company,Bain,SA;AE;QA,bain.com,careers_page,https://www.bain.com/careers/find-a-role/,yes,Own job search; Dubai/Riyadh/Doha offices
+Strategy&,Strategy& Middle East;PwC Strategy&,SA;AE;QA;KW,strategyand.pwc.com,careers_page,https://www.strategyand.pwc.com/m1/en/careers.html,yes,Strategy& Middle East; roles also on PwC Workday
+Oliver Wyman,Oliver Wyman Middle East,SA;AE,oliverwyman.com,careers_page,https://www.oliverwyman.com/careers.html,yes,Own job search (MMC); Dubai/Riyadh/Doha
+Arthur D. Little,ADL,SA;AE,adlittle.com,careers_page,https://www.adlittle.com/en/careers,yes,Own careers page
+Kearney,A.T. Kearney,SA;AE;QA,kearney.com,careers_page,https://www.kearney.com/careers,yes,Own careers page; Middle East offices
+Roland Berger,Roland Berger Middle East,SA;AE,rolandberger.com,smartrecruiters,rolandberger,yes,Global board; ME roles in Dubai/Riyadh/Doha (207 jobs at check 2026-11-13)
+Grant Thornton,Grant Thornton UAE,EG;SA;AE,grantthornton.com,careers_page,https://www.grantthornton.ae/careers/,yes,Grant Thornton UAE member firm; ATS not identified
+BDO,BDO Middle East,EG;SA;AE,bdo.global,careers_page,https://www.bdo.ae/en-gb/careers,yes,BDO UAE member firm page
+Capgemini,Capgemini Middle East,SA;AE,capgemini.com,careers_page,https://www.capgemini.com/careers/join-capgemini/job-search/,yes,Global job search; filter Saudi/UAE
+IBM,IBM Middle East,EG;SA;AE,ibm.com,careers_page,https://www.ibm.com/careers/search,yes,Own search; filter Egypt/UAE/Saudi
+Microsoft,Microsoft Egypt;Microsoft Gulf,EG;SA;AE;QA,microsoft.com,careers_page,https://apply.careers.microsoft.com/careers?lc=Egypt,yes,Microsoft Careers (Eightfold); change lc for UAE/Saudi
+Google,Alphabet,EG;SA;AE,google.com,careers_page,https://www.google.com/about/careers/applications/jobs/results/?location=Egypt,yes,Change location param for UAE/Saudi
+Amazon,Amazon.eg;Amazon.ae;Amazon.sa;Souq,EG;SA;AE,amazon.jobs,careers_page,https://www.amazon.jobs/en/search.json?country=EGY,yes,amazon.jobs public JSON search; country=EGY/ARE/SAU
+Amazon Web Services,AWS,EG;SA;AE,aws.amazon.com,careers_page,https://www.amazon.jobs/en/search.json?business_category[]=amazon-web-services&country=ARE,yes,AWS roles on amazon.jobs
+Oracle,Oracle Egypt;Oracle Middle East,EG;SA;AE,oracle.com,oracle_hcm,https://eeho.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_45001,yes,Oracle global careers (siteNumber CX_45001); filter EG/AE/SA (2835 jobs at check 2026-11-13)
+SAP,SAP Middle East,EG;SA;AE,sap.com,successfactors,https://jobs.sap.com/search/?q=&locationsearch=Egypt,no,SAP SF RMK site; change location; HTTP 403 for script at check
+Cisco,Cisco Systems,EG;SA;AE,cisco.com,workday,https://cisco.wd5.myworkdayjobs.com/Cisco_Careers,yes,Global tenant behind careers.cisco.com
+Dell Technologies,Dell;Dell EMC,EG;SA;AE,dell.com,oracle_hcm,https://enterpriseplatform.dell.com/hcmUI/CandidateExperience/en/sites/careers,yes,Dell moved to Oracle HCM (custom domain) (586 jobs at check 2026-11-13)
+HP,HP Inc,EG;SA;AE,hp.com,workday,https://hp.wd5.myworkdayjobs.com/ExternalCareerSite,yes,Global tenant
+Hewlett Packard Enterprise,HPE,EG;SA;AE,hpe.com,workday,https://hpe.wd5.myworkdayjobs.com/Jobsathpe,yes,Global tenant
+Valeo,Valeo Egypt,EG,valeo.com,workday,https://valeo.wd3.myworkdayjobs.com/valeo_jobs,yes,Global tenant; Egypt = Valeo Cairo R&D
+Siemens,Siemens Egypt;Siemens Saudi,EG;SA;AE,siemens.com,careers_page,https://jobs.siemens.com/careers,yes,Siemens Avature-style marketplace; filter Egypt/UAE/Saudi
+Siemens Digital Industries Software,Siemens EDA;Mentor Graphics,EG,sw.siemens.com,careers_page,https://jobs.sw.siemens.com,yes,Siemens Digital Industries Software (ex-Mentor) Cairo
+Siemens Energy,Siemens Energy,EG;SA;AE,siemens-energy.com,careers_page,https://jobs.siemens-energy.com/en_US/jobs,yes,Own job site; filter Egypt/Saudi/UAE
+Synopsys,Synopsys Egypt,EG,synopsys.com,careers_page,https://careers.synopsys.com/,yes,Own careers site; Cairo design center
+Analog Devices,ADI,EG,analog.com,workday,https://analogdevices.wd1.myworkdayjobs.com/External,yes,Global tenant; Cairo site
+Huawei,Huawei Technologies,EG;SA;AE,huawei.com,careers_page,https://career.huawei.com/reccampportal/portal5/index.html,yes,Huawei global recruitment portal
+Ericsson,Ericsson Egypt,EG;SA;AE,ericsson.com,careers_page,https://jobs.ericsson.com/careers,yes,Eightfold site; filter Egypt/Saudi/UAE
+Nokia,Nokia Solutions and Networks,EG;SA;AE,nokia.com,careers_page,https://www.nokia.com/careers/,yes,Nokia careers hub
+Schneider Electric,Schneider,EG;SA;AE,se.com,careers_page,https://careers.se.com,yes,Schneider careers (iCIMS-backed); filter Egypt/UAE/KSA
+ABB,ABB Egypt,EG;SA;AE,abb.com,workday,https://abb.wd3.myworkdayjobs.com/external_career_page,yes,Global tenant
+Honeywell,Honeywell Middle East,EG;SA;AE,honeywell.com,oracle_hcm,https://ibqbjb.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/Honeywell,yes,Oracle HCM site Honeywell (1342 jobs at check 2026-11-13)
+GE Vernova,GE;General Electric;GE Healthcare,EG;SA;AE,gevernova.com,workday,https://gevernova.wd5.myworkdayjobs.com/Vernova_ExternalSite,yes,GE Vernova tenant
+GE Vernova,GE;General Electric;GE Healthcare,EG;SA;AE,gevernova.com,workday,https://gehc.wd5.myworkdayjobs.com/GEHC_ExternalSite,yes,GE HealthCare tenant
+Bosch,Robert Bosch,EG;SA;AE,bosch.com,smartrecruiters,boschgroup,yes,Global board; filter EG/AE/SA (5091 jobs at check 2026-11-13)
+Expedia Group,Expedia,EG,expediagroup.com,workday,https://expedia.wd108.myworkdayjobs.com/search,yes,Global tenant; Cairo hub
+Uber,Uber Egypt,EG;SA;AE,uber.com,oracle_hcm,https://iaziqy.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/UberCareers,yes,Uber Oracle HCM; Cairo CoE (812 jobs at check 2026-11-13)
+Bolt,Bolt Egypt,EG,bolt.eu,careers_page,https://bolt.eu/en/careers/positions/,yes,Own careers page
+Visa,Visa CEMEA,EG;AE;SA,visa.com,workday,https://visa.wd5.myworkdayjobs.com/Visa,yes,Global tenant
+Mastercard,Mastercard MEA,EG;AE;SA,mastercard.com,workday,https://mastercard.wd1.myworkdayjobs.com/CorporateCareers,yes,Global tenant
+PayPal,PayPal,EG,paypal.com,workday,https://paypal.wd1.myworkdayjobs.com/jobs,yes,Global tenant; limited MENA roles
+Teleperformance,TP;Majorel,EG;SA;AE,tp.com,careers_page,https://www.tp.com/en-us/careers/job-opportunities/,yes,TP global jobs; Egypt is a large hub
+Concentrix,Concentrix Egypt,EG;SA;AE,concentrix.com,workday,https://cnx.wd1.myworkdayjobs.com/external_global,yes,Global tenant; Egypt sites
+Sutherland,Sutherland Global,EG,sutherlandglobal.com,smartrecruiters,sutherland,yes,Many Cairo roles (439 jobs at check 2026-11-13)
+Vodafone Egypt,Vodafone;_VOIS;VOIS,EG,vodafone.com.eg,successfactors,https://opportunities.vodafone.com/search/?q=&locationsearch=Egypt,yes,Vodafone group SF site; Egypt incl. _VOIS
+Orange Egypt,Orange;Orange Business,EG,orange.eg,careers_page,https://www.orange.eg/ar/about/careers/,yes,Orange Egypt careers page (linked from homepage)
+Orange Egypt,Orange;Orange Business,EG,orange.eg,careers_page,https://orange.jobs/gb/en,yes,Orange group job site; filter Egypt
+e& Egypt,Etisalat Misr;e& egypt,EG,eand.com.eg,careers_page,https://www.eand.com.eg/careers,no,"e& Egypt careers; URL not confirmed; loads (HTTP 200) but listings are JS-rendered, not confirmed"
+Telecom Egypt (WE),WE;Telecom Egypt,EG,te.eg,careers_page,https://www.te.eg/about-te/careers-and-training,yes,Telecom Egypt careers & training page
+e& (Etisalat),e&;Etisalat;Etisalat by e&,AE,eand.com,careers_page,https://careers.etisalat.ae/en/index.html,yes,e& UAE careers portal
+du,Emirates Integrated Telecommunications,AE,du.ae,careers_page,https://www.du.ae/about-us/careers,yes,du careers page
+stc,Saudi Telecom Company;stc group,SA;KW,stc.com.sa,successfactors,https://careers.stc.com.sa,yes,stc SF RMK site
+Mobily,Etihad Etisalat,SA,mobily.com.sa,careers_page,https://careers.mobily.com.sa/en/sites/opportunities,yes,Mobily careers portal
+Zain,Zain KSA;Zain Kuwait,SA;KW,zain.com,careers_page,https://careers.zain.com,yes,Zain group careers portal (KSA/Kuwait)
+Ooredoo,Ooredoo Qatar,QA;KW,ooredoo.com,successfactors,https://careers.ooredoo.com,yes,Ooredoo SF RMK site
+Commercial International Bank (CIB),CIB;CIB Egypt,EG,cibeg.com,careers_page,https://www.cibeg.com/careers,no,"CIB careers page; loads (HTTP 200) but listings are JS-rendered, not confirmed"
+National Bank of Egypt,NBE;البنك الأهلي المصري,EG,nbe.com.eg,careers_page,https://www.nbe.com.eg/careers,no,"NBE careers page; URL not confirmed; loads (HTTP 200) but listings are JS-rendered, not confirmed"
+Banque Misr,BM,EG,banquemisr.com,careers_page,https://www.banquemisr.com/careers,yes,Banque Misr careers page
+QNB Egypt,QNB Alahli;QNB,EG;QA,qnbalahli.com,careers_page,https://www.qnb.com.eg/careers,yes,QNB Egypt careers page
+QNB Group,Qatar National Bank;QNB,QA,qnb.com,careers_page,https://www.qnb.com/sites/qnb/qnbglobal/page/en/encareers.html,no,QNB Group careers (blocks bots); HTTP 403 for script at check
+HSBC,HSBC Egypt;HSBC Middle East,EG;AE;SA;QA,hsbc.com,careers_page,https://www.hsbc.com/careers,yes,HSBC careers hub; search by Egypt/UAE/Saudi
+Citi,Citibank,EG;AE;SA,citigroup.com,workday,https://citi.wd5.myworkdayjobs.com/2,yes,Citi global tenant; Dubai/Riyadh/Cairo
+J.P. Morgan,JPMorgan Chase,AE;SA,jpmorganchase.com,oracle_hcm,https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001,yes,JPMC Oracle HCM; Dubai/Riyadh (7001 jobs at check 2026-11-13)
+Arab African International Bank,AAIB,EG,aaib.com,careers_page,https://www.aaib.com/careers,yes,AAIB careers page
+Alexbank,Bank of Alexandria,EG,alexbank.com,careers_page,https://www.alexbank.com/careers,no,URL not confirmed
+Banque du Caire,BdC,EG,banqueducaire.com,careers_page,https://www.banqueducaire.com/careers,no,URL not confirmed
+Emirates NBD,ENBD;Emirates NBD Egypt;Liv,AE;EG;SA,emiratesnbd.com,oracle_hcm,https://fa-evlo-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1,yes,Linked from emiratesnbd.com careers (40 jobs at check 2026-11-13)
+First Abu Dhabi Bank,FAB,AE;EG;SA,bankfab.com,careers_page,https://www.bankfab.com/en-ae/about-fab/careers,yes,FAB careers page
+ADCB,Abu Dhabi Commercial Bank,AE;EG,adcb.com,careers_page,https://www.adcb.com/en/about-us/careers,no,ADCB careers (blocks bots); HTTP 403 for script at check
+Mashreq,Mashreq Bank;Mashreq Neo,AE;EG;QA,mashreq.com,careers_page,https://www.mashreq.com/en/uae/about-us/careers/careers-portal,yes,Mashreq careers portal
+Dubai Islamic Bank,DIB,AE,dib.ae,careers_page,https://careers.dib.ae,yes,DIB careers portal (Bayt-powered)
+Abu Dhabi Islamic Bank,ADIB;ADIB Egypt,AE;EG,adib.ae,careers_page,https://www.adib.ae/careers,yes,ADIB careers page
+Wio Bank,Wio,AE,wio.io,careers_page,https://wio.io/careers,yes,Wio careers page
+Al Rajhi Bank,Al Rajhi,SA,alrajhibank.com.sa,careers_page,https://careers.alrajhibank.com.sa/en/saudi-arabia/jobs/,yes,Al Rajhi Bank job portal (found via search)
+Saudi National Bank,SNB;AlAhli,SA,alahli.com,careers_page,https://www.alahli.com/en/pages/about-us/careers,no,SNB careers; URL not confirmed
+Riyad Bank,Riyad,SA,riyadbank.com,careers_page,https://careers.riyadbank.com,yes,Riyad Bank careers portal (Bayt-powered)
+SAB,Saudi Awwal Bank;SABB,SA,sab.com,successfactors,https://careers.sab.com,yes,SAB SF site
+Alinma Bank,Alinma,SA,alinma.com,careers_page,https://www.alinma.com/en/about-alinma/careers,yes,URL not confirmed
+Banque Saudi Fransi,BSF,SA,alfransi.com.sa,careers_page,https://www.alfransi.com.sa/careers,yes,BSF careers page
+Arab National Bank,ANB,SA,anb.com.sa,careers_page,https://careers.anb.sa,yes,ANB careers portal (linked from anb.com.sa)
+stc Bank,STC Pay;stc pay,SA,stcbank.com.sa,careers_page,https://www.stcbank.com.sa/careers,no,URL not confirmed
+D360 Bank,D360,SA,d360.com,oracle_hcm,https://fa-erqw-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/D360BankCareerPage,yes,D360 Bank Oracle HCM (16 jobs at check 2026-11-13)
+National Bank of Kuwait,NBK,KW;EG,nbk.com,careers_page,https://www.nbk.com/egypt/careers.html,yes,NBK Egypt careers page
+Kuwait Finance House,KFH,KW,kfh.com,careers_page,https://www.kfh.com/home/Personal/aboutus/careers.html,yes,URL not confirmed
+EFG Holding,EFG Hermes;EFG,EG;SA;AE,efghldg.com,careers_page,https://careers.efghldg.com/,yes,EFG Holding careers portal (linked from efgholding.com)
+CI Capital,CI Capital,EG,cicapital.com,careers_page,https://www.cicapital.com/careers,no,URL not confirmed
+Beltone Holding,Beltone,EG,beltoneholding.com,oracle_hcm,https://fa-epwu-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1,yes,Linked from beltoneholding.com careers (19 jobs at check 2026-11-13)
+valU,Valu,EG,valu.com.eg,careers_page,https://www.valu.com.eg/careers,no,URL not confirmed
+Contact Financial Holding,Contact,EG,contact.eg,careers_page,https://contact.eg/careers,yes,Contact careers page
+Fawry,Fawry for Banking Technology,EG,fawry.com,careers_page,https://www.fawry.com/careers/,yes,Fawry careers page
+e-finance,e-finance for Digital Investments,EG,efinance.com.eg,careers_page,https://www.efinance.com.eg/careers,no,"e-finance careers page; loads (HTTP 200) but listings are JS-rendered, not confirmed"
+Paymob,Paymob,EG;SA;AE,paymob.com,careers_page,https://paymob.com/careers,no,URL not confirmed; roles mirrored on jobs.global.vc
+MNT-Halan,Halan;MNT Halan,EG,mnt-halan.com,careers_page,https://careers.mnt-halan.com,no,"MNT-Halan careers portal; loads (HTTP 200) but listings are JS-rendered, not confirmed"
+Khazna,Khazna,EG;SA,khazna.app,careers_page,https://khazna.app/careers,no,"URL not confirmed; loads (HTTP 200) but listings are JS-rendered, not confirmed"
+MoneyFellows,Money Fellows,EG,moneyfellows.com,careers_page,https://careers.moneyfellows.com,yes,MoneyFellows careers portal
+Thndr,thndr,EG;SA,thndr.app,ashby,thndr,yes,Cairo and Riyadh roles (17 jobs at check 2026-11-13)
+Sympl,Sympl,EG,sympl.ai,careers_page,https://sympl.ai/careers,no,URL not confirmed
+PaySky,PaySky,EG,paysky.io,careers_page,https://paysky.io/careers,no,URL not confirmed
+Kashier,Kashier,EG,kashier.io,careers_page,https://www.kashier.io/careers,yes,Kashier careers page
+Geidea,Geidea,SA;EG;AE,geidea.net,successfactors,https://careers.geidea.net,yes,Geidea SF RMK site
+Tamara,Tamara,SA;AE,tamara.co,greenhouse,tamara,yes,Riyadh/Dubai/Cairo roles (35 jobs at check 2026-11-13)
+Tabby,Tabby,SA;AE,tabby.ai,careers_page,https://tabby.ai/careers,yes,Own page backed by Pinpoint ATS (per search)
+Lean Technologies,Lean,SA;AE,leantech.me,ashby,leantech,yes,Riyadh/Dubai roles (8 jobs at check 2026-11-13)
+Hala,Hala Payments,SA,hala.com,careers_page,https://hala.com/careers,yes,Hala careers page
+Tweeq,Tweeq,SA,tweeq.sa,careers_page,https://tweeq.sa/careers,no,URL not confirmed
+Moyasar,Moyasar,SA,moyasar.com,workable,moyasar-financial-company-1,yes,Workable account slug from moyasar.com careers (13 jobs; account 'Moyasar Financial Company' at check 2026-11-13)
+HyperPay,HyperPay,SA;EG,hyperpay.com,careers_page,https://www.hyperpay.com/careers,yes,URL not confirmed
+Lendo,Lendo,SA,lendo.sa,careers_page,https://www.lendo.sa/careers,yes,Lendo careers page
+Rasan,Rasan Information Technology;Tameeni,SA,rasan.co,teamtailor,rasan,yes,careers.rasan.co is Teamtailor
+Sarwa,Sarwa,AE,sarwa.co,careers_page,https://careers.sarwa.co,yes,Sarwa careers portal
+Baraka,baraka,AE,getbaraka.com,careers_page,https://www.getbaraka.com/careers,yes,baraka careers page
+Ziina,Ziina,AE,ziina.com,ashby,ziina,yes,Dubai roles (13 jobs at check 2026-11-13)
+Network International,N-Genius,AE;EG;SA,network.ae,careers_page,https://www.network.ae/en/careers,yes,URL not confirmed
+Magnati,Magnati,AE,magnati.com,careers_page,https://www.magnati.com/careers,no,URL not confirmed
+Careem,Careem,EG;SA;AE;QA;KW,careem.com,greenhouse,careem,yes,Dubai/Cairo/Riyadh/Karachi roles (15 jobs at check 2026-11-13)
+talabat,Talabat,EG;AE;KW;QA,talabat.com,smartrecruiters,DeliveryHero,yes,talabat roles posted on Delivery Hero board (careers.deliveryhero.com/talabat); filter brand talabat (880 jobs at check 2026-11-13)
+HungerStation,HungerStation,SA,hungerstation.com,smartrecruiters,DeliveryHero,yes,HungerStation roles on Delivery Hero board; filter Saudi (880 jobs at check 2026-11-13)
+Delivery Hero,Delivery Hero;HungerStation,SA;EG;AE;KW,deliveryhero.com,smartrecruiters,DeliveryHero,yes,"Group board incl. talabat, HungerStation, Hepsiburada etc. (880 jobs at check 2026-11-13)"
+noon,noon.com,EG;SA;AE,noon.com,careers_page,https://www.noon.com/careers/,yes,noon careers (site timed out for script)
+Swvl,Swvl,EG;SA;AE,swvl.com,workable,swvl,yes,Workable board; 0 open roles at check (0 jobs; account 'Swvl' at check 2026-11-13)
+Instabug,Instabug,EG,instabug.com,careers_page,https://www.luciq.ai/careers,yes,Instabug rebranded Luciq; Cairo HQ
+Vezeeta,Vezeeta,EG;SA,vezeeta.com,workable,vezeeta,yes,Workable board; 0 open roles at check (0 jobs; account 'Vezeeta' at check 2026-11-13)
+Breadfast,Breadfast,EG,breadfast.com,careers_page,https://www.breadfast.com/careers/,yes,Own careers page with team openings
+Rabbit,Rabbit Mart,EG;SA,rabbitmart.com,careers_page,https://www.rabbitmart.com/careers/,yes,Rabbit careers page
+Bosta,Bosta,EG;SA,bosta.co,bamboohr,bosta,yes,bosta.bamboohr.com (1 jobs at check 2026-11-13)
+MaxAB,MaxAB,EG,maxab.io,careers_page,https://www.maxab.io/careers,yes,MaxAB careers page
+Trella,Trella,EG;SA,trella.app,teamtailor,https://careers.trella.app,yes,Teamtailor on custom domain
+Sylndr,Sylndr,EG,sylndr.com,lever,sylndr,no,Linked from sylndr.com
+Nawy,Nawy,EG,nawy.com,workable,nawy,yes,Workable account exists; 0 open roles at check (0 jobs; account 'Nawy' at check 2026-11-13)
+elmenus,elmenus,EG,elmenus.com,careers_page,https://www.elmenus.com/careers,yes,elmenus careers page
+Yodawy,Yodawy,EG,yodawy.com,linkedin,https://www.linkedin.com/company/yodawyapp/jobs/,no,Yodawy site links to LinkedIn jobs
+Nagwa,Nagwa,EG,nagwa.com,careers_page,https://careers.nagwa.com/,yes,Nagwa careers portal
+Robusta,Robusta Studio,EG,robustastudio.com,workable,robusta,yes,Workable account named robusta; confirm it is Robusta Studio (83 jobs; account 'robusta' at check 2026-11-13)
+Incorta,Incorta,EG,incorta.com,lever,incorta,yes,Cairo R&D roles (4 jobs at check 2026-11-13)
+Andela,Andela,EG,andela.com,ashby,andela,yes,Few EG roles (6 jobs at check 2026-11-13)
+Dubizzle Group,dubizzle;Bayut;OLX Egypt,EG;AE;SA,dubizzlegroup.com,teamtailor,dubizzle,yes,"Dubizzle Group (dubizzle, Bayut, OLX EG)"
+Dubizzle Group,dubizzle;Bayut;OLX Egypt,EG;AE;SA,dubizzlegroup.com,workable,bayutdubizzle,yes,Second Workable account linked from dubizzlegroup.com (31 jobs; account 'Bayut | dubizzle' at check 2026-11-13)
+Property Finder,PropertyFinder,AE;EG;SA;QA,propertyfinder.ae,teamtailor,propertyfinder,yes,Dubai/Cairo/Riyadh roles
+Kitopi,Kitopi,AE;SA;KW,kitopi.com,lever,kitopi,no,Linked from kitopi.com careers; board returned 404 at check (no postings or moved)
+Anghami,Anghami,AE;EG;SA,anghami.com,careers_page,https://anghami.zenats.com/en/careers_page,yes,ZenATS careers page
+Bayzat,Bayzat,AE,bayzat.com,careers_page,https://www.bayzat.com/careers,yes,Bayzat careers page
+Huspy,Huspy,AE,huspy.com,careers_page,https://www.huspy.com/careers,yes,Huspy careers page
+Calo,Calo,SA;AE;KW,calo.app,teamtailor,https://careers.calo.app,yes,Teamtailor on custom domain
+Deliveroo,Deliveroo UAE;Deliveroo Kuwait,AE;KW;QA,deliveroo.co.uk,greenhouse,deliveroo,yes,Global board; Dubai/Kuwait/Qatar roles (186 jobs at check 2026-11-13)
+Yango,Yango,AE;SA,yango.com,careers_page,https://yango.com/en_int/careers/,no,URL not confirmed
+Foodics,Foodics,SA;EG;AE,foodics.com,workable,foodics,yes,Riyadh/Cairo roles (32 jobs; account 'Foodics' at check 2026-11-13)
+Salla,Salla,SA,salla.com,workable,salla,yes,Makkah/Jeddah/Riyadh roles (per search) (27 jobs; account 'Salla' at check 2026-11-13)
+Zid,Zid,SA,zid.sa,careers_page,https://zid.sa/ar/careers/,yes,Zid careers page
+Sary,Sary,SA;EG,sary.com,careers_page,https://sary.zenats.com/en/careers_page,no,Sary ZenATS careers page; HTTP 404 for script at check
+Nana,Nana Direct,SA,nana.sa,careers_page,https://www.nana.sa/careers,yes,Nana careers page
+Jahez,Jahez,SA,jahez.net,careers_page,https://www.jahez.net/careers,no,URL not confirmed; Jahez roles appear on sabbar.com
+Mrsool,Mrsool,SA;EG,mrsool.co,careers_page,https://mrsool.co/careers,no,URL not confirmed
+Ninja,Ninja Retail,SA,ananinja.com,careers_page,https://ananinja.com/sa/en/careers,no,URL not confirmed
+Lucidya,Lucidya,SA;EG,lucidya.com,workable,lucidya,yes,Riyadh/Cairo roles (49 jobs; account 'Lucidya' at check 2026-11-13)
+Unifonic,Unifonic,SA;EG;AE,unifonic.com,recruitee,unifonic,yes,jobs.unifonic.com is Recruitee (16 jobs at check 2026-11-13)
+Mozn,Mozn,SA,mozn.sa,workable,mozn-ai,yes,Riyadh roles (23 jobs; account 'Mozn' at check 2026-11-13)
+Rewaa,Rewaa,SA,rewaatech.com,lever,rewaatech,yes,Linked from rewaa.com careers (0 jobs at check 2026-11-13)
+Tamatem Games,Tamatem,SA,tamatem.co,workable,tamatem,yes,Linked from tamatem.co careers (8 jobs; account 'Tamatem' at check 2026-11-13)
+Noon Academy,Noon,SA;EG,noonacademy.com,teamtailor,https://careers.learnatnoon.com,yes,Teamtailor on custom domain
+Classera,Classera,SA;EG,classera.com,careers_page,https://www.classera.com/en/company/career/,yes,Classera careers page
+Abwaab,Abwaab,EG;SA,abwaab.com,careers_page,https://www.abwaab.com/careers,no,"URL not confirmed; loads (HTTP 200) but listings are JS-rendered, not confirmed"
+Almentor,almentor,EG,almentor.net,breezy,almentor,yes,almentor.breezy.hr (11 jobs at check 2026-11-13)
+TruKKer,Trukker,SA;AE,trukker.com,careers_page,https://www.trukker.com/careers,yes,TruKKer careers page
+Retailo,Retailo,SA,retailo.me,zoho_recruit,https://retailo.zohorecruit.com/jobs/Careers,yes,Retailo Zoho Recruit portal
+Cartlow,Cartlow,AE;SA,cartlow.com,careers_page,https://cartlow.com/intl/en/page/careers,yes,Cartlow careers page
+Elm,Elm Company,SA,elm.sa,careers_page,https://www.elm.sa/en/careers,no,Elm careers; URL not confirmed (TLS issue for script)
+Thiqah,Thiqah Business Services,SA,thiqah.sa,careers_page,https://www.thiqah.sa/careers,yes,Thiqah careers page
+Tahakom,Tahakom,SA,tahakom.com,careers_page,https://www.tahakom.com/careers,no,"Tahakom careers page; loads (HTTP 200) but listings are JS-rendered, not confirmed"
+SITE,Saudi Information Technology Company,SA,site.sa,careers_page,https://site.sa/en/careers,no,URL not confirmed
+Ejada,Ejada Systems,SA;EG,ejada.com,careers_page,https://careers.ejada.com/,yes,Ejada careers portal (Bayt-powered)
+SDAIA,Saudi Data and AI Authority,SA,sdaia.gov.sa,careers_page,https://sdaia.gov.sa/en/Careers/Pages/default.aspx,no,URL not confirmed
+Lucid Motors,Lucid,SA,lucidmotors.com,greenhouse,lucidmotors,yes,Global board; KAEC Saudi roles (480 jobs at check 2026-11-13)
+G42,Group 42,AE,g42.ai,careers_page,https://www.g42.ai/careers,yes,G42 careers page
+Core42,Core42,AE,core42.ai,successfactors,https://careers.core42.ai/,yes,Core42 SF RMK site
+Technology Innovation Institute,TII,AE,tii.ae,careers_page,https://careers.tii.ae/us/en,yes,TII careers site
+MBZUAI,Mohamed bin Zayed University of Artificial Intelligence,AE,mbzuai.ac.ae,careers_page,https://careers.mbzuai.ac.ae,yes,MBZUAI careers site
+Presight,Presight AI,AE,presight.ai,oracle_hcm,https://iaambv.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1,yes,Presight Oracle HCM (5 jobs at check 2026-11-13)
+EDGE Group,EDGE,AE,edgegroup.ae,successfactors,https://careers.edgegroup.ae,yes,EDGE SF RMK site
+ITWorx,ITWorx,EG;AE;SA,itworx.com,careers_page,https://careers.itworx.com,yes,ITWorx careers portal
+Sumerge,Sumerge Software Solutions,EG;SA;AE,sumerge.com,careers_page,https://www.sumerge.com/careers,yes,Sumerge careers page
+Raya Holding,Raya;Raya Information Technology;Raya CX,EG;SA;AE,rayacorp.com,lever,raya,yes,Lever account 'raya'; confirm it is Raya Holding (8 jobs at check 2026-11-13)
+Giza Systems,Giza Systems,EG;SA;AE,gizasystems.com,careers_page,https://www.gizasystems.com/careers/,yes,Giza Systems careers page
+IST Networks,IST,EG;SA;AE,ist-networks.com,careers_page,https://www.ist-networks.com/careers,no,URL not confirmed
+Saudi Aramco,Aramco,SA,aramco.com,successfactors,https://careers.aramco.com,yes,Aramco SF RMK site (careers.aramco.com/saudi/job/...)
+SABIC,Saudi Basic Industries,SA,sabic.com,successfactors,https://jobs.sabic.com/search/?q=&locationsearch=Saudi,yes,SABIC SF RMK site
+Ma'aden,Saudi Arabian Mining Company,SA,maaden.com.sa,careers_page,https://www.maaden.com.sa/en/careers,no,URL not confirmed
+NEOM,NEOM,SA,neom.com,successfactors,https://neom.jobs2web.com,yes,NEOM SF RMK site (jobs2web)
+Red Sea Global,RSG;The Red Sea Development Company,SA,redseaglobal.com,careers_page,https://www.redseaglobal.com/en/careers,no,Red Sea Global careers (blocks bots); roles mirrored on sabbar.com/gulftalent; HTTP 403 for script at check
+ROSHN,ROSHN Group,SA,roshn.sa,oracle_hcm,https://fa-epph-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1,no,Linked from roshn.sa careers; REST blocked by WAF for scripts
+Public Investment Fund,PIF,SA,pif.gov.sa,oracle_hcm,https://fa-esgl-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001,yes,Linked from pif.gov.sa careers (0 jobs at check 2026-11-13)
+Diriyah Company,Diriyah Gate Development Authority,SA,diriyah.sa,careers_page,https://www.diriyah.sa/en/careers,no,URL not confirmed
+Qiddiya Investment Company,Qiddiya,SA,qiddiya.com,careers_page,https://qiddiya.com/careers,no,URL not confirmed
+ACWA Power,ACWA,SA;AE;EG,acwapower.com,successfactors,https://careers.acwapower.com,yes,ACWA Power SF RMK site
+Saudi Electricity Company,SEC,SA,se.com.sa,careers_page,https://www.se.com.sa/careers,yes,SEC careers page
+Almarai,Almarai,SA;AE;EG,almarai.com,successfactors,https://www.almarai.com/ar/careers,yes,Almarai careers page linking SuccessFactors
+Savola Group,Savola;Panda Retail,SA;EG,savola.com,careers_page,https://www.savola.com/careers,no,URL not confirmed
+Jarir Bookstore,Jarir,SA;KW;QA;AE,jarir.com,careers_page,https://www.jarir.com/careers,no,URL not confirmed
+Saudia,Saudia Group;Saudi Arabian Airlines,SA,saudia.com,careers_page,https://www.saudia.com/careers,yes,Saudia careers page
+Riyadh Air,Riyadh Air,SA,riyadhair.com,careers_page,https://www.riyadhair.com/careers,yes,URL not confirmed
+flynas,flynas,SA,flynas.com,careers_page,https://www.flynas.com/en/careers,no,URL not confirmed
+Tawuniya,The Company for Cooperative Insurance,SA,tawuniya.com,careers_page,https://www.tawuniya.com/careers,no,URL not confirmed
+Bupa Arabia,Bupa,SA,bupa.com.sa,careers_page,https://careers.bupa.com.sa,yes,Bupa Arabia careers (Bayt-powered)
+Nahdi Medical Company,Al Nahdi,SA,nahdi.sa,careers_page,https://www.nahdi.sa/careers,no,URL not confirmed
+Alfanar,Alfanar Group,SA;EG,alfanar.com,successfactors,https://jobs.alfanar.com,yes,alfanar SF RMK site
+Abdul Latif Jameel,ALJ;Community Jameel,SA;EG;AE,alj.com,successfactors,https://careers.alj.com,yes,Abdul Latif Jameel SF RMK site
+Olayan Group,Olayan,SA,olayan.com,careers_page,https://www.olayan.com/careers,no,URL not confirmed
+Seera Group,Almosafer;Seera,SA;AE;EG,seera.sa,smartrecruiters,almosafer,yes,Almosafer (Seera) Riyadh roles (10 jobs at check 2026-11-13)
+Seera Group,Almosafer;Seera,SA;AE;EG,seera.sa,smartrecruiters,seera,yes,Seera Group board (9 jobs at check 2026-11-13)
+Solutions by stc,Solutions,SA,solutions.com.sa,successfactors,https://careers.solutions.com.sa,yes,solutions by stc SF RMK site
+ADNOC,Abu Dhabi National Oil Company,AE,adnoc.ae,careers_page,https://jobs.adnoc.ae,yes,ADNOC careers portal (Phenom); per ADNOC FAQ
+Mubadala,Mubadala Investment Company,AE,mubadala.com,careers_page,https://www.mubadala.com/en/careers,yes,Mubadala careers page
+ADQ,ADQ,AE,adq.ae,careers_page,https://www.adq.ae/careers,no,URL not confirmed
+Emirates Group,Emirates;Emirates Airline;dnata,AE,emiratesgroupcareers.com,careers_page,https://www.emiratesgroupcareers.com/search-and-apply/,yes,"Emirates Group (Emirates, dnata) job search"
+Etihad Airways,Etihad,AE,etihad.com,smartrecruiters,EtihadAirways5,yes,Linked from careers.etihad.com (74 jobs at check 2026-11-13)
+flydubai,flydubai,AE,flydubai.com,icims,https://careers-flydubai.icims.com/jobs/search?ss=1,yes,flydubai iCIMS portal
+Air Arabia,Air Arabia,AE;EG,airarabia.com,careers_page,https://careers.airarabia.com/,yes,Air Arabia careers portal
+Emaar Properties,Emaar;Emaar Misr,AE;EG,emaar.com,oracle_hcm,https://emhm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001,yes,Linked from emaar.com careers (2 jobs at check 2026-11-13)
+Aldar Properties,Aldar,AE,aldar.com,lever,aldar,yes,Abu Dhabi roles (51 jobs at check 2026-11-13)
+DP World,DP World,AE;SA;EG,dpworld.com,oracle_hcm,https://ehpv.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1,yes,Linked from dpworld.com careers (517 jobs at check 2026-11-13)
+AD Ports Group,Abu Dhabi Ports,AE;EG,adportsgroup.com,oracle_hcm,https://fa-ewzx-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1,yes,Linked from adportsgroup.com careers (32 jobs at check 2026-11-13)
+Majid Al Futtaim,MAF;Carrefour (MAF);VOX Cinemas,AE;EG;SA;KW;QA,majidalfuttaim.com,careers_page,https://careers.majidalfuttaim.com/global/en/search-results,yes,MAF Phenom job search
+Al-Futtaim Group,Al-Futtaim;IKEA UAE,AE;EG;SA;QA;KW,alfuttaim.com,careers_page,https://www.alfuttaim.com/en/careers/,yes,Al-Futtaim careers page
+Chalhoub Group,Chalhoub,AE;SA;KW;QA,chalhoubgroup.com,teamtailor,chalhoubgroup,yes,careers.chalhoubgroup.com is Teamtailor
+Landmark Group,Landmark;Centrepoint;Max,AE;SA;KW;QA;EG,landmarkgroup.com,careers_page,https://www.landmarkgroup.com/careers,yes,Landmark Group careers page
+Alshaya Group,Alshaya;M.H. Alshaya,KW;AE;SA;QA;EG,alshaya.com,careers_page,https://jobsearch.alshaya.com/,yes,Alshaya external job search (PageUp-backed; careers.alshaya.com blocks bots)
+Agility,Agility Logistics,KW;AE;SA;EG,agility.com,careers_page,https://agility.com/careers/,yes,Agility careers page
+Aramex,Aramex,AE;SA;EG;KW;QA,aramex.com,successfactors,https://careers.aramex.com,yes,Aramex SF site
+Dubai Holding,Dubai Holding;Jumeirah;Meraas;Nakheel,AE,dubaiholding.com,careers_page,https://www.dubaiholding.com/en/our-people/work-with-us,yes,Dubai Holding work-with-us page
+Jumeirah Group,Jumeirah,AE;SA,jumeirah.com,careers_page,https://www.jumeirah.com/en/careers,yes,Jumeirah careers page
+DEWA,Dubai Electricity and Water Authority,AE,dewa.gov.ae,careers_page,https://www.dewa.gov.ae/en/about-us/careers,yes,URL not confirmed
+TAQA,Abu Dhabi National Energy Company,AE;SA,taqa.com,careers_page,https://www.taqa.com/careers,no,"TAQA careers page; loads (HTTP 200) but listings are JS-rendered, not confirmed"
+Masdar,Abu Dhabi Future Energy Company,AE,masdar.ae,smartrecruiters,masdar,yes,Abu Dhabi roles (41 jobs at check 2026-11-13)
+Emirates Global Aluminium,EGA,AE,ega.ae,successfactors,https://careers.ega.ae,yes,EGA SF site
+PureHealth,Pure Health,AE,purehealth.ae,careers_page,https://purehealth.ae/careers,yes,URL not confirmed
+M42,M42;Mubadala Health,AE,m42.ae,careers_page,https://m42.ae/careers/,yes,M42 careers page
+Al Ghurair,Al Ghurair Group,AE,alghurair.com,careers_page,https://www.alghurair.com/careers/,yes,Al Ghurair careers page
+Qatar Airways,Qatar Airways Group,QA,qatarairways.com,oracle_taleo,https://aa115.taleo.net/careersection/qa_external_cs/jobsearch.ftl,yes,Qatar Airways Taleo external career section
+QatarEnergy,Qatar Petroleum,QA,qatarenergy.qa,careers_page,https://careerportal.qatarenergy.qa/,yes,QatarEnergy career portal (linked from homepage)
+Qatar Foundation,QF,QA,qf.org.qa,careers_page,https://www.qf.org.qa/careers,yes,QF careers page
+Commercial Bank of Qatar,CBQ,QA,cbq.qa,successfactors,https://career2.successfactors.eu/career?company=thecommerc,yes,CBQ SF career site (company=thecommerc)
+Qatar Islamic Bank,QIB,QA,qib.com.qa,careers_page,https://www.qib.com.qa/careers,yes,QIB careers page
+beIN Media Group,beIN,QA,beinmediagroup.com,careers_page,https://www.beinmediagroup.com/careers/,yes,beIN careers page
+Al Jazeera Media Network,Al Jazeera,QA,aljazeera.net,careers_page,https://careers.aljazeera.net,no,URL not confirmed
+Unilever,Unilever Mashreq;Unilever Arabia,EG;SA;AE,unilever.com,workday,https://unilever.wd3.myworkdayjobs.com/Unilever_Experienced_Professionals,yes,Global tenant; filter Egypt/UAE/Saudi
+Procter & Gamble,P&G,EG;SA;AE,pgcareers.com,workday,https://pg.wd5.myworkdayjobs.com/1000,yes,P&G global tenant (site 1000)
+Nestlé,Nestle Egypt;Nestle Middle East,EG;SA;AE,nestle.com,careers_page,https://www.nestle.com/jobs/search-jobs,no,Nestle job search (blocks bots); HTTP 403 for script at check
+PepsiCo,PepsiCo Egypt;Pepsi,EG;SA;AE,pepsico.com,icims,https://pepjobs-pepsico.icims.com/jobs/search?ss=1,yes,PepsiCo iCIMS portal behind pepsicojobs.com
+The Coca-Cola Company,Coca-Cola;Coca-Cola HBC Egypt,EG;AE;SA,coca-colacompany.com,workday,https://coke.wd1.myworkdayjobs.com/coca-cola-careers,yes,The Coca-Cola Company tenant
+Coca-Cola HBC,CCHBC;Coca-Cola HBC Egypt,EG,coca-colahellenic.com,careers_page,https://careers.coca-colahellenic.com/en_US/careers,yes,Coca-Cola HBC (Egypt bottler) careers
+Mondelez International,Mondelez;Cadbury,EG;SA;AE,mondelezinternational.com,workday,https://mdlz.wd3.myworkdayjobs.com/External,yes,Global tenant
+Mars,Mars Wrigley,EG;AE;SA,mars.com,workday,https://mars.wd3.myworkdayjobs.com/External,yes,Global tenant
+Danone,Danone Egypt,EG;SA;AE,danone.com,careers_page,https://careers.danone.com/en-global/home.html,yes,Danone careers
+L'Oréal,L'Oreal Middle East,EG;AE;SA,loreal.com,careers_page,https://careers.loreal.com/en,yes,L'Oreal careers
+Henkel,Henkel Egypt,EG;AE;SA,henkel.com,careers_page,https://www.henkel.com/careers/find-your-job-apply,yes,Henkel job search
+Reckitt,Reckitt Benckiser;RB,EG;AE;SA,reckitt.com,careers_page,https://www.reckitt.com/careers/,yes,Reckitt careers
+Philip Morris International,PMI;Philip Morris,EG;AE;SA,pmi.com,careers_page,https://www.pmi.com/careers/explore-our-job-opportunities,yes,PMI job search
+British American Tobacco,BAT,EG;AE;SA,bat.com,successfactors,https://careers.bat.com/en,yes,BAT careers site (SF-backed)
+JTI,Japan Tobacco International,EG;AE;SA,jti.com,successfactors,https://jobs.jti.com/search/?q=&locationsearch=Egypt,yes,JTI SF RMK site
+Heineken,Al Ahram Beverages,EG,theheinekencompany.com,successfactors,https://careers.theheinekencompany.com/,yes,Heineken careers (SF-backed); Al Ahram Beverages
+Kellanova,Kellogg's;Bisco Misr,EG;AE;SA,kellanova.com,successfactors,https://jobs.kellanova.com,yes,Kellanova SF site
+Pfizer,Pfizer Egypt,EG;SA;AE,pfizer.com,workday,https://pfizer.wd1.myworkdayjobs.com/PfizerCareers,yes,Global tenant
+Novartis,Novartis Egypt,EG;SA;AE,novartis.com,workday,https://novartis.wd3.myworkdayjobs.com/Novartis_Careers,yes,Global tenant
+Sanofi,Sanofi Egypt,EG;SA;AE,sanofi.com,workday,https://sanofi.wd3.myworkdayjobs.com/SanofiCareers,yes,Global tenant
+GSK,GlaxoSmithKline;Haleon,EG;SA;AE,gsk.com,workday,https://gsk.wd5.myworkdayjobs.com/GSKCareers,yes,Global tenant
+AstraZeneca,AZ,EG;SA;AE,astrazeneca.com,workday,https://astrazeneca.wd3.myworkdayjobs.com/Careers,yes,Global tenant
+Roche,Roche Egypt,EG;SA;AE,roche.com,workday,https://roche.wd3.myworkdayjobs.com/roche-ext,yes,Global tenant
+Bayer,Bayer Middle East,EG;SA;AE,bayer.com,careers_page,https://www.bayer.com/en/careers,yes,Bayer careers hub
+Abbott,Abbott Laboratories,EG;SA;AE,abbott.com,workday,https://abbott.wd5.myworkdayjobs.com/abbottcareers,yes,Global tenant
+MSD,Merck Sharp & Dohme,EG;SA;AE,msd.com,workday,https://msd.wd5.myworkdayjobs.com/SearchJobs,yes,Global tenant
+Johnson & Johnson,J&J;Janssen;Johnson & Johnson Innovative Medicine,EG;SA;AE,jnj.com,workday,https://jj.wd5.myworkdayjobs.com/JJ,yes,Global tenant
+Hikma Pharmaceuticals,Hikma,EG;SA;AE,hikma.com,careers_page,https://www.hikma.com/careers,yes,Hikma careers page
+EVA Pharma,EVA Pharma,EG,evapharma.com,careers_page,https://www.evapharma.com/careers,yes,EVA Pharma careers page
+Elsewedy Electric,El Sewedy,EG;SA;AE,elsewedyelectric.com,oracle_taleo,https://aa010.taleo.net/careersection/swd_external/jobsearch.ftl,yes,Elsewedy Electric Taleo
+Orascom Construction,Orascom,EG;SA;AE,orascom.com,oracle_hcm,https://fa-esco-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1,yes,Linked from orascom.com (14 jobs at check 2026-11-13)
+Hassan Allam Holding,Hassan Allam,EG;SA,hassanallam.com,careers_page,https://www.hassanallam.com/careers,yes,Hassan Allam careers page
+SODIC,Sixth of October Development & Investment,EG,sodic.com,careers_page,https://www.sodic.com/careers,yes,SODIC careers page
+Palm Hills Developments,Palm Hills,EG,palmhillsdevelopments.com,careers_page,https://www.palmhillsdevelopments.com/careers,yes,Palm Hills careers page
+Juhayna Food Industries,Juhayna,EG,juhayna.com,careers_page,https://www.juhayna.com/careers/,yes,Juhayna careers page
+Cleopatra Hospitals Group,CHG,EG,cleopatrahospitals.com,careers_page,https://www.cleopatrahospitals.com/en/careers,yes,CHG careers page
+Holcim,Lafarge Egypt,EG,holcim.com,careers_page,https://www.holcim.com/careers,yes,Holcim careers (Lafarge Egypt)
+SLB,Schlumberger,EG;SA;AE;QA;KW,slb.com,careers_page,https://careers.slb.com/job-listing,yes,SLB job listing
+Halliburton,Halliburton,EG;SA;AE;QA;KW,halliburton.com,successfactors,https://careers.halliburton.com/,yes,Halliburton careers (SF-backed)
+Baker Hughes,Baker Hughes,EG;SA;AE;QA,bakerhughes.com,workday,https://bakerhughes.wd5.myworkdayjobs.com/BakerHughes,yes,Global tenant
+Shell,Shell Egypt,EG;QA;AE,shell.com,workday,https://shell.wd3.myworkdayjobs.com/ShellCareers,yes,Global tenant
+bp,BP Egypt,EG;AE,bp.com,workday,https://bpinternational.wd3.myworkdayjobs.com/bpCareers,yes,Global tenant
+TotalEnergies,Total,EG;AE;QA;SA,totalenergies.com,careers_page,https://totalenergies.avature.net/en_US/careers/SearchJobs,yes,TotalEnergies Avature job search
+Eni,Eni Egypt,EG;AE,eni.com,careers_page,https://www.eni.com/en-IT/careers.html,yes,Eni careers
+DHL,DHL Express,EG;SA;AE,dhl.com,careers_page,https://careers.dhl.com/global/en/search-results,yes,DHL Phenom job search
+Maersk,A.P. Moller - Maersk,EG;SA;AE,maersk.com,workday,https://maersk.wd3.myworkdayjobs.com/Maersk_Careers,yes,Global tenant
+Jacobs,Jacobs Engineering,SA;AE;QA,jacobs.com,careers_page,https://www.jacobs.com/careers-jacobs,yes,Jacobs careers
+AECOM,AECOM,SA;AE;QA,aecom.com,careers_page,https://aecom.com/careers/,yes,AECOM careers
+AtkinsRéalis,Atkins;SNC-Lavalin,SA;AE;EG,atkinsrealis.com,careers_page,https://careers.atkinsrealis.com/en/search-results,yes,AtkinsRealis job search
+Dar Al-Handasah,Dar;Sidara,EG;SA;AE;QA;KW,dar.com,careers_page,https://www.dar.com/careers,yes,Dar careers page
+Hilton,Hilton Hotels,EG;SA;AE;QA,hilton.com,oracle_hcm,https://efet.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1,yes,Hilton Oracle HCM (jobs.hilton.com) (4376 jobs at check 2026-11-13)
+Marriott International,Marriott,EG;SA;AE;QA,marriott.com,oracle_hcm,https://ejwl.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX,yes,Marriott Oracle HCM (careers.marriott.com) (13194 jobs at check 2026-11-13)
+Accor,Accor Hotels,EG;SA;AE;QA,accor.com,smartrecruiters,accor,yes,Partial: some Accor brands post here; main site careers.accor.com (529 jobs at check 2026-11-13)
+IKEA,IKEA (Al-Futtaim),AE;EG;SA;KW;QA,ikea.com,careers_page,https://www.ikea.com/ae/en/this-is-ikea/work-with-us/,yes,IKEA UAE (Al-Futtaim franchise); URL not confirmed
+Lulu Group,LuLu Hypermarket,AE;SA;QA;KW;EG,lulugroupinternational.com,careers_page,https://careers.luluretail.com/,yes,Lulu Retail careers portal
+Binance,Binance,AE,binance.com,greenhouse,binance,yes,Global board; many Dubai roles (222 jobs at check 2026-11-13)
+Bybit,Bybit,AE,bybit.com,greenhouse,bybit,yes,Global board; Dubai roles (153 jobs at check 2026-11-13)
+OKX,OKX,AE,okx.com,greenhouse,okx,yes,Global board; few Dubai roles (392 jobs at check 2026-11-13)
+Deel,Deel,AE,deel.com,careers_page,https://www.deel.com/careers/,yes,Remote-first; ME roles
+Ubisoft Abu Dhabi,Ubisoft,AE,ubisoft.com,careers_page,https://www.ubisoft.com/en-us/company/careers,yes,Ubisoft Abu Dhabi studio
+Scopely,Scopely,SA,scopely.com,greenhouse,scopely,yes,Owned by Savvy Games; few ME roles (178 jobs at check 2026-11-13)
+Salesforce,Salesforce,AE;SA,salesforce.com,workday,https://salesforce.wd12.myworkdayjobs.com/External_Career_Site,yes,Global tenant; Dubai/Riyadh
+ServiceNow,ServiceNow,AE;SA,servicenow.com,smartrecruiters,servicenow,yes,Global board; Riyadh/Dubai roles (805 jobs at check 2026-11-13)
+Broadcom,VMware,AE;EG,broadcom.com,workday,https://broadcom.wd1.myworkdayjobs.com/External_Career,yes,Broadcom/VMware tenant
+NVIDIA,NVIDIA,AE;SA,nvidia.com,workday,https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite,yes,Global tenant
+Intel,Intel Egypt,EG;AE,intel.com,workday,https://intel.wd1.myworkdayjobs.com/External,yes,Global tenant
+Qualcomm,Qualcomm,AE;SA;EG,qualcomm.com,workday,https://qualcomm.wd12.myworkdayjobs.com/External,yes,Global tenant
+Cadence Design Systems,Cadence,EG,cadence.com,workday,https://cadence.wd1.myworkdayjobs.com/External_Careers,yes,Global tenant; Cairo
+Marvell Technology,Marvell,EG,marvell.com,workday,https://marvell.wd1.myworkdayjobs.com/MarvellCareers,yes,Global tenant; Cairo
+Silicon Labs,Silicon Labs,EG,silabs.com,workday,https://silabs.wd1.myworkdayjobs.com/SiliconlabsCareers,yes,Global tenant; Cairo
+Spotify,Spotify MENA,AE,spotify.com,lever,spotify,yes,Global board; few Dubai roles (85 jobs at check 2026-11-13)
+Snap Inc.,Snapchat,AE;SA,snap.com,workday,https://snapchat.wd1.myworkdayjobs.com/snap,yes,Global tenant; Dubai/Riyadh
+Netflix,Netflix,AE,netflix.com,workday,https://netflix.wd108.myworkdayjobs.com/Netflix,yes,Global tenant
+LinkedIn,LinkedIn,AE,linkedin.com,careers_page,https://careers.linkedin.com,yes,LinkedIn Dubai office
+Microchip Technology,Microchip,EG,microchip.com,smartrecruiters,microchip,yes,Microchip SR board; confirm EG roles (10 jobs at check 2026-11-13)
+TikTok,ByteDance,AE;SA,tiktok.com,careers_page,https://lifeattiktok.com/search,yes,TikTok/ByteDance job search; Dubai/Riyadh
+Meta,Facebook,AE,metacareers.com,careers_page,https://www.metacareers.com/jobs,yes,Meta job search; Dubai office
+Savvy Games Group,Savvy,SA,savvygames.com,oracle_hcm,https://evth.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/savvy-careers,yes,Linked from savvygames.com (0 jobs at check 2026-11-13)
+Americana Restaurants,Americana Group;KFC (Americana),EG;SA;AE;KW,americana-food.com,careers_page,https://www.americanarestaurants.com/careers/,yes,Americana careers page
+Talaat Moustafa Group,TMG,EG,talaatmoustafa.com,careers_page,https://careers.tmg.com.eg/,yes,TMG careers portal (linked from homepage)
+Edita Food Industries,Edita,EG,edita.com.eg,successfactors,https://career5.successfactors.eu/career?company=Edita,yes,Edita SuccessFactors career site (company=Edita)
+Mansour Group,Al-Mansour Automotive;Mansour,EG,mansourgroup.com,careers_page,https://www.mansourgroup.com/careers,no,URL not confirmed
+GB Corp,GB Auto;Ghabbour,EG,gbcorponline.com,careers_page,https://www.gbcorponline.com/careers,no,URL not confirmed
+IHG Hotels & Resorts,IHG,EG;SA;AE,ihg.com,careers_page,https://careers.ihg.com,yes,IHG careers (blocks bots)
+WSP,WSP Middle East,SA;AE;QA,wsp.com,careers_page,https://www.wsp.com/en-ae/careers,yes,URL not confirmed
+NXP Semiconductors,NXP,EG,nxp.com,careers_page,https://www.nxp.com/company/about-nxp/careers:CAREERS,yes,NXP careers; Cairo site
+Pharco Pharmaceuticals,Pharco,EG,pharco.org,careers_page,https://pharco.com/en/careers,yes,Pharco careers page
+Ezz Steel,Ezz,EG,ezzsteel.com,careers_page,https://www.ezzsteel.com/about-ezz-steel/ezz-steel-people/careers-with-ezz-steel,yes,Ezz Steel careers page
+Vodafone Egypt,Vodafone;_VOIS;VOIS,EG,vodafone.com.eg,wuzzuf,https://wuzzuf.net/jobs/careers/Vodafone-Egypt-13195,yes,"Wuzzuf company page; opened 2026-11-13, 0 open jobs (most Vodafone roles post under VOIS)"
+Commercial International Bank (CIB),CIB;CIB Egypt,EG,cibeg.com,wuzzuf,https://wuzzuf.net/jobs/careers/CIB-Egypt-36036,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Fawry,Fawry for Banking Technology,EG,fawry.com,wuzzuf,https://wuzzuf.net/jobs/careers/Fawry-Banking---Payment-Technology-Services-Egypt-2878,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Paymob,Paymob,EG;SA;AE,paymob.com,wuzzuf,https://wuzzuf.net/jobs/careers/PayMob-Egypt-15389,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+valU,Valu,EG,valu.com.eg,wuzzuf,https://wuzzuf.net/jobs/careers/Valu-Egypt-105251,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Breadfast,Breadfast,EG,breadfast.com,wuzzuf,https://wuzzuf.net/jobs/careers/Breadfast-Egypt-26873,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Orange Egypt,Orange;Orange Business,EG,orange.eg,wuzzuf,https://wuzzuf.net/jobs/careers/Orange-Egypt-Egypt-4548,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Banque Misr,BM,EG,banquemisr.com,wuzzuf,https://wuzzuf.net/jobs/careers/Banque-Misr-Egypt-3083,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Arab African International Bank,AAIB,EG,aaib.com,wuzzuf,https://wuzzuf.net/jobs/careers/Arab-African-International-Bank-Egypt-11352,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Instabug,Instabug,EG,instabug.com,wuzzuf,https://wuzzuf.net/jobs/careers/Instabug-Egypt-4599,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Bosta,Bosta,EG;SA,bosta.co,wuzzuf,https://wuzzuf.net/jobs/careers/Bosta-Egypt-18808,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+MaxAB,MaxAB,EG,maxab.io,wuzzuf,https://wuzzuf.net/jobs/careers/MAXAB-Egypt-57687,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Swvl,Swvl,EG;SA;AE,swvl.com,wuzzuf,https://wuzzuf.net/jobs/careers/Swvl-Egypt-24512,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Valeo,Valeo Egypt,EG,valeo.com,wuzzuf,https://wuzzuf.net/jobs/careers/Valeo-Egypt-52,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Raya Holding,Raya;Raya Information Technology;Raya CX,EG;SA;AE,rayacorp.com,wuzzuf,https://wuzzuf.net/jobs/careers/Raya-Holding-Egypt-1153,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+IST Networks,IST,EG;SA;AE,ist-networks.com,wuzzuf,https://wuzzuf.net/jobs/careers/IST%20Networks-Egypt-74038,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Giza Systems,Giza Systems,EG;SA;AE,gizasystems.com,wuzzuf,https://wuzzuf.net/jobs/careers/Giza-Systems-Egypt-6554,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+EFG Holding,EFG Hermes;EFG,EG;SA;AE,efghldg.com,wuzzuf,https://wuzzuf.net/jobs/careers/EFG-Hermes-Egypt-13304,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Khazna,Khazna,EG;SA,khazna.app,wuzzuf,https://wuzzuf.net/jobs/careers/Khazna-Egypt-51411,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Thndr,thndr,EG;SA,thndr.app,wuzzuf,https://wuzzuf.net/jobs/careers/Thndr-Egypt-63095,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Concentrix,Concentrix Egypt,EG;SA;AE,concentrix.com,wuzzuf,https://wuzzuf.net/jobs/careers/Concentrix-Egypt-95119,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Teleperformance,TP;Majorel,EG;SA;AE,tp.com,wuzzuf,https://wuzzuf.net/jobs/careers/Teleperformance-Egypt-99131,no,Wuzzuf company page (URL from search index; page showed few/no open jobs when indexed)
+Majid Al Futtaim,MAF;Carrefour (MAF);VOX Cinemas,AE;EG;SA;KW;QA,majidalfuttaim.com,bayt,https://www.bayt.com/en/uae/jobs/majid-al-futtaim-jobs/,no,Bayt keyword listing for Majid Al Futtaim (not a company profile page)
+Deloitte Middle East,Deloitte;Deloitte & Touche,EG;SA;AE;QA;KW,deloitte.com,linkedin,https://www.linkedin.com/company/deloitte/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+KPMG,KPMG Lower Gulf;KPMG Hazem Hassan;KPMG Al Fozan,EG;SA;AE;QA;KW,kpmg.com,linkedin,https://www.linkedin.com/company/kpmg/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Bain & Company,Bain,SA;AE;QA,bain.com,linkedin,https://www.linkedin.com/company/bain-and-company/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Kearney,A.T. Kearney,SA;AE;QA,kearney.com,linkedin,https://www.linkedin.com/company/kearney/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Grant Thornton,Grant Thornton UAE,EG;SA;AE,grantthornton.com,linkedin,https://www.linkedin.com/company/grant-thornton-us/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Capgemini,Capgemini Middle East,SA;AE,capgemini.com,linkedin,https://www.linkedin.com/company/capgemini/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Google,Alphabet,EG;SA;AE,google.com,linkedin,https://www.linkedin.com/company/google/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Amazon Web Services,AWS,EG;SA;AE,aws.amazon.com,linkedin,https://www.linkedin.com/company/amazon-web-services/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Siemens,Siemens Egypt;Siemens Saudi,EG;SA;AE,siemens.com,linkedin,https://www.linkedin.com/company/siemens/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Siemens Digital Industries Software,Siemens EDA;Mentor Graphics,EG,sw.siemens.com,linkedin,https://www.linkedin.com/company/siemenssoftware/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Synopsys,Synopsys Egypt,EG,synopsys.com,linkedin,https://www.linkedin.com/company/synopsys/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Ericsson,Ericsson Egypt,EG;SA;AE,ericsson.com,linkedin,https://www.linkedin.com/company/ericsson/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Nokia,Nokia Solutions and Networks,EG;SA;AE,nokia.com,linkedin,https://www.linkedin.com/company/nokia/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Bolt,Bolt Egypt,EG,bolt.eu,linkedin,https://www.linkedin.com/company/bolt-eu/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+e& (Etisalat),e&;Etisalat;Etisalat by e&,AE,eand.com,linkedin,https://www.linkedin.com/company/etisalat/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+HSBC,HSBC Egypt;HSBC Middle East,EG;AE;SA;QA,hsbc.com,linkedin,https://www.linkedin.com/company/hsbc/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Mashreq,Mashreq Bank;Mashreq Neo,AE;EG;QA,mashreq.com,linkedin,https://www.linkedin.com/company/mashreqbank/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Dubai Islamic Bank,DIB,AE,dib.ae,linkedin,https://www.linkedin.com/company/dubai-islamic-bank/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Abu Dhabi Islamic Bank,ADIB;ADIB Egypt,AE;EG,adib.ae,linkedin,https://www.linkedin.com/company/abu-dhabi-islamic-bank/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Wio Bank,Wio,AE,wio.io,linkedin,https://www.linkedin.com/company/wiobank/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Al Rajhi Bank,Al Rajhi,SA,alrajhibank.com.sa,linkedin,https://www.linkedin.com/company/alrajhibank/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Riyad Bank,Riyad,SA,riyadbank.com,linkedin,https://www.linkedin.com/company/riyad-bank/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Alinma Bank,Alinma,SA,alinma.com,linkedin,https://www.linkedin.com/company/alinma-bank/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+National Bank of Kuwait,NBK,KW;EG,nbk.com,linkedin,https://www.linkedin.com/company/nbkegypt/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Kuwait Finance House,KFH,KW,kfh.com,linkedin,https://www.linkedin.com/company/kfhgroup/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+MNT-Halan,Halan;MNT Halan,EG,mnt-halan.com,linkedin,https://www.linkedin.com/company/mnt-halan/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+MoneyFellows,Money Fellows,EG,moneyfellows.com,linkedin,https://www.linkedin.com/company/moneyfellows/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Kashier,Kashier,EG,kashier.io,linkedin,https://www.linkedin.com/company/kashier/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Tabby,Tabby,SA;AE,tabby.ai,linkedin,https://www.linkedin.com/company/tabbypay/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Hala,Hala Payments,SA,hala.com,linkedin,https://www.linkedin.com/company/halapayments/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Lendo,Lendo,SA,lendo.sa,linkedin,https://www.linkedin.com/company/lendosa/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Sarwa,Sarwa,AE,sarwa.co,linkedin,https://www.linkedin.com/company/sarwa/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Baraka,baraka,AE,getbaraka.com,linkedin,https://www.linkedin.com/company/getbaraka/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Rabbit,Rabbit Mart,EG;SA,rabbitmart.com,linkedin,https://www.linkedin.com/company/rabbitmart/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Bayzat,Bayzat,AE,bayzat.com,linkedin,https://www.linkedin.com/company/bayzat/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Huspy,Huspy,AE,huspy.com,linkedin,https://www.linkedin.com/company/huspy/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Nana,Nana Direct,SA,nana.sa,linkedin,https://www.linkedin.com/company/nana-app/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+TruKKer,Trukker,SA;AE,trukker.com,linkedin,https://www.linkedin.com/company/trukkertech/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Cartlow,Cartlow,AE;SA,cartlow.com,linkedin,https://www.linkedin.com/company/cartlow/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Thiqah,Thiqah Business Services,SA,thiqah.sa,linkedin,https://www.linkedin.com/company/thiqah-business-services-company/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+G42,Group 42,AE,g42.ai,linkedin,https://www.linkedin.com/company/group42ai/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+MBZUAI,Mohamed bin Zayed University of Artificial Intelligence,AE,mbzuai.ac.ae,linkedin,https://www.linkedin.com/company/mbzuai/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Sumerge,Sumerge Software Solutions,EG;SA;AE,sumerge.com,linkedin,https://www.linkedin.com/company/sumerge/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Saudia,Saudia Group;Saudi Arabian Airlines,SA,saudia.com,linkedin,https://www.linkedin.com/company/saudia-airlines/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Bupa Arabia,Bupa,SA,bupa.com.sa,linkedin,https://www.linkedin.com/company/bupaarabia/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+ADNOC,Abu Dhabi National Oil Company,AE,adnoc.ae,linkedin,https://www.linkedin.com/company/adnocgroup/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Air Arabia,Air Arabia,AE;EG,airarabia.com,linkedin,https://www.linkedin.com/company/air-arabia/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Landmark Group,Landmark;Centrepoint;Max,AE;SA;KW;QA;EG,landmarkgroup.com,linkedin,https://www.linkedin.com/company/landmark-group/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Jumeirah Group,Jumeirah,AE;SA,jumeirah.com,linkedin,https://www.linkedin.com/company/jumeirah/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+TAQA,Abu Dhabi National Energy Company,AE;SA,taqa.com,linkedin,https://www.linkedin.com/company/taqaglobal/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+PureHealth,Pure Health,AE,purehealth.ae,linkedin,https://www.linkedin.com/company/purehealthae/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+M42,M42;Mubadala Health,AE,m42.ae,linkedin,https://www.linkedin.com/company/m42-health/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Al Ghurair,Al Ghurair Group,AE,alghurair.com,linkedin,https://www.linkedin.com/company/al-ghurair-group-of-companies/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+QatarEnergy,Qatar Petroleum,QA,qatarenergy.qa,linkedin,https://www.linkedin.com/company/qatarenergy/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Qatar Foundation,QF,QA,qf.org.qa,linkedin,https://www.linkedin.com/company/qatarfoundation/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Qatar Islamic Bank,QIB,QA,qib.com.qa,linkedin,https://www.linkedin.com/company/qib/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+beIN Media Group,beIN,QA,beinmediagroup.com,linkedin,https://www.linkedin.com/company/bein-media-group/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Coca-Cola HBC,CCHBC;Coca-Cola HBC Egypt,EG,coca-colahellenic.com,linkedin,https://www.linkedin.com/company/coca-cola-hbc/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Danone,Danone Egypt,EG;SA;AE,danone.com,linkedin,https://www.linkedin.com/company/danone/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Henkel,Henkel Egypt,EG;AE;SA,henkel.com,linkedin,https://www.linkedin.com/company/henkel/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Reckitt,Reckitt Benckiser;RB,EG;AE;SA,reckitt.com,linkedin,https://www.linkedin.com/company/reckitt/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Philip Morris International,PMI;Philip Morris,EG;AE;SA,pmi.com,linkedin,https://www.linkedin.com/company/insidepmi/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Bayer,Bayer Middle East,EG;SA;AE,bayer.com,linkedin,https://www.linkedin.com/company/bayer/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Hikma Pharmaceuticals,Hikma,EG;SA;AE,hikma.com,linkedin,https://www.linkedin.com/company/hikma-pharmaceuticals/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+EVA Pharma,EVA Pharma,EG,evapharma.com,linkedin,https://www.linkedin.com/company/eva-pharma/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Hassan Allam Holding,Hassan Allam,EG;SA,hassanallam.com,linkedin,https://www.linkedin.com/company/hassan-allam-holding/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+SODIC,Sixth of October Development & Investment,EG,sodic.com,linkedin,https://www.linkedin.com/company/sodic/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Palm Hills Developments,Palm Hills,EG,palmhillsdevelopments.com,linkedin,https://www.linkedin.com/company/palm-hills-developments/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Juhayna Food Industries,Juhayna,EG,juhayna.com,linkedin,https://www.linkedin.com/company/juhayna-food-industries/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Cleopatra Hospitals Group,CHG,EG,cleopatrahospitals.com,linkedin,https://www.linkedin.com/company/cleopatra-hospitals-group/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Holcim,Lafarge Egypt,EG,holcim.com,linkedin,https://www.linkedin.com/company/holcim/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+SLB,Schlumberger,EG;SA;AE;QA;KW,slb.com,linkedin,https://www.linkedin.com/company/slbglobal/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+TotalEnergies,Total,EG;AE;QA;SA,totalenergies.com,linkedin,https://www.linkedin.com/company/totalenergies/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Eni,Eni Egypt,EG;AE,eni.com,linkedin,https://www.linkedin.com/company/eni/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Jacobs,Jacobs Engineering,SA;AE;QA,jacobs.com,linkedin,https://www.linkedin.com/company/jacobs/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+AECOM,AECOM,SA;AE;QA,aecom.com,linkedin,https://www.linkedin.com/company/aecom/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+AtkinsRéalis,Atkins;SNC-Lavalin,SA;AE;EG,atkinsrealis.com,linkedin,https://www.linkedin.com/company/atkinsrealis/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Dar Al-Handasah,Dar;Sidara,EG;SA;AE;QA;KW,dar.com,linkedin,https://www.linkedin.com/company/dar-al-handasah/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Lulu Group,LuLu Hypermarket,AE;SA;QA;KW;EG,lulugroupinternational.com,linkedin,https://www.linkedin.com/company/lulu-retail/jobs/,no,LinkedIn slug taken from the company's own site; not opened
+Deel,Deel,AE,deel.com,linkedin,https://www.linkedin.com/company/deel/jobs/,no,LinkedIn slug taken from the company's own site; not opened

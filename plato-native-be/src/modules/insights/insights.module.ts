@@ -6,6 +6,8 @@ import { UserModule } from '../user/user.module';
 import { AlertMatcherService } from './alert-matcher.service';
 import { InsightsBackfillService } from './backfill.service';
 import { DigestService } from './digest.service';
+import { CompanyCatalogService } from './company-catalog.service';
+import { CompanyCrawlerService } from './company-crawler.service';
 import {
   InsightsController,
   InsightsPublicController,
@@ -21,6 +23,8 @@ import { InsightsService } from './insights.service';
     AlertMatcherService,
     DigestService,
     InsightsBackfillService,
+    CompanyCatalogService,
+    CompanyCrawlerService,
   ],
 })
 export class InsightsModule {}

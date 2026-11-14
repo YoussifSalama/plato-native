@@ -336,6 +336,32 @@ model InsightsCursor {
   @@map("insights_cursors")
 }
 
+// The "to follow" catalogue (FOLLOWING.md 2.1): employers seekers follow and where each publishes its jobs, so the
+// company crawler can fetch them without anyone searching. One per company key (normalizeCompany). Filled from the
+// curated sheet (data/company_sources.csv), from job boards our searches found, and from companies seekers follow.
+model CompanySource {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  company_key String   @unique
+  name        String
+  aliases     String[] @default([])
+  countries   String[] @default([])
+  website     String?
+  // [{ type, ref, verified, status: active|broken|unverified, fails, last_ok_at, last_error }]
+  sources     Json     @default("[]")
+  // Active COMPANY follows, and how often the crawler visits: hot 6 h, warm daily, cold weekly.
+  followers   Int      @default(0)
+  tier        String   @default("cold")
+  added_by    String // sheet | auto | seeker
+  last_crawled_at DateTime?
+  last_new_job_at DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([tier, last_crawled_at])
+  @@map("company_sources")
+}
+
 // ========== interview.prisma ==========
 
 // A text mock interview for a listed job, a pasted job post or a role in general.

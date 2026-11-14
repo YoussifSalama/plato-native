@@ -7,7 +7,7 @@ import { PillTabs } from "@/components/pill-tabs"
 // One navigation for every Career page, so each part of Career is one click from the others.
 const TABS = [
   { key: "/career", label: "Overview", icon: Gauge },
-  { key: "/career/assessments", label: "Assessments", icon: ClipboardCheck },
+  { key: "/career/quizzes", label: "Quizzes", icon: ClipboardCheck },
   { key: "/career/interviews", label: "Interviews", icon: Mic },
   { key: "/career/proof", label: "Proof of skills", icon: Trophy },
   { key: "/career/skills", label: "Skills gap", icon: Lightbulb },

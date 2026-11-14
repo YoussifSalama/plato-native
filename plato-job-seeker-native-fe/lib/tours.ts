@@ -17,7 +17,7 @@ const SHELL: TourStep[] = [
 ]
 
 // Shared steps for Career and the interview setup.
-const CAREER_TABS: TourStep = { target: '[role="tablist"][aria-label="Career"]', title: "Every part of Career", body: "Overview, Assessments, Interviews, Proof of skills, Skills gap, Snapshot and Practice library are one click apart here." }
+const CAREER_TABS: TourStep = { target: '[role="tablist"][aria-label="Career"]', title: "Every part of Career", body: "Overview, Quizzes, Interviews, Proof of skills, Skills gap, Snapshot and Practice library are one click apart here." }
 const isInterviewId = (p: string) => /^\/career\/interviews\/[^/]+$/.test(p) && !["/career/interviews/new", "/career/interviews/general", "/career/interviews/simulate"].includes(p)
 
 const STEPS_BAR: TourStep = { target: '[data-tour="interview-steps"]', title: "Where you are", body: "Step n of 7: five quick questions, the summary, then the interview itself. The bars fill as you go." }
@@ -684,7 +684,7 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
       id: "interviews-empty",
       name: "Interviews",
       steps: [
-        { target: '[role="tablist"][aria-label="Career"]', title: "Every part of Career", body: "Overview, assessments, interviews, proof of skills, your skills gap, snapshot and the practice library are one click apart." },
+        { target: '[role="tablist"][aria-label="Career"]', title: "Every part of Career", body: "Overview, quizzes, interviews, proof of skills, your skills gap, snapshot and the practice library are one click apart." },
         { target: '[data-tour="interviews-start"]', title: "Start here", body: "You have no interviews yet. Practise an interview asks a few quick questions (the job or role, out loud or in writing, real or coached), then takes you into the interview." },
         { target: '[data-ai="interviews.new"]', title: "Practise an interview", body: "Opens the setup. Nothing is charged until you press Start on the last screen." },
         { target: '[data-tour="interviews-stats"]', title: "Your progress", body: "Interviews done, finished, average and best score. It fills in after your first one." },
@@ -699,7 +699,7 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
       id: "interviews-history",
       name: "Interviews",
       steps: [
-        { target: '[role="tablist"][aria-label="Career"]', title: "Every part of Career", body: "Overview, assessments, interviews, proof of skills, your skills gap, snapshot and the practice library are one click apart." },
+        { target: '[role="tablist"][aria-label="Career"]', title: "Every part of Career", body: "Overview, quizzes, interviews, proof of skills, your skills gap, snapshot and the practice library are one click apart." },
         { target: '[data-ai="interviews.new"]', title: "Practise again", body: "Opens the setup for a new interview: a job, a role or a tough situation." },
         { target: '[data-tour="interviews-continue"]', title: "Pick up where you left off", body: "Written interviews you started and didn't finish. Continue opens the question you stopped at." },
         { target: '[data-tour="interviews-stats"]', title: "Your progress", body: "How many you did, how many you finished, your average and your best score." },
@@ -717,7 +717,7 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
       id: "interviews",
       name: "Interviews",
       steps: [
-        { target: '[role="tablist"][aria-label="Career"]', title: "Every part of Career", body: "Overview, assessments, interviews, proof of skills, your skills gap, snapshot and the practice library are one click apart." },
+        { target: '[role="tablist"][aria-label="Career"]', title: "Every part of Career", body: "Overview, quizzes, interviews, proof of skills, your skills gap, snapshot and the practice library are one click apart." },
         { target: '[data-tour="interviews-start"]', title: "One way in", body: "Practise an interview asks a few quick questions (the job or role, out loud or in writing, real or coached) and takes you straight into the interview." },
         { target: '[data-tour="interviews-continue"]', title: "Pick up where you left off", body: "Written interviews you started and didn't finish." },
         { target: '[data-tour="interviews-stats"]', title: "Your progress", body: "How many you did, how many you finished, your average and best score, and your trend." },
@@ -1186,62 +1186,17 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
     },
   },
 
-  // ───────────── /career/assessments ─────────────
+  // ───────────── /career/quizzes ─────────────
   {
-    match: (p) => p === "/career/assessments",
+    match: (p) => p === "/career/quizzes",
     tour: {
-      id: "assessments",
-      name: "Assessments",
+      id: "quizzes",
+      name: "Quizzes",
       steps: [
         CAREER_TABS,
-        { target: '[data-tour="assessments-intro"]', title: "How assessments work", body: "Rate yourself, then answer 7 questions that get harder as you get them right. 65 or more counts as proven." },
-        { target: '[data-tour="assessments-cv"]', title: "Skills from your CV first", body: "A measured level carries more weight than a keyword. Each card shows whether you took it and your score." },
-        { target: '[data-tour="assessments-gaps"]', title: "Skills your matches ask for", body: "Not on your CV yet. A good score here shows you have them anyway." },
-        { target: '[data-ai^="assessment.start:"]', title: "Start one", body: "About eight minutes. Cards you took show your level and Retake." },
-        ...SHELL.slice(2, 3),
-      ],
-    },
-  },
-
-  // ───────────── /career/assessments/[skill] ─────────────
-  {
-    match: (p, s) => /^\/career\/assessments\/[^/]+$/.test(p) && s === "assessment.run",
-    tour: {
-      id: "assessment-run",
-      name: "Assessment",
-      steps: [
-        { target: '[role="progressbar"]', title: "Question n of 7", body: "How far you are and the topic of this question. Exit leaves without saving a score." },
-        { target: '[data-tour="assessment-question"]', title: "One question at a time", body: "Read it and pick one answer. The timer only tells you how long you have taken." },
-        { target: '[data-tour="assessment-difficulty"]', title: "Difficulty", body: "Goes up after a right answer and down after a wrong one. Harder questions count for more." },
-        { target: '[data-ai="assessment.option:1"]', title: "Pick an answer", body: "Click one, or use keys 1 to 4 or the arrow keys." },
-        { target: '[data-ai="assessment.next"]', title: "Next question", body: "Confirms your answer; Enter does the same. After the last one your result opens." },
-        ...SHELL.slice(2, 3),
-      ],
-    },
-  },
-  {
-    match: (p, s) => /^\/career\/assessments\/[^/]+$/.test(p) && s === "assessment.missing",
-    tour: {
-      id: "assessment-missing",
-      name: "Assessment",
-      steps: [
-        { title: "No assessment by that name", body: "The link may be old. Pick one from the full list." },
-        { target: '[data-ai="assessment.all"]', title: "See all assessments", body: "Every assessment, with skills from your CV first." },
-        ...SHELL.slice(2, 3),
-      ],
-    },
-  },
-  {
-    // assessment.intro and the default (same screen).
-    match: (p) => /^\/career\/assessments\/[^/]+$/.test(p),
-    tour: {
-      id: "assessment",
-      name: "Assessment",
-      steps: [
-        { target: 'nav[aria-label="Breadcrumb"]', title: "Part of Assessments", body: "The breadcrumb takes you back to all assessments." },
-        { target: '[data-tour="assessment-facts"]', title: "What to expect", body: "7 questions in about 8 minutes. They adapt to your answers and every one is explained at the end." },
-        { target: '[data-tour="assessment-self"]', title: "Rate yourself first", body: "Plato compares this with your result, so you know whether to aim higher or brush up. Keys 1 to 5 work too." },
-        { target: '[data-ai="assessment.begin"]', title: "Start", body: "Works once you have rated yourself. Enter starts it too." },
+        { target: '[data-tour="quizzes-builder"]', title: "Build a quiz for any job", body: "Pick one of your jobs or paste a description. Plato researches how the company tests candidates and writes a quiz in that format." },
+        { target: '[data-tour="quizzes-mine"]', title: "Your quizzes", body: "Every quiz you built, with your best score. Start, retake, or delete one from its menu." },
+        { target: '[data-tour="quizzes-library"]', title: "From the library", body: "Quizzes other seekers built, ready to take now. Search by company or role." },
         ...SHELL.slice(2, 3),
       ],
     },

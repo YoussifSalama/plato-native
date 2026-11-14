@@ -78,6 +78,25 @@ const ACTIONS: Record<
     fallback: 25,
   },
   voice_minute: { label: 'One minute of voice interview', fallback: 0 },
+  // Quiz Builder: read the job, look up the company's test, write 2-4 sections. A quiz from the library is free.
+  quiz: {
+    label:
+      'Building a practice quiz for a job (a quiz from the library is free)',
+    parts: [
+      ['quiz.understand', 1],
+      ['career.research', 1],
+      ['career.research.search', 2],
+      ['quiz.plan', 1],
+      ['quiz.section', 3],
+    ],
+    fallback: 40,
+  },
+  // Standard assessments are free; only the AI-written candidate report costs tokens.
+  candidate_report: {
+    label: 'Writing your candidate report from your assessment scores',
+    parts: [['assessments.report', 1]],
+    fallback: 10,
+  },
   voice_scorecard: {
     label: 'The written scorecard after a voice interview',
     parts: [['career.voice.score', 1]],

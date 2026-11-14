@@ -16,6 +16,7 @@ import { spring } from "@/lib/motion-system"
 import { getProfile } from "@/lib/documents/api"
 import { z } from "zod"
 import { saveVoiceTranscript, startVoiceSession, type VoiceMode, type VoiceScorecard, type VoiceUnscored, type VoiceUsage } from "@/lib/career/api"
+import { useLeaveGuard } from "@/lib/use-leave-guard"
 
 type Turn = { role: "user" | "assistant"; text: string }
 // Only what we call on the realtime session; the library is loaded when a call starts.
@@ -157,6 +158,7 @@ export function useVoiceCall() {
   })
 
   useMicLevel(phase === "live" && !muted, level)
+  useLeaveGuard(phase === "connecting" || phase === "live" || phase === "ending", "Your voice interview is still on. Leaving now ends the call. Leave anyway?")
 
   // Leaving the page hangs up (the microphone must never stay open).
   useEffect(() => () => session.current?.close(), [])

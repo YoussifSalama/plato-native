@@ -183,7 +183,7 @@ export function computeSnapshot(d: CareerData, allResults: HubResult[], drafts: 
   const dimensions: Dimension[] = [
     { key: "resume", label: "Resume", value: d.resume?.score ?? null, hint: d.resume ? `${d.resume.topFixes.length} quick fix${d.resume.topFixes.length === 1 ? "" : "es"} left` : "Not scored yet", href: `/career?prompt=${encodeURIComponent("Score my resume out of 100 and list the quick fixes")}` },
     { key: "interview", label: "Interviewing", value: interviewing, hint: interviewScores.length ? `Average of your last ${Math.min(3, interviewScores.length)}` : "No interviews yet", href: "/career/interviews/new" },
-    { key: "skills", label: "Skills proven", value: provenShare, hint: `${top.filter((r) => r.status === "proven").length} of ${top.length || 0} main skills`, href: "/career/assessments" },
+    { key: "skills", label: "Skills proven", value: provenShare, hint: `${top.filter((r) => r.status === "proven").length} of ${top.length || 0} main skills`, href: "/career/quizzes" },
     { key: "proof", label: "Proof of work", value: Math.min(100, proofs * 34), hint: `${proofs} challenge${proofs === 1 ? "" : "s"} passed`, href: "/career/proof" },
   ]
   const weights: Record<string, number> = { resume: 0.3, interview: 0.3, skills: 0.25, proof: 0.15 }
@@ -219,7 +219,7 @@ export function computeSnapshot(d: CareerData, allResults: HubResult[], drafts: 
   if (d.resume && d.resume.score < 80 && d.resume.topFixes[0]) recs.push({ id: "resume", kind: "resume", title: `Lift your resume from ${d.resume.score}`, why: d.resume.topFixes[0], href: `/career?prompt=${encodeURIComponent(`Help me raise my resume score. Start with: ${d.resume.topFixes[0]}`)}`, cta: "Fix", impact: "Medium", minutes: 5, p: 62 })
   if (interviewing !== null && interviewing < 70) recs.push({ id: "interview-again", kind: "interview", title: "Rework your weakest answers", why: `Your interviews average ${interviewing}/100. A behavioral round targets structure and results.`, href: "/career/interviews/new?target=general&focus=behavioral", cta: "Practise", impact: "Medium", minutes: 15, p: 60 })
   if (!history.some((h) => h.kind === "proof")) recs.push({ id: "first-proof", kind: "proof", title: "Finish a proof-of-skill challenge", why: "Real work samples are what hiring managers trust most.", href: "/career/proof", cta: "Browse", impact: "Medium", minutes: 20, p: 50 })
-  if (!skills.some((s) => s.assessHref)) recs.push({ id: "pick-assessment", kind: "assessment", title: "Take a skill assessment", why: "Give Plato a measured baseline to plan from.", href: "/career/assessments", cta: "Browse", impact: "Medium", minutes: 8, p: 45 })
+  if (!skills.some((s) => s.assessHref)) recs.push({ id: "pick-assessment", kind: "assessment", title: "Take a hiring quiz", why: "Practise the test a company gives candidates, with a score per section.", href: "/career/quizzes", cta: "Browse", impact: "Medium", minutes: 8, p: 45 })
   const recommendations = recs.sort((a, b) => b.p - a.p).map(({ p, ...r }) => (void p, r))
 
   // Improvement: the same skill measured more than once.

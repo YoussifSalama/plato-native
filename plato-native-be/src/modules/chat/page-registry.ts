@@ -356,7 +356,7 @@ export const PAGES: Record<string, PageEntry> = {
         id: 'career.nav.<path>',
         label:
           'Career tabs: Overview | Assessments | Interviews | Proof of skills | Skills gap | Snapshot | Practice library',
-        does: 'Opens that part of Career (path = /career, /career/assessments, /career/interviews, /career/proof, /career/skills, /career/snapshot, /career/library). On every Career page',
+        does: 'Opens that part of Career (path = /career, /career/quizzes, /career/interviews, /career/proof, /career/skills, /career/snapshot, /career/library). On every Career page',
         tpl: 'career.nav.',
       },
       {
@@ -727,62 +727,11 @@ export const PAGES: Record<string, PageEntry> = {
       },
     ],
   },
-  assessments: {
-    path: '/career/assessments',
+  quizzes: {
+    path: '/career/quizzes',
     purpose:
-      'Skill assessments to choose from: skills on the CV first, then skills the matches ask for, then the rest. Each card shows Not taken or the last level and score (Start or Retake).',
-    controls: [
-      {
-        id: 'assessment.start:<slug>',
-        label: 'Start',
-        does: 'Opens that assessment. slugs: sql, excel, python, javascript, data-analysis, project-management, business-communication',
-        tpl: 'assessment.start:',
-      },
-    ],
-  },
-  assessment: {
-    path: '/career/assessments/<slug>',
-    purpose:
-      'One adaptive assessment in two screens: first the intro (what to expect and a self-rating 1-5, then Start assessment), then the run (Question n of 7 with a progress bar, difficulty that rises after a right answer, 4 options, Next question). After the 7th answer the result opens at /career/results/<id>.',
-    controls: [
-      {
-        id: 'assessment.self.<n>',
-        label: 'Self-rating 1-5',
-        does: 'Picks how the seeker rates themselves',
-        tpl: 'assessment.self.',
-      },
-      {
-        id: 'assessment.begin',
-        label: 'Start assessment',
-        does: 'Starts the questions',
-      },
-      {
-        id: 'assessment.option:<n>',
-        label: 'Answer 1-4',
-        does: 'Picks an answer. Never pick answers for the seeker unless they say which.',
-        tpl: 'assessment.option:',
-      },
-      {
-        id: 'assessment.next',
-        label: 'Next question',
-        does: 'Confirms the answer',
-      },
-      {
-        id: 'assessment.exit',
-        label: 'Exit',
-        does: 'Leaves the run for /career/assessments; no score is saved',
-      },
-      {
-        id: 'assessment.back',
-        label: 'Back to Assessments',
-        does: 'On the intro screen: back to /career/assessments',
-      },
-      {
-        id: 'assessment.all',
-        label: 'See all assessments',
-        does: 'Shown when the assessment does not exist: opens /career/assessments',
-      },
-    ],
+      'Quiz Builder: practise the real hiring test for any job. Build a quiz from one of the seeker\'s jobs or a pasted description (Plato researches how the company tests candidates and writes the quiz in its format), take quizzes from the shared library, and see your quizzes with best scores. A quiz opens at /career/quizzes/<id>; results at /career/quizzes/<id>/results/<attemptId>.',
+    controls: [],
   },
   proof: {
     path: '/career/proof',

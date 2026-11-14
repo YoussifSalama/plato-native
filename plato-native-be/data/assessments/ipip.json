@@ -1,0 +1,2604 @@
+{
+ "source": "International Personality Item Pool, https://ipip.ori.org/ (public domain: any use, commercial included; see https://ipip.ori.org/newPermission.htm)",
+ "tests": [
+  {
+   "slug": "big-five",
+   "title": "Big Five personality",
+   "about": "The full Five-Factor profile: 5 traits and 30 facets (Johnson, 2014, IPIP-NEO-120).",
+   "category": "personality",
+   "scales": [
+    {
+     "key": "n1",
+     "name": "Anxiety",
+     "domain": "Neuroticism"
+    },
+    {
+     "key": "n2",
+     "name": "Anger",
+     "domain": "Neuroticism"
+    },
+    {
+     "key": "n3",
+     "name": "Depression",
+     "domain": "Neuroticism"
+    },
+    {
+     "key": "n4",
+     "name": "Self-Consciousness",
+     "domain": "Neuroticism"
+    },
+    {
+     "key": "n5",
+     "name": "Immoderation",
+     "domain": "Neuroticism"
+    },
+    {
+     "key": "n6",
+     "name": "Vulnerability",
+     "domain": "Neuroticism"
+    },
+    {
+     "key": "e1",
+     "name": "Friendliness",
+     "domain": "Extraversion"
+    },
+    {
+     "key": "e2",
+     "name": "Gregariousness",
+     "domain": "Extraversion"
+    },
+    {
+     "key": "e3",
+     "name": "Assertiveness",
+     "domain": "Extraversion"
+    },
+    {
+     "key": "e4",
+     "name": "Activity Level",
+     "domain": "Extraversion"
+    },
+    {
+     "key": "e5",
+     "name": "Excitement-Seeking",
+     "domain": "Extraversion"
+    },
+    {
+     "key": "e6",
+     "name": "Cheerfulness",
+     "domain": "Extraversion"
+    },
+    {
+     "key": "o1",
+     "name": "Imagination",
+     "domain": "Openness"
+    },
+    {
+     "key": "o2",
+     "name": "Artistic Interests",
+     "domain": "Openness"
+    },
+    {
+     "key": "o3",
+     "name": "Emotionality",
+     "domain": "Openness"
+    },
+    {
+     "key": "o4",
+     "name": "Adventurousness",
+     "domain": "Openness"
+    },
+    {
+     "key": "o5",
+     "name": "Intellect",
+     "domain": "Openness"
+    },
+    {
+     "key": "o6",
+     "name": "Liberalism",
+     "domain": "Openness"
+    },
+    {
+     "key": "a1",
+     "name": "Trust",
+     "domain": "Agreeableness"
+    },
+    {
+     "key": "a2",
+     "name": "Morality",
+     "domain": "Agreeableness"
+    },
+    {
+     "key": "a3",
+     "name": "Altruism",
+     "domain": "Agreeableness"
+    },
+    {
+     "key": "a4",
+     "name": "Cooperation",
+     "domain": "Agreeableness"
+    },
+    {
+     "key": "a5",
+     "name": "Modesty",
+     "domain": "Agreeableness"
+    },
+    {
+     "key": "a6",
+     "name": "Sympathy",
+     "domain": "Agreeableness"
+    },
+    {
+     "key": "c1",
+     "name": "Self-Efficacy",
+     "domain": "Conscientiousness"
+    },
+    {
+     "key": "c2",
+     "name": "Orderliness",
+     "domain": "Conscientiousness"
+    },
+    {
+     "key": "c3",
+     "name": "Dutifulness",
+     "domain": "Conscientiousness"
+    },
+    {
+     "key": "c4",
+     "name": "Achievement-Striving",
+     "domain": "Conscientiousness"
+    },
+    {
+     "key": "c5",
+     "name": "Self-Discipline",
+     "domain": "Conscientiousness"
+    },
+    {
+     "key": "c6",
+     "name": "Cautiousness",
+     "domain": "Conscientiousness"
+    }
+   ],
+   "items": [
+    {
+     "id": "big-five-1",
+     "text": "Worry about things.",
+     "scale": "n1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-2",
+     "text": "Get angry easily.",
+     "scale": "n2",
+     "reverse": false
+    },
+    {
+     "id": "big-five-3",
+     "text": "Often feel blue.",
+     "scale": "n3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-4",
+     "text": "Find it difficult to approach others.",
+     "scale": "n4",
+     "reverse": false
+    },
+    {
+     "id": "big-five-5",
+     "text": "Go on binges.",
+     "scale": "n5",
+     "reverse": false
+    },
+    {
+     "id": "big-five-6",
+     "text": "Panic easily.",
+     "scale": "n6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-7",
+     "text": "Make friends easily.",
+     "scale": "e1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-8",
+     "text": "Love large parties.",
+     "scale": "e2",
+     "reverse": false
+    },
+    {
+     "id": "big-five-9",
+     "text": "Take charge.",
+     "scale": "e3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-10",
+     "text": "Am always busy.",
+     "scale": "e4",
+     "reverse": false
+    },
+    {
+     "id": "big-five-11",
+     "text": "Love excitement.",
+     "scale": "e5",
+     "reverse": false
+    },
+    {
+     "id": "big-five-12",
+     "text": "Radiate joy.",
+     "scale": "e6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-13",
+     "text": "Have a vivid imagination.",
+     "scale": "o1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-14",
+     "text": "Believe in the importance of art.",
+     "scale": "o2",
+     "reverse": false
+    },
+    {
+     "id": "big-five-15",
+     "text": "Experience my emotions intensely.",
+     "scale": "o3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-16",
+     "text": "Prefer variety to routine.",
+     "scale": "o4",
+     "reverse": false
+    },
+    {
+     "id": "big-five-17",
+     "text": "Love to read challenging material.",
+     "scale": "o5",
+     "reverse": false
+    },
+    {
+     "id": "big-five-18",
+     "text": "Tend to vote for liberal political candidates.",
+     "scale": "o6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-19",
+     "text": "Trust others.",
+     "scale": "a1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-20",
+     "text": "Use others for my own ends.",
+     "scale": "a2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-21",
+     "text": "Am concerned about others.",
+     "scale": "a3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-22",
+     "text": "Love a good fight.",
+     "scale": "a4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-23",
+     "text": "Believe that I am better than others.",
+     "scale": "a5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-24",
+     "text": "Sympathize with the homeless.",
+     "scale": "a6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-25",
+     "text": "Complete tasks successfully.",
+     "scale": "c1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-26",
+     "text": "Like to tidy up.",
+     "scale": "c2",
+     "reverse": false
+    },
+    {
+     "id": "big-five-27",
+     "text": "Keep my promises.",
+     "scale": "c3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-28",
+     "text": "Do more than what's expected of me.",
+     "scale": "c4",
+     "reverse": false
+    },
+    {
+     "id": "big-five-29",
+     "text": "Am always prepared.",
+     "scale": "c5",
+     "reverse": false
+    },
+    {
+     "id": "big-five-30",
+     "text": "Jump into things without thinking.",
+     "scale": "c6",
+     "reverse": true
+    },
+    {
+     "id": "big-five-31",
+     "text": "Fear for the worst.",
+     "scale": "n1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-32",
+     "text": "Get irritated easily.",
+     "scale": "n2",
+     "reverse": false
+    },
+    {
+     "id": "big-five-33",
+     "text": "Dislike myself.",
+     "scale": "n3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-34",
+     "text": "Am afraid to draw attention to myself.",
+     "scale": "n4",
+     "reverse": false
+    },
+    {
+     "id": "big-five-35",
+     "text": "Rarely overindulge.",
+     "scale": "n5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-36",
+     "text": "Become overwhelmed by events.",
+     "scale": "n6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-37",
+     "text": "Feel comfortable around people.",
+     "scale": "e1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-38",
+     "text": "Talk to a lot of different people at parties.",
+     "scale": "e2",
+     "reverse": false
+    },
+    {
+     "id": "big-five-39",
+     "text": "Try to lead others.",
+     "scale": "e3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-40",
+     "text": "Am always on the go.",
+     "scale": "e4",
+     "reverse": false
+    },
+    {
+     "id": "big-five-41",
+     "text": "Seek adventure.",
+     "scale": "e5",
+     "reverse": false
+    },
+    {
+     "id": "big-five-42",
+     "text": "Have a lot of fun.",
+     "scale": "e6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-43",
+     "text": "Enjoy wild flights of fantasy.",
+     "scale": "o1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-44",
+     "text": "See beauty in things that others might not notice.",
+     "scale": "o2",
+     "reverse": false
+    },
+    {
+     "id": "big-five-45",
+     "text": "Feel others' emotions.",
+     "scale": "o3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-46",
+     "text": "Prefer to stick with things that I know.",
+     "scale": "o4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-47",
+     "text": "Avoid philosophical discussions.",
+     "scale": "o5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-48",
+     "text": "Believe that there is no absolute right and wrong.",
+     "scale": "o6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-49",
+     "text": "Believe that others have good intentions.",
+     "scale": "a1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-50",
+     "text": "Cheat to get ahead.",
+     "scale": "a2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-51",
+     "text": "Love to help others.",
+     "scale": "a3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-52",
+     "text": "Yell at people.",
+     "scale": "a4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-53",
+     "text": "Think highly of myself.",
+     "scale": "a5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-54",
+     "text": "Feel sympathy for those who are worse off than myself.",
+     "scale": "a6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-55",
+     "text": "Excel in what I do.",
+     "scale": "c1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-56",
+     "text": "Often forget to put things back in their proper place.",
+     "scale": "c2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-57",
+     "text": "Tell the truth.",
+     "scale": "c3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-58",
+     "text": "Work hard.",
+     "scale": "c4",
+     "reverse": false
+    },
+    {
+     "id": "big-five-59",
+     "text": "Carry out my plans.",
+     "scale": "c5",
+     "reverse": false
+    },
+    {
+     "id": "big-five-60",
+     "text": "Make rash decisions.",
+     "scale": "c6",
+     "reverse": true
+    },
+    {
+     "id": "big-five-61",
+     "text": "Am afraid of many things.",
+     "scale": "n1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-62",
+     "text": "Lose my temper.",
+     "scale": "n2",
+     "reverse": false
+    },
+    {
+     "id": "big-five-63",
+     "text": "Am often down in the dumps.",
+     "scale": "n3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-64",
+     "text": "Only feel comfortable with friends.",
+     "scale": "n4",
+     "reverse": false
+    },
+    {
+     "id": "big-five-65",
+     "text": "Easily resist temptations.",
+     "scale": "n5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-66",
+     "text": "Feel that I'm unable to deal with things.",
+     "scale": "n6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-67",
+     "text": "Avoid contacts with others.",
+     "scale": "e1",
+     "reverse": true
+    },
+    {
+     "id": "big-five-68",
+     "text": "Prefer to be alone.",
+     "scale": "e2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-69",
+     "text": "Take control of things.",
+     "scale": "e3",
+     "reverse": false
+    },
+    {
+     "id": "big-five-70",
+     "text": "Do a lot in my spare time.",
+     "scale": "e4",
+     "reverse": false
+    },
+    {
+     "id": "big-five-71",
+     "text": "Enjoy being reckless.",
+     "scale": "e5",
+     "reverse": false
+    },
+    {
+     "id": "big-five-72",
+     "text": "Love life.",
+     "scale": "e6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-73",
+     "text": "Love to daydream.",
+     "scale": "o1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-74",
+     "text": "Do not like poetry.",
+     "scale": "o2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-75",
+     "text": "Rarely notice my emotional reactions.",
+     "scale": "o3",
+     "reverse": true
+    },
+    {
+     "id": "big-five-76",
+     "text": "Dislike changes.",
+     "scale": "o4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-77",
+     "text": "Have difficulty understanding abstract ideas.",
+     "scale": "o5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-78",
+     "text": "Tend to vote for conservative political candidates.",
+     "scale": "o6",
+     "reverse": true
+    },
+    {
+     "id": "big-five-79",
+     "text": "Trust what people say.",
+     "scale": "a1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-80",
+     "text": "Take advantage of others.",
+     "scale": "a2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-81",
+     "text": "Am indifferent to the feelings of others.",
+     "scale": "a3",
+     "reverse": true
+    },
+    {
+     "id": "big-five-82",
+     "text": "Insult people.",
+     "scale": "a4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-83",
+     "text": "Have a high opinion of myself.",
+     "scale": "a5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-84",
+     "text": "Am not interested in other people's problems.",
+     "scale": "a6",
+     "reverse": true
+    },
+    {
+     "id": "big-five-85",
+     "text": "Handle tasks smoothly.",
+     "scale": "c1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-86",
+     "text": "Leave a mess in my room.",
+     "scale": "c2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-87",
+     "text": "Break rules.",
+     "scale": "c3",
+     "reverse": true
+    },
+    {
+     "id": "big-five-88",
+     "text": "Put little time and effort into my work.",
+     "scale": "c4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-89",
+     "text": "Waste my time.",
+     "scale": "c5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-90",
+     "text": "Rush into things.",
+     "scale": "c6",
+     "reverse": true
+    },
+    {
+     "id": "big-five-91",
+     "text": "Get stressed out easily.",
+     "scale": "n1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-92",
+     "text": "Am not easily annoyed.",
+     "scale": "n2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-93",
+     "text": "Feel comfortable with myself.",
+     "scale": "n3",
+     "reverse": true
+    },
+    {
+     "id": "big-five-94",
+     "text": "Am not bothered by difficult social situations.",
+     "scale": "n4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-95",
+     "text": "Am able to control my cravings.",
+     "scale": "n5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-96",
+     "text": "Remain calm under pressure.",
+     "scale": "n6",
+     "reverse": true
+    },
+    {
+     "id": "big-five-97",
+     "text": "Keep others at a distance.",
+     "scale": "e1",
+     "reverse": true
+    },
+    {
+     "id": "big-five-98",
+     "text": "Avoid crowds.",
+     "scale": "e2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-99",
+     "text": "Wait for others to lead the way.",
+     "scale": "e3",
+     "reverse": true
+    },
+    {
+     "id": "big-five-100",
+     "text": "Like to take it easy.",
+     "scale": "e4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-101",
+     "text": "Act wild and crazy.",
+     "scale": "e5",
+     "reverse": false
+    },
+    {
+     "id": "big-five-102",
+     "text": "Look at the bright side of life.",
+     "scale": "e6",
+     "reverse": false
+    },
+    {
+     "id": "big-five-103",
+     "text": "Like to get lost in thought.",
+     "scale": "o1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-104",
+     "text": "Do not enjoy going to art museums.",
+     "scale": "o2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-105",
+     "text": "Don't understand people who get emotional.",
+     "scale": "o3",
+     "reverse": true
+    },
+    {
+     "id": "big-five-106",
+     "text": "Am attached to conventional ways.",
+     "scale": "o4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-107",
+     "text": "Am not interested in theoretical discussions.",
+     "scale": "o5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-108",
+     "text": "Believe that we should be tough on crime.",
+     "scale": "o6",
+     "reverse": true
+    },
+    {
+     "id": "big-five-109",
+     "text": "Distrust people.",
+     "scale": "a1",
+     "reverse": true
+    },
+    {
+     "id": "big-five-110",
+     "text": "Obstruct others' plans.",
+     "scale": "a2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-111",
+     "text": "Take no time for others.",
+     "scale": "a3",
+     "reverse": true
+    },
+    {
+     "id": "big-five-112",
+     "text": "Get back at others.",
+     "scale": "a4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-113",
+     "text": "Boast about my virtues.",
+     "scale": "a5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-114",
+     "text": "Try not to think about the needy.",
+     "scale": "a6",
+     "reverse": true
+    },
+    {
+     "id": "big-five-115",
+     "text": "Know how to get things done.",
+     "scale": "c1",
+     "reverse": false
+    },
+    {
+     "id": "big-five-116",
+     "text": "Leave my belongings around.",
+     "scale": "c2",
+     "reverse": true
+    },
+    {
+     "id": "big-five-117",
+     "text": "Break my promises.",
+     "scale": "c3",
+     "reverse": true
+    },
+    {
+     "id": "big-five-118",
+     "text": "Do just enough work to get by.",
+     "scale": "c4",
+     "reverse": true
+    },
+    {
+     "id": "big-five-119",
+     "text": "Have difficulty starting tasks.",
+     "scale": "c5",
+     "reverse": true
+    },
+    {
+     "id": "big-five-120",
+     "text": "Act without thinking.",
+     "scale": "c6",
+     "reverse": true
+    }
+   ]
+  },
+  {
+   "slug": "big-five-quick",
+   "title": "Big Five quick check",
+   "about": "The five broad traits in 20 statements (Donnellan et al., 2006, Mini-IPIP).",
+   "category": "personality",
+   "scales": [
+    {
+     "key": "extraversion",
+     "name": "Extraversion",
+     "domain": "Extraversion"
+    },
+    {
+     "key": "agreeableness",
+     "name": "Agreeableness",
+     "domain": "Agreeableness"
+    },
+    {
+     "key": "conscientiousness",
+     "name": "Conscientiousness",
+     "domain": "Conscientiousness"
+    },
+    {
+     "key": "neuroticism",
+     "name": "Neuroticism",
+     "domain": "Neuroticism"
+    },
+    {
+     "key": "openness",
+     "name": "Openness",
+     "domain": "Openness"
+    }
+   ],
+   "items": [
+    {
+     "id": "big-five-quick-1",
+     "text": "Am the life of the party.",
+     "scale": "extraversion",
+     "reverse": false
+    },
+    {
+     "id": "big-five-quick-2",
+     "text": "Sympathize with others' feelings.",
+     "scale": "agreeableness",
+     "reverse": false
+    },
+    {
+     "id": "big-five-quick-3",
+     "text": "Get chores done right away.",
+     "scale": "conscientiousness",
+     "reverse": false
+    },
+    {
+     "id": "big-five-quick-4",
+     "text": "Have frequent mood swings.",
+     "scale": "neuroticism",
+     "reverse": false
+    },
+    {
+     "id": "big-five-quick-5",
+     "text": "Have a vivid imagination.",
+     "scale": "openness",
+     "reverse": false
+    },
+    {
+     "id": "big-five-quick-6",
+     "text": "Talk to a lot of different people at parties.",
+     "scale": "extraversion",
+     "reverse": false
+    },
+    {
+     "id": "big-five-quick-7",
+     "text": "Feel others' emotions.",
+     "scale": "agreeableness",
+     "reverse": false
+    },
+    {
+     "id": "big-five-quick-8",
+     "text": "Like order.",
+     "scale": "conscientiousness",
+     "reverse": false
+    },
+    {
+     "id": "big-five-quick-9",
+     "text": "Get upset easily.",
+     "scale": "neuroticism",
+     "reverse": false
+    },
+    {
+     "id": "big-five-quick-10",
+     "text": "Have difficulty understanding abstract ideas.",
+     "scale": "openness",
+     "reverse": true
+    },
+    {
+     "id": "big-five-quick-11",
+     "text": "Don't talk a lot.",
+     "scale": "extraversion",
+     "reverse": true
+    },
+    {
+     "id": "big-five-quick-12",
+     "text": "Am not really interested in others.",
+     "scale": "agreeableness",
+     "reverse": true
+    },
+    {
+     "id": "big-five-quick-13",
+     "text": "Often forget to put things back in their proper place.",
+     "scale": "conscientiousness",
+     "reverse": true
+    },
+    {
+     "id": "big-five-quick-14",
+     "text": "Am relaxed most of the time.",
+     "scale": "neuroticism",
+     "reverse": true
+    },
+    {
+     "id": "big-five-quick-15",
+     "text": "Am not interested in abstract ideas.",
+     "scale": "openness",
+     "reverse": true
+    },
+    {
+     "id": "big-five-quick-16",
+     "text": "Keep in the background.",
+     "scale": "extraversion",
+     "reverse": true
+    },
+    {
+     "id": "big-five-quick-17",
+     "text": "Am not interested in other people's problems.",
+     "scale": "agreeableness",
+     "reverse": true
+    },
+    {
+     "id": "big-five-quick-18",
+     "text": "Make a mess of things.",
+     "scale": "conscientiousness",
+     "reverse": true
+    },
+    {
+     "id": "big-five-quick-19",
+     "text": "Seldom feel blue.",
+     "scale": "neuroticism",
+     "reverse": true
+    },
+    {
+     "id": "big-five-quick-20",
+     "text": "Do not have a good imagination.",
+     "scale": "openness",
+     "reverse": true
+    }
+   ]
+  },
+  {
+   "slug": "workplace-style",
+   "title": "Workplace style",
+   "about": "Seven work-relevant traits, similar to the Hogan Personality Inventory scales (IPIP HPI proxies).",
+   "category": "work_style",
+   "scales": [
+    {
+     "key": "stability",
+     "name": "Stability"
+    },
+    {
+     "key": "leadership",
+     "name": "Leadership"
+    },
+    {
+     "key": "sociability",
+     "name": "Sociability"
+    },
+    {
+     "key": "friendliness",
+     "name": "Friendliness"
+    },
+    {
+     "key": "dutifulness",
+     "name": "Dutifulness"
+    },
+    {
+     "key": "creativity",
+     "name": "Creativity"
+    },
+    {
+     "key": "quickness",
+     "name": "Quickness"
+    }
+   ],
+   "items": [
+    {
+     "id": "workplace-style-1",
+     "text": "Rarely get irritated.",
+     "scale": "stability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-2",
+     "text": "Take charge.",
+     "scale": "leadership",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-3",
+     "text": "Like to attract attention.",
+     "scale": "sociability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-4",
+     "text": "Make friends easily.",
+     "scale": "friendliness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-5",
+     "text": "Respect authority.",
+     "scale": "dutifulness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-6",
+     "text": "Like to solve complex problems.",
+     "scale": "creativity",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-7",
+     "text": "Read quickly.",
+     "scale": "quickness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-8",
+     "text": "Am relaxed most of the time.",
+     "scale": "stability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-9",
+     "text": "Express myself easily.",
+     "scale": "leadership",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-10",
+     "text": "Love large parties.",
+     "scale": "sociability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-11",
+     "text": "Feel at ease with people.",
+     "scale": "friendliness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-12",
+     "text": "Try to follow the rules.",
+     "scale": "dutifulness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-13",
+     "text": "Love to read challenging material.",
+     "scale": "creativity",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-14",
+     "text": "Like to read.",
+     "scale": "quickness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-15",
+     "text": "Seldom get mad.",
+     "scale": "stability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-16",
+     "text": "Try to lead others.",
+     "scale": "leadership",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-17",
+     "text": "Enjoy being part of a loud crowd.",
+     "scale": "sociability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-18",
+     "text": "Cheer people up.",
+     "scale": "friendliness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-19",
+     "text": "Stick to the rules.",
+     "scale": "dutifulness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-20",
+     "text": "Love to think up new ways of doing things.",
+     "scale": "creativity",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-21",
+     "text": "Have a rich vocabulary.",
+     "scale": "quickness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-22",
+     "text": "Am not easily annoyed.",
+     "scale": "stability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-23",
+     "text": "Think highly of myself.",
+     "scale": "leadership",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-24",
+     "text": "Amuse my friends.",
+     "scale": "sociability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-25",
+     "text": "Am interested in people.",
+     "scale": "friendliness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-26",
+     "text": "Would never cheat on my taxes.",
+     "scale": "dutifulness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-27",
+     "text": "Have a vivid imagination.",
+     "scale": "creativity",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-28",
+     "text": "Quick to understand things.",
+     "scale": "quickness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-29",
+     "text": "Am not easily bothered by things.",
+     "scale": "stability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-30",
+     "text": "Take the initiative.",
+     "scale": "leadership",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-31",
+     "text": "Like to amuse others.",
+     "scale": "sociability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-32",
+     "text": "Warm up quickly to others.",
+     "scale": "friendliness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-33",
+     "text": "Do things by the book.",
+     "scale": "dutifulness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-34",
+     "text": "Know how things work.",
+     "scale": "creativity",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-35",
+     "text": "Catch on to things quickly.",
+     "scale": "quickness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-36",
+     "text": "Have frequent mood swings.",
+     "scale": "stability",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-37",
+     "text": "Wait for others to lead the way.",
+     "scale": "leadership",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-38",
+     "text": "Seek adventure.",
+     "scale": "sociability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-39",
+     "text": "Am not really interested in others.",
+     "scale": "friendliness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-40",
+     "text": "Enjoy being reckless.",
+     "scale": "dutifulness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-41",
+     "text": "Am not interested in abstract ideas.",
+     "scale": "creativity",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-42",
+     "text": "Can handle a lot of information.",
+     "scale": "quickness",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-43",
+     "text": "Get upset easily.",
+     "scale": "stability",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-44",
+     "text": "Am easily intimidated.",
+     "scale": "leadership",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-45",
+     "text": "Love action.",
+     "scale": "sociability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-46",
+     "text": "Am hard to get to know.",
+     "scale": "friendliness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-47",
+     "text": "Use swear words.",
+     "scale": "dutifulness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-48",
+     "text": "Am not interested in theoretical discussions.",
+     "scale": "creativity",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-49",
+     "text": "Read slowly.",
+     "scale": "quickness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-50",
+     "text": "Am often in a bad mood.",
+     "scale": "stability",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-51",
+     "text": "Have a low opinion of myself.",
+     "scale": "leadership",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-52",
+     "text": "Make myself the center of attention.",
+     "scale": "sociability",
+     "reverse": false
+    },
+    {
+     "id": "workplace-style-53",
+     "text": "Keep others at a distance.",
+     "scale": "friendliness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-54",
+     "text": "Do things that others find strange.",
+     "scale": "dutifulness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-55",
+     "text": "Avoid difficult reading material.",
+     "scale": "creativity",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-56",
+     "text": "Skip difficult words while reading.",
+     "scale": "quickness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-57",
+     "text": "Have days when I'm mad at the world.",
+     "scale": "stability",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-58",
+     "text": "Am easily discouraged.",
+     "scale": "leadership",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-59",
+     "text": "Don't like crowded events.",
+     "scale": "sociability",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-60",
+     "text": "Avoid contacts with others.",
+     "scale": "friendliness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-61",
+     "text": "Do crazy things.",
+     "scale": "dutifulness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-62",
+     "text": "Try to avoid complex people.",
+     "scale": "creativity",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-63",
+     "text": "Have a poor vocabulary.",
+     "scale": "quickness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-64",
+     "text": "Get stressed out easily.",
+     "scale": "stability",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-65",
+     "text": "Find it difficult to approach others.",
+     "scale": "leadership",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-66",
+     "text": "Dislike loud music.",
+     "scale": "sociability",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-67",
+     "text": "Want to be left alone.",
+     "scale": "friendliness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-68",
+     "text": "Do unexpected things.",
+     "scale": "dutifulness",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-69",
+     "text": "Do not have a good imagination.",
+     "scale": "creativity",
+     "reverse": true
+    },
+    {
+     "id": "workplace-style-70",
+     "text": "Don't understand things.",
+     "scale": "quickness",
+     "reverse": true
+    }
+   ]
+  },
+  {
+   "slug": "role-potential",
+   "title": "Role potential",
+   "about": "How your style fits six kinds of roles: service, stress, reliability, clerical, sales, management (IPIP HPI proxies).",
+   "category": "work_style",
+   "scales": [
+    {
+     "key": "service_orientation",
+     "name": "Service orientation"
+    },
+    {
+     "key": "stress_tolerance",
+     "name": "Stress tolerance"
+    },
+    {
+     "key": "reliability",
+     "name": "Reliability"
+    },
+    {
+     "key": "clerical_potential",
+     "name": "Clerical potential"
+    },
+    {
+     "key": "sales_potential",
+     "name": "Sales potential"
+    },
+    {
+     "key": "managerial_potential",
+     "name": "Managerial potential"
+    }
+   ],
+   "items": [
+    {
+     "id": "role-potential-1",
+     "text": "Take things as they come.",
+     "scale": "service_orientation",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-2",
+     "text": "Seldom feel blue.",
+     "scale": "stress_tolerance",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-3",
+     "text": "Rarely overindulge.",
+     "scale": "reliability",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-4",
+     "text": "Am not embarrassed easily.",
+     "scale": "clerical_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-5",
+     "text": "Don't mind being the center of attention.",
+     "scale": "sales_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-6",
+     "text": "Come up with good solutions.",
+     "scale": "managerial_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-7",
+     "text": "Accept people as they are.",
+     "scale": "service_orientation",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-8",
+     "text": "Feel comfortable with myself.",
+     "scale": "stress_tolerance",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-9",
+     "text": "Resist authority.",
+     "scale": "reliability",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-10",
+     "text": "Remain calm under pressure.",
+     "scale": "clerical_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-11",
+     "text": "Feel comfortable around people.",
+     "scale": "sales_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-12",
+     "text": "Complete tasks successfully.",
+     "scale": "managerial_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-13",
+     "text": "Seldom take offense.",
+     "scale": "service_orientation",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-14",
+     "text": "Am very pleased with myself.",
+     "scale": "stress_tolerance",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-15",
+     "text": "Oppose authority.",
+     "scale": "reliability",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-16",
+     "text": "Want to be in charge.",
+     "scale": "clerical_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-17",
+     "text": "Talk to a lot of different people at parties.",
+     "scale": "sales_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-18",
+     "text": "Carry out my plans.",
+     "scale": "managerial_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-19",
+     "text": "Am on good terms with nearly everyone.",
+     "scale": "service_orientation",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-20",
+     "text": "Readily overcome setbacks.",
+     "scale": "stress_tolerance",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-21",
+     "text": "Act wild and crazy.",
+     "scale": "reliability",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-22",
+     "text": "Quickly recognize possibilities.",
+     "scale": "clerical_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-23",
+     "text": "Am the life of the party.",
+     "scale": "sales_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-24",
+     "text": "Accomplish a lot of work.",
+     "scale": "managerial_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-25",
+     "text": "Am easy to satisfy.",
+     "scale": "service_orientation",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-26",
+     "text": "Often feel blue.",
+     "scale": "stress_tolerance",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-27",
+     "text": "Feel that people have a hard time understanding me.",
+     "scale": "reliability",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-28",
+     "text": "Automatically take charge.",
+     "scale": "clerical_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-29",
+     "text": "Know how to captivate people.",
+     "scale": "sales_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-30",
+     "text": "Get things done quickly.",
+     "scale": "managerial_potential",
+     "reverse": false
+    },
+    {
+     "id": "role-potential-31",
+     "text": "Hold a grudge.",
+     "scale": "service_orientation",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-32",
+     "text": "Dislike myself.",
+     "scale": "stress_tolerance",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-33",
+     "text": "Break rules.",
+     "scale": "reliability",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-34",
+     "text": "Feel that I'm unable to deal with things.",
+     "scale": "clerical_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-35",
+     "text": "Don't like to draw attention to myself.",
+     "scale": "sales_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-36",
+     "text": "Feel that my life lacks direction.",
+     "scale": "managerial_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-37",
+     "text": "Lose my temper.",
+     "scale": "service_orientation",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-38",
+     "text": "Am often down in the dumps.",
+     "scale": "stress_tolerance",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-39",
+     "text": "Enjoy wild flights of fantasy.",
+     "scale": "reliability",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-40",
+     "text": "Panic easily.",
+     "scale": "clerical_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-41",
+     "text": "Have little to say.",
+     "scale": "sales_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-42",
+     "text": "Am not sure where my life is going.",
+     "scale": "managerial_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-43",
+     "text": "Have a sharp tongue.",
+     "scale": "service_orientation",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-44",
+     "text": "Feel desperate.",
+     "scale": "stress_tolerance",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-45",
+     "text": "Swim against the current.",
+     "scale": "reliability",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-46",
+     "text": "Am afraid that I will do the wrong thing.",
+     "scale": "clerical_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-47",
+     "text": "Dislike being the center of attention.",
+     "scale": "sales_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-48",
+     "text": "Hang around doing nothing.",
+     "scale": "managerial_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-49",
+     "text": "Speak ill of others.",
+     "scale": "service_orientation",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-50",
+     "text": "Worry about things.",
+     "scale": "stress_tolerance",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-51",
+     "text": "Look for hidden meanings in things.",
+     "scale": "reliability",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-52",
+     "text": "Often feel uncomfortable around others.",
+     "scale": "clerical_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-53",
+     "text": "Would describe my experiences as somewhat dull.",
+     "scale": "sales_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-54",
+     "text": "Do just enough work to get by.",
+     "scale": "managerial_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-55",
+     "text": "Am quick to judge others.",
+     "scale": "service_orientation",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-56",
+     "text": "Am filled with doubts about things.",
+     "scale": "stress_tolerance",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-57",
+     "text": "Suspect hidden motives in others.",
+     "scale": "reliability",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-58",
+     "text": "Feel threatened easily.",
+     "scale": "clerical_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-59",
+     "text": "Keep in the background.",
+     "scale": "sales_potential",
+     "reverse": true
+    },
+    {
+     "id": "role-potential-60",
+     "text": "Mess things up.",
+     "scale": "managerial_potential",
+     "reverse": true
+    }
+   ]
+  },
+  {
+   "slug": "integrity",
+   "title": "Integrity",
+   "about": "Honesty and humility: sincerity, fairness, greed avoidance, modesty (IPIP HEXACO proxies).",
+   "category": "work_style",
+   "scales": [
+    {
+     "key": "sincerity",
+     "name": "Sincerity"
+    },
+    {
+     "key": "fairness",
+     "name": "Fairness"
+    },
+    {
+     "key": "greed_avoidance",
+     "name": "Greed avoidance"
+    },
+    {
+     "key": "modesty",
+     "name": "Modesty"
+    }
+   ],
+   "items": [
+    {
+     "id": "integrity-1",
+     "text": "Don't pretend to be more than I am.",
+     "scale": "sincerity",
+     "reverse": false
+    },
+    {
+     "id": "integrity-2",
+     "text": "Would never take things that aren't mine.",
+     "scale": "fairness",
+     "reverse": false
+    },
+    {
+     "id": "integrity-3",
+     "text": "Would not enjoy being a famous celebrity.",
+     "scale": "greed_avoidance",
+     "reverse": false
+    },
+    {
+     "id": "integrity-4",
+     "text": "Don't think that I'm better than other people.",
+     "scale": "modesty",
+     "reverse": false
+    },
+    {
+     "id": "integrity-5",
+     "text": "Use flattery to get ahead.",
+     "scale": "sincerity",
+     "reverse": true
+    },
+    {
+     "id": "integrity-6",
+     "text": "Would never cheat on my taxes.",
+     "scale": "fairness",
+     "reverse": false
+    },
+    {
+     "id": "integrity-7",
+     "text": "Don't strive for elegance in my appearance.",
+     "scale": "greed_avoidance",
+     "reverse": false
+    },
+    {
+     "id": "integrity-8",
+     "text": "See myself as an average person.",
+     "scale": "modesty",
+     "reverse": false
+    },
+    {
+     "id": "integrity-9",
+     "text": "Tell other people what they want to hear so that they will do what I want them to do.",
+     "scale": "sincerity",
+     "reverse": true
+    },
+    {
+     "id": "integrity-10",
+     "text": "Return extra change when a cashier makes a mistake.",
+     "scale": "fairness",
+     "reverse": false
+    },
+    {
+     "id": "integrity-11",
+     "text": "Love luxury.",
+     "scale": "greed_avoidance",
+     "reverse": true
+    },
+    {
+     "id": "integrity-12",
+     "text": "Am just an ordinary person.",
+     "scale": "modesty",
+     "reverse": false
+    },
+    {
+     "id": "integrity-13",
+     "text": "Put on a show to impress people.",
+     "scale": "sincerity",
+     "reverse": true
+    },
+    {
+     "id": "integrity-14",
+     "text": "Would feel very badly for a long time if I were to steal from someone.",
+     "scale": "fairness",
+     "reverse": false
+    },
+    {
+     "id": "integrity-15",
+     "text": "Have a strong need for power.",
+     "scale": "greed_avoidance",
+     "reverse": true
+    },
+    {
+     "id": "integrity-16",
+     "text": "Consider myself an average person.",
+     "scale": "modesty",
+     "reverse": false
+    },
+    {
+     "id": "integrity-17",
+     "text": "Switch my loyalties when I feel like it.",
+     "scale": "sincerity",
+     "reverse": true
+    },
+    {
+     "id": "integrity-18",
+     "text": "Try to follow the rules.",
+     "scale": "fairness",
+     "reverse": false
+    },
+    {
+     "id": "integrity-19",
+     "text": "Seek status.",
+     "scale": "greed_avoidance",
+     "reverse": true
+    },
+    {
+     "id": "integrity-20",
+     "text": "Would like to have more power than other people.",
+     "scale": "modesty",
+     "reverse": true
+    },
+    {
+     "id": "integrity-21",
+     "text": "Play a role in order to impress people.",
+     "scale": "sincerity",
+     "reverse": true
+    },
+    {
+     "id": "integrity-22",
+     "text": "Admire a really clever scam.",
+     "scale": "fairness",
+     "reverse": true
+    },
+    {
+     "id": "integrity-23",
+     "text": "Am mainly interested in money.",
+     "scale": "greed_avoidance",
+     "reverse": true
+    },
+    {
+     "id": "integrity-24",
+     "text": "Believe that I am better than others.",
+     "scale": "modesty",
+     "reverse": true
+    },
+    {
+     "id": "integrity-25",
+     "text": "Pretend to be concerned for others.",
+     "scale": "sincerity",
+     "reverse": true
+    },
+    {
+     "id": "integrity-26",
+     "text": "Cheat to get ahead.",
+     "scale": "fairness",
+     "reverse": true
+    },
+    {
+     "id": "integrity-27",
+     "text": "Wish to stay young forever.",
+     "scale": "greed_avoidance",
+     "reverse": true
+    },
+    {
+     "id": "integrity-28",
+     "text": "Like to attract attention.",
+     "scale": "modesty",
+     "reverse": true
+    },
+    {
+     "id": "integrity-29",
+     "text": "Act like different people in different situations.",
+     "scale": "sincerity",
+     "reverse": true
+    },
+    {
+     "id": "integrity-30",
+     "text": "Steal things.",
+     "scale": "fairness",
+     "reverse": true
+    },
+    {
+     "id": "integrity-31",
+     "text": "Try to impress others.",
+     "scale": "greed_avoidance",
+     "reverse": true
+    },
+    {
+     "id": "integrity-32",
+     "text": "Am more capable than most others.",
+     "scale": "modesty",
+     "reverse": true
+    },
+    {
+     "id": "integrity-33",
+     "text": "Find it necessary to please the people who have power.",
+     "scale": "sincerity",
+     "reverse": true
+    },
+    {
+     "id": "integrity-34",
+     "text": "Cheat on people who have trusted me.",
+     "scale": "fairness",
+     "reverse": true
+    },
+    {
+     "id": "integrity-35",
+     "text": "Prefer to eat at expensive restaurants.",
+     "scale": "greed_avoidance",
+     "reverse": true
+    },
+    {
+     "id": "integrity-36",
+     "text": "Am likely to show off if I get the chance.",
+     "scale": "modesty",
+     "reverse": true
+    },
+    {
+     "id": "integrity-37",
+     "text": "Let people push me around to help them feel important.",
+     "scale": "sincerity",
+     "reverse": true
+    },
+    {
+     "id": "integrity-38",
+     "text": "Would not regret my behavior if I were to take advantage of someone impulsively.",
+     "scale": "fairness",
+     "reverse": true
+    },
+    {
+     "id": "integrity-39",
+     "text": "Am out for my own personal gain.",
+     "scale": "greed_avoidance",
+     "reverse": true
+    },
+    {
+     "id": "integrity-40",
+     "text": "Boast about my virtues.",
+     "scale": "modesty",
+     "reverse": true
+    }
+   ]
+  },
+  {
+   "slug": "emotional-intelligence",
+   "title": "Emotional intelligence",
+   "about": "Seven parts of how you notice, show and use emotions (Barchard, 2001).",
+   "category": "personality",
+   "scales": [
+    {
+     "key": "positive_expressivity",
+     "name": "Positive expressivity"
+    },
+    {
+     "key": "negative_expressivity",
+     "name": "Negative expressivity"
+    },
+    {
+     "key": "attending_to_emotions",
+     "name": "Attending to emotions"
+    },
+    {
+     "key": "emotion_based_decision_making",
+     "name": "Emotion-based decision-making"
+    },
+    {
+     "key": "responsive_joy",
+     "name": "Responsive joy"
+    },
+    {
+     "key": "responsive_distress",
+     "name": "Responsive distress"
+    },
+    {
+     "key": "empathic_concern",
+     "name": "Empathic concern"
+    }
+   ],
+   "items": [
+    {
+     "id": "emotional-intelligence-1",
+     "text": "Express my affection physically.",
+     "scale": "positive_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-2",
+     "text": "Shout or scream when I'm angry.",
+     "scale": "negative_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-3",
+     "text": "Think about the causes of my emotions.",
+     "scale": "attending_to_emotions",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-4",
+     "text": "Listen to my feelings when making important decisions.",
+     "scale": "emotion_based_decision_making",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-5",
+     "text": "Like to watch children open presents.",
+     "scale": "responsive_joy",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-6",
+     "text": "Am deeply moved by others' misfortunes.",
+     "scale": "responsive_distress",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-7",
+     "text": "Am concerned about others.",
+     "scale": "empathic_concern",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-8",
+     "text": "Laugh out loud if something is funny.",
+     "scale": "positive_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-9",
+     "text": "Can't help but look upset when something bad happens.",
+     "scale": "negative_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-10",
+     "text": "Pay a lot of attention to my feelings.",
+     "scale": "attending_to_emotions",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-11",
+     "text": "Base my goals in life on inspiration, rather than logic.",
+     "scale": "emotion_based_decision_making",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-12",
+     "text": "Usually end up laughing if the people around me are laughing.",
+     "scale": "responsive_joy",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-13",
+     "text": "Am easily moved to tears.",
+     "scale": "responsive_distress",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-14",
+     "text": "Feel sympathy for those who are worse off than myself.",
+     "scale": "empathic_concern",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-15",
+     "text": "Express my happiness in a childlike manner.",
+     "scale": "positive_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-16",
+     "text": "Show my fear.",
+     "scale": "negative_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-17",
+     "text": "Am usually aware of the way that I'm feeling.",
+     "scale": "attending_to_emotions",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-18",
+     "text": "Plan my life based on how I feel.",
+     "scale": "emotion_based_decision_making",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-19",
+     "text": "Feel other people's joy.",
+     "scale": "responsive_joy",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-20",
+     "text": "Suffer from others' sorrows.",
+     "scale": "responsive_distress",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-21",
+     "text": "Sympathize with the homeless.",
+     "scale": "empathic_concern",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-22",
+     "text": "Sometimes laugh out loud when reading or watching TV.",
+     "scale": "positive_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-23",
+     "text": "Suspect that my facial expressions give me away when I feel sad.",
+     "scale": "negative_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-24",
+     "text": "Notice my emotions.",
+     "scale": "attending_to_emotions",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-25",
+     "text": "Believe emotions give direction to life.",
+     "scale": "emotion_based_decision_making",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-26",
+     "text": "Get caught up in the excitement when others are celebrating.",
+     "scale": "responsive_joy",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-27",
+     "text": "Am upset by the misfortunes of strangers.",
+     "scale": "responsive_distress",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-28",
+     "text": "Believe that criminals should receive help rather than punishment.",
+     "scale": "empathic_concern",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-29",
+     "text": "Hug my close friends.",
+     "scale": "positive_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-30",
+     "text": "Show my sadness.",
+     "scale": "negative_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-31",
+     "text": "Often stop to analyze how I'm feeling.",
+     "scale": "attending_to_emotions",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-32",
+     "text": "Listen to my heart rather than my brain.",
+     "scale": "emotion_based_decision_making",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-33",
+     "text": "Am strongly influenced by the good moods of others.",
+     "scale": "responsive_joy",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-34",
+     "text": "Would be upset if I saw an injured animal.",
+     "scale": "responsive_distress",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-35",
+     "text": "Believe that the poor deserve our sympathy.",
+     "scale": "empathic_concern",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-36",
+     "text": "Show my feelings when I'm happy.",
+     "scale": "positive_expressivity",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-37",
+     "text": "Keep my feelings to myself, regardless of how unhappy I am.",
+     "scale": "negative_expressivity",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-38",
+     "text": "Rarely think about how I feel.",
+     "scale": "attending_to_emotions",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-39",
+     "text": "Plan my life logically.",
+     "scale": "emotion_based_decision_making",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-40",
+     "text": "Find it hard to stay in a bad mood if the people around me are happy.",
+     "scale": "responsive_joy",
+     "reverse": false
+    },
+    {
+     "id": "emotional-intelligence-41",
+     "text": "Am calm even in tense situations.",
+     "scale": "responsive_distress",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-42",
+     "text": "Feel little concern for others.",
+     "scale": "empathic_concern",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-43",
+     "text": "Find it difficult showing people that I care about them.",
+     "scale": "positive_expressivity",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-44",
+     "text": "Find it difficult showing people that I'm angry with them.",
+     "scale": "negative_expressivity",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-45",
+     "text": "Rarely analyze my emotions.",
+     "scale": "attending_to_emotions",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-46",
+     "text": "Believe important decisions should be based on logical reasoning.",
+     "scale": "emotion_based_decision_making",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-47",
+     "text": "Dislike being around happy people when I'm feeling sad.",
+     "scale": "responsive_joy",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-48",
+     "text": "Am not easily disturbed by events.",
+     "scale": "responsive_distress",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-49",
+     "text": "Have no sympathy for criminals.",
+     "scale": "empathic_concern",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-50",
+     "text": "Have difficulty showing affection.",
+     "scale": "positive_expressivity",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-51",
+     "text": "Keep my feelings to myself, regardless of how scared I am.",
+     "scale": "negative_expressivity",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-52",
+     "text": "Am not in touch with my feelings.",
+     "scale": "attending_to_emotions",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-53",
+     "text": "Listen to my brain rather than my heart.",
+     "scale": "emotion_based_decision_making",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-54",
+     "text": "Am unaffected by other people's happiness.",
+     "scale": "responsive_joy",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-55",
+     "text": "Am unaffected by the suffering of others.",
+     "scale": "responsive_distress",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-56",
+     "text": "Look down on any weakness.",
+     "scale": "empathic_concern",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-57",
+     "text": "Keep my happy feelings to myself.",
+     "scale": "positive_expressivity",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-58",
+     "text": "Rarely show my anger.",
+     "scale": "negative_expressivity",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-59",
+     "text": "Often ignore my feelings.",
+     "scale": "attending_to_emotions",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-60",
+     "text": "Make decisions based on facts, not feelings.",
+     "scale": "emotion_based_decision_making",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-61",
+     "text": "Rarely get caught up in the excitement.",
+     "scale": "responsive_joy",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-62",
+     "text": "Rarely cry during sad movies.",
+     "scale": "responsive_distress",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-63",
+     "text": "Don't like to get involved in other people's problems.",
+     "scale": "empathic_concern",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-64",
+     "text": "Wish I could more easily show my negative feelings.",
+     "scale": "negative_expressivity",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-65",
+     "text": "Rarely notice my emotional reactions.",
+     "scale": "attending_to_emotions",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-66",
+     "text": "Dislike children's birthday parties.",
+     "scale": "responsive_joy",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-67",
+     "text": "Remain calm during emergencies.",
+     "scale": "responsive_distress",
+     "reverse": true
+    },
+    {
+     "id": "emotional-intelligence-68",
+     "text": "Have little sympathy for the unemployed.",
+     "scale": "empathic_concern",
+     "reverse": true
+    }
+   ]
+  }
+ ]
+}

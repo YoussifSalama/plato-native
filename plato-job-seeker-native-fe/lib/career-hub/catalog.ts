@@ -14,7 +14,7 @@ export const CAT_ACCENT: Record<PracticeCat, Accent> = { Aptitude: "azure", Skil
 export const CATALOG: Practice[] = [
   { id: "numerical", cat: "Aptitude", title: "Numerical reasoning", body: "Timed questions, used by many consulting firms", meta: "18 min · Medium", icon: BarChart3, prompt: "Give me a numerical reasoning practice test, one question at a time" },
   { id: "logical", cat: "Aptitude", title: "Logical reasoning", body: "Patterns and deductions, one question at a time", meta: "15 min · Medium", icon: Puzzle, prompt: "Give me a logical reasoning practice test, one question at a time" },
-  { id: "assessment", cat: "Skills", title: "Skill assessment", body: "Adaptive test that measures your level", meta: "8 min · Adaptive", icon: ClipboardCheck, href: "/career/assessments" },
+  { id: "assessment", cat: "Skills", title: "Hiring quiz", body: "A practice test in the company's own format, for any job", meta: "10 to 30 min · Built for you", icon: ClipboardCheck, href: "/career/quizzes" },
   { id: "proof", cat: "Skills", title: "Proof of skills challenge", body: "A real work sample, scored against a rubric", meta: "15–30 min", icon: Hammer, href: "/career/proof" },
   { id: "skill-gap", cat: "Skills", title: "Close a skill gap", body: "Skills your matches ask for that aren't on your CV", meta: "Your matches", icon: Lightbulb, href: "/career/skills" },
   { id: "resume-score", cat: "Resume", title: "Resume score", body: "See what to fix before Plato applies", meta: "3 min", icon: FileSearch, prompt: "Score my resume out of 100 and list the quick fixes" },

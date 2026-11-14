@@ -88,7 +88,7 @@ function CommandPalette() {
       { id: "following", label: "Following", hint: "Go to", icon: BellRing, run: go("/following"), words: "alerts digest companies roles email" },
       { id: "career", label: "Career", hint: "Go to", icon: GraduationCap, run: go(PAGE_PATH.career), words: "readiness overview" },
       { id: "interviews", label: "Interviews", hint: "Career", icon: MessagesSquare, run: go("/career/interviews"), words: "mock practice history" },
-      { id: "assessments", label: "Assessments", hint: "Career", icon: ClipboardCheck, run: go("/career/assessments"), words: "test quiz skill level" },
+      { id: "quizzes", label: "Quizzes", hint: "Career", icon: ClipboardCheck, run: go("/career/quizzes"), words: "quiz test assessment hiring online assessment company practice" },
       { id: "proof", label: "Proof of skills", hint: "Career", icon: Award, run: go("/career/proof"), words: "challenge work sample" },
       { id: "skills", label: "Skills gap", hint: "Career", icon: Target, run: go("/career/skills"), words: "learn certificate" },
       { id: "snapshot", label: "Profile snapshot", hint: "Career", icon: UserRound, run: go("/career/snapshot"), words: "history scores" },

@@ -1,0 +1,102 @@
+// Quiz Builder (src/modules/quizzes): a practice test in a company's own hiring-test format for one role, built by AI
+// from a job Plato has or a pasted description. Shapes of the Json fields: src/modules/quizzes/quiz.contract.ts.
+
+model Quiz {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String @db.ObjectId
+
+  title       String // "Amazon · Software Development Engineer"
+  company     String?
+  company_key String? // normalizeCompany(company).key, for the library
+  role        String
+  role_family String // normalised role ("software development engineer"), for the library
+
+  source Json // { kind: 'job', job_id } | { kind: 'text', text }
+
+  status String  @default("generating") // generating | ready | failed
+  stage  String? // reading | researching | writing (while generating)
+  error  String?
+
+  about    String @default("") // what the research found about the company's test
+  sources  Json   @default("[]") // [{ title, url }]
+  sections Json   @default("[]") // Section[] (questions without keys)
+  keys     Json   @default("{}") // questionId -> { key: AnswerKey, explanation }
+
+  library_id String? @db.ObjectId // the shared library entry it came from or was saved as
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([job_seeker_id, created_at])
+  @@map("quizzes")
+}
+
+// The shared library ("vault"): every quiz that passed validation, reusable by other seekers for the same company
+// and role family, so a second seeker gets it instantly and without AI cost.
+model QuizLibrary {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  company_key String // "" when no company
+  company     String?
+  role_family String
+  role        String
+  title       String
+
+  about    String @default("")
+  sources  Json   @default("[]")
+  sections Json
+  keys     Json
+
+  times_taken Int @default(0)
+
+  created_at DateTime @default(now())
+
+  @@index([company_key, role_family, created_at])
+  @@map("quiz_library")
+}
+
+model QuizAttempt {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  quiz_id       String @db.ObjectId
+  job_seeker_id String @db.ObjectId
+
+  answers Json // questionId -> Answer
+  result  Json // AttemptResult without id/quizId/createdAt
+  score   Int // 0-100
+  seconds Int
+
+  created_at DateTime @default(now())
+
+  @@index([quiz_id, created_at])
+  @@index([job_seeker_id, created_at])
+  @@map("quiz_attempts")
+}
+
+// Standard assessments (fixed item banks in data/assessments; shapes in quiz.contract.ts).
+model AssessmentAttempt {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String @db.ObjectId
+  slug          String // "matrix-3", "big-five"
+
+  answers  Json // item id -> AssessmentAnswer
+  result   Json // AssessmentResult without id/createdAt
+  headline String
+  seconds  Int
+
+  created_at DateTime @default(now())
+
+  @@index([job_seeker_id, slug, created_at])
+  @@map("assessment_attempts")
+}
+
+// The AI-written candidate report, one per seeker, rewritten on request when newer attempts exist.
+model CandidateReport {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String @unique @db.ObjectId
+  basis         String // the newest attempt id it was written from
+  report        Json // CandidateReport
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("candidate_reports")
+}

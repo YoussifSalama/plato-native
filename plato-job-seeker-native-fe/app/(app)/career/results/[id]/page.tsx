@@ -19,7 +19,7 @@ import { InterviewResult, fromHub } from "../../interviews/interview-result"
 const SELF = ["New to it", "Some exposure", "Comfortable", "Strong", "Expert"]
 // The Career tab each kind of result belongs to: the breadcrumb and the way back.
 const PARENT: Record<HubKind, { label: string; href: string }> = {
-  assessment: { label: "Assessments", href: "/career/assessments" },
+  assessment: { label: "Quizzes", href: "/career/quizzes" },
   interview: { label: "Interviews", href: "/career/interviews" },
   simulation: { label: "Interviews", href: "/career/interviews" },
   proof: { label: "Proof of skills", href: "/career/proof" },

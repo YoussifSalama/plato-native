@@ -7,7 +7,7 @@ export type TokenMove = { id: string; kind: "grant" | "consume" | "hold" | "rele
 export type TokenAccount = { plan: string; balance: number; topup: number; monthly: number; periodStart: string; resetsAt: string; history: TokenMove[] }
 export type TokenPrices = { plans: Record<string, { label: string; monthly: number; priceUsd: number }>; topups: Record<string, { label: string; tokens: number; priceUsd: number }> }
 // Rounded figures from the server (the same ones the assistant uses): "about" is usual, "upTo" the most.
-export type EstimateAction = "search_message" | "career_message" | "resume" | "mock_interview" | "research" | "cv_analysis" | "voice_minute" | "voice_scorecard" | "interview_start" | "interview_answer" | "interview_answer_coach" | "deep_search"
+export type EstimateAction = "search_message" | "career_message" | "resume" | "mock_interview" | "research" | "cv_analysis" | "voice_minute" | "voice_scorecard" | "interview_start" | "interview_answer" | "interview_answer_coach" | "deep_search" | "quiz" | "candidate_report"
 export type TokenEstimate = { action: EstimateAction; label: string; about: number; upTo: number; note?: string }
 export type TokenEstimates = { plan: string; balance: number; monthly: number; refillsOn: string; estimates: TokenEstimate[] }
 // The body of a 402 from any paid route.

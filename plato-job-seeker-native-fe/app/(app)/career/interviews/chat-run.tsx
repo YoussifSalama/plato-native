@@ -12,6 +12,7 @@ import { answerInterview, type AnswerFeedback, type Interview } from "@/lib/inte
 import { invalidateCareerData } from "@/lib/career-hub/snapshot"
 import { styleLabel } from "@/lib/interviews/flow"
 import { Kbd } from "../practice-ui"
+import { useLeaveGuard } from "@/lib/use-leave-guard"
 
 // The run, the same frame for chat and voice: what it is · how · style, the question count,
 // whose turn it is, the whole conversation so far, and a way out.
@@ -82,6 +83,7 @@ const Asked = ({ children, follow }: { children: ReactNode; follow?: boolean }) 
 const Said = ({ children }: { children: ReactNode }) => <p className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2.5 text-[14px] leading-relaxed whitespace-pre-wrap text-primary-foreground">{children}</p>
 
 export function ChatRun({ iv, title, onChange }: { iv: Interview; title: string; onChange: (iv: Interview) => void }) {
+  useLeaveGuard(true, "Your interview is still running. Leave now? Your answers so far are saved, but this interview stays unfinished.")
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

@@ -159,7 +159,7 @@ describe('route protection over HTTP', () => {
       .expect(401);
   });
 
-  it('token API: wrong, missing or unconfigured origin is forbidden', async () => {
+  it('token API: wrong or unconfigured origin is forbidden; no Origin (host-permitted GET) passes', async () => {
     await http()
       .get('/extension/v1/me')
       .set({ Authorization: `Bearer ${GOOD}`, Origin: 'https://evil.example' })
@@ -167,9 +167,10 @@ describe('route protection over HTTP', () => {
     await http()
       .get('/extension/v1/me')
       .set({ Authorization: `Bearer ${GOOD}` })
-      .expect(403);
+      .expect(200);
     delete process.env.EXTENSION_ORIGIN;
     await http().get('/extension/v1/me').set(bearer()).expect(403);
+    await http().get('/extension/v1/me').set({ Authorization: `Bearer ${GOOD}` }).expect(403);
     process.env.EXTENSION_ORIGIN = ORIGIN;
   });
 

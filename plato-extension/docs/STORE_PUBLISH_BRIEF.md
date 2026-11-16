@@ -33,9 +33,9 @@ Architecture, so you can answer reviewer questions truthfully:
 - Permissions: `sidePanel`, `storage`, `tabGroups`, `debugger`. No host permissions. Content script declared for
   18 job-site URL patterns (Greenhouse, Lever, Ashby, Workable, SmartRecruiters, BambooHR, Recruitee, Teamtailor,
   Personio, JazzHR, LinkedIn jobs, Indeed job view, Wuzzuf job pages).
-- The manifest carries a `key` so the extension ID stays `nilmidkdmklmoaddnglfalmondjmfeaj` (the backend allows
-  exactly this origin). If the dashboard rejects the package because of the `key` field, STOP and tell the owner;
-  removing it changes the ID and the backend setting must change with it.
+- The store package leaves out the manifest `key` (the dashboard refuses it). The store id is
+  `khlefnjhigieijnbjhgfedpmenobcope`; unpacked builds pin the store's public key so they share that id, and the
+  backend allows exactly this origin.
 - The icons are placeholders (purple square, white P). The owner has a logo coming; the listing can be updated later.
 
 ## What the dashboard will ask, and the answers

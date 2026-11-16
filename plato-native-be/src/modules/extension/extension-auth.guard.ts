@@ -52,8 +52,11 @@ export class ExtensionAuthGuard implements CanActivate {
     );
     if (!scopes) throw new ForbiddenException('Route has no declared scope');
 
-    // Defense in depth (CORS is browser-side only; the token is the credential).
-    if (!isExtensionOrigin(req.headers.origin))
+    // Defense in depth (CORS is browser-side only; the token is the credential). A missing Origin passes: once the
+    // user grants the any-site permission (Start batch), Chrome stops sending Origin on the extension's GETs.
+    // EXTENSION_ORIGIN unset still denies everything.
+    const origin = req.headers.origin;
+    if (origin ? !isExtensionOrigin(origin) : !extensionOrigins().length)
       throw new ForbiddenException('Origin not allowed');
 
     const header = req.headers.authorization;

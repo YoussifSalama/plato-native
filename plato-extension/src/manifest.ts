@@ -15,9 +15,9 @@ export function buildManifest(o: { flavor: Flavor; apiOrigin: string; webOrigin?
     version: o.version ?? '0.1.0',
     description: 'Fills job applications in your own browser from your Plato profile, and asks you only when it needs you.',
     minimum_chrome_version: '116',
-    // The pinned key gives every unpacked/dev build the same id. The Chrome Web Store refuses a key in an uploaded
-    // package ("key field is not allowed in manifest") and assigns its own id: the store build leaves it out, and the
-    // backend's EXTENSION_ORIGIN lists both ids.
+    // The pinned key is the Web Store listing's public key, so unpacked/dev builds get the store id
+    // (khlefnjhigieijnbjhgfedpmenobcope) and the backend trusts one origin. The store refuses a key in an uploaded
+    // package ("key field is not allowed in manifest"), so the store build leaves it out; the store assigns the same id.
     ...(o.store ? {} : { key: key.key }),
     // tabGroups only labels the tabs Plato opens ("Plato" group). No host_permissions, no tabs/cookies/webRequest.
     // debugger: real mouse / key events into the job's tab (custom dropdowns, boxes, Submit), the same way a person presses.

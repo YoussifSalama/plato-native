@@ -3,9 +3,9 @@
 import { useEffect } from "react"
 import { startPairing } from "@/lib/extension/api"
 
-// The Plato Apply extension ids this page may talk to: the unpacked build's pinned id, and
-// the Chrome Web Store id once published (NEXT_PUBLIC_EXTENSION_IDS, comma-separated).
-const IDS = (process.env.NEXT_PUBLIC_EXTENSION_IDS || "nilmidkdmklmoaddnglfalmondjmfeaj")
+// The Plato Apply extension id this page may talk to. The unpacked build pins the Web Store key, so both
+// builds share it (NEXT_PUBLIC_EXTENSION_IDS overrides, comma-separated).
+const IDS = (process.env.NEXT_PUBLIC_EXTENSION_IDS || "khlefnjhigieijnbjhgfedpmenobcope")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean)

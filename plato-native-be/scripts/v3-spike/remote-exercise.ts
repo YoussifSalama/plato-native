@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { CdpBrowser } from './cdp-browser.js';
 
 const API = 'http://localhost:3000';
-const EXT_ORIGIN = 'chrome-extension://nilmidkdmklmoaddnglfalmondjmfeaj';
+const EXT_ORIGIN = 'chrome-extension://khlefnjhigieijnbjhgfedpmenobcope';
 const SCRATCH = '/tmp/claude-1000/-media-youssif-salama-work1-mine-plato-native/7be43129-e0fc-49ff-a8c9-f1521c15f1be/scratchpad';
 const RESUME = `${SCRATCH}/cv/Test_Seeker_CV.pdf`;
 

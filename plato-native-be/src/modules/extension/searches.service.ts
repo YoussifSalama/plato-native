@@ -14,6 +14,8 @@ export interface MatchEngine {
     o: { skip?: number; take?: number; shortlistedOnly?: boolean; filters?: Record<string, unknown> },
   ): Promise<{ total: number; items: any[] }>;
   referenceScore(jobSeekerId: string): Promise<number | null>;
+  // the web sidebar's live count per search (thread): the panel shows the same number
+  openMatchCounts?(jobSeekerId: string, threadIds: string[]): Promise<Map<string, number>>;
 }
 
 const OBJECT_ID = /^[0-9a-f]{24}$/;
@@ -50,15 +52,17 @@ export class SearchesService {
   ) {}
 
   /**
-   * Searches holding jobs the seeker added from the web come first (that is what they want to
-   * apply to), then newest. Featured only earns a tag. Newest-first from the DB; the sort is stable.
+   * The web's searches, one per chat thread like its sidebar (its newest run stands for it; the thread's jobs are
+   * every run's), with the same title and live count. Searches holding jobs the seeker added from the web come
+   * first (that is what they want to apply to), then newest. Featured only earns a tag. The sort is stable.
    */
   async list(jobSeekerId: string) {
-    const [runs, queued] = await Promise.all([
+    const [allRuns, queued] = await Promise.all([
       this.prisma.discoveryRun.findMany({
         where: { job_seeker_id: jobSeekerId },
         orderBy: { started_at: 'desc' },
         take: MAX_SEARCHES,
+        include: { thread: { select: { title: true } } },
       }),
       this.prisma.jobSeekerJobMatch.findMany({
         where: { job_seeker_id: jobSeekerId, extension_queued: true },
@@ -66,8 +70,12 @@ export class SearchesService {
         take: 200,
       }),
     ]);
-    const queuedIn = (runId: string) =>
-      queued.filter((m) => m.discovery_run_id === runId || m.discovery_run_ids.includes(runId)).length;
+    const runs = allRuns.filter((r, i) => !r.thread_id || allRuns.findIndex((x) => x.thread_id === r.thread_id) === i);
+    const threadRuns = (r: (typeof allRuns)[number]) => (r.thread_id ? allRuns.filter((x) => x.thread_id === r.thread_id).map((x) => x.id) : [r.id]);
+    const queuedIn = (ids: string[]) =>
+      queued.filter((m) => ids.includes(m.discovery_run_id ?? '') || m.discovery_run_ids.some((id) => ids.includes(id))).length;
+    const threadIds = runs.flatMap((r) => (r.thread_id ? [r.thread_id] : []));
+    const live = (await this.discovery.openMatchCounts?.(jobSeekerId, threadIds).catch(() => null)) ?? new Map<string, number>();
     return runs
       .map((r) => {
         const q = (r.query ?? {}) as {
@@ -78,12 +86,14 @@ export class SearchesService {
         };
         return {
           id: r.id,
-          title: q.requestedTitles?.[0] ?? q.titles?.[0] ?? 'Search',
+          thread_id: r.thread_id ?? null, // "Open in extension" on the web names the thread
+          // the web's name for it: the thread's title, else every title asked for
+          title: (r.thread?.title?.replace(/ search$/i, '') || (q.requestedTitles?.length ? q.requestedTitles : q.titles ?? []).join(', ')) || 'Search',
           locations: (q.locations ?? []).slice(0, 3),
           remote: q.remoteTypes?.[0] ?? null,
-          job_count: r.matched,
+          job_count: (r.thread_id && live.get(r.thread_id)) ?? r.matched,
           featured: r.featured === true,
-          queued: queuedIn(r.id),
+          queued: queuedIn(threadRuns(r)),
           created_at: r.started_at,
         };
       })
@@ -98,14 +108,18 @@ export class SearchesService {
     if (!OBJECT_ID.test(runId)) throw new BadRequestException('Invalid id');
     const run = await this.prisma.discoveryRun.findFirst({
       where: { id: runId, job_seeker_id: jobSeekerId },
-      select: { id: true },
+      select: { id: true, thread_id: true },
     });
     if (!run) throw new NotFoundException('Search not found');
+    // A search is the web's thread: its jobs come from every run in it, like the web's list.
+    const runIds = run.thread_id
+      ? (await this.prisma.discoveryRun.findMany({ where: { job_seeker_id: jobSeekerId, thread_id: run.thread_id }, select: { id: true } })).map((r) => r.id)
+      : [runId];
     const { skip = 0, take = 8, first, fromPlato, ...filters } = query;
     // Jobs the seeker already ticked come first, on every page count, then the rest in the chosen order.
     // "From Plato": just the jobs added on the web, nothing else.
     const firstIds = fromPlato
-      ? await this.queuedOf(jobSeekerId, runId)
+      ? await this.queuedOf(jobSeekerId, runIds)
       : (first ?? '').split(',').filter((x) => OBJECT_ID.test(x)).slice(0, 50);
     const pinnedAll = firstIds.length
       ? (
@@ -124,7 +138,7 @@ export class SearchesService {
       skip: Math.max(0, skip - pinnedAll.length),
       take: Math.max(0, take - pinned.length),
       shortlistedOnly: true, // same slice the web shows for a search
-            filters: { ...filters, tab: 'discover', runIds: [runId], ...(firstIds.length && { excludeJobIds: firstIds }) },
+            filters: { ...filters, tab: 'discover', runIds, ...(firstIds.length && { excludeJobIds: firstIds }) },
           }),
     ]);
     const total = rest.total + pinnedAll.length;
@@ -153,18 +167,18 @@ export class SearchesService {
       total,
       items: rows,
       // first page only: the source filter's options, and every job queued from the web (any page) to pre-tick
-      sources: skip === 0 ? await this.sourcesOf(jobSeekerId, runId) : undefined,
-      queued: skip === 0 ? await this.queuedOf(jobSeekerId, runId) : undefined,
+      sources: skip === 0 ? await this.sourcesOf(jobSeekerId, runIds) : undefined,
+      queued: skip === 0 ? await this.queuedOf(jobSeekerId, runIds) : undefined,
     };
   }
 
   /** Ids queued from the web for this search whose site Plato may fill: the wizard pre-ticks them. */
-  private async queuedOf(jobSeekerId: string, runId: string) {
+  private async queuedOf(jobSeekerId: string, runIds: string[]) {
     const rows = await this.prisma.jobSeekerJobMatch.findMany({
       where: {
         job_seeker_id: jobSeekerId,
         extension_queued: true,
-        OR: [{ discovery_run_ids: { has: runId } }, { discovery_run_id: runId }],
+        OR: [{ discovery_run_ids: { hasSome: runIds } }, { discovery_run_id: { in: runIds } }],
       },
       select: { job: { select: { id: true, source: true, url: true, apply_url: true } } },
       take: 50,
@@ -178,12 +192,12 @@ export class SearchesService {
   }
 
   /** Which boards this search's jobs came from (for the Source filter). */
-  private async sourcesOf(jobSeekerId: string, runId: string) {
+  private async sourcesOf(jobSeekerId: string, runIds: string[]) {
     const rows = await this.prisma.jobSeekerJobMatch.findMany({
       where: {
         job_seeker_id: jobSeekerId,
         shortlisted: true,
-        OR: [{ discovery_run_ids: { has: runId } }, { discovery_run_id: runId }],
+        OR: [{ discovery_run_ids: { hasSome: runIds } }, { discovery_run_id: { in: runIds } }],
       },
       select: { job: { select: { source: true } } },
       take: 2000,

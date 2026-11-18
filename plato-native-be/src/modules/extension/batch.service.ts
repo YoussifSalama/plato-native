@@ -132,6 +132,13 @@ export class ExtensionBatchService {
         rejected.push({ job_id: id, reason: app?.status === 'SUBMITTED' && !liveItems.some((i) => i.job_id === id) ? 'applied' : 'duplicate' });
       else accepted.push({ job_id: id, provider: source, ...(app?.status === 'SUBMITTED' && { reapply: true }) });
     }
+    // Queued from the web means "waiting for the extension": a batch request spends the tag for every job in it,
+    // accepted or refused. Clearing only the accepted ones left a refused one (a second, racing request: React's
+    // dev double effect, a double click) showing "Queued on Plato" with nothing queued.
+    await this.prisma.jobSeekerJobMatch?.updateMany({
+      where: { job_seeker_id: jobSeekerId, job_id: { in: ids } },
+      data: { extension_queued: false },
+    });
     if (!accepted.length) return { batch_id: null, items: [], rejected };
     // Name the batch after the search it came from (only the seeker's own search).
     const run = searchId && OBJECT_ID.test(searchId)
@@ -140,11 +147,6 @@ export class ExtensionBatchService {
     const q = (run?.query ?? {}) as { requestedTitles?: string[]; titles?: string[] };
     const batch = await this.prisma.applyBatch.create({
       data: { job_seeker_id: jobSeekerId, ...(run && { search_id: run.id, label: q.requestedTitles?.[0] ?? q.titles?.[0] ?? null }) },
-    });
-    // Queued from the web means "waiting for the extension": once a batch exists, the tag is spent.
-    await this.prisma.jobSeekerJobMatch?.updateMany({
-      where: { job_seeker_id: jobSeekerId, job_id: { in: accepted.map((a) => a.job_id) } },
-      data: { extension_queued: false },
     });
     const items: any[] = [];
     for (const a of accepted)

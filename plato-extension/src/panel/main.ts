@@ -1384,7 +1384,7 @@ const actions: Actions = {
       if (runner.isActive()) return toast('A batch is running. New jobs wait until it finishes.');
       const j = state.jobs;
       const room = MAX_BATCH_JOBS - j.picked.length;
-      const add = visibleJobs(j).filter((x) => x.applyable && !x.queued && !j.picked.includes(`job:${x.id}`)).map((x) => `job:${x.id}` as PickKey); // what the site chip shows, not the whole page
+      const add = visibleJobs(j).filter((x) => x.applyable && !(x.queued && queuedItems(state).some((i) => i.job_id === x.id)) && !j.picked.includes(`job:${x.id}`)).map((x) => `job:${x.id}` as PickKey); // what the site chip shows, not the whole page
       j.picked = [...j.picked, ...add.slice(0, room)];
       draw();
       if (add.length > room) toast(`Added ${Math.max(0, room)}. The batch is full at ${MAX_BATCH_JOBS}; ${add.length - room} not added.`);
@@ -1582,6 +1582,7 @@ chrome.runtime.onMessage.addListener((msg: unknown, sender) => {
     await loadSearches().catch(fail);
     toast('Linked from your Plato account.', 'ok');
     void applyNow();
+    void openSearch();
   });
 });
 
@@ -1615,7 +1616,27 @@ async function applyNow() {
   toast('Press Start once to let Plato open the job sites. Next time it starts by itself.');
   draw();
 }
-chrome.storage.session.onChanged.addListener((c) => void (c.applyNow?.newValue && applyNow()));
+// "Open in extension" on a web search: the Jobs tab on that search (by run, else by its thread: the web may show an
+// older run of the same search).
+async function openSearch() {
+  if (!leader || state.status !== 'ready') return;
+  const req = ((await chrome.storage.session.get('openSearch').catch(() => ({}))) as { openSearch?: { searchId: string; threadId?: string; at: number } }).openSearch;
+  if (!req) return;
+  await chrome.storage.session.remove('openSearch').catch(() => undefined);
+  if (Date.now() - req.at > APPLY_NOW_MS) return;
+  const j = state.jobs;
+  j.searches = await api.searches().catch(() => j.searches); // the web may have just made it
+  const hit = j.searches.find((c) => c.id === req.searchId) ?? (req.threadId ? j.searches.find((c) => c.thread_id === req.threadId) : undefined);
+  if (!hit) return void (toast('That search is not in the extension yet. Refresh in a moment.', 'err'), draw());
+  state.view = 'jobs';
+  state.sheet = false;
+  Object.assign(j, { searchId: hit.id, pickerOpen: false, q: '', remote: false, fromPlato: false, sort: 'best', jobs: [], jobsTotal: 0 });
+  await guard(() => fetchJobs(false));
+}
+chrome.storage.session.onChanged.addListener((c) => {
+  if (c.applyNow?.newValue) void applyNow();
+  if (c.openSearch?.newValue) void openSearch();
+});
 
 // Only one panel instance may run the batch (two would double-open tabs and double-ask the AI).
 const PANEL_ID = Math.random().toString(36).slice(2);
@@ -1662,7 +1683,7 @@ async function boot() {
   }
   await refresh();
   void applyNow();
-  if (state.status === 'ready') loadSearches().then(draw, (e) => (log('warn', `searches: ${e instanceof Error ? e.message : String(e)}`), draw()));
+  if (state.status === 'ready') loadSearches().then(() => (draw(), openSearch()), (e) => (log('warn', `searches: ${e instanceof Error ? e.message : String(e)}`), draw()));
   setInterval(() => document.visibilityState === 'visible' && void refresh(), 15_000);
   setInterval(() => runner.isActive() && state.view === 'batch' && ((state.eta = runner.eta(state.rows, tabLimit())), scheduleDraw()), 5_000); // the estimate counts down between refreshes
   // jobs queued from the website show up as soon as the seeker comes back to the panel

@@ -40,11 +40,12 @@ const autoLink = createAutoLink({
   onLinked: () => void chrome.runtime.sendMessage({ type: 'plato:linked' }).catch(() => undefined),
   // Kept in session storage: the panel picks it up when it opens (or at once, if it is open already).
   onApplyNow: (jobIds) => chrome.storage.session.set({ applyNow: { jobIds, at: Date.now() } }),
+  onOpenSearch: (o) => chrome.storage.session.set({ openSearch: { ...o, at: Date.now() } }),
 });
 chrome.runtime.onMessageExternal.addListener((msg, sender, reply) => {
   // Try to open the panel for the person: Chrome allows it only inside a user gesture, which a web page's message
   // usually does not carry. Called before any await (an await spends the gesture); refused = they open it themselves.
-  if ((msg as { type?: string } | null)?.type === 'plato:apply-now' && sender.origin === __WEB_ORIGIN__ && sender.tab?.windowId !== undefined)
+  if (/^plato:(apply-now|open-search)$/.test(String((msg as { type?: unknown } | null)?.type)) && sender.origin === __WEB_ORIGIN__ && sender.tab?.windowId !== undefined)
     chrome.sidePanel.open({ windowId: sender.tab.windowId }).catch(() => undefined);
   void autoLink(msg, sender.origin).then((r) => reply(r ?? undefined));
   return true; // answered asynchronously

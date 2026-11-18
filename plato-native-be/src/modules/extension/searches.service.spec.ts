@@ -21,6 +21,20 @@ describe('SearchesService', () => {
     expect(out.find((x) => x.id === 'b')!.featured).toBe(true);
   });
 
+  it('one search per web thread, named and counted like the web sidebar', async () => {
+    const r = (id: string, thread_id: string | null, titles: string[], title: string | null = null) => ({ ...run(id, null, ''), thread_id, thread: thread_id ? { title } : null, query: { requestedTitles: titles } });
+    const prisma: any = {
+      // newest first: t1 has two runs, its newest (n1) stands for it
+      discoveryRun: { findMany: async () => [r('n1', 't1', ['AI Engineer', 'Full Stack']), r('o1', 't1', ['AI Engineer']), r('n2', 't2', ['Backend'], 'Backend Developer search'), r('x', null, ['Solo'])] },
+      jobSeekerJobMatch: { findMany: async () => [{ discovery_run_id: 'o1', discovery_run_ids: [] }] },
+    };
+    const discovery: any = { openMatchCounts: async () => new Map([['t1', 180]]) };
+    const out = await new SearchesService(prisma, discovery).list('s1');
+    expect(out.map((x) => x.id)).toEqual(['n1', 'n2', 'x']); // n1 first: a job added from Plato sits in its older run
+    expect(out[0]).toMatchObject({ title: 'AI Engineer, Full Stack', job_count: 180, queued: 1 });
+    expect(out[1]).toMatchObject({ title: 'Backend Developer', job_count: 3 }); // no live count: the run's own
+  });
+
   it("refuses another seeker's search", async () => {
     const prisma: any = { discoveryRun: { findFirst: async () => null, updateMany: async () => ({ count: 0 }) } };
     const s = new SearchesService(prisma, {} as any);

@@ -8,8 +8,9 @@ function setup(token: string | null = null) {
   const api = { exchange: vi.fn(async () => ({ token: 'ext-token', device_id: 'd', scopes: [], expires_at: '' })) };
   const onLinked = vi.fn();
   const onApplyNow = vi.fn(async () => undefined);
-  const handle = createAutoLink({ webOrigin: WEB, tokens: tokens as never, exchange: api.exchange, version: '0.2.0', onLinked, onApplyNow });
-  return { handle, tokens, api, onLinked, onApplyNow };
+  const onOpenSearch = vi.fn(async () => undefined);
+  const handle = createAutoLink({ webOrigin: WEB, tokens: tokens as never, exchange: api.exchange, version: '0.2.0', onLinked, onApplyNow, onOpenSearch });
+  return { handle, tokens, api, onLinked, onApplyNow, onOpenSearch };
 }
 
 describe('auto-link from the logged-in Plato web app', () => {
@@ -57,6 +58,17 @@ describe('auto-link from the logged-in Plato web app', () => {
     const unlinked = setup();
     expect(await unlinked.handle({ type: 'plato:apply-now', jobIds: [id] }, WEB)).toEqual({ installed: true, linked: false });
     expect(unlinked.onApplyNow).not.toHaveBeenCalled();
+  });
+
+  it('"Open in extension" hands a valid search (and thread) to the panel, only from Plato', async () => {
+    const id = 'b'.repeat(24);
+    const ok = setup('t');
+    expect(await ok.handle({ type: 'plato:open-search', searchId: id, threadId: id }, WEB)).toEqual({ installed: true, linked: true });
+    expect(ok.onOpenSearch).toHaveBeenCalledWith({ searchId: id, threadId: id });
+    expect(await ok.handle({ type: 'plato:open-search', searchId: id }, 'https://evil.test')).toBeNull();
+    expect(await ok.handle({ type: 'plato:open-search', searchId: 'x' }, WEB)).toBeNull();
+    expect(await ok.handle({ type: 'plato:open-search', searchId: id, threadId: 5 }, WEB)).toBeNull();
+    expect(ok.onOpenSearch).toHaveBeenCalledTimes(1);
   });
 
   it('names the browser for the Extension page', () => {

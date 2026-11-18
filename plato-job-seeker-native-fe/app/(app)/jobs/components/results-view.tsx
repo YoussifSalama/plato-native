@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ExtensionApplyModal } from "@/components/extension-apply-modal"
+import { askExtension } from "@/components/extension-auto-link"
 import { AnimatePresence, motion } from "motion/react"
 import {
   Bookmark,
@@ -22,6 +23,7 @@ import {
   MoreHorizontal,
   Sparkles,
   Star,
+  Puzzle,
   TriangleAlert,
   Undo2,
   X,
@@ -484,6 +486,14 @@ function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: {
     })
   }
 
+  // "Open in extension": the extension's Jobs tab on this search (it opens its panel when Chrome lets it).
+  async function openInExtension() {
+    if (!run) return
+    const r = await askExtension({ type: "plato:open-search", searchId: run.id, ...(threadId && { threadId }) })
+    setNotice(!r ? "Install the Plato extension to pick jobs from this search there (Extension page)." : !r.linked ? "Link the Plato extension first: open it and it links itself while you are logged in here." : "This search is open in the Plato extension. If its panel didn't open, click the Plato icon in your toolbar.")
+    setTimeout(() => setNotice(null), 6000)
+  }
+
   // Both CTAs queue applications server-side (top N = best across the whole
   // conversation, not just this page) and land on Applications.
   function askApply(mode: "top" | "selected") {
@@ -514,6 +524,12 @@ function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: {
           <p className="text-[13px] text-text-secondary">Best matches first. Tick the ones you want, or let Plato apply to the top {TOP_N}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {run && (
+            <button type="button" data-ai="results.open-in-extension" onClick={() => void openInExtension()} className="flex items-center gap-2 rounded-full border bg-card px-4 py-2 text-sm font-semibold whitespace-nowrap text-foreground transition-colors duration-200 hover:border-primary-line hover:text-primary">
+              <Puzzle className="size-4" />
+              Open in extension
+            </button>
+          )}
           {selectedIds.length > 0 && (
             <button type="button" data-ai="results.apply-selected" onClick={() => askApply("selected")} className="rounded-full bg-primary-soft px-4 py-2 text-sm font-semibold whitespace-nowrap text-primary transition-colors duration-200 hover:bg-primary hover:text-primary-foreground">
               Apply to {selectedIds.length} selected

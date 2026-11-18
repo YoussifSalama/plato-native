@@ -85,7 +85,7 @@ export function renderJobs(doc: Document, s: PanelState, a: Actions, registry: R
     const list = h(doc, 'div', { class: 'plist', id: 'search-list', attrs: { role: 'listbox' } });
     for (const c of j.searches)
       list.append(h(doc, 'button', { type: 'button', onclick: () => a.jobs.pickSearch(c.id), attrs: { role: 'option', 'aria-selected': String(c.id === j.searchId) } }, icon(doc, 'target'),
-        h(doc, 'span', { class: 'pt' }, h(doc, 'strong', { text: c.title }), h(doc, 'span', { text: [c.locations.join(', ') || 'Anywhere', c.queued ? `${c.queued} added from Plato` : '', c.featured ? '★ Featured' : ''].filter(Boolean).join(' · ') })),
+        h(doc, 'span', { class: 'pt' }, h(doc, 'strong', { text: c.title }), h(doc, 'span', { text: [c.locations.join(', ') || 'Anywhere', `searched ${new Date(c.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`, c.queued ? `${c.queued} added from Plato` : '', c.featured ? '★ Featured' : ''].filter(Boolean).join(' · ') })),
         h(doc, 'span', { class: 'count num', text: String(c.job_count) })));
     const link = h(doc, 'a', { text: 'Run a new search on Plato ↗', href: `${__WEB_ORIGIN__}/jobs` });
     link.setAttribute('target', '_blank');
@@ -132,7 +132,7 @@ export function renderJobs(doc: Document, s: PanelState, a: Actions, registry: R
 function jobRow(doc: Document, x: SearchJob, s: PanelState, a: Actions, running: boolean) {
   const key: PickKey = `job:${x.id}`;
   const site = x.site && x.site.toUpperCase() !== x.source.toUpperCase() ? `${label(x.source)} → ${label(x.site)}` : label(x.source);
-  return row(doc, { key, title: x.title, company: x.company, where: x.location ?? '', via: site, match: x.match, fromPlato: !!x.queued, applied: !!x.applied, off: x.queued ? 'Queued on Plato already (above).' : x.applyable ? null : 'Plato can’t fill this site yet, or it is working on it already.', on: s.jobs.picked.includes(key), locked: running }, a, !!s.busy);
+  return row(doc, { key, title: x.title, company: x.company, where: x.location ?? '', via: site, match: x.match, fromPlato: !!x.queued, applied: !!x.applied, off: x.queued && queuedItems(s).some((i) => i.job_id === x.id) ? 'Queued on Plato already (above).' : x.applyable ? null : 'Plato can’t fill this site yet, or it is working on it already.', on: s.jobs.picked.includes(key), locked: running }, a, !!s.busy);
 }
 
 /** The dock: the selection against the cap, or the running batch's progress. Always in view. */

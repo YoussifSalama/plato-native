@@ -79,6 +79,7 @@ export interface SearchCard {
   featured: boolean;
   queued?: number; // jobs added from the Plato web app in this search
   created_at: string;
+  thread_id?: string | null; // the web's search (chat thread) this run belongs to
 }
 export interface SearchJob {
   id: string;

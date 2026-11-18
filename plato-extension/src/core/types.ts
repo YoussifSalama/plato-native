@@ -90,6 +90,7 @@ export interface SearchJob {
   match: number | null; // 0-100, same as the web's cards
   applyable: boolean; // false = Plato cannot fill this site yet
   queued?: boolean; // added from the Plato web app: pre-ticked in the wizard
+  applied?: boolean; // marked as sent before: pickable, flagged, the batch asks with reapply
 }
 export interface ConsentBody {
   decision: 'allow' | 'decline';

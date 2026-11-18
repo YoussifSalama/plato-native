@@ -116,6 +116,21 @@ describe('panel view', () => {
     expect(buttons.filter((b) => /^start/i.test(b))).toEqual(['Start batch · 3 jobs']);
   });
 
+  it('a job Plato marked as sent stays pickable, tagged "Applied before", and the sheet warns before Start', () => {
+    const search = { id: 's', title: 'Frontend', locations: [], remote: null, job_count: 1, featured: false, created_at: '2026-10-01' };
+    const sent = job(1, { applied: true });
+    const list = draw({ jobs: { ...base().jobs, searches: [search], searchId: 's', jobs: [sent], jobsTotal: 1 } });
+    const row = list.root.querySelector('.job[data-key="job:j1"]')!;
+    expect(row.getAttribute('aria-disabled')).toBe('false');
+    expect(row.textContent).toContain('Applied before');
+    (row as HTMLElement).click();
+    expect(list.a.jobs.toggle).toHaveBeenCalledWith('job:j1');
+    const sheet = draw({ jobs: { ...base().jobs, known: { j1: sent, j2: job(2) }, picked: ['job:j1', 'job:j2'] }, sheet: true });
+    expect(sheet.root.querySelector('#sheet')!.textContent).toContain('1 already marked as applied');
+    const none = draw({ jobs: { ...base().jobs, known: { j2: job(2) }, picked: ['job:j2'] }, sheet: true });
+    expect(none.root.querySelector('#sheet')!.textContent).not.toContain('already marked as applied');
+  });
+
   it('a running batch locks the jobs view: rows are disabled, the dock shows progress, the nav badge counts', () => {
     const b = batch([item('FILLING'), item('PENDING', { id: 'i2' })], { iFILLING: { step: 'review' } });
     const { root } = draw({ ...b, view: 'jobs', items: [item('FILLING'), item('PENDING', { id: 'i2' }), item('PENDING', { id: 'i3' })] });

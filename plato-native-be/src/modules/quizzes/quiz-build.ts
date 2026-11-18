@@ -249,7 +249,13 @@ export function toQuestion(
     case 'work_style': {
       const left = text(d.left);
       const right = text(d.right);
-      if (!left || !right || left === right || !d.preferred) return null;
+      if (
+        !isStatement(left) ||
+        !isStatement(right) ||
+        left === right ||
+        !d.preferred
+      )
+        return null;
       return {
         question: { ...base, type: 'work_style', left, right },
         key: k({
@@ -344,6 +350,29 @@ export function buildSection(
   };
 }
 
+/** A work-style statement is a sentence, not an id the model echoed ("i1", "a"): at least three words. */
+export const isStatement = (s: string | null | undefined) =>
+  !!s &&
+  s.trim().split(/\s+/).length >= 3 &&
+  !/^[a-z]{1,2}\d*$/i.test(s.trim());
+
+/**
+ * Stored sections without the questions a model got wrong before the build checked for it (work-style pairs whose
+ * statements were ids), and without sections left empty. Read, list and scoring all use this, so they agree.
+ */
+export function usableSections(raw: unknown): Section[] {
+  return ((raw as Section[]) ?? [])
+    .map((s) => ({
+      ...s,
+      questions: s.questions.filter(
+        (q) =>
+          q.type !== 'work_style' ||
+          (isStatement(q.left) && isStatement(q.right)),
+      ),
+    }))
+    .filter((s) => s.questions.length > 0);
+}
+
 // ---- library and mapping ---------------------------------------------------------------------------------------
 
 const LEVELS =
@@ -427,7 +456,7 @@ export function toSummary(
   },
   fromLibrary = false,
 ): QuizSummary {
-  const sections = (q.sections as Section[]) ?? [];
+  const sections = usableSections(q.sections);
   return {
     id: q.id,
     title: q.title,
@@ -459,7 +488,7 @@ export function toDetail(
     lastAttemptId?: string | null;
   },
 ): QuizDetail {
-  const sections = ((q.sections as Section[]) ?? []).map((s) => ({
+  const sections = usableSections(q.sections).map((s) => ({
     ...s,
     questions: s.questions.map(stripKey),
   }));

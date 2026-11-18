@@ -7,8 +7,9 @@ function setup(token: string | null = null) {
   const tokens = { get: vi.fn(async () => stored), set: vi.fn(async (t: string) => void (stored = t)), clear: vi.fn(), ensureTrusted: vi.fn() };
   const api = { exchange: vi.fn(async () => ({ token: 'ext-token', device_id: 'd', scopes: [], expires_at: '' })) };
   const onLinked = vi.fn();
-  const handle = createAutoLink({ webOrigin: WEB, tokens: tokens as never, exchange: api.exchange, version: '0.2.0', onLinked });
-  return { handle, tokens, api, onLinked };
+  const onApplyNow = vi.fn(async () => undefined);
+  const handle = createAutoLink({ webOrigin: WEB, tokens: tokens as never, exchange: api.exchange, version: '0.2.0', onLinked, onApplyNow });
+  return { handle, tokens, api, onLinked, onApplyNow };
 }
 
 describe('auto-link from the logged-in Plato web app', () => {
@@ -42,6 +43,20 @@ describe('auto-link from the logged-in Plato web app', () => {
     bad.api.exchange.mockRejectedValueOnce(new Error('expired'));
     expect(await bad.handle({ type: 'plato:pair', code: 'ABCDEFGH' }, WEB)).toMatchObject({ linked: false });
     expect(bad.tokens.set).not.toHaveBeenCalled();
+  });
+
+  it('"Apply now" hands valid job ids to the panel, only from Plato and only when linked', async () => {
+    const id = 'a'.repeat(24);
+    const ok = setup('t');
+    expect(await ok.handle({ type: 'plato:apply-now', jobIds: [id] }, WEB)).toEqual({ installed: true, linked: true });
+    expect(ok.onApplyNow).toHaveBeenCalledWith([id]);
+    expect(await ok.handle({ type: 'plato:apply-now', jobIds: [id] }, 'https://evil.test')).toBeNull();
+    expect(await ok.handle({ type: 'plato:apply-now', jobIds: ['../x'] }, WEB)).toBeNull();
+    expect(await ok.handle({ type: 'plato:apply-now', jobIds: [] }, WEB)).toBeNull();
+    expect(ok.onApplyNow).toHaveBeenCalledTimes(1);
+    const unlinked = setup();
+    expect(await unlinked.handle({ type: 'plato:apply-now', jobIds: [id] }, WEB)).toEqual({ installed: true, linked: false });
+    expect(unlinked.onApplyNow).not.toHaveBeenCalled();
   });
 
   it('names the browser for the Extension page', () => {

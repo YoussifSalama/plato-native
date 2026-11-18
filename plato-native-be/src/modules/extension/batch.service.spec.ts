@@ -75,7 +75,7 @@ describe('provider gate', () => {
     expect(r.items.map((i: any) => i.job_id)).toEqual([ok.id]);
     expect(Object.fromEntries(r.rejected.map((x: any) => [x.job_id, x.reason]))).toEqual({
       [gated.id]: 'no_provider',
-      [sub.id]: 'duplicate',
+      [sub.id]: 'applied',
       [jobId(9)]: 'unknown_job',
     });
     // same job again while its item is live
@@ -125,6 +125,23 @@ describe('claim and the duplicate lock', () => {
       expect(app(prisma).status).toBe(status);
     },
   );
+
+  it('a SENT job is refused unless the seeker asks to apply again; cancelling restores "sent"', async () => {
+    const { prisma, svc } = setup();
+    const job = await addJob(prisma);
+    await prisma.jobApplication.create({ data: { job_seeker_id: 'seeker1', job_id: job.id, status: 'SUBMITTED' } });
+    expect((await svc.createBatch('seeker1', [job.id])).rejected[0].reason).toBe('applied');
+    const r = await svc.createBatch('seeker1', [job.id], undefined, undefined, true);
+    expect(r.items).toHaveLength(1);
+    const c = await svc.claim(A, r.items[0].id);
+    expect(app(prisma).status).toBe('EXTENSION_ACTIVE');
+    await svc.transition(A, c.id, { attempt_id: c.attempt_id, seq: 1, to: 'CANCELLED' });
+    expect(app(prisma).status).toBe('SUBMITTED');
+    // a job Plato is working on right now is never doubled, even with apply-again
+    await prisma.jobApplication.create({ data: { job_seeker_id: 'seeker1', job_id: jobId(2), status: 'EXTENSION_ACTIVE' } });
+    const busy = await addJob(prisma, 2);
+    expect((await svc.createBatch('seeker1', [busy.id], undefined, undefined, true)).rejected[0].reason).toBe('duplicate');
+  });
 
   it('a FAILED application can be retried; cancelling restores it', async () => {
     const { prisma, svc } = setup();

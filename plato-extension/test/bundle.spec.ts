@@ -29,10 +29,12 @@ describe('production bundle', () => {
     expect(read('production', 'content.js')).not.toMatch(/localhost|127\.0\.0\.1|plato:inspect/);
   });
 
-  it('the service worker only takes a pairing code from the Plato web app: one exchange call, no other handler, no tabs', () => {
+  it('the service worker only takes a pairing code and "Apply now" from the Plato web app: one exchange call, no other handler, no tabs', () => {
     const sw = read('production', 'background.js');
     // Messages only from outside (the web app, limited by externally_connectable), never from content scripts.
-    expect(sw).not.toMatch(/onMessage\.|onConnect|XMLHttpRequest|WebSocket|sendBeacon|storage\.session|tabs\./);
+    expect(sw).not.toMatch(/onMessage\.|onConnect|XMLHttpRequest|WebSocket|sendBeacon|tabs\./);
+    // Session storage only to hand "Apply now" item ids to the panel (memory only, trusted contexts only).
+    expect(sw.match(/storage\.session\.[a-z]+/gi) ?? []).toEqual(['storage.session.set']);
     expect(sw).toMatch(/onMessageExternal/);
     // Its one network call is the pairing exchange; no other API path.
     expect(sw.match(/fetch\(/g)?.length ?? 0).toBe(1);

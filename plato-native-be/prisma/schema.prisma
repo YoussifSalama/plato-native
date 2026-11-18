@@ -745,6 +745,8 @@ model ApplyBatchItem {
   // Which resume this application uploads ("profile" | "tailored"). Its own column: `detail` is read-modify-written
   // by every state transition, and a transition in flight used to overwrite the choice saved a moment earlier.
   resume_choice  String?
+  // The seeker chose to apply again to a job Plato already marked as sent (the AI can be wrong about a submit).
+  reapply        Boolean?
   // Evidence/reason for the latest state (page marker, verify reason, failure_kind).
   detail         Json?
   created_at     DateTime       @default(now())

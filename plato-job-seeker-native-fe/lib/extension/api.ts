@@ -20,5 +20,6 @@ export type ExtensionProgress = {
 export const getExtensionProgress = async () => (await apiClient.get<ExtensionProgress>("/extension/progress")).data
 // Put jobs in the extension's queue: each becomes a waiting job in the panel. Jobs whose site the
 // extension cannot apply on (or already queued / applied) come back in `rejected` with the reason.
-export const createApplyBatch = async (jobIds: string[], resumes?: Record<string, "profile" | "tailored">) =>
-  (await apiClient.post<{ batch_id: string | null; items: { id: string; job_id: string }[]; rejected: { job_id: string; reason: string }[] }>("/extension/apply-batches", { jobIds, ...(resumes && { resumes }) })).data
+// `reapply`: the seeker confirmed applying again to jobs Plato already marked as sent.
+export const createApplyBatch = async (jobIds: string[], resumes?: Record<string, "profile" | "tailored">, reapply?: boolean) =>
+  (await apiClient.post<{ batch_id: string | null; items: { id: string; job_id: string }[]; rejected: { job_id: string; reason: string }[] }>("/extension/apply-batches", { jobIds, ...(resumes && { resumes }), ...(reapply && { reapply }) })).data

@@ -3,18 +3,23 @@
 import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Check, Copy, Loader2, Lock, MoreVertical, MousePointer2, Pin, Puzzle, Star, X } from "lucide-react"
+import { Check, Copy, Loader2, Lock, MoreVertical, MousePointer2, Pin, Puzzle, Star, TriangleAlert, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InfoTip } from "@/components/info-tip"
 import { getExtensionProgress, startPairing, type PairingCode } from "@/lib/extension/api"
 import { queueForExtension } from "@/lib/jobs/api"
 import { createApplyBatch } from "@/lib/extension/api"
+import { askExtension } from "@/components/extension-auto-link"
 
-// "Apply with Plato": the jobs are only TAGGED here (nothing is applied from the web); the person
-// connects the browser extension with a one-time code and the extension does the applying.
-// Step 1 open the extension, step 2 enter the code, step 3 (connected) start applying there.
+// "Apply with Plato": first the seeker picks how (owner, 2026-11-18):
+//  - Apply now: the jobs are queued and the extension is told to start them as a batch at once (it opens its panel
+//    when Chrome lets it; otherwise the seeker clicks the Plato icon and it starts by itself);
+//  - Mark to apply via extension: the jobs are only queued, ticked in the panel for the seeker to start there.
+// Nothing is applied from the web; the extension does the applying. Not linked yet: the same 3 connect steps.
 // `resumes`: per job, chosen on the review screen (their own CV, or the approved tailored one).
-type Req = { top?: number; jobIds?: string[]; threadId?: string; resumes?: Record<string, "profile" | "tailored"> }
+// `reapply`: how many of these Plato already marked as sent; picking them again is the seeker's call.
+type Req = { top?: number; jobIds?: string[]; threadId?: string; resumes?: Record<string, "profile" | "tailored">; reapply?: number }
+type Mode = "now" | "mark"
 
 const STEPS = ["Open extension", "Enter code", "Start applying"]
 
@@ -35,7 +40,58 @@ export function ExtensionApplyModal({ open, count, req, onClose }: { open: boole
 
 // Mounted only while open, so every opening starts from fresh state.
 function Content({ count, req, onClose }: { count: number; req: Req; onClose: () => void }) {
+  const [mode, setMode] = useState<Mode | null>(null)
+  if (!mode) return <Choose count={count} reapply={req.reapply ?? 0} onPick={setMode} onClose={onClose} />
+  return <Connect count={count} req={req} mode={mode} onClose={onClose} />
+}
+
+function Choose({ count, reapply, onPick, onClose }: { count: number; reapply: number; onPick: (m: Mode) => void; onClose: () => void }) {
+  const jobs = `${count} job${count === 1 ? "" : "s"}`
+  return (
+    <div className="flex flex-col gap-5 p-7">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1.5">
+          <h2 className="text-2xl font-bold">Apply to {jobs}?</h2>
+          <p className="text-sm text-text-secondary">Plato applies in your browser with the Plato extension. Start now, or keep them ticked in the extension for later.</p>
+        </div>
+        <button type="button" aria-label="Close" onClick={onClose} className="rounded-md p-1.5 text-text-secondary hover:bg-muted">
+          <X className="size-5" />
+        </button>
+      </div>
+      {reapply > 0 && (
+        <p role="note" className="flex items-start gap-2 rounded-lg bg-warning-soft px-4 py-3 text-sm text-warning">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          {reapply === 1 ? "1 of these jobs is" : `${reapply} of these jobs are`} already marked as applied. Plato sends a new application if you go on: check the site or your email first if you are not sure.
+        </p>
+      )}
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button type="button" variant="outline" size="lg" onClick={() => onPick("mark")}>Mark to apply via extension</Button>
+        <Button type="button" size="lg" onClick={() => onPick("now")}>Apply now</Button>
+      </div>
+    </div>
+  )
+}
+
+function Connect({ count, req, mode, onClose }: { count: number; req: Req; mode: Mode; onClose: () => void }) {
   const router = useRouter()
+  const [jobIds, setJobIds] = useState<string[]>([]) // queued for the extension: what "Apply now" hands it
+  const [started, setStarted] = useState(false) // the extension took the "Apply now"
+  const [sentBefore, setSentBefore] = useState<string[]>([]) // refused as already sent: the seeker decides
+  const [againBusy, setAgainBusy] = useState(false)
+  // "Apply again anyway": queue the ones Plato marked as sent, with the seeker's explicit go-ahead.
+  const applyAgain = async () => {
+    setAgainBusy(true)
+    try {
+      const b = await createApplyBatch(sentBefore, req.resumes, true)
+      setQueued((q) => (q ?? 0) + b.items.length)
+      setJobIds((ids) => [...ids, ...b.items.map((i) => i.job_id)])
+      setSentBefore([])
+    } catch {
+      setError("Could not add those jobs. Try again.")
+    } finally {
+      setAgainBusy(false)
+    }
+  }
   const [queued, setQueued] = useState<number | null>(null)
   const [unsupported, setUnsupported] = useState(0) // jobs on sites the extension cannot apply on
   const [code, setCode] = useState<PairingCode | null>(null)
@@ -77,12 +133,15 @@ function Content({ count, req, onClose }: { count: number; req: Req; onClose: ()
     let alive = true
     ;(async () => {
       try {
-        const { resumes, ...queueReq } = JSON.parse(reqKey) as Req
+        const { resumes, reapply, ...queueReq } = JSON.parse(reqKey) as Req
         const r = await queueForExtension(queueReq)
         if (!alive) return
         // straight into the extension's queue: they show up in the panel as waiting jobs
-        const b = r.jobIds?.length ? await createApplyBatch(r.jobIds, resumes).catch(() => null) : null
+        const b = r.jobIds?.length ? await createApplyBatch(r.jobIds, resumes, !!reapply).catch(() => null) : null
         if (!alive) return
+        const sent = b?.rejected.filter((x) => x.reason === "applied").map((x) => x.job_id) ?? []
+        setSentBefore(sent)
+        setJobIds((r.jobIds ?? []).filter((id) => !sent.includes(id)))
         const already = b?.rejected.filter((x) => x.reason === "duplicate").length ?? 0
         setQueued((b?.items.length ?? 0) + already)
         setUnsupported(b ? b.rejected.filter((x) => x.reason === "no_provider" || x.reason === "provider_blocked").length : 0)
@@ -99,6 +158,26 @@ function Content({ count, req, onClose }: { count: number; req: Req; onClose: ()
       alive = false
     }
   }, [reqKey, newCode])
+
+  // "Apply now": tell the extension to start these jobs. Not installed or not linked yet: ask again every 3 s while
+  // this is open, so installing / linking it now still starts the batch. Held while the seeker decides on the
+  // ones already sent, so they join the same batch.
+  useEffect(() => {
+    if (mode !== "now" || !jobIds.length || started || sentBefore.length) return
+    let alive = true
+    const send = async () => {
+      const r = await askExtension({ type: "plato:apply-now", jobIds })
+      if (!alive || !r?.linked) return
+      setStarted(true)
+      setConnected(true) // the extension answered: it is linked here
+    }
+    void send()
+    const id = setInterval(() => void send(), 3000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [mode, jobIds, started, sentBefore.length])
 
   // Countdown; an expired code is replaced. Poll for the browser linking itself.
   useEffect(() => {
@@ -154,6 +233,18 @@ function Content({ count, req, onClose }: { count: number; req: Req; onClose: ()
           </ol>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {sentBefore.length > 0 && (
+            <div role="alert" className="flex flex-col gap-3 rounded-lg bg-warning-soft px-4 py-3 text-sm text-warning sm:flex-row sm:items-center">
+              <p className="flex flex-1 items-start gap-2">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                {sentBefore.length === 1 ? "1 job is" : `${sentBefore.length} jobs are`} already marked as applied, so Plato didn&apos;t add {sentBefore.length === 1 ? "it" : "them"}. Apply again only if you are sure it didn&apos;t go through: check the site or your email first.
+              </p>
+              <div className="flex shrink-0 gap-2">
+                <Button type="button" variant="ghost" size="sm" disabled={againBusy} onClick={() => setSentBefore([])}>Skip</Button>
+                <Button type="button" variant="outline" size="sm" disabled={againBusy} onClick={() => void applyAgain()}>{againBusy && <Loader2 className="size-4 animate-spin" />}Apply again anyway</Button>
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-4 md:grid-cols-2">
             <section className="flex flex-col gap-3 rounded-xl border p-5">
@@ -194,12 +285,16 @@ function Content({ count, req, onClose }: { count: number; req: Req; onClose: ()
               {connected ? (
                 <div className="flex flex-col gap-3 text-sm">
                   <p className="flex items-center gap-2 font-medium text-success"><Check className="size-4" />Your browser is linked to Plato.</p>
-                  {queued ? (
+                  {queued && started ? (
+                    <p className="text-text-secondary">
+                      Plato is starting {queued} job{queued === 1 ? "" : "s"} in the extension now. If its panel didn&apos;t open by itself, click the Plato icon in your toolbar: the batch starts on its own.
+                    </p>
+                  ) : queued ? (
                     <p className="text-text-secondary">
                       {queued} job{queued === 1 ? " is" : "s are"} in your extension&apos;s queue. Open the extension and press <b>Start applying</b>.{" "}
                       <InfoTip className="align-[-3px]" text="Queued jobs wait in the extension. Nothing is sent until you press Start applying there; it then fills each form in this browser." label="What the extension queue is" />
                     </p>
-                  ) : (
+                  ) : sentBefore.length ? null : (
                     <p className="text-text-secondary">None of these jobs can be applied by the extension.</p>
                   )}
                   {unsupported > 0 && <p className="text-sm text-warning">{unsupported} job{unsupported === 1 ? " is" : "s are"} on a site the extension can&apos;t apply on yet (for example listings from Himalayas or Remotive without a company apply form). Apply on the posting itself.</p>}

@@ -26,6 +26,7 @@ import {
 import {
   buildSection,
   pickLibrary,
+  usableSections,
   roleFamily,
   toDetail,
   toSummary,
@@ -485,7 +486,7 @@ export class QuizzesService {
     const q = await this.owned(userId, quizId);
     if (q.status !== 'ready')
       throw new BadRequestException('This quiz is not ready yet');
-    const sections = (q.sections as unknown as Section[]) ?? [];
+    const sections = usableSections(q.sections);
     const keys = (q.keys as unknown as Record<string, StoredKey>) ?? {};
     const scored = scoreAttempt(sections, keys, body.answers);
     const misses = scored.questions

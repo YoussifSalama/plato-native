@@ -132,7 +132,9 @@ export class SearchesService {
     const rows = items.map((m: any) => {
       const job = m.job;
       const source = extensionProvider(job);
-      const taken = (job.applications ?? []).some((a: any) => !['FAILED', 'SKIPPED', 'EXPIRED'].includes(a.status));
+      // Plato is on it now = not pickable. Sent = pickable again, flagged (the seeker decides; owner, 2026-11-18).
+      const taken = (job.applications ?? []).some((a: any) => !['FAILED', 'SKIPPED', 'EXPIRED', 'SUBMITTED'].includes(a.status));
+      const applied = (job.applications ?? []).some((a: any) => a.status === 'SUBMITTED');
       return {
         id: job.id,
         title: job.title,
@@ -142,8 +144,9 @@ export class SearchesService {
         site: source ?? null, // the site Plato fills (Greenhouse, Lever…), when it differs from the board
         match: m.match_percent ?? toMatchPercent(m.match_score, reference),
         queued: m.extension_queued === true, // added from the web: the wizard pre-ticks these
-        // Only jobs whose site Plato may fill, and not already applied for.
+        // Only jobs whose site Plato may fill, and not in Plato's hands right now.
         applyable: !taken && !!source && policyFor(source) === 'FILL_ONLY',
+        applied, // marked as sent before: picking it sends reapply
       };
     });
     return {

@@ -175,6 +175,9 @@ async function probeFor(item: ApiItem): Promise<Evidence> {
 
 // The seeker's speed setting decides how many jobs are open at once (careful 2, smart 4, fast 8).
 const tabLimit = () => Math.min(state.settings?.tabs ?? MAX_TABS, MAX_TABS);
+// Jobs Plato is working on now. A job waiting for the seeker (needs you, or "please check") keeps its tab open but
+// not a slot: otherwise N stuck jobs froze the queue for good.
+const busyTabs = () => Object.entries(state.sessions).filter(([id, x]) => x.step !== 'needs-user' && state.items.find((i) => i.id === id)?.state !== 'VERIFY').length;
 const autoSubmitDefault = () => (__FLAVOR__ === 'fixtures' ? !!state.settings?.autoSubmit : __AUTO_SUBMIT__); // production always presses Submit (owner rule 2026-10-21); the test build keeps the setting
 const metaOf = (i: ApiItem): JobMeta => ({ jobId: i.job_id, title: i.job?.title ?? 'Job', company: i.job?.company ?? '', provider: i.provider });
 
@@ -358,14 +361,56 @@ const limit = <T>(p: Promise<T>, ms: number, what: string): Promise<T> =>
 const trusted = createTrusted({
   attach: async (tabId) => {
     await limit(chrome.debugger.attach({ tabId }, '1.3'), 5000, 'debugger attach');
+    droppedByUser.delete(tabId);
     return true;
   },
   detach: (tabId) => limit(chrome.debugger.detach({ tabId }), 5000, 'debugger detach'),
-  cdp: (tabId, method, params) => timedTab(tabId, `cdp ${method}${params?.type ? ` ${String(params.type)}` : ''}`, limit(chrome.debugger.sendCommand({ tabId }, method, params), 5000, `CDP ${method}`)),
+  cdp: (tabId, method, params) => timedTab(tabId, `cdp ${method}${params?.type ? ` ${String(params.type)}` : ''}`, cdpSend(tabId, method, params, 5000)),
   send: <T>(tabId: number, msg: unknown) => timedTab(tabId, `msg ${(msg as { type?: string; what?: string }).type ?? ''}${(msg as { what?: string }).what ? `:${(msg as { what?: string }).what}` : ''}`, limit(chrome.tabs.sendMessage(tabId, msg) as Promise<T>, 15_000, `page message ${(msg as { type?: string }).type ?? ''}`)),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
 });
-chrome.debugger.onDetach.addListener(({ tabId }) => void (tabId !== undefined && trusted.detach(tabId)));
+// Tabs whose debugger the person dropped (Cancel on Chrome's "started debugging" bar): Plato does not take it back.
+const droppedByUser = new Set<number>();
+const lastDetach = new Map<number, string>(); // Chrome's own reason for the last drop, per tab (target_closed, canceled_by_user)
+chrome.debugger.onDetach.addListener(({ tabId }, reason) => {
+  if (tabId === undefined) return;
+  lastDetach.set(tabId, reason);
+  if (reason === 'canceled_by_user') droppedByUser.add(tabId);
+  void trusted.detach(tabId);
+});
+// The run's tab lost the debugger for good: the run stops with this (checked after each action), never a model guessing.
+const debuggerLost = new Map<number, string>();
+class DebuggerLost extends Error {}
+const MAX_REATTACH = 3;
+// Chrome 151 closes the debugger session on a full page load (seen 2026-11-17: target_closed on every load on Workday
+// and Deloitte; LinkedIn's in-app page changes keep it). Re-attaching mid-load got dropped again by the same load, so
+// every press failed. Now: wait for the load to finish, re-attach, put the same-tab script back (it lives in the
+// session), retry; each drop goes into the job's journal with Chrome's reason.
+async function cdpSend(tabId: number, method: string, params: Record<string, unknown> | undefined, ms: number): Promise<unknown> {
+  const run = () => limit(chrome.debugger.sendCommand({ tabId }, method, params), ms, `CDP ${method}`);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run();
+    } catch (e) {
+      if (!/not attached/i.test(String(e))) throw e;
+      if (droppedByUser.has(tabId)) throw new Error('The debugger bar was cancelled, so Plato cannot press on this page. Press Try again to let Plato press again.', { cause: e });
+      const reason = lastDetach.get(tabId) ?? 'no reason from Chrome';
+      const url = await tabUrl(tabId);
+      const itemId = state.items.find((i) => orch.session(i.id)?.tabId === tabId)?.id;
+      if (itemId) jot(itemId, `Chrome dropped Plato's connection to the tab (${reason}) on ${url}; reconnect ${attempt} of ${MAX_REATTACH}.`);
+      if (attempt > MAX_REATTACH) {
+        const why = `Chrome keeps dropping Plato's connection to this tab after each page load (${reason}, ${url}). Nothing more was pressed.`;
+        debuggerLost.set(tabId, why);
+        throw new Error(why, { cause: e });
+      }
+      await trusted.detach(tabId); // the onDetach event may not have landed yet
+      await sleep(300); // the load that dropped it has started: let the tab report "loading"
+      await tabLoaded(tabId, 15_000); // re-attaching mid-load gets dropped again by the same load
+      if (!(await trusted.attach(tabId))) throw new Error('Plato lost the debugger on this tab and cannot take it back (DevTools open on it?). Close DevTools, then press Try again.', { cause: e });
+      await pinTab(tabId);
+    }
+  }
+}
 
 // The application's journal: what Plato did on each page (decided, filled, failed, pressed, stopped). The AI gets it
 // with every decision and the chat gets it with every turn: neither forgets the steps already taken.
@@ -680,13 +725,20 @@ const v3Running = new Set<string>();
 // Tabs opened lately (a job's Apply button handing the application to the company's site): followed by the run.
 // LinkedIn's external Apply opens with noopener, and Chrome then leaves openerTabId empty: a tab with no opener, in the
 // job tab's window, created since the run last looked, counts too. ponytail: last 30 tabs, no cleanup needed.
-const created: { id: number; opener?: number; win: number; at: number }[] = [];
+// Plato's own job tabs also open with no opener, in the same window: without excluding them, one job's run took
+// another job's freshly opened tab for its Apply page and worked on the wrong job. `opening` marks tabs created
+// while Plato's own chrome.tabs.create is in flight (onCreated fires before create resolves); `ownTabs` holds every
+// tab a job owns. ponytail: a real noopener child created in that same instant is missed; the run then stops and asks.
+const created: { id: number; opener?: number; win: number; at: number; own: boolean }[] = [];
+const ownTabs = new Set<number>();
+let opening = 0;
 chrome.tabs.onCreated.addListener((t) => {
   if (t.id === undefined) return;
-  created.push({ id: t.id, opener: t.openerTabId, win: t.windowId, at: Date.now() });
+  created.push({ id: t.id, opener: t.openerTabId, win: t.windowId, at: Date.now(), own: opening > 0 });
   if (created.length > 30) created.shift();
 });
-const openedFrom = (tabId: number, win: number, since: number) => created.find((c) => c.at >= since && c.opener === tabId) ?? created.find((c) => c.at >= since && c.opener === undefined && c.win === win && c.id !== tabId);
+const openedFrom = (tabId: number, win: number, since: number) =>
+  created.find((c) => c.at >= since && c.opener === tabId) ?? created.find((c) => c.at >= since && c.opener === undefined && c.win === win && c.id !== tabId && !c.own && !ownTabs.has(c.id));
 const readerDeps: ReaderDeps = {
   ping: (tabId) => limit(chrome.tabs.sendMessage(tabId, { type: PING }) as Promise<unknown>, 3000, 'page ping').then((r) => !!r, () => false),
   granted: () => chrome.permissions.contains(ANY_SITE).catch(() => false),
@@ -772,7 +824,8 @@ async function runV3Item(item: ApiItem) {
   };
   let resumeFile: { name: string; mime: string; data: string } | null = null;
   try {
-    if (!(await trusted.attach(tabId))) return await finishRun(item, s, { kind: 'needs-user', why: 'Plato cannot press on this tab (another debugger holds it). Close DevTools on it, then press Try again.' });
+    debuggerLost.delete(tabId); // Try again: a fresh start on this tab
+    if (!(await trusted.attach(tabId))) return await finishRun(item, s, { kind: 'needs-user', stop: 'blocked', why: 'Plato cannot press on this tab (another debugger holds it). Close DevTools on it, then press Try again.' });
     await pinTab(tabId);
     // After each action: did the job's tab open another one (its Apply button)? Then the application lives there now.
     const follow = async (r: CallResult): Promise<CallResult> => {
@@ -793,6 +846,7 @@ async function runV3Item(item: ApiItem) {
       await pinTab(child);
       tabId = child;
       s.tabId = child;
+      ownTabs.add(child);
       await rememberTab(item.id, child);
       await groupTab(child);
       const info = await send<PageInfo | null>({ op: 'info' }).catch(() => null);
@@ -802,7 +856,7 @@ async function runV3Item(item: ApiItem) {
     };
     const executor = createExecutor({
       send,
-      cdp: (method, params) => timedTab(tabId, `cdp ${method}`, limit(chrome.debugger.sendCommand({ tabId }, method, params), 8000, `CDP ${method}`)),
+      cdp: (method, params) => timedTab(tabId, `cdp ${method}`, cdpSend(tabId, method, params, 8000)),
       navigate: async (url) => {
         if (url === 'back') await chrome.tabs.goBack(tabId);
         else if (url === 'forward') await chrome.tabs.goForward(tabId);
@@ -875,6 +929,8 @@ async function runV3Item(item: ApiItem) {
           const r = await executor.exec(call, allowed);
           const out = /click|key/.test(call.name) ? await follow(r) : r; // only a press can open a tab
           if (noAccess) throw noAccess; // the site needs the seeker's go-ahead first: stop with that, not a model guessing
+          const lost = debuggerLost.get(tabId);
+          if (lost) throw new DebuggerLost(lost);
           return out;
         },
         pageText: () => send<string>({ op: 'page_text' }),
@@ -906,7 +962,7 @@ async function runV3Item(item: ApiItem) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     log('error', `apply loop (v3): ${msg}`);
-    await finishRun(item, s, e instanceof NeedsSiteAccess ? { kind: 'needs-user', why: `${msg} Press Try again and choose Allow.`, stop: 'blocked' } : lostResult(e));
+    await finishRun(item, s, e instanceof NeedsSiteAccess ? { kind: 'needs-user', why: `${msg} Press Try again and choose Allow.`, stop: 'blocked' } : e instanceof DebuggerLost ? { kind: 'needs-user', why: `${msg} Press Try again once the page has finished loading.`, stop: 'blocked' } : lostResult(e));
   } finally {
     chrome.tabs.onUpdated.removeListener(onLoaded);
     v3Running.delete(item.id);
@@ -980,9 +1036,18 @@ async function startItem(item: ApiItem) {
   // A tab already open for this job (the panel was closed and reopened): reuse it, never open a second one.
   const prior = await recallTab(item.id);
   const alive = prior !== undefined && (await chrome.tabs.get(prior).then(() => true, () => false));
-  const tabId = alive ? prior : (await chrome.tabs.create({ url: job, active: false })).id;
+  let tabId = prior;
+  if (!alive) {
+    opening++;
+    try {
+      tabId = (await chrome.tabs.create({ url: job, active: false })).id;
+    } finally {
+      opening--;
+    }
+  }
   s.tabId = tabId;
   if (tabId !== undefined) {
+    ownTabs.add(tabId);
     await rememberTab(item.id, tabId);
     await groupTab(tabId);
   }
@@ -1021,7 +1086,7 @@ async function runQueue() {
   if (launching || !run || run.status !== 'running') return;
   const waiting = state.items.filter((i) => run.itemIds.includes(i.id) && i.state === 'PENDING' && !tried.has(i.id) && !state.sessions[i.id] && canStart(i, state, registry));
   if (!waiting.length) return;
-  const slots = tabLimit() - Object.keys(state.sessions).length;
+  const slots = tabLimit() - busyTabs();
   if (slots <= 0) return;
   launching = true;
   try {
@@ -1047,7 +1112,7 @@ async function startBatch() {
   const settings = state.settings ?? (await api.settings().catch(() => null));
   state.settings = settings;
   if (settings && j.resumeMode !== settings.resumeMode) state.settings = await api.saveSettings({ resumeMode: j.resumeMode }).catch(() => settings); // the choice on the sheet is the seeker's preference from now on
-  const created = jobIds.length ? await api.createBatch(jobIds, j.searchId) : null;
+  const created = jobIds.length ? await api.createBatch(jobIds, j.searchId, jobIds.some((id) => j.known[id]?.applied)) : null; // the sheet warned about the ones sent before
   const fresh = created?.items ?? [];
   const queued = state.items.filter((i) => itemIds.includes(i.id) && i.state === 'PENDING');
   const all = [...fresh, ...queued];
@@ -1516,6 +1581,7 @@ chrome.runtime.onMessage.addListener((msg: unknown, sender) => {
     await refresh();
     await loadSearches().catch(fail);
     toast('Linked from your Plato account.', 'ok');
+    void applyNow();
   });
 });
 
@@ -1526,8 +1592,34 @@ chrome.runtime.onMessage.addListener((msg: unknown, sender) => {
   if (item) void actions.batch.cancelJob(item);
 });
 
+// "Apply now" pressed on the Plato web app (background.ts keeps the request): start those queued jobs as a batch, no
+// sheet. Chrome grants any-site access only inside a click, so without it the Start sheet opens: one press left.
+const APPLY_NOW_MS = 15 * 60_000;
+async function applyNow() {
+  if (!leader || state.status !== 'ready') return; // not linked or still loading: boot / link runs this again
+  const req = ((await chrome.storage.session.get('applyNow').catch(() => ({}))) as { applyNow?: { jobIds: string[]; at: number } }).applyNow;
+  if (!req) return;
+  await chrome.storage.session.remove('applyNow').catch(() => undefined);
+  if (Date.now() - req.at > APPLY_NOW_MS) return;
+  if (runner.isActive()) return void (toast('A batch is already running. The jobs from Plato wait in your queue.'), draw());
+  await refresh(); // the web just queued them: make sure this panel has them
+  const ids = new Set(req.jobIds);
+  const picked = queuedItems(state).filter((i) => ids.has(i.job_id) && canStart(i, state, registry)).slice(0, MAX_BATCH_JOBS);
+  if (!picked.length) return void (toast('None of the jobs from Plato can be started here.', 'err'), draw());
+  state.jobs.picked = picked.map((i) => `item:${i.id}` as PickKey);
+  state.view = 'jobs';
+  log('info', `Apply now from Plato: ${picked.length} job(s).`);
+  const granted = __FLAVOR__ === 'fixtures' || (await chrome.permissions.contains(ANY_SITE).catch(() => false));
+  if (granted) return void guard(startBatch);
+  state.sheet = true;
+  toast('Press Start once to let Plato open the job sites. Next time it starts by itself.');
+  draw();
+}
+chrome.storage.session.onChanged.addListener((c) => void (c.applyNow?.newValue && applyNow()));
+
 // Only one panel instance may run the batch (two would double-open tabs and double-ask the AI).
 const PANEL_ID = Math.random().toString(36).slice(2);
+let leader = false; // this panel holds the lock: only it runs batches
 async function holdsPanelLock(): Promise<boolean> {
   try {
     const cur = (await chrome.storage.session.get('panelLock')).panelLock as { id: string; ts: number } | undefined;
@@ -1550,6 +1642,7 @@ async function boot() {
     state.error = 'Plato is already open in another panel. Use that one.';
     return draw();
   }
+  leader = true;
   setInterval(() => void holdsPanelLock(), 3000); // keep the lock while this panel is open
   const run = await runner.restore();
   state.run = run;
@@ -1568,6 +1661,7 @@ async function boot() {
     return draw();
   }
   await refresh();
+  void applyNow();
   if (state.status === 'ready') loadSearches().then(draw, (e) => (log('warn', `searches: ${e instanceof Error ? e.message : String(e)}`), draw()));
   setInterval(() => document.visibilityState === 'visible' && void refresh(), 15_000);
   setInterval(() => runner.isActive() && state.view === 'batch' && ((state.eta = runner.eta(state.rows, tabLimit())), scheduleDraw()), 5_000); // the estimate counts down between refreshes

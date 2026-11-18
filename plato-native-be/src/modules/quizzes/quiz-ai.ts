@@ -254,8 +254,18 @@ const questionSchema = z.object({
       maxLabel: z.string(),
     })
     .nullable(),
-  left: z.string().nullable(),
-  right: z.string().nullable(),
+  left: z
+    .string()
+    .nullable()
+    .describe(
+      'work_style only: statement A, a full first-person sentence of 5-20 words (never an id). null for other types.',
+    ),
+  right: z
+    .string()
+    .nullable()
+    .describe(
+      'work_style only: statement B, a full first-person sentence of 5-20 words (never an id). null for other types.',
+    ),
   sequence: z.array(figureSchema),
   correct: z.array(z.string()),
   ideal: z.number().int().nullable(),

@@ -25,6 +25,17 @@ const ask = (rt: ChromeRuntime, id: string, msg: unknown) =>
     }
   })
 
+// Send one message to the installed Plato extension, whichever build id answers. undefined = not installed here.
+export async function askExtension(msg: unknown): Promise<Reply> {
+  const rt = (window as unknown as { chrome?: { runtime?: ChromeRuntime } }).chrome?.runtime
+  if (!rt?.sendMessage) return undefined
+  for (const id of IDS) {
+    const r = await ask(rt, id, msg)
+    if (r?.installed) return r
+  }
+  return undefined
+}
+
 // Logged in here + Plato Apply installed but not linked: link it now, no code to copy.
 // The page makes a one-time pairing code with this session and hands it to the extension,
 // which does the usual exchange. The login itself never leaves the page.

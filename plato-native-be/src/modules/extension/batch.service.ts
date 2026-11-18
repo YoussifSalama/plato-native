@@ -30,6 +30,9 @@ const OBJECT_ID = /^[0-9a-f]{24}$/;
 const MAX_BATCH = 50;
 // A job that already has an application in one of these may be tried again.
 const RETRYABLE = ['FAILED', 'SKIPPED', 'EXPIRED'];
+// ...and with the seeker's explicit "apply again" (owner, 2026-11-18): also one marked as sent. A job Plato is
+// working on right now (EXTENSION_ACTIVE / a live item) is never doubled.
+const retryable = (reapply?: boolean | null) => (reapply ? [...RETRYABLE, 'SUBMITTED'] : RETRYABLE);
 const LIVE: ItemState[] = [...PRE_ARMED, 'AWAITING_SUBMIT', 'VERIFY'];
 
 type Detail = Record<string, any>;
@@ -87,7 +90,7 @@ export class ExtensionBatchService {
 
   // `resumes`: the seeker already chose per job on the web's review screen (their own
   // CV, or the resume Plato made and they approved), so the extension won't ask again.
-  async createBatch(jobSeekerId: string, jobIds: string[], searchId?: string, resumes?: Record<string, 'profile' | 'tailored'>) {
+  async createBatch(jobSeekerId: string, jobIds: string[], searchId?: string, resumes?: Record<string, 'profile' | 'tailored'>, reapply?: boolean) {
     const ids = [...new Set(jobIds)];
     if (
       !ids.length ||
@@ -111,7 +114,7 @@ export class ExtensionBatchService {
       },
       select: { job_id: true },
     });
-    const accepted: { job_id: string; provider: string }[] = [];
+    const accepted: { job_id: string; provider: string; reapply?: boolean }[] = [];
     const rejected: { job_id: string; reason: string }[] = [];
     for (const id of ids) {
       const job = jobs.find((j) => j.id === id);
@@ -122,11 +125,12 @@ export class ExtensionBatchService {
       else if (this.policy(source) !== 'FILL_ONLY')
         rejected.push({ job_id: id, reason: 'provider_blocked' });
       else if (
-        (app && !RETRYABLE.includes(app.status)) ||
+        (app && !retryable(reapply).includes(app.status)) ||
         liveItems.some((i) => i.job_id === id)
       )
-        rejected.push({ job_id: id, reason: 'duplicate' });
-      else accepted.push({ job_id: id, provider: source });
+        // 'applied': marked as sent, the seeker may ask again with reapply; 'duplicate': Plato is on it now
+        rejected.push({ job_id: id, reason: app?.status === 'SUBMITTED' && !liveItems.some((i) => i.job_id === id) ? 'applied' : 'duplicate' });
+      else accepted.push({ job_id: id, provider: source, ...(app?.status === 'SUBMITTED' && { reapply: true }) });
     }
     if (!accepted.length) return { batch_id: null, items: [], rejected };
     // Name the batch after the search it came from (only the seeker's own search).
@@ -275,7 +279,7 @@ export class ExtensionBatchService {
       },
       select: { id: true, status: true, engine: true },
     });
-    if (app && !RETRYABLE.includes(app.status))
+    if (app && !retryable(item.reapply).includes(app.status))
       throw new ConflictException('This job already has an application');
 
     // Written with the claim, so a crash right after still knows how to undo.

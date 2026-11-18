@@ -118,6 +118,7 @@ export class ExtensionWebController {
       parsed.data.jobIds,
       undefined,
       parsed.data.resumes,
+      parsed.data.reapply,
     );
   }
 
@@ -153,6 +154,8 @@ const batchSchema = z.object({
   searchId: z.string().regex(/^[0-9a-f]{24}$/).optional(),
   // Per job, from the web's review screen: 'profile' = their own CV, 'tailored' = the approved one.
   resumes: z.record(z.string(), z.enum(['profile', 'tailored'])).optional(),
+  // The seeker confirmed "apply again" for jobs Plato already marked as sent.
+  reapply: z.boolean().optional(),
 });
 
 export const transitionSchema = z.object({
@@ -256,7 +259,7 @@ export class ExtensionApiController {
   createBatch(@Req() req: ExtensionRequest, @Body() body: unknown) {
     const p = batchSchema.safeParse(body);
     if (!p.success) throw new BadRequestException('Invalid request');
-    return this.batches.createBatch(req.extension.jobSeekerId, p.data.jobIds, p.data.searchId);
+    return this.batches.createBatch(req.extension.jobSeekerId, p.data.jobIds, p.data.searchId, undefined, p.data.reapply);
   }
 
   // Audit log of the tab-opening consent, a decline carries the seeker's reason.

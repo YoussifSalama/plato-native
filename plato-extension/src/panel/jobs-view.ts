@@ -33,11 +33,11 @@ export const pickMeta = (key: PickKey, s: PanelState) => {
   return j ? { title: j.title, company: j.company, via: label(j.site ?? j.source) } : null;
 };
 
-function row(doc: Document, o: { key: PickKey; title: string; company: string; where: string; via: string; match?: number | null; fromPlato?: boolean; off?: string | null; on: boolean; locked: boolean; extra?: Node | null }, a: Actions, busy: boolean) {
+function row(doc: Document, o: { key: PickKey; title: string; company: string; where: string; via: string; match?: number | null; fromPlato?: boolean; applied?: boolean; off?: string | null; on: boolean; locked: boolean; extra?: Node | null }, a: Actions, busy: boolean) {
   const el = h(doc, 'div', { class: `job${o.on ? ' sel' : ''}${o.off || o.locked ? ' off' : ''}`, attrs: { role: 'checkbox', 'aria-checked': String(o.on), 'aria-disabled': String(!!(o.off || o.locked)), tabindex: '0', 'data-key': o.key } });
   const t = h(doc, 'span', { class: 't' }, h(doc, 'strong', { text: o.title }), h(doc, 'span', { text: [o.company, o.where].filter(Boolean).join(' · ') }));
   if (o.off) t.append(h(doc, 'span', { class: 'why', text: o.off }));
-  else t.append(h(doc, 'span', {}, `via ${o.via}`, o.fromPlato ? h(doc, 'span', { class: 'tagp', text: 'From Plato' }) : null));
+  else t.append(h(doc, 'span', {}, `via ${o.via}`, o.fromPlato ? h(doc, 'span', { class: 'tagp', text: 'From Plato' }) : null, o.applied ? h(doc, 'span', { class: 'tagp warn', text: 'Applied before', attrs: { title: 'Plato marked this as sent. Pick it to apply again.' } }) : null));
   el.append(h(doc, 'span', { class: 'ck' }, icon(doc, 'check')), avatar(doc, o.company), t);
   if (o.match) el.append(h(doc, 'span', { class: `match num${o.match >= 85 ? ' hi' : ''}`, text: `${Math.round(o.match)}%`, attrs: { title: 'Your match on Plato' } }));
   else if (o.extra) el.append(o.extra);
@@ -132,7 +132,7 @@ export function renderJobs(doc: Document, s: PanelState, a: Actions, registry: R
 function jobRow(doc: Document, x: SearchJob, s: PanelState, a: Actions, running: boolean) {
   const key: PickKey = `job:${x.id}`;
   const site = x.site && x.site.toUpperCase() !== x.source.toUpperCase() ? `${label(x.source)} → ${label(x.site)}` : label(x.source);
-  return row(doc, { key, title: x.title, company: x.company, where: x.location ?? '', via: site, match: x.match, fromPlato: !!x.queued, off: x.queued ? 'Queued on Plato already (above).' : x.applyable ? null : 'Plato can’t fill this site yet, or you already applied.', on: s.jobs.picked.includes(key), locked: running }, a, !!s.busy);
+  return row(doc, { key, title: x.title, company: x.company, where: x.location ?? '', via: site, match: x.match, fromPlato: !!x.queued, applied: !!x.applied, off: x.queued ? 'Queued on Plato already (above).' : x.applyable ? null : 'Plato can’t fill this site yet, or it is working on it already.', on: s.jobs.picked.includes(key), locked: running }, a, !!s.busy);
 }
 
 /** The dock: the selection against the cap, or the running batch's progress. Always in view. */
@@ -161,6 +161,7 @@ export function renderDock(doc: Document, s: PanelState, a: Actions) {
 export function renderSheet(doc: Document, s: PanelState, a: Actions): Node[] {
   const picks = s.jobs.picked.map((key) => ({ key, meta: pickMeta(key, s) }));
   const n = picks.length;
+  const sentBefore = s.jobs.picked.filter((k) => k.startsWith('job:') && s.jobs.known[k.slice(4)]?.applied).length;
   const list = h(doc, 'div', { class: 'minilist' });
   for (const p of picks)
     list.append(h(doc, 'div', { class: 'mini' }, avatar(doc, p.meta?.company ?? '?'), h(doc, 'span', { class: 't' }, h(doc, 'strong', { text: p.meta?.title ?? 'Job' }), h(doc, 'span', { text: [p.meta?.company, p.meta?.via && `via ${p.meta.via}`].filter(Boolean).join(' · ') })),
@@ -177,6 +178,7 @@ export function renderSheet(doc: Document, s: PanelState, a: Actions): Node[] {
     h(doc, 'div', { class: 'sb' },
       h(doc, 'div', { class: 'bigcount' }, h(doc, 'b', { class: 'num', text: String(n) }), h(doc, 'span', { text: `of ${MAX_BATCH_JOBS} jobs${n < MAX_BATCH_JOBS ? ` · room for ${MAX_BATCH_JOBS - n} more` : ' · full'}` })),
       list,
+      sentBefore ? banner(doc, 'warn', 'alert', `${sentBefore} already marked as applied`, 'Plato sends a new application to each. Check the site or your email first if you are not sure.') : null,
       n < MAX_BATCH_JOBS ? btn(doc, '+ Add more jobs', () => a.jobs.sheet(false), 'btn ghost sm') : null,
       h(doc, 'div', { class: 'facts' },
         fact('layers', 'One batch at a time.', `These ${n} run together, up to ${tabs} open tab${tabs === 1 ? '' : 's'} at once. Another batch can start once this one finishes.`),

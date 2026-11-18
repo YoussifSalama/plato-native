@@ -146,6 +146,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focu
 .job .t span, .jrow .t span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .job .t .why { color: var(--warn-fg); white-space: normal; }
 .tagp { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; background: var(--ok-soft); color: var(--ok); }
+.tagp.warn { background: var(--warn-soft); color: var(--warn-fg); }
 .match { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; color: var(--fg2); background: var(--fill); }
 .match.hi { color: var(--ok); background: var(--ok-soft); }
 .sect { display: flex; align-items: center; gap: 8px; padding: 6px 2px 0; font-size: 12.5px; font-weight: 700; color: var(--fg2); }

@@ -75,6 +75,11 @@ export function applicationReason(app: { status: ApplicationStatus; error?: stri
 export const canRetry = (app: { status: ApplicationStatus; needs_input?: NeedsInput | null }) =>
   app.status === "FAILED" || app.status === "EXPIRED" || app.status === "SKIPPED" || (app.status === "NEEDS_INPUT" && app.needs_input?.reason === "ready")
 
+// Can the seeker pick this job for a new application? Not while Plato is on it (queued, applying, needs you, in the
+// browser). One marked as sent can be picked again (owner, 2026-11-18): the AI is sometimes wrong about a submit,
+// so the seeker decides, after a warning (ExtensionApplyModal).
+export const canApplyAgain = (status: ApplicationStatus | null | undefined) => !status || ["FAILED", "SKIPPED", "EXPIRED", "SUBMITTED"].includes(status)
+
 export const retryLabel = (app: { status: ApplicationStatus; failure_kind?: string | null }) =>
   app.status === "SKIPPED" && app.failure_kind === "ineligible" ? "Apply anyway" : app.status === "NEEDS_INPUT" ? "Run again" : "Try again"
 

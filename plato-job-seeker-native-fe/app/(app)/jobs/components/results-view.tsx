@@ -32,7 +32,7 @@ import { FilterChip, FilterSelect } from "@/components/filter-controls"
 import { SOURCE_LABEL, type JobSourceName, exportMatches, getFacets, getMatches,  setHidden, setSaved, attributionLabel, type DiscoveryRun, type Facets, type JobMatch, type JobTypeKey, type MatchFilters, type MatchLevel, type MatchSort, type MatchTab, type UiCommand } from "@/lib/jobs/api"
 import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
 import { CompanyAvatar } from "@/components/company-avatar"
-import { APPLICATION_STATUS, applicationHref, applicationReason } from "@/lib/jobs/application-status"
+import { APPLICATION_STATUS, applicationHref, applicationReason, canApplyAgain } from "@/lib/jobs/application-status"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CARD, EmptyState, StatIcon } from "@/components/plato-ui"
 import { InfoTip } from "@/components/info-tip"
@@ -164,8 +164,8 @@ function JobItem({ match, selected, highlight, position, cards, onToggle, onSave
     router.push(`/career/interviews/new?${new URLSearchParams({ target: "job", job: job.id, jt: job.title, jc: job.company })}`)
   }
   const app = match.application_status ? APPLICATION_STATUS[match.application_status] : null
-  // Already with Plato (queued / applying / applied) → not selectable; a failed attempt can be picked again.
-  const locked = !!match.application_status && match.application_status !== "FAILED"
+  // Plato is on it (queued / applying / needs you) → not selectable; failed or sent can be picked again.
+  const locked = !canApplyAgain(match.application_status)
   const problem = match.application_status && ["FAILED", "NEEDS_INPUT", "NEEDS_USER_VERIFICATION", "EXPIRED", "SKIPPED"].includes(match.application_status)
 
   const check = (
@@ -174,7 +174,7 @@ function JobItem({ match, selected, highlight, position, cards, onToggle, onSave
       disabled={locked}
       onCheckedChange={onToggle}
       aria-label={locked ? `${job.title} is already with Plato` : `Select ${job.title}`}
-      title={locked ? `Already ${app?.label.toLowerCase()} — can't be selected again` : undefined}
+      title={locked ? `Already ${app?.label.toLowerCase()} — can't be selected again` : match.application_status === "SUBMITTED" ? "Already applied: select it to apply again" : undefined}
       className="size-[18px] shrink-0 rounded-[5px] border-[1.5px] border-[#D5DEE8] disabled:opacity-40"
     />
   )
@@ -343,7 +343,7 @@ function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: {
   const [focusPos, setFocusPos] = useState<number | null>(null)
   // Applying submits real applications, so it is confirmed first. `forced`: asked for by the
   // assistant, which can never skip the dialog; a seeker can opt out of it for the buttons only.
-  const [confirm, setConfirm] = useState<{ req: { top?: number; jobIds?: string[] }; count: number } | null>(null) // the "Apply with Plato" modal
+  const [confirm, setConfirm] = useState<{ req: { top?: number; jobIds?: string[]; reapply?: number }; count: number } | null>(null) // the "Apply with Plato" modal
 
   // Every query change flips loading on in the event handler (not the effect).
   function update(patch: Partial<Query>) {
@@ -360,9 +360,9 @@ function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: {
     if (e.type === "apply_filter") update({ filters: { ...filters, ...e.filters }, ...(e.sort && { sort: e.sort }) })
     else if (e.type === "remove_filter") update({ filters: e.keys === "all" ? {} : Object.fromEntries(Object.entries(filters).filter(([k]) => !(e.keys as string[]).includes(k))) })
     else if (e.type === "propose_apply") {
-      const ok = (e.positions ?? []).map((n) => data?.items[n - 1]).filter((m): m is JobMatch => !!m && (!m.application_status || m.application_status === "FAILED"))
+      const ok = (e.positions ?? []).map((n) => data?.items[n - 1]).filter((m): m is JobMatch => !!m && canApplyAgain(m.application_status))
       if (e.positions && !ok.length) setNotice("None of those jobs can be applied to: they are not on screen or are already with Plato.")
-      else setConfirm({ req: e.positions ? { jobIds: ok.map((m) => m.job.id) } : { top: e.top }, count: e.positions ? ok.length : (e.top ?? 0) })
+      else setConfirm({ req: e.positions ? { jobIds: ok.map((m) => m.job.id), reapply: ok.filter((m) => m.application_status === "SUBMITTED").length } : { top: e.top }, count: e.positions ? ok.length : (e.top ?? 0) })
     } else if (e.position > (data?.items.length ?? 0)) setNotice(`There is no job #${e.position} on screen.`)
     else setFocusPos(e.position)
   }
@@ -475,7 +475,7 @@ function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: {
     }
   }
   function toggleSelected(m: JobMatch) {
-    if (m.application_status && m.application_status !== "FAILED") return
+    if (!canApplyAgain(m.application_status)) return
     setSelected((prev) => {
       const next = new Map(prev)
       if (next.has(m.job.id)) next.delete(m.job.id)
@@ -487,7 +487,7 @@ function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: {
   // Both CTAs queue applications server-side (top N = best across the whole
   // conversation, not just this page) and land on Applications.
   function askApply(mode: "top" | "selected") {
-    const req = mode === "top" ? { top: TOP_N } : { jobIds: [...selected.keys()] }
+    const req = mode === "top" ? { top: TOP_N } : { jobIds: [...selected.keys()], reapply: [...selected.values()].filter((m) => m.application_status === "SUBMITTED").length }
     setConfirm({ req, count: mode === "top" ? Math.min(TOP_N, stats.total) : selected.size })
   }
 

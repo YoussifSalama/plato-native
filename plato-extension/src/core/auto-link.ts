@@ -4,10 +4,11 @@
 // leaves the extension: this handler answers only "linked or not".
 import type { TokenStore } from './token-store';
 
-export type AutoLinkMessage = { type: 'plato:status' } | { type: 'plato:pair'; code: string };
+export type AutoLinkMessage = { type: 'plato:status' } | { type: 'plato:pair'; code: string } | { type: 'plato:apply-now'; jobIds: string[] };
 export type AutoLinkReply = { installed: true; linked: boolean; error?: string };
 
 const CODE = /^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/;
+const JOB = /^[a-f0-9]{24}$/;
 
 // "Chrome on macOS": the name shown on Plato's Extension page.
 export function browserName(ua: string = globalThis.navigator?.userAgent ?? ''): string {
@@ -21,13 +22,22 @@ export function createAutoLink(d: {
   exchange: (code: string, deviceLabel: string, version: string) => Promise<{ token: string }>;
   version: string;
   onLinked: () => void;
+  // "Apply now" on the web app: the panel starts these queued jobs as a batch (it re-checks each against the server).
+  onApplyNow: (jobIds: string[]) => Promise<void>;
 }) {
   return async (msg: unknown, senderOrigin: string | undefined): Promise<AutoLinkReply | null> => {
-    // Only the Plato web app, only these two messages. Anything else gets no answer at all.
+    // Only the Plato web app, only these messages. Anything else gets no answer at all.
     if (senderOrigin !== d.webOrigin || !msg || typeof msg !== 'object') return null;
     const m = msg as Partial<AutoLinkMessage> & { code?: unknown };
     const linked = async () => !!(await d.tokens.get().catch(() => null));
     if (m.type === 'plato:status') return { installed: true, linked: await linked() };
+    if (m.type === 'plato:apply-now') {
+      const ids = (m as { jobIds?: unknown }).jobIds;
+      if (!Array.isArray(ids) || !ids.length || ids.length > 50 || !ids.every((x) => typeof x === 'string' && JOB.test(x))) return null;
+      if (!(await linked())) return { installed: true, linked: false };
+      await d.onApplyNow(ids as string[]);
+      return { installed: true, linked: true };
+    }
     if (m.type !== 'plato:pair' || typeof m.code !== 'string' || !CODE.test(m.code.trim())) return null;
     // Already linked: keep the existing link (the seeker unlinks on purpose, never by accident).
     if (await linked()) return { installed: true, linked: true };

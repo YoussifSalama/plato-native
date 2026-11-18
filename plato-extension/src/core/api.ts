@@ -75,7 +75,7 @@ export function createApi(cfg: ApiConfig) {
       const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString();
       return call<JobsPage>('GET', `/extension/v1/searches/${encodeURIComponent(id)}/jobs${qs ? `?${qs}` : ''}`);
     },
-    createBatch: (jobIds: string[], searchId?: string) => call<{ batch_id: string | null; items: ApiItem[]; rejected: { job_id: string; reason: string }[] }>('POST', '/extension/v1/apply-batches', { jobIds, ...(searchId && { searchId }) }),
+    createBatch: (jobIds: string[], searchId?: string, reapply?: boolean) => call<{ batch_id: string | null; items: ApiItem[]; rejected: { job_id: string; reason: string }[] }>('POST', '/extension/v1/apply-batches', { jobIds, ...(searchId && { searchId }), ...(reapply && { reapply }) }),
     orchestrate: (body: OrchestratorRequest) => call<{ reply: string; events: OrchestratorEvent[] }>('POST', '/extension/v1/orchestrator', body),
     decide: (itemId: string, body: unknown) => call<Decision>('POST', `/extension/v1/items/${encodeURIComponent(itemId)}/decide`, body),
     // engine v3: one model turn (the backend holds the conversation and the key)

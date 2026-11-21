@@ -164,12 +164,12 @@ describe('changed and typed: values the page set since the model last read them'
   it('lists a field the page filled after the read, names the active field, and forgets it once the model reads again or we set it', () => {
     const t = readPage(document, 'interactive');
     const fn = refOf(t, 'First name *');
-    expect(handle(document, { op: 'changed' })).toEqual({ active: null, fields: [] });
+    expect(handle(document, { op: 'changed' })).toEqual({ active: null, password: false, fields: [] });
     ($('fn') as HTMLInputElement).value = 'Test Seeker'; // the page's own autofill (a resume parse)
     $('fn').focus();
-    expect(handle(document, { op: 'changed' })).toEqual({ active: fn, fields: [{ ref: fn, label: 'First name *', value: 'Test Seeker' }] });
+    expect(handle(document, { op: 'changed' })).toEqual({ active: fn, password: false, fields: [{ ref: fn, label: 'First name *', value: 'Test Seeker' }] });
     readPage(document, 'interactive'); // the model saw it
-    expect(handle(document, { op: 'changed' })).toEqual({ active: fn, fields: [] });
+    expect(handle(document, { op: 'changed' })).toEqual({ active: fn, password: false, fields: [] });
     ($('em') as HTMLInputElement).value = 'a@b.c';
     expect((handle(document, { op: 'changed' }) as { fields: unknown[] }).fields).toHaveLength(1);
     formInput(document, refOf(t, 'Email *'), 'x@y.z'); // ours now
@@ -181,7 +181,22 @@ describe('changed and typed: values the page set since the model last read them'
     ($('ph') as HTMLInputElement).value = 'Cai'; // what our key events produced
     expect((handle(document, { op: 'changed' }) as { fields: unknown[] }).fields).toHaveLength(1);
     handle(document, { op: 'typed' });
-    expect(handle(document, { op: 'changed' })).toEqual({ active: refOf(t, 'Phone'), fields: [] });
+    expect(handle(document, { op: 'changed' })).toEqual({ active: refOf(t, 'Phone'), password: false, fields: [] });
+  });
+  it('never fills or types into a password box', () => {
+    const pw = document.createElement('input');
+    pw.type = 'password';
+    pw.setAttribute('aria-label', 'Create password');
+    document.body.append(pw);
+    const t = readPage(document, 'interactive');
+    expect(formInput(document, refOf(t, 'Create password'), 'x').ok).toBe(false);
+    pw.focus();
+    expect(handle(document, { op: 'changed' })).toMatchObject({ password: true });
+    pw.value = 'hunter2'; // a value the browser's autofill (or our vault) put there never reaches the model
+    const seen = JSON.stringify([readPage(document, 'interactive'), handle(document, { op: 'changed' }), handle(document, { op: 'describe', ref: refOf(t, 'Create password') })]);
+    expect(seen).not.toContain('hunter2');
+    expect(JSON.stringify(readPage(document, 'interactive'))).toContain('(filled, hidden)');
+    pw.remove();
   });
 });
 

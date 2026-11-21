@@ -21,6 +21,7 @@ import { hash } from '../dom/inspect';
 import { FORM_FILE, FORM_OPTIONS, PAGE_SETTLE, PAGE_STATE, SNAP_PRESS, SNAP_TAKE } from '../core/messages';
 import { startFormReview } from './form-review-hook';
 import { createTokenStore } from '../core/token-store';
+import { newPassword, savedPassword, wipeVault } from '../core/vault';
 import type { ApiItem, Decision, Evidence, PolicyMap, SearchJob } from '../core/types';
 import { registry } from '../providers';
 import { render, type Actions, type PanelState, type PickKey } from './view';
@@ -203,6 +204,7 @@ async function refresh() {
     state.items = decided.some((d) => d.plan.action === 'confirm' || d.plan.action === 'to-verify') ? await api.batches() : items;
     state.pendingOutbox = (await outbox.list()).length;
     if (!state.settings) state.settings = await api.settings().catch(() => null);
+    if (state.settings && !state.settings.createAccounts) await wipeVault().catch(() => undefined); // the seeker turned job-site accounts off: their passwords go from this browser
     state.autoSubmitPreview = autoSubmitDefault();
     if (state.settings && !preselected) state.jobs.resumeMode = state.settings.resumeMode;
     // the batch record is gone (browser restart) but jobs are open on the server: they are the batch
@@ -782,6 +784,7 @@ async function runV3Item(item: ApiItem) {
   const s = sessionOf(item);
   if (s.tabId === undefined) return void v3Running.delete(item.id);
   let tabId: number = s.tabId; // the job's tab; moves when its Apply button hands the application to another site
+  state.settings = (await api.settings().catch(() => null)) ?? state.settings; // fresh: the seeker may have changed "create accounts" on the website
   let lookedAt = Date.now(); // tabs created after this are candidates for the hand-off
   let noAccess: NeedsSiteAccess | null = null;
   // Every page the job's tab loads (an Apply link to the company's site, the next step of a form): Plato's page reader
@@ -897,6 +900,18 @@ async function runV3Item(item: ApiItem) {
         return t?.url ? { url: t.url, title: t.title ?? '' } : null;
       },
       quick: __FLAVOR__ === 'fixtures',
+      // job-site accounts: only with the seeker's setting on; the password is made and kept in this browser (core/vault.ts)
+      password: async (kind, host) => {
+        if (!state.settings?.createAccounts) return null;
+        if (kind === 'saved') return savedPassword(host);
+        const r = await newPassword(host);
+        if (r.created) {
+          jot(item.id, `Made an account password for ${host}; it is kept encrypted in this browser only.`);
+          const browser = `${/Edg\//.test(navigator.userAgent) ? 'Edge' : 'Chrome'} ${/(?:Chrome|Edg)\/(\d+)/.exec(navigator.userAgent)?.[1] ?? ''} on ${/Mac/.test(navigator.userAgent) ? 'macOS' : /Win/.test(navigator.userAgent) ? 'Windows' : /Linux|X11/.test(navigator.userAgent) ? 'Linux' : 'another system'}`.replace(/\s+/g, ' ');
+          await api.siteAccount({ ref: r.ref, host, browser }).catch((e) => jot(item.id, `Account reference not saved: ${e instanceof Error ? e.message : String(e)}`.slice(0, 160)));
+        }
+        return r.password;
+      },
     });
     const next = v3Next.get(item.id);
     v3Next.delete(item.id);

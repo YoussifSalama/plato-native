@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Changed, V3Op } from '../src/content/v3-reader';
-import { createExecutor, REFUSE_AGAIN, REFUSE_FILLED, REFUSE_OTHER_SUBMIT, REFUSE_SUBMIT, type ExecDeps } from '../src/v3/executor';
+import { REFUSE_PASSWORD, type Changed, type V3Op } from '../src/content/v3-reader';
+import { createExecutor, NEW_PASSWORD, REFUSE_PLACEHOLDER, SAVED_PASSWORD, REFUSE_AGAIN, REFUSE_FILLED, REFUSE_OTHER_SUBMIT, REFUSE_SUBMIT, type ExecDeps } from '../src/v3/executor';
 
 // A fake tab: the content script answers refs by a small table; chrome.debugger calls are recorded.
-function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } }; changed?: Changed } = {}) {
+function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } }; changed?: Changed; password?: ExecDeps['password'] } = {}) {
   const cdp: { method: string; params: Record<string, unknown> }[] = [];
   const ops: V3Op[] = [];
   const nav: string[] = [];
@@ -23,7 +23,7 @@ function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?:
         case 'page_text': return 'Apply here' as T;
         case 'form_input': return (o.formInput ?? { ok: true, message: 'Set to "x"' }) as T;
         case 'set_file': return { ok: true, message: `Uploaded ${msg.name}` } as T;
-        case 'changed': return (o.changed ?? { active: null, fields: [] }) as T;
+        case 'changed': return (o.changed ?? { active: null, password: false, fields: [] }) as T;
         case 'typed': return { ok: true } as T;
         case 'state': return { captcha: false } as T;
       }
@@ -43,6 +43,7 @@ function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?:
     resume: async () => (o.resume === false ? null : { name: 'cv.pdf', mime: 'application/pdf', data: 'JVBERi0=' }),
     sleep: async () => undefined,
     quick: true,
+    password: o.password,
   };
   const ex = createExecutor(deps);
   const run = (name: string, input: Record<string, unknown> = {}, allowed = false) => ex.exec({ call_id: `c-${name}`, name, input }, allowed);
@@ -201,7 +202,7 @@ describe('executor: members', () => {
 });
 
 describe('a value the page filled since the last read is never typed over (Lever fills name, email and phone from the resume)', () => {
-  const filled: Changed = { active: 'ref_1', fields: [{ ref: 'ref_1', label: 'Full name *', value: 'Test Seeker' }] };
+  const filled: Changed = { active: 'ref_1', password: false, fields: [{ ref: 'ref_1', label: 'Full name *', value: 'Test Seeker' }] };
   it('type into such a field is refused with the value the field holds; nothing is inserted', async () => {
     const t = tab({ changed: filled });
     expect(await t.run('type', { text: 'Test Seeker' })).toEqual({ call_id: 'c-type', ok: false, error: REFUSE_FILLED('Full name *', 'Test Seeker') });
@@ -214,8 +215,32 @@ describe('a value the page filled since the last read is never typed over (Lever
     expect(t.ops.map((o) => o.op)).toContain('typed');
   });
   it('file_upload reports the fields the page then filled from the file', async () => {
-    const t = tab({ changed: { active: null, fields: filled.fields } });
+    const t = tab({ changed: { active: null, password: false, fields: filled.fields } });
     expect((await t.run('file_upload', { ...ref('ref_6'), document_ids: ['resume'] })).text).toBe('Uploaded cv.pdf. The page then filled from it: Full name * = "Test Seeker". Do not type into those; read the page again.');
     expect(await tab().run('file_upload', { ...ref('ref_6'), document_ids: ['resume'] })).toMatchObject({ ok: true, text: 'Uploaded cv.pdf' });
+  });
+});
+
+describe('job-site passwords: the model types a placeholder, the password comes from the vault and never back', () => {
+  const pwBox: Changed = { active: 'ref_p', password: true, fields: [] };
+  const vault = (got: string[]) => async (kind: 'new' | 'saved', host: string) => (got.push(`${kind}@${host}`), kind === 'new' ? 'S3cret!pass' : null);
+  it('the new-password placeholder in a password box inserts the vault password; the result never contains it', async () => {
+    const got: string[] = [];
+    const t = tab({ changed: pwBox, password: vault(got) });
+    const r = await t.run('type', { text: NEW_PASSWORD });
+    expect(r).toMatchObject({ ok: true, text: 'Typed the password (hidden)' });
+    expect(JSON.stringify(r)).not.toContain('S3cret');
+    expect(got).toEqual(['new@jobs.example']);
+    expect(t.cdp.filter((c) => c.method === 'Input.insertText').map((c) => c.params.text)).toEqual(['S3cret!pass']);
+  });
+  it('anything else typed into a password box is refused; a placeholder outside one is refused', async () => {
+    expect(await tab({ changed: pwBox, password: vault([]) }).run('type', { text: 'hunter2' })).toMatchObject({ ok: false, error: REFUSE_PASSWORD });
+    const t = tab({ password: vault([]) });
+    expect(await t.run('type', { text: NEW_PASSWORD })).toMatchObject({ ok: false, error: REFUSE_PLACEHOLDER });
+    expect(t.cdp.filter((c) => c.method === 'Input.insertText')).toEqual([]);
+  });
+  it('no saved password, or the setting off (no vault): the model is told to stop', async () => {
+    expect((await tab({ changed: pwBox, password: vault([]) }).run('type', { text: SAVED_PASSWORD })).error).toMatch(/no saved password for jobs\.example/);
+    expect((await tab({ changed: pwBox }).run('type', { text: NEW_PASSWORD })).error).toMatch(/has not allowed it/);
   });
 });

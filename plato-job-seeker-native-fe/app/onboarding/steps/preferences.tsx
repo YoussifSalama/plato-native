@@ -7,6 +7,7 @@ import { InfoTip } from "@/components/info-tip"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FilterChip } from "@/components/filter-controls"
@@ -363,6 +364,8 @@ function PreferencesStep({ onContinue, onBack }: { onContinue: () => void; onBac
                 <Row key={q.key} label={q.question} id={`ans-${q.key}`}>
                   {q.options?.length ? (
                     <FormSelect id={`ans-${q.key}`} value={facts[q.key] ?? ""} onChange={(v) => setFacts((f) => ({ ...f, [q.key]: v }))} options={q.options.map((o) => ({ value: o, label: o }))} optional />
+                  ) : q.type === "paragraph" ? (
+                    <Textarea id={`ans-${q.key}`} maxLength={1000} value={facts[q.key] ?? ""} onChange={(e) => setFacts((f) => ({ ...f, [q.key]: e.target.value }))} />
                   ) : (
                     <Input id={`ans-${q.key}`} type={q.type === "date" ? "date" : q.type === "number" ? "number" : "text"} value={facts[q.key] ?? ""} onChange={(e) => setFacts((f) => ({ ...f, [q.key]: e.target.value }))} />
                   )}
@@ -506,4 +509,4 @@ function Row({ label, tip, id, children }: { label: string; tip?: ReactNode; id:
   )
 }
 
-export { PreferencesStep }
+export { PreferencesStep, FormSelect }

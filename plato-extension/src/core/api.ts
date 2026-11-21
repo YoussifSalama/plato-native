@@ -89,6 +89,7 @@ export function createApi(cfg: ApiConfig) {
     verifyMapping: (provider: string, formKey: string, version: number) => call<{ verified: boolean }>('POST', `/extension/v1/mappings/${encodeURIComponent(provider)}/${encodeURIComponent(formKey)}/verify`, { version }),
     settings: () => call<RunSettings>('GET', '/extension/v1/settings'),
     saveSettings: (patch: Partial<Pick<RunSettings, 'autoSubmit' | 'coverLetter' | 'speed' | 'customMessage' | 'resumeMode'>>) => call<RunSettings>('POST', '/extension/v1/settings', patch),
+    siteAccount: (body: { ref: string; host: string; browser: string }) => call<{ ok: true }>('POST', '/extension/v1/site-accounts', body), // a reference only: the password stays in core/vault.ts
     queue: () => call<{ id: string; company: string; title: string; match: number }[]>('GET', '/extension/v1/queue'),
     dropFromQueue: (itemIds: string[]) => call<{ dropped: number }>('POST', '/extension/v1/queue/drop', { itemIds }),
     clearQueue: () => call<{ cleared: number }>('POST', '/extension/v1/queue/clear', {}),

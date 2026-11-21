@@ -183,4 +183,5 @@ export interface RunSettings {
   tabs: number; // jobs open at once, from the speed
   resume: string | null;
   resumeMode: 'profile' | 'tailored'; // what goes into resume upload fields
+  createAccounts?: boolean; // the seeker allows job-site accounts (set on the Plato website only); absent on old backends = off
 }

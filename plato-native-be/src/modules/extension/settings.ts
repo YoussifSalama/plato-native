@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -12,11 +12,12 @@ export const settingsPatchSchema = z
     speed: z.enum(['careful', 'smart', 'fast']),
     customMessage: z.string().trim().max(600), // the seeker's own note, worked into cover letters / messages
     resumeMode: z.enum(['profile', 'tailored']), // what goes into resume upload fields: the profile's, or one built per job
+    createAccounts: z.boolean(), // the extension may create and sign in to job-site accounts (password made and kept in the browser); off = none, and the saved ones are wiped
   })
   .partial()
   .strict();
 export type ExtensionSettings = Required<z.infer<typeof settingsPatchSchema>>;
-export const DEFAULT_SETTINGS: ExtensionSettings = { autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile' };
+export const DEFAULT_SETTINGS: ExtensionSettings = { autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: false };
 
 export const readSettings = (raw: unknown): ExtensionSettings => {
   const p = settingsPatchSchema.safeParse(raw ?? {});
@@ -47,6 +48,30 @@ export class ExtensionSettingsService {
     const seeker = await this.prisma.jobSeeker.findUniqueOrThrow({ where: { id: jobSeekerId }, select: { extension_settings: true } });
     const next = { ...readSettings(seeker.extension_settings), ...patch };
     await this.prisma.jobSeeker.update({ where: { id: jobSeekerId }, data: { extension_settings: next } });
+    // off: the references go now; each browser wipes its own passwords the next time the extension reads its settings
+    if (patch.createAccounts === false) await this.prisma.extensionSiteAccount.deleteMany({ where: { job_seeker_id: jobSeekerId } });
     return this.get(jobSeekerId);
   }
+
+  /** The job-site accounts the extension created, with the browser that holds each password (never the password). */
+  async siteAccounts(jobSeekerId: string) {
+    const rows = await this.prisma.extensionSiteAccount.findMany({ where: { job_seeker_id: jobSeekerId }, orderBy: { created_at: 'desc' }, take: 200 });
+    const devices = await this.prisma.extensionDevice.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.device_id))] } }, select: { id: true, label: true, revoked_at: true } });
+    const byId = new Map(devices.map((d) => [d.id, d]));
+    return rows.map((r) => ({ id: r.id, host: r.host, browser: r.browser, device: byId.get(r.device_id)?.label ?? null, device_linked: !!byId.get(r.device_id) && !byId.get(r.device_id)!.revoked_at, created_at: r.created_at }));
+  }
+
+  /** The extension made an account: keep its reference. Refused while the seeker has the setting off. */
+  async addSiteAccount(jobSeekerId: string, deviceId: string, a: z.infer<typeof siteAccountSchema>) {
+    const s = await this.prisma.jobSeeker.findUniqueOrThrow({ where: { id: jobSeekerId }, select: { extension_settings: true } });
+    if (!readSettings(s.extension_settings).createAccounts) throw new ForbiddenException('Creating site accounts is off');
+    await this.prisma.extensionSiteAccount.upsert({ where: { ref: a.ref }, create: { job_seeker_id: jobSeekerId, device_id: deviceId, ...a }, update: { host: a.host, browser: a.browser } });
+    return { ok: true };
+  }
 }
+
+export const siteAccountSchema = z.object({
+  ref: z.string().uuid(),
+  host: z.string().min(1).max(253).regex(/^[a-z0-9.-]+$/i),
+  browser: z.string().min(1).max(80),
+});

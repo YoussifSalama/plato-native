@@ -284,6 +284,21 @@ model ExtensionDevice {
   @@map("extension_devices")
 }
 
+// A job-site account the extension created for the seeker (owner, 2026-11-21). The password never reaches Plato:
+// it is made and kept encrypted in that browser's extension storage. This row is only the reference to it.
+model ExtensionSiteAccount {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String   @db.ObjectId
+  device_id     String   @db.ObjectId // the linked browser that holds the password
+  ref           String   @unique // the vault entry's id in that browser
+  host          String // the site, e.g. acme.wd5.myworkdayjobs.com
+  browser       String // e.g. "Chrome 142 on Linux"
+  created_at    DateTime @default(now())
+
+  @@index([job_seeker_id])
+  @@map("extension_site_accounts")
+}
+
 // One-time pairing code typed into the extension. Only its hash is stored.
 model ExtensionPairing {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId

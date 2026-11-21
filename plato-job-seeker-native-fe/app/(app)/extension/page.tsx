@@ -4,16 +4,17 @@ import { PAGE, PageHeader } from "@/components/page-header"
 import { useCallback, useEffect, useState } from "react"
 import { AxiosError } from "axios"
 import Link from "next/link"
-import { ArrowRight, Check, Copy, Monitor, Puzzle, Search } from "lucide-react"
+import { ArrowRight, Check, Copy, KeyRound, Monitor, Puzzle, Search } from "lucide-react"
 import { cn } from "cn"
 import { CARD, EmptyState, SectionHeader, StatIcon } from "@/components/plato-ui"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { timeAgo } from "@/lib/jobs/links"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { InfoTip } from "@/components/info-tip"
 import { listRuns, type DiscoveryRun } from "@/lib/jobs/api"
-import { listDevices, setSearchFeatured, removeAllDevices, removeDevice, startPairing, type ExtensionDevice, type PairingCode } from "@/lib/extension/api"
+import { getExtensionSettings, listSiteAccounts, setCreateAccounts, type SiteAccount, listDevices, setSearchFeatured, removeAllDevices, removeDevice, startPairing, type ExtensionDevice, type PairingCode } from "@/lib/extension/api"
 
 // Each card fades up after the one before it.
 const enter = (i: number) => ({ className: "animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-both duration-500", style: { animationDelay: `${i * 70}ms` } })
@@ -282,6 +283,69 @@ export default function ExtensionPage() {
           </ul>
         )}
       </section>
+
+      <SiteAccounts />
     </div>
+  )
+}
+
+// Job-site accounts: off until the seeker turns it on here (the extension cannot turn it on). Off again = the references
+// go now and every linked browser wipes its saved passwords the next time the extension starts.
+function SiteAccounts() {
+  const [on, setOn] = useState<boolean | null>(null)
+  const [accounts, setAccounts] = useState<SiteAccount[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    getExtensionSettings().then((s) => setOn(!!s.createAccounts)).catch(() => setOn(false))
+    listSiteAccounts().then(setAccounts).catch(() => setAccounts([]))
+  }, [])
+  const toggle = async (v: boolean) => {
+    setBusy(true)
+    setError(null)
+    try {
+      setOn(!!(await setCreateAccounts(v)).createAccounts)
+      if (!v) setAccounts([])
+    } catch {
+      setError("Could not change this setting. Try again.")
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section data-tour="extension-site-accounts" className={cn(CARD, "flex flex-col gap-3 p-5", enter(3).className)} style={enter(3).style}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5">
+          <SectionHeader title="Job-site accounts" icon={KeyRound} accent="cobalt" />
+          <InfoTip text="The password is made in your browser, encrypted there with a key that never leaves it, and typed into the site by the extension. Plato's servers and its AI never see it. Uninstalling the extension or clearing its data removes the passwords: use the site's Forgot password then." label="How job-site passwords are kept" />
+        </span>
+        <label className="flex items-center gap-2.5 text-sm font-medium">
+          {on === null ? <Skeleton className="h-7 w-12 rounded-full" /> : <Switch checked={on} disabled={busy} onCheckedChange={(v) => void toggle(v)} aria-label="Let Plato create job-site accounts" />}
+          Let Plato create accounts
+        </label>
+      </div>
+      <p className="text-sm text-text-secondary">
+        Some career sites (Workday, iCIMS, Taleo…) need an account before you can apply. With this on, the extension creates it with your email and a strong password it makes and keeps in that browser only. Turning it off deletes those passwords from your browsers.
+      </p>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {accounts === null ? (
+        <Skeleton className="h-12 w-full" />
+      ) : accounts.length === 0 ? (
+        <EmptyState icon={KeyRound} title="No job-site accounts yet" hint={on ? "Accounts the extension creates show up here, with the browser that keeps the password." : "Turn this on to let the extension create the accounts career sites ask for."} />
+      ) : (
+        <ul className="divide-y divide-divider">
+          {accounts.map((a) => (
+            <li key={a.id} className={cn("flex flex-wrap items-center justify-between gap-3 py-3", ROW)}>
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate font-medium text-foreground">{a.host}</span>
+                <span className="type-meta text-text-secondary">
+                  Password kept in {a.device ?? a.browser}{a.device_linked ? "" : " (no longer linked)"} · created {timeAgo(a.created_at)}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }

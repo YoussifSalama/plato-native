@@ -37,7 +37,7 @@ import { AnswersService, answersSchema, decideBodySchema, rememberSchema } from 
 import { ResumeFileService, resumeChoiceSchema } from './resume-file.service';
 import { extensionProgress } from './progress';
 import { dropSchema, QueueService } from './queue.service';
-import { ExtensionSettingsService, settingsPatchSchema } from './settings';
+import { ExtensionSettingsService, settingsPatchSchema, siteAccountSchema } from './settings';
 import { OrchestratorService, orchestratorSchema } from './orchestrator.service';
 import { jobsQuerySchema, SearchesService } from './searches.service';
 import { ProofService, proofSchema } from './proof.service';
@@ -56,6 +56,7 @@ export class ExtensionWebController {
     private readonly batches: ExtensionBatchService,
     private readonly searches: SearchesService,
     private readonly prismaRef: PrismaService,
+    private readonly settings: ExtensionSettingsService,
   ) {}
 
   private async seekerId(req: AuthenticatedRequest) {
@@ -86,6 +87,24 @@ export class ExtensionWebController {
   @Get('devices')
   async devices(@Req() req: AuthenticatedRequest) {
     return this.extension.listDevices(await this.seekerId(req));
+  }
+
+  // The web's extension page: the job-site account setting and the accounts the extension made.
+  @Get('settings')
+  async getSettings(@Req() req: AuthenticatedRequest) {
+    return this.settings.get(await this.seekerId(req));
+  }
+
+  @Post('settings')
+  async saveSettings(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    const p = settingsPatchSchema.safeParse(body);
+    if (!p.success) throw new BadRequestException('Invalid request');
+    return this.settings.put(await this.seekerId(req), p.data);
+  }
+
+  @Get('site-accounts')
+  async siteAccounts(@Req() req: AuthenticatedRequest) {
+    return this.settings.siteAccounts(await this.seekerId(req));
   }
 
   @Post('devices/revoke-all')
@@ -367,7 +386,19 @@ export class ExtensionApiController {
   saveSettings(@Req() req: ExtensionRequest, @Body() body: unknown) {
     const p = settingsPatchSchema.safeParse(body);
     if (!p.success) throw new BadRequestException('Invalid request');
+    // the seeker's consent comes from their own web session, never from an extension token
+    if (p.data.createAccounts !== undefined) throw new ForbiddenException('Change this setting on the Plato website');
     return this.settings.put(req.extension.jobSeekerId, p.data);
+  }
+
+  // The extension made a job-site account: only its reference (the password stays in that browser).
+  @Post('site-accounts')
+  @ExtensionScopes('apply:write')
+  addSiteAccount(@Req() req: ExtensionRequest, @Body() body: unknown) {
+    const p = siteAccountSchema.safeParse(body);
+    if (!p.success) throw new BadRequestException('Invalid request');
+    if (!limiter.hit(`acct:${req.extension.deviceId}`, 20, MINUTE)) throw tooMany();
+    return this.settings.addSiteAccount(req.extension.jobSeekerId, req.extension.deviceId, p.data);
   }
 
   // The waiting queue with company and match %, and narrowing it (min match, skip companies, by id).

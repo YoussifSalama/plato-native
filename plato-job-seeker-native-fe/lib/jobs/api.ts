@@ -441,7 +441,7 @@ export type ApplyQueue = {
 }
 export type ApplyReadiness = { ready: boolean; missing: { key: string; label: string; why: string }[]; recommended?: { key: string; question: string; sensitive: boolean }[] }
 // The intake bank: facts employers keep asking for, answered once.
-export type IntakeItem = { key: string; question: string; type: "number" | "text" | "choice" | "date"; options: string[] | null; sensitive: boolean; value: string | null }
+export type IntakeItem = { key: string; question: string; type: "number" | "text" | "paragraph" | "choice" | "date"; options: string[] | null; sensitive: boolean; value: string | null }
 const getIntake = () => request<IntakeItem[]>(apiClient.get("/job-seeker/applications/intake"))
 const saveIntake = (facts: Record<string, string | null>) => request<IntakeItem[]>(apiClient.post("/job-seeker/applications/intake", { facts }))
 const getApplyReadiness = () => request<ApplyReadiness>(apiClient.get("/job-seeker/applications/readiness"))

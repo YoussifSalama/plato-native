@@ -1,4 +1,5 @@
 import type { Candidate } from '../apply/apply.types';
+import { INTAKE } from '../apply/intake';
 
 // The seeker's facts as compact text for the orchestrator: the ONLY source it may use to answer a form.
 // No contact details beyond what a form asks for, capped so a huge profile stays cheap. The seeker's own earlier
@@ -23,6 +24,8 @@ export function profileSummary(c: Candidate, max = 4500): string {
     line('Willing to relocate', `${p.willingToRelocate ? 'yes' : 'no'}${p.relocationNote ? ` (${p.relocationNote})` : ''}`),
     line('Languages', c.languages.map((l) => `${l.language}${l.proficiency ? ` (${l.proficiency})` : ''}`)),
     line('Certifications', c.certifications.map((x) => x.name)),
+    // onboarding / "Apply preferences" answers (apply_facts): before the work history, so the cap never cuts them
+    ...INTAKE.map((q) => line(`Seeker's answer for forms: "${q.question}"`, c.facts?.[q.key])),
     ...c.experiences.slice(0, 8).map((e) => line('Experience', `${e.title} at ${e.company} (${e.start ?? '?'} to ${e.end ?? 'present'})${e.description ? `: ${e.description.slice(0, 350)}` : ''}`)),
     ...c.educations.slice(0, 4).map((e) => line('Education', `${e.degree}${e.field ? ` in ${e.field}` : ''}, ${e.institution}${e.start || e.end ? ` (${e.start?.slice(0, 4) ?? '?'} to ${e.end?.slice(0, 4) ?? 'present'})` : ''}`)),
     ...Object.entries(c.answerBank ?? {}).slice(-40).map(([q, v]) => line(`Answered before: "${q}"`, v)),

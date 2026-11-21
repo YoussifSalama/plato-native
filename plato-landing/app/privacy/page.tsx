@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Privacy policy", description: "What 
 
 // Linked from the Chrome Web Store listing of the Plato Apply extension (a privacy policy URL is required there)
 // and from the app. Plain statements of what the code actually does; keep it true when the code changes.
-const UPDATED = "3 November 2026";
+const UPDATED = "21 November 2026";
 
 const sections: LegalSection[] = [
   { id: "what-plato-is", title: "What Plato is", body: <p>Plato helps a job seeker find jobs and apply to them. You create an account, build a profile, search jobs, and apply. The <b>Plato Apply</b> Chrome extension fills application forms in your own browser from that profile, for the jobs you chose. This policy covers the website (platohiring.com and jobs.platohiring.com), the API (api.platohiring.com) and the extension.</p> },
@@ -36,6 +36,7 @@ const sections: LegalSection[] = [
       <li>It talks only to <code>api.platohiring.com</code>. There is no analytics and no third-party code in it.</li>
       <li>It reads and fills the job application page you asked Plato to apply on, and nothing else. While a run is going it attaches Chrome&apos;s debugger to that one tab, to click and type the way you would, and detaches when the run ends. It never reads your other tabs, console or network.</li>
       <li>It keeps a pairing token for your Plato account in the extension&apos;s local storage. Unlinking the browser, in the extension or on the website, revokes it.</li>
+      <li><b>Job-site accounts (off unless you turn it on):</b> some career sites need an account before you can apply. If you allow it on the website&apos;s Browser extension page, the extension creates that account with your email and a strong password it generates in your browser. The password is encrypted there (AES-256-GCM, with a key that is created in your browser and cannot be exported) and kept in the extension&apos;s own storage. It is never sent to Plato or to an AI provider: Plato stores only which site the account is on and which browser holds it. Turning the setting off deletes those records and makes each browser delete its saved passwords; uninstalling the extension also deletes them.</li>
       <li>It stops and asks you when a form needs something your profile does not hold, and always stops for a human check (captcha). It never applies anywhere you did not choose, and never twice to the same job.</li>
     </ul>
   ) },

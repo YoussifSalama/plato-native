@@ -6,7 +6,7 @@ const c = {
   skills: ['Node.js', 'NestJS'], links: { portfolio: 'https://p.dev' }, totalYears: 4, languages: [{ language: 'English', proficiency: 'C1' }], certifications: [],
   preferences: { salaryMin: 3000, salaryMax: 4000, salaryCurrency: 'USD', salaryPeriod: 'MONTHLY', availability: 'immediately', yearsExperience: null, willingToRelocate: true, visaSponsorshipRequired: false, workAuthorization: ['EG'], autoApplyConsent: true },
   experiences: [{ title: 'Backend Engineer', company: 'Acme', start: '2022-01', end: null, description: 'Built a wallet.' }],
-  educations: [{ institution: 'Cairo University', degree: 'BSc', field: 'CS', end: '2021' }], answerBank: { secret: 'x' },
+  educations: [{ institution: 'Cairo University', degree: 'BSc', field: 'CS', end: '2021' }], answerBank: { secret: 'x' }, facts: { preferred_name: 'Joe', gender: 'Male' },
 } as unknown as Candidate;
 
 describe('profileSummary', () => {
@@ -16,6 +16,8 @@ describe('profileSummary', () => {
     expect(s).toContain('Expected salary: 3000-4000 USD per monthly');
     expect(s).toContain('Skills: Node.js, NestJS');
     expect(s).toContain('Answered before: "secret": x'); // the seeker's own answer, reused
+    expect(s).toContain('Seeker\'s answer for forms: "What first name do you go by, if not your legal one?": Joe'); // apply_facts reach the live AI
+    expect(s).toContain('How should I answer? (optional)": Male');
   });
   it('is capped so a huge profile stays cheap', () => {
     expect(profileSummary({ ...c, summary: 'x'.repeat(20000) } as Candidate, 1000).length).toBeLessThanOrEqual(1000);

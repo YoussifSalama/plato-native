@@ -5,6 +5,12 @@ export type ExtensionDevice = { id: string; label: string; ext_version: string |
 
 // Cookie-authenticated web routes. The extension itself never uses these.
 export const startPairing = async () => (await apiClient.post<PairingCode>("/extension/pairing/start")).data
+// Job-site accounts (2026-11-21): the extension may make an applicant account on a career site. The password is made and
+// kept encrypted in that browser only; Plato stores where the account is, never the password.
+export type SiteAccount = { id: string; host: string; browser: string; device: string | null; device_linked: boolean; created_at: string }
+export const getExtensionSettings = async () => (await apiClient.get<{ createAccounts: boolean }>("/extension/settings")).data
+export const setCreateAccounts = async (createAccounts: boolean) => (await apiClient.post<{ createAccounts: boolean }>("/extension/settings", { createAccounts })).data
+export const listSiteAccounts = async () => (await apiClient.get<SiteAccount[]>("/extension/site-accounts")).data
 export const listDevices = async () => (await apiClient.get<ExtensionDevice[]>("/extension/devices")).data
 export const removeDevice = async (id: string) => (await apiClient.delete(`/extension/devices/${id}`)).data
 export const removeAllDevices = async () => (await apiClient.post<{ revoked: number }>("/extension/devices/revoke-all")).data

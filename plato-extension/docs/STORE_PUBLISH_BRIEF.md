@@ -47,6 +47,12 @@ Architecture, so you can answer reviewer questions truthfully:
   console or network data and never runs scripts on the page."
 - `sidePanel`: "The extension's whole UI is a side panel: the job list, progress, and the questions it asks."
 - `storage`: "Keeps the pairing token for the user's Plato account and the current batch state."
+- Job-site accounts (owner, 2026-11-21; off unless the user turns it on on the Plato website): "When a career site
+  requires an applicant account, the extension can create it with the user's email and a password it generates
+  locally. The password is encrypted with AES-GCM using a non-extractable WebCrypto key and stored in the extension's
+  IndexedDB. It is never transmitted: not to Plato's servers and not to the AI. Plato's server stores only a
+  reference (site host and which browser holds it). Turning the setting off deletes the passwords." In the Data usage
+  section this means also ticking "Authentication information" (passwords are handled on the device only).
 - `tabGroups`: "Groups the tabs Plato opens under one 'Plato' group so the user sees which tabs it is working on."
 - Content scripts (declared matches): "Reads the application form's fields and fills values on the job sites
   listed, only for pages the user asked Plato to apply on."

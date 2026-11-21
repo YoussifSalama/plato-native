@@ -9,7 +9,7 @@ export interface IntakeQuestion {
   key: string;
   // How Plato asks the seeker.
   question: string;
-  type: 'number' | 'text' | 'choice' | 'date';
+  type: 'number' | 'text' | 'paragraph' | 'choice' | 'date';
   options?: string[];
   // Personal / demographic. Always optional; Plato never guesses these and
   // prefers the form's own "prefer not to say".
@@ -77,7 +77,99 @@ export const INTAKE: IntakeQuestion[] = [
     labels:
       /\b(earliest|expected|desired|preferred|possible)\s+(possible\s+)?start(ing)?\s+date\b|^\s*start(ing)? date\s*\??\s*$|\bdate (you can|available to) start\b/i,
   },
+  // Asked in "Apply preferences" (web, first Apply). Seeded 2026-11-21 from the questions that
+  // stopped the extension for the seeker plus common Greenhouse / Lever / Workday / UK forms.
+  {
+    key: 'preferred_name',
+    question: 'What first name do you go by, if not your legal one?',
+    type: 'text',
+    labels: /\b(preferred|known as|nick ?name|go(es)? by)\b.{0,20}\bname\b|\bpreferred (first|last)\b/i,
+  },
+  {
+    key: 'work_setup',
+    question: 'Which work setups do you accept?',
+    type: 'choice',
+    options: ['Remote only', 'Remote or hybrid', 'Remote, hybrid or on-site', 'On-site or hybrid only'],
+    labels: /\b(on-?site|in[- ](the )?office|hybrid|commut)/i,
+  },
+  {
+    key: 'shifts',
+    question: 'Can you work evenings, weekends or shifts when a job needs it?',
+    type: 'choice',
+    options: ['Yes', 'No'],
+    labels: /\b(weekends?|evenings?|night|shifts?|overtime|on-?call)\b/i,
+  },
+  {
+    key: 'over_18',
+    question: 'Are you 18 or older?',
+    type: 'choice',
+    options: ['Yes', 'No'],
+    labels: /\b(18|eighteen) (years|or older)|\bover (18|eighteen)\b|\bage of (18|majority)\b|\bat least 18\b/i,
+  },
+  {
+    key: 'background_check',
+    question: 'Will you agree to a background check if you get an offer?',
+    type: 'choice',
+    options: ['Yes', 'No'],
+    labels: /\bbackground (check|screen|verification)/i,
+  },
+  {
+    key: 'drug_test',
+    question: 'Will you take a drug test if a job requires it?',
+    type: 'choice',
+    options: ['Yes', 'No'],
+    labels: /\bdrug (test|screen)/i,
+  },
+  {
+    key: 'non_compete',
+    question: 'Are you bound by a non-compete or non-solicitation agreement?',
+    type: 'choice',
+    options: ['Yes', 'No'],
+    labels: /\bnon-?compete|\bnon-?solicit|\brestrictive covenant/i,
+  },
+  {
+    // ponytail: one answer for every company; "ask me" leaves it to the seeker per job.
+    key: 'relatives',
+    question: 'Do relatives of yours work at companies you apply to?',
+    type: 'choice',
+    options: ['No', 'Sometimes: ask me for that job'],
+    labels: /\brelatives?\b|\bfamily members?\b.{0,30}\b(work|employ)|\brelated to (an?|any) (employee|staff)/i,
+  },
+  {
+    key: 'security_clearance',
+    question: 'Your security clearance, if any (write "None" if you have none)',
+    type: 'text',
+    labels: /\bsecurity clearance\b|\bclearance level\b/i,
+  },
+  {
+    key: 'work_style',
+    question: 'Do you work best independently or in a team?',
+    type: 'choice',
+    options: ['Independently', 'In a team', 'Both equally'],
+    labels: /\bindependent(ly)?\b.{0,40}\bteam\b|\bteam\b.{0,40}\bindependent|\bwork(ing)? style\b/i,
+  },
+  {
+    key: 'three_words',
+    question: 'Three words that describe you at work',
+    type: 'text',
+    labels: /\b(three|3) words\b/i,
+  },
+  {
+    // the seeker's own voice for motivation / personality essays; the AI still writes each answer for the job
+    key: 'motivation',
+    question: 'In a few sentences: what do you want in your next job, and what motivates you?',
+    type: 'paragraph',
+    labels: /\bwhat motivates you\b|\bwhat are you looking for in (your next|a) (role|job)\b|\bideal (job|role|work environment)\b/i,
+  },
   // --- Sensitive: optional, never inferred ---
+  {
+    key: 'criminal_record',
+    question: 'Some forms ask about criminal convictions. How should I answer? (optional)',
+    type: 'choice',
+    options: ['No', 'Yes', 'Prefer not to say'],
+    sensitive: true,
+    labels: /\bconvict|\bcriminal (record|offen[cs]e|history|conviction)|\bfelony/i,
+  },
   {
     key: 'gender',
     question: 'Some forms require gender. How should I answer? (optional)',

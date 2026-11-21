@@ -5,9 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Check, Copy, Loader2, Lock, MoreVertical, MousePointer2, Pin, Puzzle, Star, TriangleAlert, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { FormSelect } from "@/app/onboarding/steps/preferences"
 import { InfoTip } from "@/components/info-tip"
 import { getExtensionProgress, startPairing, type PairingCode } from "@/lib/extension/api"
-import { queueForExtension } from "@/lib/jobs/api"
+import { getIntake, queueForExtension, saveIntake, type IntakeItem } from "@/lib/jobs/api"
 import { createApplyBatch } from "@/lib/extension/api"
 import { askExtension } from "@/components/extension-auto-link"
 
@@ -41,8 +44,95 @@ export function ExtensionApplyModal({ open, count, req, onClose }: { open: boole
 // Mounted only while open, so every opening starts from fresh state.
 function Content({ count, req, onClose }: { count: number; req: Req; onClose: () => void }) {
   const [mode, setMode] = useState<Mode | null>(null)
+  const [prefsDone, setPrefsDone] = useState(prefsSeen)
+  const prefsFinished = useCallback(() => (markPrefsSeen(), setPrefsDone(true)), [])
+  if (!prefsDone) return <ApplyPrefs onDone={prefsFinished} onClose={onClose} />
   if (!mode) return <Choose count={count} reapply={req.reapply ?? 0} onPick={setMode} onClose={onClose} />
   return <Connect count={count} req={req} mode={mode} onClose={onClose} />
+}
+
+// "Apply preferences" (owner, 2026-11-21): the first Apply asks, once and optionally, the answers forms keep asking
+// (preferred name, work setup, shifts, checks…) so the AI stops less to ask. They are the intake bank (apply_facts),
+// the same answers as onboarding and Profile > Application answers. Personal ones stay there: forms offer "decline".
+// ponytail: "seen" per browser; a server flag if seekers re-see it on every new device.
+const PREFS_KEY = "plato.applyPrefsSeen"
+const prefsSeen = () => {
+  try {
+    return localStorage.getItem(PREFS_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+const markPrefsSeen = () => {
+  try {
+    localStorage.setItem(PREFS_KEY, "1")
+  } catch {
+    /* asked again next time: harmless */
+  }
+}
+
+function ApplyPrefs({ onDone, onClose }: { onDone: () => void; onClose: () => void }) {
+  const [qs, setQs] = useState<IntakeItem[] | null>(null)
+  const [vals, setVals] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    getIntake()
+      .then((all) => {
+        const open = all.filter((q) => !q.sensitive && q.value === null)
+        if (open.length) setQs(open)
+        else onDone() // nothing left to ask
+      })
+      .catch(() => onDone()) // never block applying on this
+  }, [onDone])
+  const save = async () => {
+    const facts = Object.fromEntries(Object.entries(vals).filter(([, v]) => v.trim()))
+    if (!Object.keys(facts).length) return onDone()
+    setSaving(true)
+    setError(null)
+    try {
+      await saveIntake(facts)
+      onDone()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save. Try again.")
+    } finally {
+      setSaving(false)
+    }
+  }
+  if (!qs) return <p className="flex items-center gap-2 p-7 text-sm text-text-secondary"><Loader2 className="size-4 animate-spin" />Loading…</p>
+  const set = (k: string, v: string) => setVals((x) => ({ ...x, [k]: v }))
+  return (
+    <div className="flex max-h-[calc(100vh-4rem)] flex-col gap-5 p-7">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1.5">
+          <h2 className="text-2xl font-bold">Apply preferences</h2>
+          <p className="text-sm text-text-secondary">Optional. Forms keep asking these. Answer once and Plato fills them on every application, so it stops to ask you less. Change them any time in Profile, Application answers.</p>
+        </div>
+        <button type="button" aria-label="Close" onClick={onClose} className="rounded-md p-1.5 text-text-secondary hover:bg-muted">
+          <X className="size-5" />
+        </button>
+      </div>
+      <div className="-mx-1 flex flex-col divide-y divide-divider overflow-y-auto px-1">
+        {qs.map((q) => (
+          <div key={q.key} className="grid grid-cols-1 items-center gap-2 py-2.5 sm:grid-cols-[1fr_minmax(0,1fr)]">
+            <label htmlFor={`pref-${q.key}`} className="text-[15px] text-text-secondary">{q.question}</label>
+            {q.options?.length ? (
+              <FormSelect id={`pref-${q.key}`} label={q.question} value={vals[q.key] ?? ""} onChange={(v) => set(q.key, v)} options={q.options.map((o) => ({ value: o, label: o }))} optional />
+            ) : q.type === "paragraph" ? (
+              <Textarea id={`pref-${q.key}`} maxLength={1000} value={vals[q.key] ?? ""} onChange={(e) => set(q.key, e.target.value)} />
+            ) : (
+              <Input id={`pref-${q.key}`} type={q.type === "date" ? "date" : q.type === "number" ? "number" : "text"} maxLength={200} value={vals[q.key] ?? ""} onChange={(e) => set(q.key, e.target.value)} />
+            )}
+          </div>
+        ))}
+      </div>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button type="button" variant="outline" size="lg" disabled={saving} onClick={onDone}>Skip for now</Button>
+        <Button type="button" size="lg" disabled={saving} onClick={() => void save()}>{saving && <Loader2 className="size-4 animate-spin" />}Save and continue</Button>
+      </div>
+    </div>
+  )
 }
 
 function Choose({ count, reapply, onPick, onClose }: { count: number; reapply: number; onPick: (m: Mode) => void; onClose: () => void }) {

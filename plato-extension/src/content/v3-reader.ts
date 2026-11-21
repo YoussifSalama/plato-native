@@ -38,8 +38,10 @@ export type V3Op =
   | { op: 'info' }
   | { op: 'state' };
 export const V3_OPS = new Set(['read_page', 'find', 'page_text', 'form_input', 'resolve', 'ready', 'describe', 'set_file', 'guard', 'guarded', 'changed', 'typed', 'info', 'state']);
+export const REFUSE_PASSWORD = 'Refused: that is a password box. Never type or choose a password: type {{PLATO_NEW_PASSWORD}} (a new account) or {{PLATO_PASSWORD}} (sign in) when your rules allow it; otherwise answer BLOCKED so the seeker signs in or creates the account there.';
 export interface Changed {
   active: string | null;
+  password: boolean; // the active field is a password box: never typed into
   fields: { ref: string; label: string; value: string }[];
 }
 
@@ -68,7 +70,10 @@ const inner = (el: Element) => (el as HTMLElement).innerText ?? el.textContent ?
 // appends, which gave "Test SeekerTest Seeker" on a live run. `typed` and form_input mark a value as ours.
 const TYPED_ROLES = new Set(['textbox', 'combobox', 'spinbutton']);
 const seen = new WeakMap<Element, string>();
-const fieldValue = (el: Element) => txt((el as Ctl).value) || (roleOf(el) === 'combobox' ? chosenText(el) : '');
+// A password box's value never leaves the page: the model (and so the backend and Anthropic) only learns it is filled.
+const isPassword = (el: Element) => (el as HTMLInputElement).type === 'password';
+const valueOf = (el: Element) => (isPassword(el) ? ((el as Ctl).value ? '(filled, hidden)' : '') : txt((el as Ctl).value));
+const fieldValue = (el: Element) => valueOf(el) || (roleOf(el) === 'combobox' ? chosenText(el) : '');
 const vis = (el: Element, doc: Document) => {
   const r = el.getBoundingClientRect();
   if (!(r.width > 0 || r.height > 0)) return false;
@@ -141,7 +146,7 @@ export function describe(el: Element, doc: Document): string {
   const c = el as Ctl;
   const parts: string[] = [];
   if (TYPED_ROLES.has(role)) seen.set(el, fieldValue(el)); // what the model is about to see is what it plans on
-  const name = FIELD_ROLES.has(role) ? labelText(el, doc) : txt(inner(el) || c.value || el.getAttribute('aria-label') || (el as HTMLImageElement).alt || '');
+  const name = FIELD_ROLES.has(role) ? labelText(el, doc) : txt(inner(el) || valueOf(el) || el.getAttribute('aria-label') || (el as HTMLImageElement).alt || '');
   parts.push(`${role} "${name.slice(0, 120)}"`);
   if (FIELD_ROLES.has(role) && required(el, doc)) parts.push('required');
   if (el.tagName === 'SELECT') {
@@ -155,7 +160,7 @@ export function describe(el: Element, doc: Document): string {
   else if (role === 'combobox') {
     const shown = txt(c.value) || chosenText(el);
     if (shown) parts.push(`value="${shown.slice(0, 60)}"`);
-  } else if ('value' in el && c.value && role !== 'button') parts.push(`value="${txt(c.value).slice(0, 60)}"`);
+  } else if ('value' in el && c.value && role !== 'button') parts.push(`value="${valueOf(el).slice(0, 60)}"`);
   if (el.getAttribute('aria-invalid') === 'true') {
     const e = byIds(doc, el.getAttribute('aria-errormessage') || el.getAttribute('aria-describedby'));
     parts.push(`error="${(e || 'invalid').slice(0, 100)}"`);
@@ -211,6 +216,7 @@ const setNative = (node: Element, v: string) => {
 export function formInput(doc: Document, ref: string, value: unknown): { ok: boolean; message: string; clickPoint?: Point } {
   const el = elOf(ref);
   if (!el) return { ok: false, message: STALE(ref) };
+  if (isPassword(el)) return { ok: false, message: REFUSE_PASSWORD };
   const want = String(value);
   if (el.tagName === 'SELECT') {
     const s = el as HTMLSelectElement;
@@ -256,7 +262,7 @@ export function changed(doc: Document): Changed {
     if (value !== last) fields.push({ ref, label: labelText(el, doc).slice(0, 80), value: value.slice(0, 60) });
   }
   const a = doc.activeElement;
-  return { active: (a && R.byEl.get(a)) || null, fields };
+  return { active: (a && R.byEl.get(a)) || null, password: !!a && isPassword(a), fields };
 }
 /** The executor typed or pressed keys in the active field: its value is ours now, not something the page did. */
 export function typed(doc: Document): { ok: true } {
@@ -314,7 +320,7 @@ const SUBMIT_TEXT = /^(submit( application| my application)?|send( application| 
 const STEP_TEXT = /^(apply|apply now|apply for this job|start application|next|continue|review)$/i;
 export function describeElement(el: Element): ElementInfo {
   const c = el as Ctl;
-  const text = txt(inner(el) || c.value || el.getAttribute('aria-label') || '').slice(0, 80);
+  const text = txt(inner(el) || valueOf(el) || el.getAttribute('aria-label') || '').slice(0, 80);
   const isSubmit = ((el.tagName === 'BUTTON' && c.type === 'submit' && !!el.closest('form')) || (el.tagName === 'INPUT' && c.type === 'submit') || SUBMIT_TEXT.test(text)) && !STEP_TEXT.test(text);
   return { tag: el.tagName, type: c.type || '', text, role: el.getAttribute('role') || '', isSubmit };
 }

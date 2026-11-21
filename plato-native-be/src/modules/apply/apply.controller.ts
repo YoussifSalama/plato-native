@@ -58,7 +58,7 @@ v.onerror=()=>{document.getElementById('m').textContent='Not running (finished o
 </script>`;
 
 const intakeSchema = z.object({
-  facts: z.record(z.string(), z.string().max(200).nullable()),
+  facts: z.record(z.string(), z.string().max(1000).nullable()), // 1000: the motivation paragraph
 });
 
 // Listing/queueing applications lives in DiscoveryController; this is the

@@ -17,7 +17,7 @@
 // typing for suggestion lists. Nothing here is made to look human to bot detection: no random mouse paths,
 // no fingerprint changes, and a human check still stops the run for the seeker.
 import type { BrowserCall, CallResult } from './contract';
-import type { Changed, ElementInfo, PageInfo, Point, Readiness, V3Op } from '../content/v3-reader';
+import { REFUSE_PASSWORD, type Changed, type ElementInfo, type PageInfo, type Point, type Readiness, type V3Op } from '../content/v3-reader';
 
 export interface ExecDeps {
   send<T>(msg: V3Op): Promise<T>; // the content script of the job's tab
@@ -28,10 +28,15 @@ export interface ExecDeps {
   resume(): Promise<{ name: string; mime: string; data: string } | string | null>; // the staged resume (base64), or the reason it could not be fetched
   sleep(ms: number): Promise<void>;
   tabInfo?(): Promise<{ url: string; title: string } | null>; // Chrome's own view of the tab, when the page reader is not on the page
+  password?(kind: 'new' | 'saved', host: string): Promise<string | null>; // core/vault.ts, only with the seeker's "create accounts" setting on; null = none
   quick?: boolean; // the test build moves fast; real builds at a human pace
 }
 type Target = { type: 'ref'; ref: string } | { type: 'coordinate'; x: number; y: number };
 const TAB = 'tab_1';
+// The model never sees or picks a password: it types one of these into a password box and the password goes in here.
+export const NEW_PASSWORD = '{{PLATO_NEW_PASSWORD}}';
+export const SAVED_PASSWORD = '{{PLATO_PASSWORD}}';
+export const REFUSE_PLACEHOLDER = 'Refused: a password placeholder goes only into a password box. Click the password box first, then type it.';
 export const REFUSE_SUBMIT = 'Refused: Submit is not allowed yet. Answer SUBMIT_READY when every required field holds a correct value.';
 export const REFUSE_AGAIN = 'Refused: Submit was already pressed once. Read the page and report what it says.';
 export const REFUSE_OTHER_SUBMIT = 'Refused: that action would have submitted the form; it was cancelled. Submit only with the Submit control itself, once.';
@@ -163,6 +168,20 @@ export function createExecutor(d: ExecDeps) {
         // a person looks at the field first: a value the page put there since the last read is not typed over
         const ch = await d.send<Changed | null>({ op: 'changed' }).catch(() => null);
         const hit = ch?.active ? ch.fields.find((f) => f.ref === ch.active) : undefined;
+        // passwords: only a placeholder, only into a password box; the real one comes from this browser's vault
+        const secret = text.trim() === NEW_PASSWORD ? 'new' : text.trim() === SAVED_PASSWORD ? 'saved' : null;
+        if (ch?.password || secret) {
+          if (!secret) return { ok: false, error: REFUSE_PASSWORD };
+          if (!ch?.password) return { ok: false, error: REFUSE_PLACEHOLDER };
+          const url = (await info())?.url ?? '';
+          const host = URL.canParse(url) ? new URL(url).hostname : '';
+          const pw = host ? await d.password?.(secret, host).catch(() => null) : null;
+          if (!pw) return { ok: false, error: secret === 'new' ? 'Refused: Plato cannot make an account here (the seeker has not allowed it). Answer BLOCKED so the seeker creates the account there, then presses Try again.' : `Plato has no saved password for ${host || 'this site'} in this browser. Answer BLOCKED so the seeker signs in there (or uses Forgot password), then presses Try again.` };
+          await d.cdp('Input.insertText', { text: pw });
+          await d.send({ op: 'typed' }).catch(() => undefined);
+          await human(200, 400);
+          return { ok: true, text: 'Typed the password (hidden)', state: await state() };
+        }
         if (hit) return { ok: false, error: REFUSE_FILLED(hit.label, hit.value) };
         // short values letter by letter, long answers word by word, at a typing pace
         for (const piece of text.length > 60 ? (text.match(/\S+\s*/g) ?? [text]) : [...text]) {

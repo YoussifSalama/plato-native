@@ -42,7 +42,7 @@ const routes = (cls: any) =>
 describe('extension route registry', () => {
   it('web routes: JwtAuthGuard only', () => {
     const r = routes(ExtensionWebController);
-    expect(r.length).toBe(9); // + GET stops (the stop report)
+    expect(r.length).toBe(12); // + GET stops (the stop report), GET/POST settings + GET site-accounts (job-site accounts, 2026-11-21)
     for (const x of r) expect(x.guards).toEqual([JwtAuthGuard]);
   });
 

@@ -19,7 +19,7 @@ export function profileSummary(c: Candidate, max = 4500, career = true): string 
     line('Location', c.location || c.country),
     line('Email', c.email),
     line('Phone', c.phone),
-    line('Years of experience', c.totalYears ?? p.yearsExperience),
+    k(line('Years of experience', c.totalYears ?? p.yearsExperience)), // with a CV: counted from its dates
     k(line('Summary', c.summary)),
     k(line('Skills', c.skills.slice(0, 40))),
     line('Links', Object.entries(c.links).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`)),

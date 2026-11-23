@@ -33,7 +33,7 @@ export const SITE_WHY: Record<SitePage, string> = {
 };
 const SITE_REASON: Record<SitePage, StopReason> = { ACCOUNT_SIGNUP: 'account-signup', LOGIN: 'login', EMAIL_VERIFICATION: 'email-verification', UNKNOWN: 'unknown-page' };
 export const LOOP_WHY = 'Plato is going in circles on this page: its last 3 actions changed nothing. Look at the job’s tab; Continue picks up from the page as it is.';
-export const TOO_MANY_WHY = 'The application took more steps than Plato goes through on its own (40). Open the tab to see where it stands; Try again continues from there.';
+export const TOO_MANY_WHY = 'The application ran longer than Plato goes on its own. Open the tab to see where it stands; Try again continues from there.';
 // The presses and entries that should change the page; reads, screenshots, scrolls and waits do not count toward a loop.
 const ACTIONS = new Set(['left_click', 'double_click', 'triple_click', 'right_click', 'type', 'key', 'form_input', 'file_upload']);
 const SAME_LIMIT = 3; // ponytail: 3 action turns with no change on the page; raise it if slow pages trip it
@@ -58,7 +58,6 @@ export interface V3RunDeps {
   sleep(ms: number): Promise<void>;
 }
 
-const MAX_TURNS = 40; // the backend caps the model at 40 too
 const MAX_ERRORS = 3; // consecutive brain failures (network, model) before the seeker is told
 export const NO_SOLVE = 'Plato does not solve human checks. Solve it in the job’s tab, then press “I solved it, continue”.';
 export const CAPTCHA_WHY = `The page shows a human check (captcha). ${NO_SOLVE}`; // the page itself detected it
@@ -113,7 +112,8 @@ async function loop(d: V3RunDeps, first: TurnRequest, seen: string[]): Promise<V
   let same = 0;
   let req: TurnRequest = { ...first, ...(p && { page: pageOf(p) }) };
   let errors = 0;
-  for (let t = 0; t < MAX_TURNS; t++) {
+  // no step cap (owner 2026-11-24): the backend gives the model 5 minutes at a time and it renews or stops itself
+  for (;;) {
     let res: TurnResponse;
     try {
       res = await d.turn(req);
@@ -189,5 +189,4 @@ async function loop(d: V3RunDeps, first: TurnRequest, seen: string[]): Promise<V
     }
     req = { event: 'results', results, ...(p && { page: pageOf(p) }) };
   }
-  return { kind: 'needs-user', why: TOO_MANY_WHY, stop: 'blocked', reason: 'too-many-steps' };
 }

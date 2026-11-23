@@ -16,7 +16,10 @@ import { applyPageOf, parseOutcome, type BrowserCall, type CallResult, type Outc
 // them to the extension. The extension executes and posts the results; nothing here touches a page.
 // Sessions live in memory: a backend restart ends them, and the extension restarts the item from the page as it is.
 
-const MAX_TURNS = 40;
+// No turn cap (owner 2026-11-24: Amazon's 9 pages ran out of 40 turns). Time instead: every 5 minutes of work the model
+// is asked whether the application is still moving; it renews its own 5 minutes (RENEW) or stops (BLOCKED).
+// ponytail: no hard ceiling by the owner's choice; the extension's loop check (same page 3 times) is the runaway guard.
+const WINDOW_MS = 5 * 60_000;
 const IDLE_MS = 2 * 60 * 60_000; // a session nobody has touched for 2 h is dropped (its screenshots stay in memory until then)
 const MODEL = () => process.env.V3_MODEL ?? 'claude-sonnet-5-5';
 const PRICE: Record<string, { in: number; out: number; cacheRead: number; cacheWrite: number }> = {
@@ -32,6 +35,8 @@ interface Session {
   system: string;
   messages: Anthropic.Beta.BetaMessageParam[];
   turns: number;
+  window: number; // when the current 5 minutes started; every seeker action (Try again, Continue, an answer) starts a fresh one
+  timeAsked: boolean; // the 5 minutes ran out and the model was asked to RENEW or stop
   hosts: string[]; // the URL policy: the job's apply host and its registrable domain
   pending: Map<string, BrowserCall>; // calls handed out, awaiting results
   createAccounts: boolean; // the seeker allows job-site accounts: the password placeholders may be typed
@@ -66,7 +71,7 @@ How to work:
 - After filling, call read_page again and check every required field shows value="…" and no error; a combobox that shows no value was NOT picked: click it, type, and click the option in the list. Fix what did not stick before you stop. A field marked error="X is required" that now shows a value is fine.
 - Dates: use today's date when asked for an availability/start date, in the format the label asks (mm/dd/yyyy if it says so). Choice questions: always pick the option the seeker's data supports.
 - A question about the JOB's location ("Which location are you applying for?", office choice): pick the posting's location (the first listed when several); it is the job's fact, not the seeker's.
-- Screening questions about experience, skills, seniority or level: answer from the work history and skills, picking the strongest option the seeker's data supports; never ask.
+- Screening questions (years of experience, "have you done X", seniority, skills): answer the way the seeker would about themselves, from your understanding of the whole CV, not only its literal words. Years: count them from the experience dates (start to end, today for a current role), not from a phrase like "9+ years" written when the CV was made. Work or skill: it counts when the roles, their bullets or the skills show it, in any wording (designing cloud solutions for enterprise clients IS architecting cloud solutions). When the CV clearly supports Yes or clearly No, answer it; never pick an answer the CV does not support. When it does not settle the question (a years threshold the dates do not clearly reach, work the CV never touches), do not guess: collect it for the ASK, with what the CV does show in "why".
 - A REQUIRED checkbox that is a consent or acknowledgement for this application (privacy notice, data processing, terms of applying) must be checked: the seeker asked you to apply. Optional marketing/newsletter boxes stay unchecked.
 - Fill the form the way the seeker would fill their own: a person never stops to ask themselves something they already know. A field that asks for a fact the seeker's data has, worded or shaped differently, is that fact: first / middle / last name = the CV's "name" first / middle / last, else the PROFILE's First name / Middle name / Last name lines, exactly (a form with no middle-name field leaves the middle name out; never put it into the last name); preferred / known-as / display first or last name = the same again; confirm or re-enter email = Email; mobile / contact number = Phone; city or country alone = that part of Location. Ask only for facts the seeker's data truly lacks, never because a label is worded differently from it.
 - The profile's "Seeker's answer for forms" lines are the seeker's own answers: use them wherever a form asks the same thing, in any wording.
@@ -93,7 +98,11 @@ ASK: <one line for the seeker: which form questions you cannot answer and why>
 \`\`\`
   Types: boolean (Yes/No); choice (one of options; add "other": true when a free answer is also fine); multi (several of options); text (a short value); textarea (a sentence or more). Copy the form's own options into "options" when it has them. Each label is a complete question answerable without seeing the page. At most 8 questions, each with a short "why".
 - After you are told Submit is allowed: press the Submit control ONCE, wait, read the page, and answer exactly one of: CONFIRMED <quote the page's confirmation text> / REFUSED <quote the page's refusal> / CAPTCHA / UNCONFIRMED <what you see>. Never press it twice.
-- Keep going without asking for confirmation; at most ${MAX_TURNS} turns.`;
+- Keep going without asking for confirmation, and take the steps the application needs: there is no step limit. Every 5 minutes of work Plato asks you whether it is still moving (TIME).`;
+
+const TIME_CHECK = `TIME: 5 more minutes of this application have passed. Decide honestly from where it stands now:
+- it is moving forward (new pages, fields filling) and you can finish it: start your reply with the line RENEW <what is done, what is left, one line> and carry on with your next actions in the same reply;
+- it will not succeed (stuck on the same page, the same error again and again, something only the seeker can do): answer BLOCKED <what you tried, what stops you, what the seeker could do>.`;
 
 // The site a host belongs to, for the URL policy: "jobs.lever.co" -> "lever.co". A country second level
 // ("careers.acme.co.uk", "jobs.acme.com.eg") keeps three labels, or the policy would open every *.co.uk.
@@ -126,6 +135,7 @@ export class V3SessionService {
     }
     const user: Anthropic.Beta.BetaContentBlockParam[] = [];
     if (req.page) s.page = req.page.kind;
+    if (req.event !== 'results') s.window = Date.now(); // the seeker acted: their time is not the model's
     if (req.event === 'results') user.push(...this.resultsToBlocks(s, req.results ?? []));
     else if (req.event === 'seeker_answer') user.push({ type: 'text', text: `The seeker answered your questions:\n${req.text ?? ''}\nUse these answers exactly where the form asks them; do not ask them again. Continue the application.` });
     else if (req.event === 'solved') user.push({ type: 'text', text: 'The seeker solved the human check on the page. Read the page again and continue.' });
@@ -135,6 +145,10 @@ export class V3SessionService {
       user.push({ type: 'text', text: 'The seeker allows Submit now. Press the Submit control ONCE, wait for the page, read it, and answer CONFIRMED <quote> / REFUSED <quote> / CAPTCHA / UNCONFIRMED <what you see>.' });
     } else if (req.event === 'check') user.push({ type: 'text', text: 'Read the page again now and answer exactly one of: CONFIRMED <quote> / REFUSED <quote> / CAPTCHA / UNCONFIRMED <what you see>. Do not press anything.' });
     else if (req.event === 'start') user.push({ type: 'text', text: s.messages.length ? 'Start again from the page as it is now: read it, keep what is filled, fill the rest.' : `Apply to this job: ${(await this.jobUrl(item.job_id)) ?? ''}` });
+    if (req.event === 'results' && Date.now() - s.window >= WINDOW_MS) {
+      s.timeAsked = true;
+      user.push({ type: 'text', text: TIME_CHECK });
+    }
     if (req.page) user.push({ type: 'text', text: `PAGE (detected): ${req.page.kind} at ${req.page.url.slice(0, 300)} (${req.page.fields} fields)` });
     if (user.length) s.messages.push({ role: 'user', content: user });
     s.lastAt = Date.now();
@@ -144,7 +158,6 @@ export class V3SessionService {
   /** One model call; the calls it returns are checked and handed to the executor. A refused call is answered here and the model asked again. */
   private async advance(s: Session): Promise<TurnResponse> {
     for (let guard = 0; guard < 4; guard++) {
-      if (s.turns >= MAX_TURNS) return { version: 1, turn: s.turns, outcome: { kind: 'blocked', reason: `Turn limit (${MAX_TURNS}) reached.` } };
       s.turns++;
       let response: Anthropic.Beta.BetaMessage;
       try {
@@ -180,6 +193,15 @@ export class V3SessionService {
       s.messages.push({ role: 'assistant', content: response.content });
       const uses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
       const texts = response.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map((b) => b.text).join('\n');
+      if (s.timeAsked && /^\s*RENEW\b/m.test(texts)) {
+        s.window = Date.now();
+        s.timeAsked = false;
+        this.log.log(`item ${s.itemId} turn ${s.turns}: renewed 5 minutes (${texts.match(/RENEW\b(.*)/)?.[1]?.trim().slice(0, 200) ?? ''})`);
+        if (!uses.length) {
+          s.messages.push({ role: 'user', content: [{ type: 'text', text: 'Renewed. Continue the application.' }] });
+          continue;
+        }
+      }
       if (!uses.length) {
         const outcome = parseOutcome(texts);
         this.log.log(`item ${s.itemId} turn ${s.turns} [${s.page ?? '-'}]: ${outcome.kind}${outcome.kind === 'site' ? ` ${outcome.page}` : ''}`);
@@ -256,8 +278,8 @@ export class V3SessionService {
     return [...out, ...carry];
   }
 
-  /** The seeker's newest CV as compact JSON (cv-facts.ts): made once per upload and kept on the document; null = none. */
-  private async cvFacts(jobSeekerId: string): Promise<string | null> {
+  /** The seeker's newest CV as JSON (cv-facts.ts): made once per upload and kept on the document; null = none. */
+  private async cvFacts(jobSeekerId: string): Promise<CvJson | null> {
     const doc = await this.prisma.jobSeekerDocument.findFirst({
       where: { job_seeker_id: jobSeekerId, type: 'CV_RESUME', status: 'READY' },
       orderBy: { created_at: 'desc' },
@@ -266,7 +288,7 @@ export class V3SessionService {
     const text = doc?.extracted_text?.trim();
     if (!doc || !text) return null;
     const cached = doc.apply_json as { v?: number; json?: CvJson } | null;
-    if (cached?.v === CV_JSON_VERSION && cached.json) return compactCv(withName(cached.json));
+    if (cached?.v === CV_JSON_VERSION && cached.json) return withName(cached.json);
     const model = MODEL();
     const r = await this.client.messages.create({
       model,
@@ -282,7 +304,7 @@ export class V3SessionService {
     const json = grounded(JSON.parse(out) as CvJson, text);
     await this.prisma.jobSeekerDocument.update({ where: { id: doc.id }, data: { apply_json: { v: CV_JSON_VERSION, json } as object } });
     this.log.log(`CV JSON made for document ${doc.id} (${out.length} chars)`);
-    return compactCv(withName(json));
+    return withName(json);
   }
 
   private async open(p: ExtensionPrincipal, itemId: string, jobId: string): Promise<Session> {
@@ -293,7 +315,17 @@ export class V3SessionService {
     const host = new URL(url).hostname;
     const hosts = [host, registrable(host), ...(job.url ? [new URL(job.url).hostname] : [])];
     const today = new Date().toISOString().slice(0, 10);
-    const cv = await this.cvFacts(p.jobSeekerId).catch((e) => (this.log.warn(`item ${itemId}: CV JSON not available (${e instanceof Error ? e.message : String(e)}); the profile alone is used`), null));
+    const cvJson = await this.cvFacts(p.jobSeekerId).catch((e) => (this.log.warn(`item ${itemId}: CV JSON not available (${e instanceof Error ? e.message : String(e)}); the profile alone is used`), null));
+    const cv = cvJson && compactCv(cvJson);
+    // the CV's contact wins over the account's: the rules say "Email" / "Phone", and the account's went on Amazon (2026-11-24)
+    const n = cvJson?.name as { full?: string; first?: string; middle?: string; last?: string } | undefined;
+    const c = cvJson?.contact;
+    const seeker = {
+      ...candidate,
+      ...(c?.emails?.[0] && { email: c.emails[0] }),
+      ...(c?.phones?.[0] && { phone: c.phones[0] }),
+      ...(n?.full && { fullName: n.full, firstName: n.first ?? '', middleName: n.middle || undefined, lastName: n.last ?? '' }), // the CV's whole name, never mixed with the account's
+    };
     const system = `GOAL: you are applying to ${job.title} at ${job.company}. Every action serves that application; nothing else.
 
 ${settings.createAccounts ? RULES.replace(PASSWORD_OFF, PASSWORD_ON) : RULES}
@@ -304,7 +336,7 @@ JOB: ${job.title} at ${job.company}${job.location ? ` (${job.location})` : ''}. 
 ${(job.description ?? '').slice(0, 2500)}
 
 ${cv ? `SOURCES, in this order:
-1. CV: the seeker's resume as JSON, the main source and the basis of the application. Every fact it states comes from it: name (its "name" first / middle / last), email, phone, address, job titles, dates, education, skills.
+1. CV: the seeker's resume as JSON, the main source and the basis of the application. Every fact it states comes from it: name (its "name" first / middle / last), email, phone, address, job titles, dates, education, skills. PROFILE's Name, Email and Phone lines already hold the CV's values.
 2. The seeker's own answers, for what the CV does not state: the "Seeker's answer for forms" and "Answered before" lines in PROFILE, and answers given in this conversation.
 3. PROFILE (the account): a fallback only, for what neither states (preferences, salary, work authorization, relocation).
 A fact in none of them is not known: never invent it.
@@ -313,8 +345,8 @@ CV (JSON)
 ${cv}
 
 ` : ''}PROFILE
-${profileSummary(candidate, 4500, !cv)}`;
-    const s: Session = { itemId, jobSeekerId: p.jobSeekerId, model: MODEL(), system, messages: [], turns: 0, hosts, pending: new Map(), createAccounts: settings.createAccounts, submitAllowed: false, submitPressed: false, startedAt: Date.now(), lastAt: Date.now() };
+${profileSummary(seeker, 4500, !cv)}`;
+    const s: Session = { itemId, jobSeekerId: p.jobSeekerId, model: MODEL(), system, messages: [], turns: 0, window: Date.now(), timeAsked: false, hosts, pending: new Map(), createAccounts: settings.createAccounts, submitAllowed: false, submitPressed: false, startedAt: Date.now(), lastAt: Date.now() };
     this.sessions.set(itemId, s);
     this.log.log(`item ${itemId}: session opened (${s.model}, host ${host})`);
     return s;

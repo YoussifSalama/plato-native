@@ -255,10 +255,7 @@ describe('runV3: what the page is decides before the brain acts', () => {
     const h = harness([{ calls: [click()] }, { calls: [click()] }, { calls: [click()] }, { calls: [click()] }, { outcome: { kind: 'blocked', reason: 'done' } }], { pages: [a, a, a, b, b, b] });
     expect(await h.run()).toMatchObject({ reason: 'blocked' });
   });
-  it('40 steps at most, by the extension or the backend\'s turn limit: "too many steps"', async () => {
-    const h = harness(Array.from({ length: 40 }, () => ({ calls: [call('read_page')] })));
-    expect(await h.run()).toMatchObject({ why: TOO_MANY_WHY, reason: 'too-many-steps' });
-    expect(h.reqs.length).toBe(40);
-    expect(await harness([{ outcome: { kind: 'blocked', reason: 'Turn limit (40) reached.' } }]).run()).toMatchObject({ reason: 'too-many-steps' });
+  it('no step cap in the extension; an older backend\'s turn limit is still "too many steps"', async () => {
+    expect(await harness([{ outcome: { kind: 'blocked', reason: 'Turn limit (40) reached.' } }]).run()).toMatchObject({ why: TOO_MANY_WHY, reason: 'too-many-steps' });
   });
 });

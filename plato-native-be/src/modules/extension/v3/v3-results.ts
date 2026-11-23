@@ -124,31 +124,3 @@ export function resultContent(
   if (state) content.push(state);
   return { content: content as Block, isError: false };
 }
-
-export const KEEP_IMAGES = 3;
-export const OLD_IMAGE = '[older screenshot removed]';
-/**
- * Keeps only the newest `keep` images in the history (in place); older image blocks, top level or inside a
- * tool_result, become a text note. Every tool_result keeps its tool_use_id, so the tool_use pairing stays valid.
- * Long runs would otherwise cross the API's 20-image threshold (and its stricter per-image size limit).
- */
-export function pruneImages(
-  messages: Anthropic.Beta.BetaMessageParam[],
-  keep = KEEP_IMAGES,
-) {
-  let seen = 0;
-  type Loose = { type: string; content?: unknown };
-  const prune = (blocks: Loose[]) => {
-    for (let j = blocks.length - 1; j >= 0; j--) {
-      const b = blocks[j]!;
-      if (b.type === 'image' && ++seen > keep)
-        blocks[j] = { type: 'text', text: OLD_IMAGE } as Loose;
-      else if (b.type === 'tool_result' && Array.isArray(b.content))
-        prune(b.content as Loose[]);
-    }
-  };
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const c = messages[i]!.content;
-    if (Array.isArray(c)) prune(c as Loose[]);
-  }
-}

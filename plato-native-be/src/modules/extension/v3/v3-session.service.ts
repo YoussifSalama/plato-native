@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { errorCode, pruneImages, resultContent } from './v3-results';
+import { errorCode, resultContent } from './v3-results';
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { recordUsage } from '../../usage/usage';
@@ -142,7 +142,6 @@ export class V3SessionService {
       if (s.turns >= MAX_TURNS) return { version: 1, turn: s.turns, outcome: { kind: 'blocked', reason: `Turn limit (${MAX_TURNS}) reached.` } };
       s.turns++;
       let response: Anthropic.Beta.BetaMessage;
-      pruneImages(s.messages);
       try {
         response = await this.client.beta.messages.create({
           model: s.model,
@@ -150,9 +149,16 @@ export class V3SessionService {
           system: [{ type: 'text', text: s.system, cache_control: { type: 'ephemeral' } }],
           tools: [{ type: 'browser_toolset_20260801', configs: { file_upload: { enabled: true } }, cache_control: { type: 'ephemeral' } } as unknown as Anthropic.Beta.BetaToolUnion],
           messages: s.messages,
-          betas: ['context-management-2025-06-27'],
+          // The history is append-only: thinking blocks are bound to everything before them, and an edited history fails
+          // the request (400 "Invalid signature in thinking block", PL-KDJSKX 2026-11-23: old screenshots were rewritten).
+          // Old tool results (screenshots included) are cleared by the API itself (context editing), which is not an edit.
+          // drop_block: should the history ever differ, the stale thinking is dropped instead of failing the application.
+          thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } } as unknown as Anthropic.Beta.BetaThinkingConfigParam,
+          betas: ['context-management-2025-06-27', 'thinking-binding-controls-2026-08-01'],
           context_management: { edits: [{ type: 'clear_tool_uses_20250919' }] },
         });
+        const dropped = (response as { input_transformations?: unknown[] }).input_transformations;
+        if (dropped?.length) this.log.warn(`item ${s.itemId} turn ${s.turns}: thinking dropped ${JSON.stringify(dropped).slice(0, 500)}`);
       } catch (e) {
         s.turns--; // not a turn: the extension may retry the same event
         const msg = e instanceof Error ? e.message : String(e);

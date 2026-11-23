@@ -68,7 +68,7 @@ export function grounded(cv: CvJson, source: string): CvJson {
   };
 }
 
-/** The CV's name, ready for a form: "HESHAM ELELAMY" -> { full: "Hesham Elelamy", first: "Hesham", last: "Elelamy" }. */
+/** The CV's name, ready for a form: "OMAR HADDAD" -> { full: "Omar Haddad", first: "Omar", last: "Haddad" }. */
 export function withName(cv: CvJson): CvJson {
   const full = cv.contact?.full_name?.trim();
   if (!full) return cv;

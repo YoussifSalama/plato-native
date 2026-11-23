@@ -141,7 +141,12 @@ function row(doc: Document, r: Row, s: PanelState, a: Actions, registry: Registr
         const why = sess?.detail ?? NEEDS_TEXT[sess?.message ?? ''] ?? 'Plato stopped here and needs you on the page.';
         // the kind of stop decides the card: an older engine or backend gives only words, so the words are classified
         const stop: StopKind = sess?.stop ?? (sess?.ask ? 'ask' : isHumanStep(why) ? 'captcha' : /lost the page|could not be reached|internal server error|network error/i.test(why) ? 'error' : ALREADY_APPLIED.test(why) ? 'duplicate' : /refused|did not accept/i.test(why) ? 'refused' : 'ask');
-        const card = (title: string, text: string, hint: string | null, ...acts: Node[]) => el.append(h(doc, 'div', { class: `qcard ${stop}` }, h(doc, 'p', { class: 'qt', text: title }), h(doc, 'p', { class: 'q', text }, hint ? h(doc, 'small', { text: hint }) : null), acts.length ? h(doc, 'div', { class: 'chips' }, ...acts) : null));
+        // the error code: the seeker copies it and sends it to us; GET /admin/errors?code= finds this stop
+        const code = (c: string) => {
+          const copy = btn(doc, 'Copy', () => void navigator.clipboard.writeText(c).then(() => (copy.textContent = 'Copied')).catch(() => undefined), 'btn ghost sm');
+          return h(doc, 'p', { class: 'ecode' }, 'Error code ', h(doc, 'code', { text: c }), copy);
+        };
+        const card = (title: string, text: string, hint: string | null, ...acts: Node[]) => el.append(h(doc, 'div', { class: `qcard ${stop}` }, h(doc, 'p', { class: 'qt', text: title }), h(doc, 'p', { class: 'q', text }, hint ? h(doc, 'small', { text: hint }) : null), sess?.code ? code(sess.code) : null, acts.length ? h(doc, 'div', { class: 'chips' }, ...acts) : null));
         const open = () => btn(doc, 'Open the tab', () => a.batch.watch(item), 'btn sm', { icon: 'ext', disabled: s.busy });
         const again = (text = 'Try again') => btn(doc, text, () => a.batch.retry(item), 'btn primary sm', { disabled: s.busy, id: `continue-${item.id}` });
         switch (stop) {
@@ -166,6 +171,12 @@ function row(doc: Document, r: Row, s: PanelState, a: Actions, registry: Registr
             break;
           case 'error':
             card('Plato hit a problem on its own side', why, 'The job site is not involved; nothing was typed or sent since the last step.', again(), open());
+            break;
+          case 'site': // an account, a sign-in, an email code or a page Plato cannot place: the seeker acts on the site, then Continue
+            card('Plato needs you on the job site', why, 'Plato filled nothing on this page. Continue picks up from the page as it is.', open(), again('Continue'));
+            break;
+          case 'loop':
+            card('Plato was going in circles', why, null, open(), again('Continue'));
             break;
           case 'lost':
             card('Plato lost the job’s tab', why, 'Nothing was sent. Reopen the tab, then continue.', open(), again());

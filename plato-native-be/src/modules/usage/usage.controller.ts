@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Headers, Query } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertAdminKey } from './admin-key';
@@ -127,9 +127,14 @@ export class UsageController {
     const batchItems = ids.length
       ? await this.prisma.applyBatchItem.findMany({
           where: { id: { in: ids } },
-          select: { id: true, state: true, provider: true, job_id: true },
+          select: { id: true, state: true, provider: true, job_id: true, detail: true },
         })
       : [];
+    // failure reasons: every stop on these items by its reason code (plato-extension src/panel/main.ts STOP reasons)
+    const stops: Record<string, number> = {};
+    for (const i of batchItems)
+      for (const st of (i.detail as { stops?: { reason?: string }[] } | null)?.stops ?? [])
+        stops[st.reason ?? 'unknown'] = (stops[st.reason ?? 'unknown'] ?? 0) + 1;
     const jobs = batchItems.length
       ? await this.prisma.job.findMany({
           where: { id: { in: [...new Set(batchItems.map((i) => i.job_id))] } },
@@ -149,10 +154,59 @@ export class UsageController {
         },
       ]),
     );
-    return { days: n, ...v3Summary(rows, items) };
+    return { days: n, stops, ...v3Summary(rows, items) };
   }
 
   private assertKey(key: string | undefined) {
     assertAdminKey(this.config, key);
+  }
+}
+
+type Stop = { at: string; reason: string; message: string; code?: string; detail?: string };
+
+// Support: the seeker copies the error code from the extension panel ("Error code PL-XXXXXX") and sends it to us.
+// GET /admin/errors?code=PL-XXXXXX (x-admin-key) answers with that stop: who, which job, what the panel said, the raw
+// error behind it, and the item's stops before it. The server log has the same code on the Claude failure line.
+@Controller('admin/errors')
+export class ErrorsController {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
+
+  @Get()
+  async byCode(
+    @Headers('x-admin-key') key: string | undefined,
+    @Query('code') raw = '',
+  ) {
+    assertAdminKey(this.config, key);
+    const code = raw.trim().toUpperCase();
+    if (!/^PL-[A-Z2-9]{6}$/.test(code))
+      throw new BadRequestException('code looks like PL-XXXXXX');
+    const hits = (await this.prisma.applyBatchItem.findRaw({
+      filter: { 'detail.stops.code': code },
+      options: { projection: { _id: 1 } },
+    })) as unknown as { _id: { $oid: string } }[];
+    const items = await this.prisma.applyBatchItem.findMany({
+      where: { id: { in: hits.map((h) => h._id.$oid) } },
+      select: { id: true, batch_id: true, job_id: true, job_seeker_id: true, provider: true, state: true, detail: true },
+    });
+    return Promise.all(
+      items.map(async (i) => {
+        const stops = (i.detail as { stops?: Stop[] } | null)?.stops ?? [];
+        const [job, seeker] = await Promise.all([
+          this.prisma.job.findUnique({ where: { id: i.job_id }, select: { title: true, company: true, url: true, apply_url: true } }),
+          this.prisma.jobSeeker.findUnique({ where: { id: i.job_seeker_id }, select: { user: { select: { id: true, email: true } } } }),
+        ]);
+        return {
+          code,
+          stop: stops.find((st) => st.code === code),
+          seeker: { job_seeker_id: i.job_seeker_id, user_id: seeker?.user.id, email: seeker?.user.email },
+          job,
+          item: { id: i.id, batch_id: i.batch_id, provider: i.provider, state: i.state },
+          stops, // the item's last 20 stops, oldest first: what happened before this one
+        };
+      }),
+    );
   }
 }

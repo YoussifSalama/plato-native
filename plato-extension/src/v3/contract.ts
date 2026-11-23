@@ -1,6 +1,8 @@
 // Engine v3 wire contract with the backend brain. Mirrors plato-native-be src/modules/extension/v3/v3-contract.ts.
 //   POST /extension/v1/items/:id/v3/turn  { event, results?, text? }  ->  { calls, submit_allowed } | { outcome }
 // The call/result shapes are those of Anthropic's browser use tool members; the executor is a plain driver.
+import type { PageKind } from '../dom/page-state';
+export type { PageKind };
 export const V3_CONTRACT_VERSION = 1;
 
 export interface BrowserCall {
@@ -12,7 +14,7 @@ export interface CallResult {
   call_id: string;
   ok: boolean;
   text?: string;
-  image?: { media_type: 'image/png'; data: string };
+  image?: { media_type: 'image/png' | 'image/jpeg'; data: string };
   state?: { tabs: { tab_id: string; title: string; url: string; active?: boolean }[] };
   error?: string;
 }
@@ -34,10 +36,12 @@ export interface SeekerAnswer {
 export interface TurnRequest {
   // start: open (or restart) the conversation. results: the previous turn's calls ran. seeker_answer: the seeker answered an ASK.
   // solved: the seeker cleared a human check. submit: the item is armed, the model may press Submit once. check: read the page, press nothing.
-  event: 'start' | 'results' | 'seeker_answer' | 'solved' | 'submit' | 'check';
+  // continue: the seeker did what the site needed (made the account, signed in, confirmed the email) or looked at the page; carry on from it.
+  event: 'start' | 'results' | 'seeker_answer' | 'solved' | 'submit' | 'check' | 'continue';
   results?: CallResult[];
   text?: string;
   answers?: SeekerAnswer[]; // seeker_answer: the structured answers behind `text`
+  page?: { kind: PageKind; url: string; fields: number }; // the page as the classifier sees it now (dom/page-state.ts), for the brain and the log
 }
 export type Outcome =
   | { kind: 'submit_ready'; summary: string }
@@ -45,8 +49,9 @@ export type Outcome =
   | { kind: 'captcha'; text: string }
   | { kind: 'closed'; reason: string }
   | { kind: 'blocked'; reason: string }
+  | { kind: 'site'; page: 'ACCOUNT_SIGNUP' | 'LOGIN' | 'EMAIL_VERIFICATION' | 'UNKNOWN'; reason: string } // the brain says the seeker must act on the site first (or it cannot tell what the page is)
   | { kind: 'confirmed'; quote: string }
   | { kind: 'refused'; quote: string }
   | { kind: 'unconfirmed'; text: string }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string; fatal?: boolean; code?: string }; // fatal: the request itself is wrong (a 4xx), retrying cannot help; code: the server log's error code
 export type TurnResponse = { version: 1; turn: number; calls: BrowserCall[]; submit_allowed: boolean } | { version: 1; turn: number; outcome: Outcome };

@@ -1,4 +1,4 @@
-import { applyPageOf, parseOutcome } from './v3-contract';
+import { applyPageOf, parseOutcome, turnRequestSchema } from './v3-contract';
 import { registrable, V3SessionService } from './v3-session.service';
 
 describe('parseOutcome', () => {
@@ -131,5 +131,21 @@ ASK: The form requires two facts your profile does not hold.
   it('the other stops keep the brain’s description', () => {
     expect(parseOutcome('CAPTCHA hCaptcha challenge appeared right after Submit on the Lever form')).toEqual({ kind: 'captcha', text: 'CAPTCHA hCaptcha challenge appeared right after Submit on the Lever form' });
     expect(parseOutcome('BLOCKED The Apply button opens a login page; the site needs an account first.')).toEqual({ kind: 'blocked', reason: 'The Apply button opens a login page; the site needs an account first.' });
+  });
+});
+
+describe('parseOutcome: the seeker must act on the site first', () => {
+  it('ACCOUNT_REQUIRED / LOGIN_REQUIRED / VERIFY_EMAIL / UNKNOWN_PAGE map to a site stop with the page and the words', () => {
+    expect(parseOutcome('The site wants an account.\nACCOUNT_REQUIRED acme.workday.com')).toEqual({ kind: 'site', page: 'ACCOUNT_SIGNUP', reason: 'acme.workday.com' });
+    expect(parseOutcome('LOGIN_REQUIRED: Google sign-in only')).toEqual({ kind: 'site', page: 'LOGIN', reason: 'Google sign-in only' });
+    expect(parseOutcome('VERIFY_EMAIL — a 6-digit code was sent')).toEqual({ kind: 'site', page: 'EMAIL_VERIFICATION', reason: 'a 6-digit code was sent' });
+    expect(parseOutcome('UNKNOWN_PAGE a cookie wall with no form')).toEqual({ kind: 'site', page: 'UNKNOWN', reason: 'a cookie wall with no form' });
+  });
+});
+
+describe('turnRequestSchema: the page the extension classified', () => {
+  it('accepts a known kind with the continue event, refuses an unknown kind', () => {
+    expect(turnRequestSchema.safeParse({ event: 'continue', page: { kind: 'LOGIN', url: 'https://x/login', fields: 2 } }).success).toBe(true);
+    expect(turnRequestSchema.safeParse({ event: 'results', page: { kind: 'SOMETHING', url: 'https://x', fields: 1 } }).success).toBe(false);
   });
 });

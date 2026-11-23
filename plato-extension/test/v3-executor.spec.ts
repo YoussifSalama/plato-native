@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { REFUSE_PASSWORD, type Changed, type V3Op } from '../src/content/v3-reader';
-import { createExecutor, NEW_PASSWORD, REFUSE_PLACEHOLDER, SAVED_PASSWORD, REFUSE_AGAIN, REFUSE_FILLED, REFUSE_OTHER_SUBMIT, REFUSE_SUBMIT, type ExecDeps } from '../src/v3/executor';
+import { createExecutor, NEW_PASSWORD, REFUSE_PLACEHOLDER, SAVED_PASSWORD, REFUSE_AGAIN, REFUSE_FILLED, REFUSE_OTHER_SUBMIT, REFUSE_SUBMIT, MAX_SIDE, type ExecDeps } from '../src/v3/executor';
 
 // A fake tab: the content script answers refs by a small table; chrome.debugger calls are recorded.
-function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } }; changed?: Changed; password?: ExecDeps['password'] } = {}) {
+function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } }; changed?: Changed; password?: ExecDeps['password']; viewport?: number[] } = {}) {
   const cdp: { method: string; params: Record<string, unknown> }[] = [];
   const ops: V3Op[] = [];
   const nav: string[] = [];
@@ -33,8 +33,9 @@ function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?:
       if (method === 'Page.captureScreenshot') {
         shots++;
         if (o.shotFailsFirst && shots === 1) throw new Error('Unable to capture screenshot');
-        return { data: 'iVBORw0KGgo=' };
+        return { data: '/9j/4AAQ' };
       }
+      if (method === 'Runtime.evaluate' && o.viewport) return { result: { value: o.viewport } };
       return {};
     },
     navigate: async (url) => void nav.push(url),
@@ -188,10 +189,26 @@ describe('executor: members', () => {
   it('screenshot: a tab Chrome did not paint is brought forward once and captured again; zoom clips', async () => {
     const t = tab({ shotFailsFirst: true });
     const r = await t.run('screenshot');
-    expect(r).toMatchObject({ ok: true, image: { media_type: 'image/png', data: 'iVBORw0KGgo=' } });
+    expect(r).toMatchObject({ ok: true, image: { media_type: 'image/jpeg', data: '/9j/4AAQ' } });
     expect(t.counts()).toMatchObject({ activated: 1, shots: 2 });
     await t.run('zoom', { region: [100, 200, 740, 600] });
-    expect(t.cdp.at(-1)?.params.clip).toEqual({ x: 100, y: 200, width: 640, height: 400, scale: 2 });
+    expect(t.cdp.at(-1)?.params).toEqual({ format: 'jpeg', quality: 80, clip: { x: 100, y: 200, width: 640, height: 400, scale: 2 } });
+  });
+  it('screenshots: 30+ captures on a big high-DPI viewport, scrolled; the viewport only, no image side over MAX_SIDE, clicks mapped back', async () => {
+    // 2560x1440 CSS px at devicePixelRatio 2 = 5120x2880 device px, scrolled 3000 px down
+    const t = tab({ viewport: [0, 3000, 2560, 1440, 2], submitRef: 'ref_s' });
+    const sizes: number[] = [];
+    for (let i = 0; i < 32; i++) {
+      await t.run(i % 4 === 3 ? 'zoom' : 'screenshot', i % 4 === 3 ? { region: [0, 0, 1568 / (1 + i), 100] } : {});
+      const { clip } = t.cdp.at(-1)!.params as { clip: { x: number; y: number; width: number; height: number; scale: number } };
+      sizes.push(Math.round(clip.width * clip.scale * 2), Math.round(clip.height * clip.scale * 2)); // what Chrome renders
+      expect(clip.y).toBeGreaterThanOrEqual(3000); // the visible viewport, not the top of the page
+    }
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(MAX_SIDE);
+    expect(sizes.slice(0, 2)).toEqual([1568, 882]); // aspect kept
+    await t.run('screenshot');
+    expect(await t.run('left_click', { target: { type: 'coordinate', x: 784, y: 441 } })).toMatchObject({ ok: true }); // the middle of that screenshot
+    expect(t.clicks().at(-1)?.params).toMatchObject({ x: 1280, y: 720 }); // the middle of the viewport, in CSS px
   });
   it('members this browser does not serve are refused, never thrown', async () => {
     const t = tab();

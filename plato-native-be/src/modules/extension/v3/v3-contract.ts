@@ -6,6 +6,7 @@ import { z } from 'zod';
 // The call/result shapes mirror Anthropic's browser use tool members, so the executor is a plain driver.
 
 export const V3_CONTRACT_VERSION = 1;
+export const PAGE_KINDS = ['APPLICATION_FORM', 'ACCOUNT_SIGNUP', 'LOGIN', 'EMAIL_VERIFICATION', 'CAPTCHA', 'SUBMITTED', 'JOB_DESCRIPTION', 'UNKNOWN'] as const;
 
 /** The page an application starts on: apply_url when the job has one, else the listing. Board jobs (LinkedIn) store apply_url as '' (not null); `??` kept it and `new URL('')` threw (2026-10-30). */
 export const applyPageOf = (job: { apply_url?: string | null; url: string }): string => job.apply_url || job.url;
@@ -30,11 +31,14 @@ export type CallResult = z.infer<typeof callResultSchema>;
 export const turnRequestSchema = z.object({
   // start: open the conversation. results: the previous turn's calls were run. seeker_answer: the seeker answered an ASK.
   // solved: the seeker cleared a human check. submit: the item is armed, the model may press Submit once.
-  event: z.enum(['start', 'results', 'seeker_answer', 'solved', 'submit', 'check']),
+  // continue: the seeker did what the site needed (made the account, signed in, confirmed the email) or looked at the page; carry on from it.
+  event: z.enum(['start', 'results', 'seeker_answer', 'solved', 'submit', 'check', 'continue']),
   results: z.array(callResultSchema).max(64).optional(),
   text: z.string().max(4000).optional(),
   // seeker_answer: the structured answers behind `text` (one per question the brain asked), when the panel's form collected them
   answers: z.array(z.object({ id: z.string().min(1).max(40), label: z.string().min(1).max(300), value: z.string().max(2000) })).max(20).optional(),
+  // the page as the extension's classifier sees it now (plato-extension src/dom/page-state.ts): a hint for the brain, and the log
+  page: z.object({ kind: z.enum(PAGE_KINDS), url: z.string().max(4096), fields: z.number().int().min(0).max(10_000) }).optional(),
 });
 export type TurnRequest = z.infer<typeof turnRequestSchema>;
 
@@ -64,16 +68,18 @@ export type Outcome =
   | { kind: 'captcha'; text: string }
   | { kind: 'closed'; reason: string }
   | { kind: 'blocked'; reason: string }
+  | { kind: 'site'; page: 'ACCOUNT_SIGNUP' | 'LOGIN' | 'EMAIL_VERIFICATION' | 'UNKNOWN'; reason: string } // the seeker must act on the site first, or the brain cannot tell what the page is
   | { kind: 'confirmed'; quote: string }
   | { kind: 'refused'; quote: string }
   | { kind: 'unconfirmed'; text: string }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string; fatal?: boolean; code?: string }; // fatal: the request itself is wrong (a 4xx other than 429), retrying cannot help; code: errorCode(), in the server log and the seeker's stop
 
 export type TurnResponse =
   | { version: 1; turn: number; calls: BrowserCall[]; submit_allowed: boolean }
   | { version: 1; turn: number; outcome: Outcome };
 
-const KEYWORD = /^(?:(?:SUBMIT_READY|UNCONFIRMED|CONFIRMED|REFUSED|CAPTCHA|CLOSED|BLOCKED)\b|ASK\s*:)/i;
+const KEYWORD = /^(?:(?:SUBMIT_READY|UNCONFIRMED|CONFIRMED|REFUSED|CAPTCHA|CLOSED|BLOCKED|ACCOUNT_REQUIRED|LOGIN_REQUIRED|VERIFY_EMAIL|UNKNOWN_PAGE)\b|ASK\s*:)/i;
+const SITE = { ACCOUNT_REQUIRED: 'ACCOUNT_SIGNUP', LOGIN_REQUIRED: 'LOGIN', VERIFY_EMAIL: 'EMAIL_VERIFICATION', UNKNOWN_PAGE: 'UNKNOWN' } as const;
 
 /** The model's final text, mapped to an outcome the state machine understands. The keyword may follow a sentence
  * of its own ("All fields hold a value.\nSUBMIT_READY …"): the LAST line that starts with one is the answer. */
@@ -89,6 +95,8 @@ export function parseOutcome(text: string): Outcome {
   if (/^CAPTCHA\b/i.test(t)) return { kind: 'captcha', text: t.slice(0, 300) };
   if (/^ASK\s*:/i.test(t)) return parseAsk(m(/^ASK\s*:\s*([\s\S]*)$/i));
   if (/^CLOSED\b/i.test(t)) return { kind: 'closed', reason: m(/^CLOSED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
+  const site = /^(ACCOUNT_REQUIRED|LOGIN_REQUIRED|VERIFY_EMAIL|UNKNOWN_PAGE)\b[:\s\-—–]*([\s\S]*)$/i.exec(t);
+  if (site) return { kind: 'site', page: SITE[site[1]!.toUpperCase() as keyof typeof SITE], reason: site[2]!.trim().slice(0, 300) };
   if (/^BLOCKED\b/i.test(t)) return { kind: 'blocked', reason: m(/^BLOCKED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
   // no keyword: the model stopped talking; treat as blocked with its words, never as success
   return { kind: 'blocked', reason: (t || 'The model ended without a result.').slice(0, 300) };

@@ -1,4 +1,5 @@
-import { resultContent } from './v3-results';
+import type Anthropic from '@anthropic-ai/sdk';
+import { errorCode, OLD_IMAGE, pruneImages, resultContent } from './v3-results';
 
 const tabs = (n = 1) => ({
   tabs: Array.from({ length: n }, (_, i) => ({
@@ -85,4 +86,35 @@ describe('v3 tool_result content (browser toolset rules)', () => {
     expect(isError).toBe(true);
     expect(content).toEqual([{ type: 'text', text: 'stale' }]);
   });
+});
+
+describe('pruneImages: long runs send at most 3 images per request', () => {
+  it('a 35-step session: every request carries <= 3 images, the newest ones, and every tool_use keeps its tool_result', () => {
+    const messages: Anthropic.Beta.BetaMessageParam[] = [];
+    const images = (m: unknown) => (JSON.stringify(m).match(/"type":"image"/g) ?? []).length;
+    for (let i = 0; i < 35; i++) {
+      messages.push({ role: 'assistant', content: [{ type: 'tool_use', id: `t${i}`, name: 'screenshot', input: {} }] });
+      const r = resultContent('screenshot', { call_id: `t${i}`, ok: true, image: { media_type: 'image/jpeg', data: `img${i}` }, state: tabs() });
+      messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: `t${i}`, content: r.content }] });
+      pruneImages(messages); // what advance() does before each request
+      expect(images(messages)).toBe(Math.min(3, i + 1));
+    }
+    const json = JSON.stringify(messages);
+    expect(json).toContain('img34');
+    expect(json).toContain('img32');
+    expect(json).not.toContain('img31');
+    expect((json.match(new RegExp(OLD_IMAGE.replace(/[[\]]/g, '\\$&'), 'g')) ?? []).length).toBe(32);
+    for (let i = 0; i < 35; i++) {
+      const use = messages[2 * i]!.content as { id: string }[];
+      const res = messages[2 * i + 1]!.content as { tool_use_id: string; content: unknown[] }[];
+      expect(res[0]!.tool_use_id).toBe(use[0]!.id);
+      expect(res[0]!.content.length).toBeGreaterThan(0); // the browser_state stays beside the note
+    }
+  });
+});
+
+it('error codes: PL- and 6 characters without 0, O, 1 or I (what the stop schema and GET /admin/errors accept)', () => {
+  const codes = Array.from({ length: 200 }, errorCode);
+  for (const c of codes) expect(c).toMatch(/^PL-[A-HJ-NP-Z2-9]{6}$/);
+  expect(new Set(codes).size).toBe(200);
 });

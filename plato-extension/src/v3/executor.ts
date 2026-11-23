@@ -33,6 +33,7 @@ export interface ExecDeps {
 }
 type Target = { type: 'ref'; ref: string } | { type: 'coordinate'; x: number; y: number };
 const TAB = 'tab_1';
+export const MAX_SIDE = 1568; // longest side of any image sent to the model, in pixels
 // The model never sees or picks a password: it types one of these into a password box and the password goes in here.
 export const NEW_PASSWORD = '{{PLATO_NEW_PASSWORD}}';
 export const SAVED_PASSWORD = '{{PLATO_PASSWORD}}';
@@ -72,8 +73,9 @@ export function createExecutor(d: ExecDeps) {
     const i = await info();
     return { tabs: [{ tab_id: TAB, title: i?.title ?? '', url: i?.url ?? '', active: true }] };
   };
+  let k = 1; // screenshot px per CSS px, set by the last screenshot: the model's coordinates are screenshot px
   const point = async (t: Target): Promise<Point> => {
-    if (t.type === 'coordinate') return { x: t.x, y: t.y };
+    if (t.type === 'coordinate') return { x: t.x / k, y: t.y / k }; // screenshot px -> CSS px
     // waits until the control can really be pressed; a press that would miss is never sent
     const r = await d.send<Readiness | null>({ op: 'ready', ref: t.ref, capMs: d.quick ? 600 : 4000 });
     if (!r) throw new Error(`Unknown or stale ref: ${t.ref}. Call read_page again for current refs.`);
@@ -95,7 +97,7 @@ export function createExecutor(d: ExecDeps) {
     await human(150, 300);
     await d.settle(); // the page answers a press (a menu opens, a step loads) before anything else happens
   };
-  const describe = (t: Target) => d.send<ElementInfo | null>(t.type === 'ref' ? { op: 'describe', ref: t.ref } : { op: 'describe', x: t.x, y: t.y }).catch(() => null);
+  const describe = (t: Target) => d.send<ElementInfo | null>(t.type === 'ref' ? { op: 'describe', ref: t.ref } : { op: 'describe', x: t.x / k, y: t.y / k }).catch(() => null);
   // Every press and key except the one Submit press runs under the page guard: a form submit it triggers is
   // cancelled and reported. Allowed or not: once allowed, only the Submit control may send the form, and only once.
   const guarded = async (allowed: boolean, fn: () => Promise<void>) => {
@@ -116,8 +118,19 @@ export function createExecutor(d: ExecDeps) {
     await d.cdp('Input.dispatchKeyEvent', { type: printable ? 'keyDown' : 'rawKeyDown', ...base, ...(printable && { text: def.text, unmodifiedText: def.text }) });
     await d.cdp('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
   };
-  const shot = async (clip?: Record<string, number>) => {
-    const take = () => d.cdp('Page.captureScreenshot', { format: 'png', ...(clip && { clip }) }) as Promise<{ data: string }>;
+  // Every image the model sees: the visible viewport only (never the full page), JPEG, longest side <= MAX_SIDE px
+  // (the API's per-image limits). CDP clips in document CSS px and renders at clip.scale x devicePixelRatio, so the
+  // scale divides the device pixel ratio back out.
+  const shot = async (region?: { x: number; y: number; width: number; height: number }) => {
+    const m = (await d.cdp('Runtime.evaluate', { expression: '[visualViewport.pageLeft, visualViewport.pageTop, visualViewport.width, visualViewport.height, devicePixelRatio]', returnByValue: true })) as { result?: { value?: number[] } } | undefined;
+    const [px = 0, py = 0, vw = 1280, vh = 900, dpr = 1] = m?.result?.value ?? [];
+    let c = { x: 0, y: 0, width: vw, height: vh }, scale: number;
+    if (region) {
+      c = { x: region.x / k, y: region.y / k, width: region.width / k, height: region.height / k };
+      scale = Math.min(2, MAX_SIDE / Math.max(c.width, c.height)); // a zoom may enlarge a small region, up to 2x
+    } else scale = k = Math.min(1, MAX_SIDE / Math.max(vw, vh));
+    const clip = { x: px + c.x, y: py + c.y, width: c.width, height: c.height, scale: scale / dpr };
+    const take = () => d.cdp('Page.captureScreenshot', { format: 'jpeg', quality: 80, clip }) as Promise<{ data: string }>;
     try {
       return await take();
     } catch {
@@ -228,11 +241,11 @@ export function createExecutor(d: ExecDeps) {
         return { ok: true, text: r.message, state: await state() };
       }
       case 'screenshot':
-        return { ok: true, image: { media_type: 'image/png', data: (await shot()).data }, state: await state() };
+        return { ok: true, image: { media_type: 'image/jpeg', data: (await shot()).data }, state: await state() };
       case 'zoom': {
         const [x0 = 0, y0 = 0, x1 = 1280, y1 = 900] = (input.region as number[] | undefined) ?? [];
         const w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0);
-        return { ok: true, image: { media_type: 'image/png', data: (await shot({ x: x0, y: y0, width: w, height: h, scale: Math.min(2, 1280 / w) })).data }, state: await state() };
+        return { ok: true, image: { media_type: 'image/jpeg', data: (await shot({ x: x0, y: y0, width: w, height: h })).data }, state: await state() };
       }
       case 'file_upload': {
         const ids = (input.document_ids as string[] | undefined) ?? [];

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { UsageController } from './usage.controller';
+import { ErrorsController, UsageController } from './usage.controller';
 
-@Module({ controllers: [UsageController] })
+@Module({ controllers: [UsageController, ErrorsController] })
 export class UsageModule {}

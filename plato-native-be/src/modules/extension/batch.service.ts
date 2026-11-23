@@ -201,7 +201,7 @@ export class ExtensionBatchService {
    * Where Plato stopped and asked the seeker, kept on the item (newest 20) without changing its
    * state: the run carries on when the seeker answers. Read back by stopReport().
    */
-  async recordStop(p: ExtensionPrincipal, itemId: string, stop: { reason: string; message: string }) {
+  async recordStop(p: ExtensionPrincipal, itemId: string, stop: { reason: string; message: string; code?: string; detail?: string; states?: string[] }) {
     const item = await this.item(p, itemId);
     const prev = (item.detail ?? {}) as Detail & { stops?: unknown[] };
     const stops = [...(prev.stops ?? []), { at: new Date().toISOString(), ...stop }].slice(-20);

@@ -43,7 +43,7 @@ export interface PanelState {
   toasts: Toast[];
   items: ApiItem[];
   policy?: PolicyMap; // server policy; undefined = unknown = everything blocked
-  sessions: Record<string, { step: SessionStep; message?: string; detail?: string; stop?: StopKind; ask?: AskQuestion[] }>; // stop/ask: why a v3 run stopped and the questions to draw
+  sessions: Record<string, { step: SessionStep; message?: string; detail?: string; stop?: StopKind; ask?: AskQuestion[]; code?: string }>; // stop/ask: why a v3 run stopped and the questions to draw; code: the error code the seeker can copy
   progress: Record<string, string>; // item id -> the last journal line (what Plato is doing on that page)
   cards: Record<string, ReconcileAction>;
   formReviews?: Record<string, ReviewState>; // engine v2 bookkeeping; not drawn

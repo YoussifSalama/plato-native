@@ -11,7 +11,7 @@ import type { CallResult } from '../v3/contract';
 import type { PageState } from '../dom/page-state';
 import { createExecutor } from '../v3/executor';
 import { SAME_TAB_SOURCE } from '../v3/same-tab';
-import { ALREADY_APPLIED, runV3, type StopKind, type V3Result } from '../v3/run';
+import { ALREADY_APPLIED, newCode, runV3, type StopKind, type V3Result } from '../v3/run';
 import type { AskQuestion, SeekerAnswer } from '../v3/contract';
 import type { TurnRequest } from '../v3/contract';
 import { runAiApply, type EaResult } from './ai-apply';
@@ -250,7 +250,7 @@ async function refresh() {
 }
 
 const sessionOf = (item: ApiItem) => orch.session(item.id) as Session;
-const setStep = (item: ApiItem, step: 'preparing' | 'review' | 'armed' | 'needs-user', message?: string, detail?: string, extra: { stop?: StopKind; ask?: AskQuestion[] } = {}) => {
+const setStep = (item: ApiItem, step: 'preparing' | 'review' | 'armed' | 'needs-user', message?: string, detail?: string, extra: { stop?: StopKind; ask?: AskQuestion[]; code?: string } = {}) => {
   if (!orch.session(item.id)) return void delete state.sessions[item.id]; // the job was cancelled or lost meanwhile: nothing to show as live
   state.sessions[item.id] = { step, message, detail, ...extra };
   if (step === 'needs-user') {
@@ -323,7 +323,9 @@ const whyEmpty = (r: { reason?: string; proposed?: unknown }, itemId: string) =>
 
 // What a finished run means for the job, the same for every site. Terminal outcomes are recorded on the batch.
 async function finishRun(item: ApiItem, s: Session, result: EaResult | V3Result) {
-  jot(item.id, result.kind === 'needs-user' ? `Stopped for the seeker: ${result.why}` : result.kind === 'confirmed' ? `Submitted: the page confirms (${result.marker}).` : result.kind === 'ready' ? 'Complete: waiting for the seeker to press Submit.' : result.kind === 'skip' ? `Skipped: ${result.why}` : 'Submit pressed, no confirmation on the page.');
+  // every stop gets a code the seeker can copy and send us (the server's own, for an AI failure)
+  const code = result.kind === 'needs-user' ? ('code' in result && result.code) || newCode() : '';
+  jot(item.id, result.kind === 'needs-user' ? `Stopped for the seeker [${code}]: ${result.why}` : result.kind === 'confirmed' ? `Submitted: the page confirms (${result.marker}).` : result.kind === 'ready' ? 'Complete: waiting for the seeker to press Submit.' : result.kind === 'skip' ? `Skipped: ${result.why}` : 'Submit pressed, no confirmation on the page.');
   if (result.kind === 'confirmed') {
     if (orch.session(item.id)) {
       // still held: record the confirmation when the page's own marker shows it, else the proof the engine quoted from the page
@@ -349,8 +351,10 @@ async function finishRun(item: ApiItem, s: Session, result: EaResult | V3Result)
     } else await orch.notSure(s, 'easy_apply_unconfirmed');
   }
   else {
-    setStep(item, 'needs-user', result.why.includes(RESUME_ASK) ? 'resume' : 'questions', result.why, 'stop' in result ? { stop: result.stop, ask: result.ask } : {});
-    void api.stop(item.id, { reason: stopKind(result.why), message: result.why.slice(0, 300) }).catch(() => undefined); // for the stop report
+    setStep(item, 'needs-user', result.why.includes(RESUME_ASK) ? 'resume' : 'questions', result.why, { code, ...('stop' in result && { stop: result.stop, ask: result.ask }) });
+    const raw = 'raw' in result ? result.raw : undefined;
+    const states = 'states' in result ? result.states : undefined;
+    void api.stop(item.id, { reason: ('reason' in result && result.reason) || stopKind(result.why), message: result.why.slice(0, 300), code, ...(raw && { detail: raw.slice(0, 2000) }), ...(states?.length && { states }) }).catch(() => undefined); // for the stop report and GET /admin/errors?code=
     void chrome.action.setBadgeText({ text: '!' });
     void chrome.action.setBadgeBackgroundColor({ color: '#d97706' });
   }
@@ -715,13 +719,15 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 // ---- Engine v3: the backend holds the Claude conversation; this panel runs each browser action in the job's tab ----
 // A stopped run remembers how its conversation continues (the seeker's answer, a solved captcha); a fresh run starts over.
-const v3Next = new Map<string, 'seeker_answer' | 'solved'>();
+const v3Next = new Map<string, 'seeker_answer' | 'solved' | 'continue'>();
 const v3Answers = new Map<string, SeekerAnswer[]>(); // the form's structured answers, sent with the next seeker_answer turn
 // What a thrown error means for the person: Plato's own failure (server, network) or the job's tab gone. Never a text box.
 const lostResult = (e: unknown): V3Result => {
   const msg = e instanceof Error ? e.message : String(e);
-  if (e instanceof ApiError) return { kind: 'needs-user', stop: 'error', why: `Plato's server failed while working on this job (${e.status ? `HTTP ${e.status}: ` : ''}${msg.slice(0, 100)}). Nothing was typed or sent since the last step. Press Try again; if it repeats, the problem is on Plato's side, not the job site.` };
-  return { kind: 'needs-user', stop: 'lost', why: `Plato lost contact with the job's tab (${msg.slice(0, 100)}). Nothing was sent. Open the tab, then press Try again.` };
+  // the raw error goes to the stop record (raw), never on the card: it can be a status line or a JSON body
+  if (e instanceof ApiError && e.status === 0) return { kind: 'needs-user', stop: 'error', why: 'Plato could not reach its server. Check your internet connection, then press Try again. Nothing was typed or sent since the last step.', raw: msg, reason: 'server-error' };
+  if (e instanceof ApiError) return { kind: 'needs-user', stop: 'error', why: `Plato’s server had a problem (HTTP ${e.status}). Nothing was typed or sent since the last step. Press Try again; if it happens again, send us the error code below.`, raw: msg, reason: 'server-error' };
+  return { kind: 'needs-user', stop: 'lost', why: 'Plato lost contact with the job’s tab. Nothing was sent. Open the tab, then press Try again.', raw: msg, reason: 'page-lost' };
 };
 const v3Running = new Set<string>();
 // Tabs opened lately (a job's Apply button handing the application to the company's site): followed by the run.
@@ -917,7 +923,7 @@ async function runV3Item(item: ApiItem) {
     v3Next.delete(item.id);
     const answers = v3Answers.get(item.id);
     v3Answers.delete(item.id);
-    const first: TurnRequest = next === 'seeker_answer' ? { event: 'seeker_answer', text: (notes.get(item.id)?.at(-1) ?? '').slice(0, 4000), ...(answers?.length && { answers }) } : next === 'solved' ? { event: 'solved' } : auto && s.item.state === 'AWAITING_SUBMIT' ? { event: 'submit' } : { event: 'start' }; // an armed item + "Submit for me": continue the same conversation at Submit, no refill (session_lost falls back to start below)
+    const first: TurnRequest = next === 'seeker_answer' ? { event: 'seeker_answer', text: (notes.get(item.id)?.at(-1) ?? '').slice(0, 4000), ...(answers?.length && { answers }) } : next === 'solved' || next === 'continue' ? { event: next } : auto && s.item.state === 'AWAITING_SUBMIT' ? { event: 'submit' } : { event: 'start' }; // an armed item + "Submit for me": continue the same conversation at Submit, no refill (session_lost falls back to start below)
     if (first.event === 'start') {
       // What is this page? A confirmation already on it ("Application submitted", "Applied 3w ago") ends the job here:
       // no brain turn, no refill, no navigate away. ponytail: the page-state.ts regex is the classifier; the brain's CLOSED covers the rest
@@ -949,7 +955,8 @@ async function runV3Item(item: ApiItem) {
           return out;
         },
         pageText: () => send<string>({ op: 'page_text' }),
-        captcha: async () => !!(await send<{ captcha?: boolean } | undefined>({ op: 'state' }))?.captcha,
+        page: () => send<PageState | undefined>({ op: 'state' }),
+        createAccounts: !!state.settings?.createAccounts,
         arm: async () => void (s.item.state !== 'AWAITING_SUBMIT' && (await orch.armForSubmit(s))),
         pressed: () => executor.submitPressed(),
         autoSubmit: auto,

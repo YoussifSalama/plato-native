@@ -5,7 +5,11 @@
 // What the model says is never taken on faith:
 //   - SUBMIT_READY arms the item on the server FIRST; only then (auto-submit on) does the brain get to press Submit, once;
 //   - CONFIRMED counts only when the quoted text is really on the page; otherwise it is "unconfirmed" (VERIFY, never a resend);
-//   - a human check seen by the page itself stops the run, whatever the model said.
+//   - a human check seen by the page itself stops the run, whatever the model said;
+//   - before the brain acts on a page, the page's own structure is classified (dom/page-state.ts): an account to make or
+//     a sign-in (with the seeker's "create accounts" setting off) or an email code stops the run before anything is typed;
+//   - 3 action turns in a row that change nothing on the page (same kind, URL, fields and values) stop it too.
+import type { PageState } from '../dom/page-state';
 import type { AskQuestion, BrowserCall, CallResult, TurnRequest, TurnResponse } from './contract';
 
 export type V3Result =
@@ -13,19 +17,40 @@ export type V3Result =
   | { kind: 'ready' } // armed; the person presses Submit (auto-submit is off)
   | { kind: 'unconfirmed' } // Submit pressed, nothing proved it: VERIFY, never resend
   | { kind: 'skip'; reason: 'closed' | 'already_applied'; why: string }
-  | { kind: 'needs-user'; why: string; resume?: 'seeker_answer' | 'solved'; stop?: StopKind; ask?: AskQuestion[] }; // resume: the event that continues this conversation; stop: what kind of stop, so the panel draws the right card
+  | { kind: 'needs-user'; why: string; resume?: 'seeker_answer' | 'solved' | 'continue'; stop?: StopKind; ask?: AskQuestion[]; code?: string; raw?: string; reason?: StopReason; states?: string[] }; // resume: the event that continues this conversation; stop: what kind of stop, so the panel draws the right card; code: the server's error code; raw: the error behind it (for us, never shown)
 // Why a run stopped for the person: a question (a form to answer), a human check on the page, the site's refusal, the
 // brain giving up, Plato's own failure (server, network), or the job's tab gone. Each gets its own card and buttons.
-export type StopKind = 'ask' | 'captcha' | 'refused' | 'blocked' | 'error' | 'lost' | 'duplicate';
+export type StopKind = 'ask' | 'captcha' | 'refused' | 'blocked' | 'error' | 'lost' | 'duplicate' | 'site' | 'loop'; // site: the seeker acts on the job site (account, sign-in, email code, an unknown page), then Continue
+// Why a run stopped, as one code: the stop record's `reason` (POST /stops), counted by GET /admin/usage/v3. The panel's
+// own stops use the same codes (panel/main.ts stopKind); keep them hyphenated like the older ones there.
+export type StopReason = 'account-signup' | 'login' | 'email-verification' | 'captcha' | 'unknown-page' | 'loop' | 'too-many-steps' | 'ai-error' | 'ai-asked' | 'blocked' | 'refused' | 'server-error' | 'page-lost';
+type SitePage = 'ACCOUNT_SIGNUP' | 'LOGIN' | 'EMAIL_VERIFICATION' | 'UNKNOWN';
+export const SITE_WHY: Record<SitePage, string> = {
+  ACCOUNT_SIGNUP: 'This site requires creating an account. Create it in the job’s tab, then click Continue.',
+  LOGIN: 'This site asks you to sign in. Sign in in the job’s tab, then click Continue.',
+  EMAIL_VERIFICATION: 'The site sent a code or a link to your email. Enter the code (or open the link) in the job’s tab, then click Continue.',
+  UNKNOWN: 'Plato is not sure what this page is and will not guess. Look at the job’s tab, move it to the application if you can, then click Continue.',
+};
+const SITE_REASON: Record<SitePage, StopReason> = { ACCOUNT_SIGNUP: 'account-signup', LOGIN: 'login', EMAIL_VERIFICATION: 'email-verification', UNKNOWN: 'unknown-page' };
+export const LOOP_WHY = 'Plato is going in circles on this page: its last 3 actions changed nothing. Look at the job’s tab; Continue picks up from the page as it is.';
+export const TOO_MANY_WHY = 'The application took more steps than Plato goes through on its own (40). Open the tab to see where it stands; Try again continues from there.';
+// The presses and entries that should change the page; reads, screenshots, scrolls and waits do not count toward a loop.
+const ACTIONS = new Set(['left_click', 'double_click', 'triple_click', 'right_click', 'type', 'key', 'form_input', 'file_upload']);
+const SAME_LIMIT = 3; // ponytail: 3 action turns with no change on the page; raise it if slow pages trip it
 /** The site's own words that this person already applied ("This email ... has already been used to apply for this job"). */
 export const ALREADY_APPLIED = /already (been )?(used to )?appl(y|ied)|already (submitted|sent) (an |your )?application|(you|you've|you have) (already )?applied (to|for) this|duplicate application|application (for this (job|position|role) )?already exists/i;
+// A short code the seeker can copy and send us; GET /admin/errors?code= (backend) finds the stop by it.
+// No 0/O/1/I. Same alphabet as plato-native-be src/modules/extension/v3/v3-results.ts errorCode().
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export const newCode = () => `PL-${Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => CODE_CHARS[b % 32]).join('')}`;
 export const askFallback = (question: string): AskQuestion[] => [{ id: 'answer', label: question, type: 'textarea', required: true }];
 
 export interface V3RunDeps {
   turn(req: TurnRequest): Promise<TurnResponse>;
   exec(call: BrowserCall, submitAllowed: boolean): Promise<CallResult>;
   pageText(): Promise<string>; // to check a CONFIRMED quote against the page
-  captcha(): Promise<boolean>; // the page shows a human check (dom/page-state.ts)
+  page(): Promise<PageState | undefined>; // what the page is now (dom/page-state.ts): kind, human check, signature
+  createAccounts?: boolean; // the seeker's setting: Plato may make and sign in to job-site accounts
   arm(): Promise<void>; // record "about to submit" on the server; throws if not acknowledged
   pressed?: () => boolean; // the executor really pressed Submit in this run (executor.submitPressed)
   autoSubmit: boolean;
@@ -33,7 +58,7 @@ export interface V3RunDeps {
   sleep(ms: number): Promise<void>;
 }
 
-const MAX_TURNS = 60; // the backend caps the model at 40; this is the executor's own guard
+const MAX_TURNS = 40; // the backend caps the model at 40 too
 const MAX_ERRORS = 3; // consecutive brain failures (network, model) before the seeker is told
 export const NO_SOLVE = 'Plato does not solve human checks. Solve it in the job’s tab, then press “I solved it, continue”.';
 export const CAPTCHA_WHY = `The page shows a human check (captcha). ${NO_SOLVE}`; // the page itself detected it
@@ -53,9 +78,41 @@ const brief = (c: BrowserCall) => {
 };
 
 export async function runV3(d: V3RunDeps, first: TurnRequest = { event: 'start' }): Promise<V3Result> {
-  let req = first;
-  let errors = 0;
+  const seen: string[] = []; // every page the run classified, for the stop record
+  const r = await loop(d, first, seen);
+  return r.kind === 'needs-user' ? { ...r, states: seen.slice(-5) } : r;
+}
+
+async function loop(d: V3RunDeps, first: TurnRequest, seen: string[]): Promise<V3Result> {
   let submitted = first.event === 'submit'; // the brain was allowed to press Submit (once); a run that begins at Submit (armed item, "Submit for me") counts it
+  // The page before the brain acts on it. The seeker just pressed Continue / "I solved it" on this page: the structure may
+  // still look the same (a lingering banner, an optional password box), so it does not stop the run again until the
+  // page moves on; the brain's own reading still can.
+  const look = async () => {
+    const p = await d.page().catch(() => undefined);
+    if (p) {
+      seen.push(`${p.kind} ${p.href.slice(0, 200)}`);
+      d.jot(`Page: ${p.kind} ${p.href.slice(0, 120)} (${p.fields} fields)`);
+    }
+    return p;
+  };
+  const pageOf = (p?: PageState) => (p ? { kind: p.kind, url: p.href.slice(0, 4000), fields: p.fields } : undefined);
+  let p = await look();
+  const waived = first.event === 'continue' || first.event === 'solved' ? p?.href : undefined;
+  const siteStop = (pg?: PageState): V3Result | null => {
+    if (!pg || pg.href === waived) return null;
+    if (pg.captcha) return { kind: 'needs-user', why: CAPTCHA_WHY, resume: 'solved', stop: 'captcha', reason: 'captcha' };
+    if (submitted) return null; // after the one press the brain reads the page and says what happened
+    const k = pg.kind;
+    if (k === 'EMAIL_VERIFICATION' || (!d.createAccounts && (k === 'ACCOUNT_SIGNUP' || k === 'LOGIN'))) return { kind: 'needs-user', why: SITE_WHY[k], resume: 'continue', stop: 'site', reason: SITE_REASON[k] };
+    return null;
+  };
+  const early = siteStop(p);
+  if (early) return early;
+  let lastSig = p?.sig;
+  let same = 0;
+  let req: TurnRequest = { ...first, ...(p && { page: pageOf(p) }) };
+  let errors = 0;
   for (let t = 0; t < MAX_TURNS; t++) {
     let res: TurnResponse;
     try {
@@ -86,19 +143,24 @@ export async function runV3(d: V3RunDeps, first: TurnRequest = { event: 'start' 
           return { kind: 'unconfirmed' };
         }
         case 'refused':
-          return { kind: 'needs-user', why: `The site did not accept the submission. Its words: “${o.quote.slice(0, 200)}”`, stop: 'refused' };
+          return { kind: 'needs-user', why: `The site did not accept the submission. Its words: “${o.quote.slice(0, 200)}”`, stop: 'refused', reason: 'refused' };
         case 'unconfirmed':
           return { kind: 'unconfirmed' };
         case 'captcha':
-          return { kind: 'needs-user', why: `${o.text.replace(/^CAPTCHA[:\s\-—–]*/i, '').trim() || 'A human check (captcha) appeared on the page.'} ${NO_SOLVE}`.slice(0, 400), resume: 'solved', stop: 'captcha' };
+          return { kind: 'needs-user', why: `${o.text.replace(/^CAPTCHA[:\s\-—–]*/i, '').trim() || 'A human check (captcha) appeared on the page.'} ${NO_SOLVE}`.slice(0, 400), resume: 'solved', stop: 'captcha', reason: 'captcha' };
         case 'ask':
-          return { kind: 'needs-user', why: o.question, resume: 'seeker_answer', stop: 'ask', ask: o.questions?.length ? o.questions : askFallback(o.question) };
+          return { kind: 'needs-user', why: o.question, resume: 'seeker_answer', stop: 'ask', ask: o.questions?.length ? o.questions : askFallback(o.question), reason: 'ai-asked' };
+        case 'site': // the brain's own reading: an account, a sign-in, an email code, or a page it cannot place
+          return { kind: 'needs-user', why: o.page === 'UNKNOWN' && o.reason ? `Plato is not sure what this page is (${o.reason.slice(0, 160)}) and will not guess. Look at the job’s tab, move it to the application if you can, then click Continue.` : SITE_WHY[o.page], resume: 'continue', stop: 'site', reason: SITE_REASON[o.page], raw: o.reason };
         case 'closed':
           return { kind: 'skip', reason: /already/i.test(o.reason) ? 'already_applied' : 'closed', why: o.reason };
         case 'blocked':
-          return { kind: 'needs-user', why: o.reason, stop: 'blocked' };
+          if (/^Turn limit/i.test(o.reason)) return { kind: 'needs-user', why: TOO_MANY_WHY, stop: 'blocked', reason: 'too-many-steps' };
+          return { kind: 'needs-user', why: o.reason, stop: 'blocked', reason: 'blocked' };
         case 'error':
-          if (++errors >= MAX_ERRORS) return { kind: 'needs-user', why: `Plato's AI could not be reached (${o.message.slice(0, 120)}). Nothing was typed or sent since the last step. Try again in a moment.`, stop: 'error' };
+          d.jot(`Plato's AI call failed${o.code ? ` (${o.code})` : ''}: ${o.message.slice(0, 200)}`);
+          if (o.fatal) return { kind: 'needs-user', why: 'Plato hit an internal error on this application and stopped. Nothing was typed or sent since the last step.', stop: 'error', code: o.code, raw: o.message, reason: 'ai-error' };
+          if (++errors >= MAX_ERRORS) return { kind: 'needs-user', why: 'Plato’s AI is not answering right now. Nothing was typed or sent since the last step. Try again in a few minutes.', stop: 'error', code: o.code, raw: o.message, reason: 'ai-error' };
           await d.sleep(3000);
           continue; // the same event again
       }
@@ -116,8 +178,16 @@ export async function runV3(d: V3RunDeps, first: TurnRequest = { event: 'start' 
       if (!r.ok) failed = true;
       results.push(r);
     }
-    if (await d.captcha().catch(() => false)) return { kind: 'needs-user', why: CAPTCHA_WHY, resume: 'solved', stop: 'captcha' };
-    req = { event: 'results', results };
+    p = await look();
+    const stop = siteStop(p);
+    if (stop) return stop;
+    // a loop: action turns that leave the page exactly as it was (read-only turns neither count nor reset it)
+    if (p) {
+      if (p.sig !== lastSig) same = 0;
+      else if (res.calls.some((c) => ACTIONS.has(c.name)) && ++same >= SAME_LIMIT) return { kind: 'needs-user', why: LOOP_WHY, resume: 'continue', stop: 'loop', reason: 'loop' };
+      lastSig = p.sig;
+    }
+    req = { event: 'results', results, ...(p && { page: pageOf(p) }) };
   }
-  return { kind: 'needs-user', why: 'The application took more steps than Plato goes through on its own. Open the tab to see where it stands; Try again continues from there.', stop: 'blocked' };
+  return { kind: 'needs-user', why: TOO_MANY_WHY, stop: 'blocked', reason: 'too-many-steps' };
 }

@@ -154,7 +154,8 @@ export class ExtensionWebController {
 }
 
 const featuredSchema = z.object({ featured: z.boolean() });
-const stopSchema = z.object({ reason: z.string().min(1).max(60), message: z.string().max(300) });
+// code: the error code the panel shows the seeker (PL-XXXXXX); detail: the raw error behind the stop, for us only
+const stopSchema = z.object({ reason: z.string().min(1).max(60), message: z.string().max(300), code: z.string().regex(/^PL-[A-Z2-9]{6}$/).optional(), detail: z.string().max(2000).optional(), states: z.array(z.string().max(300)).max(5).optional() }); // states: the last pages the run saw ("LOGIN https://…"), newest last
 const consentSchema = z
   .object({
     decision: z.enum(['allow', 'decline']),

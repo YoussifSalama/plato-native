@@ -7,6 +7,8 @@
 // the CV text itself. Tokens: empty fields stripped, long entries capped, and the result sits in the cached system
 // prompt, so every later turn of the application reads it at the cache price.
 
+import { presentableName, splitName } from '../../apply/answer-mapper';
+
 export const CV_JSON_VERSION = 2; // bump when the schema or the instructions change: cached copies are rebuilt
 export const CV_MAX_CHARS = 12_000; // ~3k tokens in the prompt
 
@@ -64,6 +66,15 @@ export function grounded(cv: CvJson, source: string): CvJson {
       postal_code: c.postal_code && word(c.postal_code) ? c.postal_code : null, // its own word: "00000" inside a phone number is not one
     },
   };
+}
+
+/** The CV's name, ready for a form: "HESHAM ELELAMY" -> { full: "Hesham Elelamy", first: "Hesham", last: "Elelamy" }. */
+export function withName(cv: CvJson): CvJson {
+  const full = cv.contact?.full_name?.trim();
+  if (!full) return cv;
+  const n = presentableName(full);
+  const { firstName, middleName, lastName } = splitName(n);
+  return { name: { full: n, first: firstName, middle: middleName, last: lastName }, ...cv };
 }
 
 /** Compact JSON for the prompt: no nulls or empty lists, capped at `max` characters by trimming the longest parts. */

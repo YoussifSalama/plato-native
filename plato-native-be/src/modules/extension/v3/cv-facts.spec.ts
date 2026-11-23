@@ -1,4 +1,4 @@
-import { compactCv, CV_SCHEMA, grounded, type CvJson } from './cv-facts';
+import { compactCv, CV_SCHEMA, grounded, withName, type CvJson } from './cv-facts';
 
 // The top of a two-column CV, as the PDF text extraction gives it (made-up person).
 const TEXT = `OMAR HADDAD
@@ -34,6 +34,11 @@ describe('CV JSON for the apply brain', () => {
     });
     expect(grounded({ contact: { address_line: '12 Sheikh Zayed Road' } }, TEXT).contact?.address_line).toBeNull();
     expect(grounded({ contact: { postal_code: '11511' } }, `${TEXT}\nCairo 11511, Egypt`).contact?.postal_code).toBe('11511'); // a real one stays
+  });
+
+  it("the CV's name comes ready for a form: capitals made readable, split first / middle / last", () => {
+    expect(withName({ contact: { full_name: 'OMAR ADEL HADDAD' } }).name).toEqual({ full: 'Omar Adel Haddad', first: 'Omar', middle: 'Adel', last: 'Haddad' });
+    expect(withName({ contact: { full_name: '' } }).name).toBeUndefined();
   });
 
   it('the prompt copy carries no nulls or empty lists and stays under the cap', () => {

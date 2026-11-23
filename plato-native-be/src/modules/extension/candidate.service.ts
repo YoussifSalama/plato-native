@@ -1,14 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { splitName, totalYears } from '../apply/answer-mapper';
+import { presentableName, splitName, totalYears } from '../apply/answer-mapper';
 import { AnswerValue, Candidate } from '../apply/apply.types';
 import { PrismaService } from '../prisma/prisma.service';
 
-// Same rule as the legacy apply worker: names typed IN CAPITALS at signup
-// shouldn't shout at a recruiter.
-const presentableName = (name: string) =>
-  name === name.toUpperCase() || name === name.toLowerCase()
-    ? name.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (c) => c.toUpperCase())
-    : name;
 
 // The seeker's application snapshot for the extension engine. A copy of the
 // legacy worker's private loader, so the legacy executor is not imported

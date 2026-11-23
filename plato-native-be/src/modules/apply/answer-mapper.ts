@@ -442,6 +442,12 @@ export function mapAnswers(
   return { answers, questions };
 }
 
+// Same rule as the legacy apply worker: names typed IN CAPITALS (at signup, or on a CV) shouldn't shout at a recruiter.
+export const presentableName = (name: string) =>
+  name === name.toUpperCase() || name === name.toLowerCase()
+    ? name.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (c) => c.toUpperCase())
+    : name;
+
 // First word = first name, last word = last (family) name, anything between = middle name: "Karim Adel Mansour" is
 // Karim / Adel / Mansour, not Karim / "Adel Mansour" (owner, 2026-11-23). A form without a middle-name field drops it.
 // Arabic compounds stay one name: "Abdel Rahman", "Abu Bakr", "El Sayed" (a prefix joins the word after it).

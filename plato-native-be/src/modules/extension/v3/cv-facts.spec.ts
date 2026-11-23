@@ -54,5 +54,7 @@ describe('CV JSON for the apply brain', () => {
       if (s.type === 'array') walk(s.items);
     };
     walk(CV_SCHEMA);
+    // the API refuses more than 16 union-typed parameters (type arrays or anyOf): this schema has none
+    expect(JSON.stringify(CV_SCHEMA)).not.toMatch(/"type":\[|"anyOf"/);
   });
 });

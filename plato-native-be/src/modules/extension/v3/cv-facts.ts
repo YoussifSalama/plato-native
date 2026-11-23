@@ -7,10 +7,12 @@
 // the CV text itself. Tokens: empty fields stripped, long entries capped, and the result sits in the cached system
 // prompt, so every later turn of the application reads it at the cache price.
 
-export const CV_JSON_VERSION = 1; // bump when the schema or the instructions change: cached copies are rebuilt
+export const CV_JSON_VERSION = 2; // bump when the schema or the instructions change: cached copies are rebuilt
 export const CV_MAX_CHARS = 12_000; // ~3k tokens in the prompt
 
-const str = { type: ['string', 'null'] };
+// No nullable fields: the API refuses a schema with more than 16 union-typed parameters (2026-11-23, 24 of them failed
+// every CV). An empty string means "the CV does not say"; compactCv() drops it.
+const str = { type: 'string' };
 const strs = { type: 'array', items: { type: 'string' } };
 const obj = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
 const list = (properties: Record<string, unknown>) => ({ type: 'array', items: obj(properties) });
@@ -29,7 +31,7 @@ export const CV_SCHEMA = obj({
 
 export const CV_PROMPT = `You turn the text extracted from a resume into JSON that matches the schema.
 - Copy facts exactly as written: names, dates, numbers, addresses, phone numbers, emails and links character for character.
-- Never infer, complete, translate, correct or guess. A field the text does not state is null (a list: []). A city alone is not an address line; no postal code unless one is written.
+- Never infer, complete, translate, correct or guess. A field the text does not state is an empty string "" (a list: []). A city alone is not an address line; no postal code unless one is written.
 - The text came from a PDF: columns may be interleaved. Put each fact under the section it belongs to.
 - details: the bullet points of that job, each as written. other: anything that fits no field, with its section title, verbatim.`;
 

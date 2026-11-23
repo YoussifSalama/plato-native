@@ -11,13 +11,12 @@ import { comboOptions, comboVerify, fieldPoint, groupState, optionPoint, refPoin
 import { submitForm } from '../dom/submit';
 import { inspectForm, listForms } from '../dom/inspect';
 import { createOverlay } from './overlay';
-import { handle as v3, installGuard } from './v3-reader';
+import { handle as v3 } from './v3-reader';
 
 // The person can press Stop on the page; the panel hears it and cancels that job.
 const overlay = createOverlay(document, () => void chrome.runtime.sendMessage({ type: 'plato:stop' }));
 
 const settle = createSettleWatcher(document); // watches the page from the moment the script runs
-installGuard(document); // engine v3: form submits are cancelled while the executor says so
 chrome.runtime.onMessage.addListener((msg: unknown, sender, sendResponse: (r: unknown) => void) => {
   if (sender.id !== chrome.runtime.id) return false;
   if (isPing(msg)) {

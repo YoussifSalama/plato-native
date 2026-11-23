@@ -5,9 +5,8 @@
 //
 // Code-enforced, whatever the model asks:
 //   - the Submit gate: a press on the Submit control runs only when the backend allowed it, and only once;
-//   - the page guard: every other press and key runs with form submission cancelled, before Submit is allowed
-//     and after it too, so the one Submit press is the only way the form is ever sent (an Enter in a field
-//     or a second control that submits the form cannot send it again);
+//   - nothing else is gated: every other press, key and step of a multi-page form is the brain's own call (the page
+//     guard that cancelled form submits was removed 2026-11-24: it stopped Amazon's Continue / Save & continue);
 //   - file_upload takes only the staged resume (document id "resume");
 //   - tabs: one tab, the job's; nothing opens or closes.
 //
@@ -38,9 +37,8 @@ export const MAX_SIDE = 1568; // longest side of any image sent to the model, in
 export const NEW_PASSWORD = '{{PLATO_NEW_PASSWORD}}';
 export const SAVED_PASSWORD = '{{PLATO_PASSWORD}}';
 export const REFUSE_PLACEHOLDER = 'Refused: a password placeholder goes only into a password box. Click the password box first, then type it.';
-export const REFUSE_SUBMIT = 'Refused: Submit is not allowed yet. Answer SUBMIT_READY when every required field holds a correct value.';
+export const REFUSE_SUBMIT = 'Not pressed: this control sends the application, and Plato sends it only after you answer SUBMIT_READY. If this is the last page and every required field holds a correct value, answer SUBMIT_READY; otherwise keep going.';
 export const REFUSE_AGAIN = 'Refused: Submit was already pressed once. Read the page and report what it says.';
-export const REFUSE_OTHER_SUBMIT = 'Refused: that action would have submitted the form; it was cancelled. Submit only with the Submit control itself, once.';
 // Typing appends. A field the page filled after the model's last read (a resume parse, a script) would end up doubled.
 export const REFUSE_FILLED = (label: string, value: string) => `Refused: "${label}" already holds "${value}", filled by the page after your last read. Typing would append to it. Read the page again; to replace a value use form_input.`;
 const KEYS: Record<string, { key: string; code: string; vk: number; text?: string }> = {
@@ -98,15 +96,6 @@ export function createExecutor(d: ExecDeps) {
     await d.settle(); // the page answers a press (a menu opens, a step loads) before anything else happens
   };
   const describe = (t: Target) => d.send<ElementInfo | null>(t.type === 'ref' ? { op: 'describe', ref: t.ref } : { op: 'describe', x: t.x / k, y: t.y / k }).catch(() => null);
-  // Every press and key except the one Submit press runs under the page guard: a form submit it triggers is
-  // cancelled and reported. Allowed or not: once allowed, only the Submit control may send the form, and only once.
-  const guarded = async (allowed: boolean, fn: () => Promise<void>) => {
-    await d.send({ op: 'guard', ms: 1500 });
-    await fn();
-    await d.sleep(d.quick ? 50 : 250);
-    const g = await d.send<{ blocked: number }>({ op: 'guarded' }).catch(() => ({ blocked: 0 }));
-    if (g.blocked) throw new Error(allowed && !pressed ? REFUSE_OTHER_SUBMIT : pressed ? `${REFUSE_OTHER_SUBMIT} ${REFUSE_AGAIN}` : `Refused: that action would have submitted the form; it was cancelled. ${REFUSE_SUBMIT}`);
-  };
   const chord = async (c: string) => {
     const parts = c.split('+');
     const name = parts.pop()!;
@@ -169,8 +158,9 @@ export function createExecutor(d: ExecDeps) {
           await click(await point(t), count);
           return { ok: true, text: `Clicked "${el.text}" (Submit)`, state: await state() };
         }
-        await guarded(allowed, async () => click(await point(t), count));
-        return { ok: true, text: `Clicked${el?.text ? ` "${el.text.slice(0, 60)}"` : ''}`, state: await state() };
+        // everything else is the brain's call: a step of a multi-page form, a checkbox, a menu (no gate, 2026-11-24)
+        await click(await point(t), count);
+        return { ok: true, text: `Clicked${el?.text ? ` "${el.text.slice(0, 60)}"` : ''}${el?.isStep ? ' (next step)' : ''}`, state: await state() };
       }
       case 'hover':
         await Promise.race([mouse('mouseMoved', await point(t)).catch(() => undefined), d.sleep(400)]);
@@ -208,9 +198,7 @@ export function createExecutor(d: ExecDeps) {
       }
       case 'key': {
         const chords = String(input.text ?? '').split(/\s+/).filter(Boolean);
-        await guarded(allowed, async () => {
-          for (let r = 0; r < Number(input.repeat ?? 1); r++) for (const c of chords) await chord(c);
-        });
+        for (let r = 0; r < Number(input.repeat ?? 1); r++) for (const c of chords) await chord(c);
         await d.send({ op: 'typed' }).catch(() => undefined); // a Backspace or a shortcut changed the value: ours
         await human(150, 300);
         await d.settle();
@@ -233,7 +221,7 @@ export function createExecutor(d: ExecDeps) {
         const r = await d.send<{ ok: boolean; message: string; clickPoint?: Point } | null>({ op: 'form_input', ref: t.ref, value: input.value });
         if (!r) return { ok: false, error: 'form_input: the page did not answer' };
         if (r.clickPoint) {
-          await guarded(allowed, () => click(r.clickPoint!)); // boxes get a real click, not a scripted tick
+          await click(r.clickPoint); // boxes get a real click, not a scripted tick
           return { ok: true, text: r.message, state: await state() };
         }
         if (!r.ok) return { ok: false, error: r.message };

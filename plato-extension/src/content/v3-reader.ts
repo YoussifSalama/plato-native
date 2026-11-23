@@ -15,6 +15,7 @@ export interface ElementInfo {
   text: string;
   role: string;
   isSubmit: boolean;
+  isStep?: boolean; // moves the application to its next page (Next, Continue, Save & continue): not the submission
 }
 export interface PageInfo {
   url: string;
@@ -31,14 +32,12 @@ export type V3Op =
   | { op: 'ready'; ref: string; capMs?: number } // waits until it can really be pressed (in view, visible, enabled, still, not covered)
   | { op: 'describe'; ref?: string; x?: number; y?: number } // what is there (the Submit gate)
   | { op: 'set_file'; ref: string; name: string; mime: string; data: string } // base64 bytes into the file input at/near the ref
-  | { op: 'guard'; ms: number } // cancel any form submit for the next ms
-  | { op: 'guarded' } // how many submits the guard cancelled since it was armed (and reset)
   | { op: 'changed' } // text fields whose value the PAGE changed since the model last read them (a resume parse, a script), and the active ref
   | { op: 'typed' } // the executor typed or pressed keys: the active field's value is ours now
   | { op: 'info' }
   | { op: 'state' };
-export const V3_OPS = new Set(['read_page', 'find', 'page_text', 'form_input', 'resolve', 'ready', 'describe', 'set_file', 'guard', 'guarded', 'changed', 'typed', 'info', 'state']);
-export const REFUSE_PASSWORD = 'Refused: that is a password box. Never type or choose a password: type {{PLATO_NEW_PASSWORD}} (a new account) or {{PLATO_PASSWORD}} (sign in) when your rules allow it; otherwise answer BLOCKED so the seeker signs in or creates the account there.';
+export const V3_OPS = new Set(['read_page', 'find', 'page_text', 'form_input', 'resolve', 'ready', 'describe', 'set_file', 'changed', 'typed', 'info', 'state']);
+export const REFUSE_PASSWORD = 'Refused: that is a password box. Never type or choose a password: type {{PLATO_NEW_PASSWORD}} (a new account) or {{PLATO_PASSWORD}} (sign in) when your rules allow it; otherwise answer ACCOUNT_REQUIRED (an account to make) or LOGIN_REQUIRED (an account to sign in to).';
 export interface Changed {
   active: string | null;
   password: boolean; // the active field is a password box: never typed into
@@ -314,15 +313,21 @@ export async function ready(doc: Document, ref: string, capMs = 4000): Promise<R
     await wait(90);
   }
 }
-// The Submit control, by what it is: a submit button inside a form, or a control that says Submit/Send (application).
-// "Apply", "Next", "Continue", "Review" are steps, not the submission.
-const SUBMIT_TEXT = /^(submit( application| my application)?|send( application| my application)?)$/i;
-const STEP_TEXT = /^(apply|apply now|apply for this job|start application|next|continue|review)$/i;
+// The Submit control, generic for any site and any number of pages: a control whose words SEND the application
+// (Submit / Send / Finish, in the languages seekers meet). Every other control that submits a form is a STEP: a page of
+// a multi-page form saved on the way (Next, Continue, Save & continue, Weiter, التالي...), pressed with no gate.
+// Before 2026-11-24 any submit-type button counted as the Submit: Amazon's page-1 "Save & continue" was refused and
+// the brain answered SUBMIT_READY on page 1 of 9. A submit button with no words at all stays the Submit (unknown = gated).
+// ponytail: a word list; a site whose last button says only "Continue" sends without the gate (its review page still shows it)
+const SUBMIT_TEXT = /\b(submit|send|finish|complete (my |the )?application)\b|envoyer|soumettre|absenden|abschicken|enviar|inviare|verzenden|indienen|gönder|إرسال|ارسال|تقديم الطلب/i;
+const STEP_TEXT = /^(apply|apply now|apply for this job|start application|review\b.*|proceed|(save (&|and) )?(continue|next)( step| to next step)?)$/i;
 export function describeElement(el: Element): ElementInfo {
   const c = el as Ctl;
   const text = txt(inner(el) || valueOf(el) || el.getAttribute('aria-label') || '').slice(0, 80);
-  const isSubmit = ((el.tagName === 'BUTTON' && c.type === 'submit' && !!el.closest('form')) || (el.tagName === 'INPUT' && c.type === 'submit') || SUBMIT_TEXT.test(text)) && !STEP_TEXT.test(text);
-  return { tag: el.tagName, type: c.type || '', text, role: el.getAttribute('role') || '', isSubmit };
+  const submitType = (el.tagName === 'BUTTON' && c.type === 'submit' && !!el.closest('form')) || (el.tagName === 'INPUT' && c.type === 'submit');
+  const step = STEP_TEXT.test(text);
+  const isSubmit = !step && (SUBMIT_TEXT.test(text) || (submitType && !text));
+  return { tag: el.tagName, type: c.type || '', text, role: el.getAttribute('role') || '', isSubmit, ...(!isSubmit && (step || submitType) && { isStep: true }) };
 }
 export function describeAt(doc: Document, q: { ref?: string; x?: number; y?: number }): ElementInfo | null {
   let el: Element | null | undefined = q.ref ? elOf(q.ref) : typeof q.x === 'number' && typeof q.y === 'number' ? doc.elementFromPoint(q.x, q.y) : undefined;
@@ -366,34 +371,6 @@ export function setFile(doc: Document, ref: string, file: { name: string; mime: 
   return input.files?.[0]?.name === file.name ? { ok: true, message: `Uploaded ${file.name}` } : { ok: false, message: 'file_upload: the input did not take the file' };
 }
 
-// The submit guard: while armed, any form submission the page attempts is cancelled and counted. The executor arms it
-// around every press and key while Submit is not allowed, so a stray Enter or a mislabelled control cannot send the form.
-const guard = { until: 0, blocked: 0 };
-// A form that only starts the application or signs in is a step on the way, not the application, and its submit goes
-// through: an email box alone (Amazon's "Log in or create account" → Continue), or a form with a password box (sign-in,
-// account). Cancelling it left the model pressing Continue again and again (2026-11-23). The page that follows is
-// classified before the next turn: a sign-in or account page stops there while "create accounts" is off.
-// ponytail: field-type rule; an application form that also asks for a password would pass too (none seen so far)
-const EMAILISH = /e-?mail|user(name)?|login/i;
-export function accountStep(form: Element): boolean {
-  const fields = Array.from(form.querySelectorAll<HTMLInputElement>('input,select,textarea')).filter((f) => !['hidden', 'submit', 'button', 'image', 'reset'].includes(f.type));
-  if (!fields.length) return false;
-  if (fields.some((f) => f.type === 'password')) return fields.length <= 6 && !fields.some((f) => f.type === 'file');
-  return fields.length <= 2 && fields.every((f) => f.type === 'email' || ['email', 'username'].includes(f.getAttribute('autocomplete') ?? '') || EMAILISH.test(`${f.name} ${f.id}`));
-}
-export function installGuard(doc: Document) {
-  doc.addEventListener(
-    'submit',
-    (e) => {
-      if (Date.now() >= guard.until) return;
-      if (e.target instanceof Element && accountStep(e.target)) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      guard.blocked++;
-    },
-    true,
-  );
-}
 export const pageInfo = (doc: Document): PageInfo => ({ url: doc.location?.href ?? '', title: txt(doc.title), width: doc.defaultView?.innerWidth ?? 0, height: doc.defaultView?.innerHeight ?? 0 });
 
 /** One entry point for the content script. */
@@ -419,16 +396,6 @@ export function handle(doc: Document, m: V3Op): unknown {
       return changed(doc);
     case 'typed':
       return typed(doc);
-    case 'guard':
-      guard.until = Date.now() + Math.min(m.ms, 5000);
-      guard.blocked = 0;
-      return { ok: true };
-    case 'guarded': {
-      const n = guard.blocked; // read once, and the guard is off: an allowed Submit press must go through
-      guard.blocked = 0;
-      guard.until = 0;
-      return { blocked: n };
-    }
     case 'info':
       return pageInfo(doc);
     case 'state':

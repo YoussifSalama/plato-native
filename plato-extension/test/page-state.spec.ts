@@ -61,3 +61,14 @@ describe('pageState.kind: what the page is, from its structure (engine v3 stops 
     expect(pageState(document).sig).not.toBe(a);
   });
 });
+
+describe('pageState.sig: what counts as "the page changed" (loop check)', () => {
+  it('a custom dropdown opening or an option picked shows in the signature even when no input value changes', () => {
+    history.replaceState(null, '', '/apply');
+    document.body.innerHTML = '<form><input name="a"><input name="b"><div role="combobox">Select a country</div></form>';
+    const before = pageState(document).sig;
+    expect(pageState(document).sig).toBe(before);
+    document.querySelector('[role=combobox]')!.textContent = 'United Arab Emirates';
+    expect(pageState(document).sig).not.toBe(before);
+  });
+});

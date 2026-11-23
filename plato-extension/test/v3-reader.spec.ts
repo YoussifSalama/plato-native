@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { accountStep, describeAt, describeElement, find, formInput, handle, installGuard, readPage, ready, resolve } from '../src/content/v3-reader';
+import { describeAt, describeElement, find, formInput, handle, readPage, ready, resolve } from '../src/content/v3-reader';
 
 // A synthetic application form (not a copy of any site): labels, a select that reveals a field, a file input,
 // a required consent box, an off-screen honeypot, a step button and the Submit control.
@@ -88,6 +88,20 @@ describe('the Submit gate reads the element, not the model', () => {
     expect(describeElement($('send')).isSubmit).toBe(true);
     expect(describeElement($('lnk')).isSubmit).toBe(true);
     expect(describeElement($('cont')).isSubmit).toBe(false);
+    // a multi-page form's own step button, even type=submit in a form (Amazon "Save & continue"): a step, not the Submit
+    document.body.insertAdjacentHTML('beforeend', '<form><button type="submit" id="save">Save &amp; continue</button><button type="submit" id="snext">Save and Next</button></form>');
+    expect(describeElement($('save'))).toMatchObject({ isSubmit: false, isStep: true });
+    expect(describeElement($('snext'))).toMatchObject({ isSubmit: false, isStep: true });
+    expect(describeElement($('submit')).isStep).toBeUndefined();
+    // generic: any other words on a form-submitting button are a step; the words that send the application, in any of
+    // the seekers' languages, are the Submit; a review tab is a step even when it says "Review & submit"
+    document.body.insertAdjacentHTML('beforeend', '<form><button type="submit" id="w">Weiter</button><button type="submit" id="ar">التالي</button><button type="submit" id="arsend">إرسال الطلب</button><button type="submit" id="fin">Finish</button><button type="submit" id="rev">Review &amp; submit</button><button type="submit" id="blank"></button></form>');
+    expect(describeElement($('w'))).toMatchObject({ isSubmit: false, isStep: true });
+    expect(describeElement($('ar'))).toMatchObject({ isSubmit: false, isStep: true });
+    expect(describeElement($('arsend')).isSubmit).toBe(true);
+    expect(describeElement($('fin')).isSubmit).toBe(true);
+    expect(describeElement($('rev'))).toMatchObject({ isSubmit: false, isStep: true });
+    expect(describeElement($('blank')).isSubmit).toBe(true); // no words: unknown, so gated
   });
   it('a coordinate is resolved to the control under it', () => {
     document.elementFromPoint = () => $('submit').firstChild as Element; // the text node's parent is found via closest()
@@ -95,47 +109,6 @@ describe('the Submit gate reads the element, not the model', () => {
     document.elementFromPoint = () => $('submit');
     expect(describeAt(document, { x: 5, y: 5 })).toMatchObject({ isSubmit: true });
     expect(describeAt(document, { ref: refOf(readPage(document, 'interactive'), 'Apply now') })).toMatchObject({ isSubmit: false, text: 'Apply now' });
-  });
-  it('the page guard cancels and counts form submissions while armed, and is off once read', () => {
-    installGuard(document);
-    const submit = () => {
-      const e = new Event('submit', { bubbles: true, cancelable: true });
-      $('f').dispatchEvent(e);
-      return e.defaultPrevented;
-    };
-    expect(submit()).toBe(false);
-    handle(document, { op: 'guard', ms: 1000 });
-    expect(submit()).toBe(true);
-    expect(submit()).toBe(true);
-    expect(handle(document, { op: 'guarded' })).toEqual({ blocked: 2 });
-    expect(submit()).toBe(false); // read once: disarmed, an allowed press goes through
-    expect(handle(document, { op: 'guarded' })).toEqual({ blocked: 0 });
-  });
-  it('an email-only or sign-in / account step is not the application: the armed guard lets its submit through', () => {
-    const form = (html: string) => {
-      const f = document.createElement('form');
-      f.innerHTML = html;
-      return f;
-    };
-    // Amazon's "Log in or create account": one email box and Continue
-    expect(accountStep(form('<input type="text" name="email"><button type="submit">Continue</button>'))).toBe(true);
-    expect(accountStep(form('<input type="email"><input type="hidden" name="csrf">'))).toBe(true);
-    expect(accountStep(form('<input type="email"><input type="password">'))).toBe(true);
-    expect(accountStep(form('<input name="first"><input name="last"><input type="email"><input type="password"><input type="password">'))).toBe(true);
-    // the application itself stays guarded
-    expect(accountStep(form('<input name="name"><input type="email"><input type="file">'))).toBe(false);
-    expect(accountStep(form('<input type="email"><input name="phone">'))).toBe(false);
-    expect(accountStep(form('<input type="email"><input type="password"><input type="file">'))).toBe(false);
-    // through the listener
-    const f = form('<input type="email" name="email"><button>Continue</button>');
-    document.body.append(f);
-    installGuard(document);
-    handle(document, { op: 'guard', ms: 1000 });
-    const e = new Event('submit', { bubbles: true, cancelable: true });
-    f.dispatchEvent(e);
-    expect(e.defaultPrevented).toBe(false);
-    expect(handle(document, { op: 'guarded' })).toEqual({ blocked: 0 });
-    f.remove();
   });
 });
 

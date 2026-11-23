@@ -12,7 +12,7 @@ export interface PageState {
   confirmed: string | null; // the marker text/URL that proves a submission, if any
   kind: PageKind; // what this page is, from its structure alone (the brain gets it as a hint; its own reading wins)
   fields: number; // visible form fields
-  sig: string; // kind + URL + every visible field and its value: unchanged after an action = the action did nothing (loop check)
+  sig: string; // kind + URL + the page's text + every visible field and its value: unchanged after an action = the action did nothing (loop check)
 }
 // Engine v3 stops before the brain acts on ACCOUNT_SIGNUP / LOGIN (the seeker's "create accounts" setting off),
 // EMAIL_VERIFICATION and CAPTCHA. UNKNOWN here is only "no rule matched" (a loading page, a landing page): it is
@@ -59,6 +59,9 @@ export function pageState(doc: Document): PageState {
     : 'UNKNOWN';
   // a password's value never goes into the signature, only whether it is filled
   const value = (f: HTMLInputElement) => (f.type === 'password' ? (f.value ? '•' : '') : f.type === 'checkbox' || f.type === 'radio' ? String(f.checked) : f.value);
-  const sig = [kind, url ? url.origin + url.pathname + url.search : href, ...fields.slice(0, 80).map((f) => `${f.name || f.id}=${value(f)}`)].join('\n');
+  // the text is hashed: an opened list or an option picked in a custom dropdown changes it even when no input value does
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  const sig = [kind, url ? url.origin + url.pathname + url.search : href, `text:${h}`, ...fields.slice(0, 80).map((f) => `${f.name || f.id}=${value(f)}`)].join('\n');
   return { href, formPresent, captcha, closed: !formPresent && !confirmed && CLOSED_TEXT.test(text), confirmed, kind, fields: fields.length, sig };
 }

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { REFUSE_PASSWORD, type Changed, type V3Op } from '../src/content/v3-reader';
-import { createExecutor, NEW_PASSWORD, REFUSE_PLACEHOLDER, SAVED_PASSWORD, REFUSE_AGAIN, REFUSE_FILLED, REFUSE_OTHER_SUBMIT, REFUSE_SUBMIT, MAX_SIDE, type ExecDeps } from '../src/v3/executor';
+import { createExecutor, NEW_PASSWORD, REFUSE_PLACEHOLDER, SAVED_PASSWORD, REFUSE_AGAIN, REFUSE_FILLED, REFUSE_SUBMIT, MAX_SIDE, type ExecDeps } from '../src/v3/executor';
 
 // A fake tab: the content script answers refs by a small table; chrome.debugger calls are recorded.
-function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } }; changed?: Changed; password?: ExecDeps['password']; viewport?: number[] } = {}) {
+function tab(o: { submitRef?: string; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } }; changed?: Changed; password?: ExecDeps['password']; viewport?: number[] } = {}) {
   const cdp: { method: string; params: Record<string, unknown> }[] = [];
   const ops: V3Op[] = [];
   const nav: string[] = [];
-  let activated = 0, settled = 0, shots = 0, guardArmed = 0;
+  let activated = 0, settled = 0, shots = 0;
   const deps: ExecDeps = {
     send: async <T,>(msg: V3Op): Promise<T> => {
       ops.push(msg);
@@ -15,9 +15,7 @@ function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?:
         case 'info': return { url: 'https://jobs.example/apply', title: 'Apply', width: 1280, height: 900 } as T;
         case 'resolve': return (msg.ref === 'ref_gone' ? null : { x: 100, y: 200 }) as T;
         case 'ready': return (msg.ref === 'ref_gone' ? { ok: false, reason: `Unknown or stale ref: ${msg.ref}. Call read_page again for current refs.` } : msg.ref === 'ref_covered' ? { ok: false, reason: 'Not pressed: something covers it: div "We use cookies" (close or answer that first).' } : { ok: true, point: { x: 100, y: 200 } }) as T;
-        case 'describe': return (msg.ref === o.submitRef ? { tag: 'BUTTON', type: 'submit', text: 'Submit application', role: '', isSubmit: true } : msg.ref === 'ref_gone' ? null : { tag: 'BUTTON', type: 'button', text: 'Next', role: '', isSubmit: false }) as T;
-        case 'guard': guardArmed++; return { ok: true } as T;
-        case 'guarded': return { blocked: o.blockedOnGuard ? 1 : 0 } as T;
+        case 'describe': return (msg.ref === o.submitRef ? { tag: 'BUTTON', type: 'submit', text: 'Submit application', role: '', isSubmit: true } : msg.ref === 'ref_gone' ? null : msg.ref === 'ref_step' ? { tag: 'BUTTON', type: 'submit', text: 'Save & continue', role: '', isSubmit: false, isStep: true } : { tag: 'BUTTON', type: 'button', text: 'Next', role: '', isSubmit: false }) as T;
         case 'read_page': return 'textbox "Name" required [ref_1]\nbutton "Next" [ref_2]' as T;
         case 'find': return `button "Next" [ref_2]` as T;
         case 'page_text': return 'Apply here' as T;
@@ -49,7 +47,7 @@ function tab(o: { submitRef?: string; blockedOnGuard?: boolean; shotFailsFirst?:
   const ex = createExecutor(deps);
   const run = (name: string, input: Record<string, unknown> = {}, allowed = false) => ex.exec({ call_id: `c-${name}`, name, input }, allowed);
   const clicks = () => cdp.filter((c) => c.method === 'Input.dispatchMouseEvent' && c.params.type === 'mousePressed');
-  return { ex, run, cdp, ops, nav, clicks, counts: () => ({ activated, settled, shots, guardArmed }) };
+  return { ex, run, cdp, ops, nav, clicks, counts: () => ({ activated, settled, shots }) };
 }
 const ref = (r: string) => ({ target: { type: 'ref', ref: r } });
 
@@ -72,49 +70,21 @@ describe('executor: the Submit gate (code, not prompt)', () => {
   });
   it('a coordinate click is gated the same way (what is under the point is asked first)', async () => {
     const t = tab({ submitRef: 'ref_s' });
-    // the fake answers "Next" for any coordinate: an ordinary press, allowed under the page guard
+    // the fake answers "Next" for any coordinate: an ordinary press, the brain's own call
     const r = await t.run('left_click', { target: { type: 'coordinate', x: 10, y: 20 } }, false);
     expect(r.ok).toBe(true);
     expect(t.ops.some((o) => o.op === 'describe' && 'x' in o && o.x === 10)).toBe(true);
-    expect(t.counts().guardArmed).toBe(1);
   });
-  it('the page guard: a press or key while Submit is not allowed runs with form submission cancelled; a cancelled submit is reported as a refusal', async () => {
-    const t = tab({ blockedOnGuard: true });
-    const r = await t.run('left_click', ref('ref_2'), false);
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/would have submitted the form; it was cancelled/);
-    expect(t.clicks().length).toBe(1); // the press itself happened; the submission did not
-    const k = await t.run('key', { text: 'Return' }, false);
-    expect(k.ok).toBe(false);
-    expect(t.counts().guardArmed).toBe(2);
+  it('no page guard: any other press or key goes through before Submit is allowed (a step of a multi-page form, an Enter)', async () => {
+    const t = tab();
+    expect(await t.run('left_click', ref('ref_2'), false)).toMatchObject({ ok: true });
+    expect(await t.run('key', { text: 'Return' }, false)).toMatchObject({ ok: true });
+    expect(t.ops.some((o) => (o.op as string) === 'guard')).toBe(false);
   });
-  it('the allowed Submit press itself runs without the guard (it must go through)', async () => {
-    const t = tab({ submitRef: 'ref_s', blockedOnGuard: true });
-    const r = await t.run('left_click', ref('ref_s'), true);
-    expect(r.ok).toBe(true);
-    expect(t.counts().guardArmed).toBe(0);
-  });
-  it('once allowed, any other press or key is still guarded: an Enter in a field cannot send the form instead of Submit', async () => {
-    const t = tab({ submitRef: 'ref_s', blockedOnGuard: true });
-    const enter = await t.run('key', { text: 'Enter' }, true);
-    expect(enter).toMatchObject({ ok: false, error: REFUSE_OTHER_SUBMIT });
-    expect(t.counts().guardArmed).toBe(1);
-    expect(t.ex.submitPressed()).toBe(false);
-    // the Submit control itself is still there for its one press
-    expect(await t.run('left_click', ref('ref_s'), true)).toMatchObject({ ok: true, text: 'Clicked "Submit application" (Submit)' });
-  });
-  it('after the one Submit press, a later Enter or another submitting control in the same turn cannot send it again', async () => {
-    const t = tab({ submitRef: 'ref_s', blockedOnGuard: true });
-    await t.run('left_click', ref('ref_s'), true);
-    const enter = await t.run('key', { text: 'Enter' }, true);
-    expect(enter.ok).toBe(false);
-    expect(enter.error).toContain(REFUSE_AGAIN);
-    const other = await t.run('left_click', ref('ref_2'), true);
-    expect(other.ok).toBe(false);
-    expect(t.counts().guardArmed).toBe(2);
-  });
-  it('an ordinary press after Submit is allowed still works when it does not submit (Next, a checkbox)', async () => {
+  it('after the one Submit press, the Submit control is refused for good; other presses still work', async () => {
     const t = tab({ submitRef: 'ref_s' });
+    expect(await t.run('left_click', ref('ref_s'), true)).toMatchObject({ ok: true, text: 'Clicked "Submit application" (Submit)' });
+    expect(await t.run('left_click', ref('ref_s'), true)).toMatchObject({ ok: false, error: REFUSE_AGAIN });
     expect(await t.run('left_click', ref('ref_2'), true)).toMatchObject({ ok: true });
     expect(await t.run('key', { text: 'Tab' }, true)).toMatchObject({ ok: true });
   });
@@ -209,6 +179,12 @@ describe('executor: members', () => {
     await t.run('screenshot');
     expect(await t.run('left_click', { target: { type: 'coordinate', x: 784, y: 441 } })).toMatchObject({ ok: true }); // the middle of that screenshot
     expect(t.clicks().at(-1)?.params).toMatchObject({ x: 1280, y: 720 }); // the middle of the viewport, in CSS px
+  });
+  it("a multi-page form's step (Save & continue) is pressed before Submit is allowed: the page moves on", async () => {
+    const t = tab();
+    const r = await t.run('left_click', { target: { type: 'ref', ref: 'ref_step' } }, false);
+    expect(r).toMatchObject({ ok: true, text: 'Clicked "Save & continue" (next step)' });
+    expect(t.clicks()).toHaveLength(1);
   });
   it('members this browser does not serve are refused, never thrown', async () => {
     const t = tab();

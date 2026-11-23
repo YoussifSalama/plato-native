@@ -44,7 +44,7 @@ export function assertProductionDir(dir) {
   assertAllowedNames(listFiles(dir), hasContent);
 
   if (/fixture/i.test(manifest.name)) fail(`manifest name marks a fixtures build: ${manifest.name}`);
-  if (JSON.stringify(manifest.permissions) !== JSON.stringify(['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting'])) fail(`unexpected permissions: ${JSON.stringify(manifest.permissions)}`);
+  if (JSON.stringify(manifest.permissions) !== JSON.stringify(['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting', 'notifications'])) fail(`unexpected permissions: ${JSON.stringify(manifest.permissions)}`);
   // Any-site access exists only as OPTIONAL (asked once at Start batch, owner 2026-11-13), and exactly this pair.
   if (JSON.stringify(manifest.optional_host_permissions) !== JSON.stringify(['https://*/*', 'http://*/*'])) fail(`unexpected optional_host_permissions: ${JSON.stringify(manifest.optional_host_permissions)}`);
   // host_permissions only for the Plato web app's own origins: https, exact host, no wildcard, not local.

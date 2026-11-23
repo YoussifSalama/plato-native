@@ -26,6 +26,7 @@ import type { ApiItem, Decision, Evidence, PolicyMap, SearchJob } from '../core/
 import { registry } from '../providers';
 import { render, type Actions, type PanelState, type PickKey } from './view';
 import { canStart, JOBS_PAGE_SIZE, latestBatch, queuedItems, visibleJobs } from './jobs-view';
+import { noticeText, type Notice } from '../core/notice';
 import type { AnswerQuestion, OrchestratorEvent, OrchestratorRequest } from './../core/types';
 
 // The side panel runs the whole flow. It is the only place (besides the
@@ -50,6 +51,21 @@ const runner = createBatchRunner({
     return r && Array.isArray(r.itemIds) && r.outcomes ? r : null;
   },
   set: (r) => chrome.storage.session.set({ [RUN_KEY]: r }),
+  notify: (n) => notify(n),
+});
+// Browser notifications: every outcome the batch record shows, each stop that needs the seeker, the batch finishing.
+// The id carries the item, so a click opens that job's tab.
+function notify(n: Notice) {
+  const t = noticeText(n);
+  if (!t) return;
+  const id = `plato:${'itemId' in n ? n.itemId : 'batch'}:${n.kind}:${Date.now()}`;
+  void Promise.resolve(chrome.notifications.create(id, { type: 'basic', iconUrl: 'icon128.png', title: t.title.slice(0, 120), message: t.message.slice(0, 250), priority: t.urgent ? 2 : 0, requireInteraction: t.urgent })).catch(() => undefined);
+}
+chrome.notifications.onClicked.addListener((id) => {
+  void chrome.notifications.clear(id);
+  const tabId = orch.session(id.split(':')[1] ?? '')?.tabId;
+  if (tabId === undefined) return;
+  void chrome.tabs.update(tabId, { active: true }).then((t) => void (t?.windowId !== undefined && chrome.windows.update(t.windowId, { focused: true }))).catch(() => undefined);
 });
 const MAX_TABS = 10;
 
@@ -352,6 +368,7 @@ async function finishRun(item: ApiItem, s: Session, result: EaResult | V3Result)
   }
   else {
     setStep(item, 'needs-user', result.why.includes(RESUME_ASK) ? 'resume' : 'questions', result.why, { code, ...('stop' in result && { stop: result.stop, ask: result.ask }) });
+    notify({ kind: 'needs-user', itemId: item.id, meta: { title: item.job?.title ?? 'A job', company: item.job?.company ?? '' }, note: result.why });
     const raw = 'raw' in result ? result.raw : undefined;
     const states = 'states' in result ? result.states : undefined;
     void api.stop(item.id, { reason: ('reason' in result && result.reason) || stopKind(result.why), message: result.why.slice(0, 300), code, ...(raw && { detail: raw.slice(0, 2000) }), ...(states?.length && { states }) }).catch(() => undefined); // for the stop report and GET /admin/errors?code=

@@ -20,10 +20,10 @@ describe('queue narrowing', () => {
 
 describe('settings', () => {
   it('fills defaults and ignores junk', () => {
-    expect(readSettings(null)).toEqual({ autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: false });
-    expect(readSettings({ speed: 'fast', evil: 1 })).toEqual({ autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: false }); // strict: unknown keys reject the whole object
+    expect(readSettings(null)).toEqual({ autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: true });
+    expect(readSettings({ speed: 'fast', evil: 1 })).toEqual({ autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: true }); // strict: unknown keys reject the whole object
     expect(readSettings({ speed: 'fast' }).speed).toBe('fast');
     expect(SPEED_TABS.smart).toBe(4);
-    expect(readSettings({ createAccounts: true }).createAccounts).toBe(true); // job-site accounts: off unless the seeker turned them on
+    expect(readSettings({ createAccounts: false }).createAccounts).toBe(false); // job-site accounts: on unless the seeker turned them off
   });
 });

@@ -257,7 +257,7 @@ describe('job-site passwords: the model types a placeholder, the password comes 
     expect(t.cdp.filter((c) => c.method === 'Input.insertText')).toEqual([]);
   });
   it('no saved password, or the setting off (no vault): the model is told to stop', async () => {
-    expect((await tab({ changed: pwBox, password: vault([]) }).run('type', { text: SAVED_PASSWORD })).error).toMatch(/no saved password for jobs\.example/);
+    expect((await tab({ changed: pwBox, password: vault([]) }).run('type', { text: SAVED_PASSWORD })).error).toMatch(/did not make an account on jobs\.example.*LOGIN_REQUIRED/);
     expect((await tab({ changed: pwBox }).run('type', { text: NEW_PASSWORD })).error).toMatch(/has not allowed it/);
   });
 });

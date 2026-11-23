@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { describeAt, describeElement, find, formInput, handle, installGuard, readPage, ready, resolve } from '../src/content/v3-reader';
+import { accountStep, describeAt, describeElement, find, formInput, handle, installGuard, readPage, ready, resolve } from '../src/content/v3-reader';
 
 // A synthetic application form (not a copy of any site): labels, a select that reveals a field, a file input,
 // a required consent box, an off-screen honeypot, a step button and the Submit control.
@@ -110,6 +110,32 @@ describe('the Submit gate reads the element, not the model', () => {
     expect(handle(document, { op: 'guarded' })).toEqual({ blocked: 2 });
     expect(submit()).toBe(false); // read once: disarmed, an allowed press goes through
     expect(handle(document, { op: 'guarded' })).toEqual({ blocked: 0 });
+  });
+  it('an email-only or sign-in / account step is not the application: the armed guard lets its submit through', () => {
+    const form = (html: string) => {
+      const f = document.createElement('form');
+      f.innerHTML = html;
+      return f;
+    };
+    // Amazon's "Log in or create account": one email box and Continue
+    expect(accountStep(form('<input type="text" name="email"><button type="submit">Continue</button>'))).toBe(true);
+    expect(accountStep(form('<input type="email"><input type="hidden" name="csrf">'))).toBe(true);
+    expect(accountStep(form('<input type="email"><input type="password">'))).toBe(true);
+    expect(accountStep(form('<input name="first"><input name="last"><input type="email"><input type="password"><input type="password">'))).toBe(true);
+    // the application itself stays guarded
+    expect(accountStep(form('<input name="name"><input type="email"><input type="file">'))).toBe(false);
+    expect(accountStep(form('<input type="email"><input name="phone">'))).toBe(false);
+    expect(accountStep(form('<input type="email"><input type="password"><input type="file">'))).toBe(false);
+    // through the listener
+    const f = form('<input type="email" name="email"><button>Continue</button>');
+    document.body.append(f);
+    installGuard(document);
+    handle(document, { op: 'guard', ms: 1000 });
+    const e = new Event('submit', { bubbles: true, cancelable: true });
+    f.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(false);
+    expect(handle(document, { op: 'guarded' })).toEqual({ blocked: 0 });
+    f.remove();
   });
 });
 

@@ -1,3 +1,4 @@
+import type { Notice } from './notice';
 import type { ApiItem } from './types';
 import type { SessionStep } from '../panel/view';
 
@@ -60,6 +61,7 @@ export interface Live {
 export interface RunStore {
   get(): Promise<BatchRun | null>;
   set(run: BatchRun | null): Promise<void>;
+  notify?(n: Notice): void; // each outcome as it is recorded, and the batch finishing (core/notice.ts)
 }
 
 const OPEN: RowStatus[] = ['queued', 'running', 'needs', 'interrupted', 'elsewhere'];
@@ -133,6 +135,7 @@ export function createBatchRunner(store: RunStore, now: () => number = () => Dat
       const st = run.started[id];
       run.outcomes[id] = { kind, note: note.slice(0, 300), at: now(), ...(st && { ms: now() - st }) };
       void save();
+      store.notify?.({ kind, itemId: id, meta: run.meta[id]!, note });
     },
     /** Every row of the batch from what the server lists now and what this panel holds. Pure. */
     rows(items: ApiItem[], live: Live): Row[] {
@@ -151,6 +154,7 @@ export function createBatchRunner(store: RunStore, now: () => number = () => Dat
         run.status = 'finished';
         run.finishedAt = now();
         void save();
+        store.notify?.({ kind: 'finished', submitted: Object.values(run.outcomes).filter((o) => o.kind === 'submitted').length, total: run.itemIds.length });
       }
       return rows;
     },

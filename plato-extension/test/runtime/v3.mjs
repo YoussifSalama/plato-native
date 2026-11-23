@@ -56,7 +56,7 @@ const loaded = async (p) => { const tab = await p; await tab.waitForLoadState('d
 console.log(`Runtime tests, engine v3 (fixtures build, extension ${id})`);
 await T('the built manifest is the same approved one (engine is a build define, not a permission)', async () => {
   const m = await sw.evaluate(() => chrome.runtime.getManifest());
-  eq(m.permissions, ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting']); // scripting: off-board apply (owner, 2026-11-13)
+  eq(m.permissions, ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting', 'notifications']); // scripting: off-board apply (owner, 2026-11-13); notifications: outcomes outside the panel
   eq(m.optional_host_permissions, ['https://*/*', 'http://*/*']); // any-site access only as optional, asked at Start batch
   ok(!m.host_permissions, 'unexpected host access');
 });

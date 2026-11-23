@@ -20,7 +20,7 @@ describe('production manifest (pinned exactly)', () => {
       icons: { '16': 'icon16.png', '32': 'icon32.png', '48': 'icon48.png', '128': 'icon128.png' },
       minimum_chrome_version: '116',
       key: key.key,
-      permissions: ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting'],
+      permissions: ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting', 'notifications'],
       optional_host_permissions: ['https://*/*', 'http://*/*'],
       action: { default_title: 'Plato Apply', default_icon: { '16': 'icon16.png', '32': 'icon32.png', '48': 'icon48.png', '128': 'icon128.png' } },
       side_panel: { default_path: 'panel.html' },
@@ -71,7 +71,7 @@ describe('content scripts follow the registry', () => {
   it('fixtures flavor matches the local fixture origin only, with the probe first', () => {
     const m = buildManifest({ flavor: 'fixtures', apiOrigin: 'http://127.0.0.1:4011', registry: createRegistry([...DEFINITIONS, fixtureProvider]) });
     expect(m.content_scripts).toEqual([{ matches: ['http://127.0.0.1:4012/*'], js: ['probe.js', 'content.js'], run_at: 'document_start', all_frames: false }]);
-    expect(m.permissions).toEqual(['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting']);
+    expect(m.permissions).toEqual(['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting', 'notifications']);
   });
 });
 

@@ -369,11 +369,24 @@ export function setFile(doc: Document, ref: string, file: { name: string; mime: 
 // The submit guard: while armed, any form submission the page attempts is cancelled and counted. The executor arms it
 // around every press and key while Submit is not allowed, so a stray Enter or a mislabelled control cannot send the form.
 const guard = { until: 0, blocked: 0 };
+// A form that only starts the application or signs in is a step on the way, not the application, and its submit goes
+// through: an email box alone (Amazon's "Log in or create account" → Continue), or a form with a password box (sign-in,
+// account). Cancelling it left the model pressing Continue again and again (2026-11-23). The page that follows is
+// classified before the next turn: a sign-in or account page stops there while "create accounts" is off.
+// ponytail: field-type rule; an application form that also asks for a password would pass too (none seen so far)
+const EMAILISH = /e-?mail|user(name)?|login/i;
+export function accountStep(form: Element): boolean {
+  const fields = Array.from(form.querySelectorAll<HTMLInputElement>('input,select,textarea')).filter((f) => !['hidden', 'submit', 'button', 'image', 'reset'].includes(f.type));
+  if (!fields.length) return false;
+  if (fields.some((f) => f.type === 'password')) return fields.length <= 6 && !fields.some((f) => f.type === 'file');
+  return fields.length <= 2 && fields.every((f) => f.type === 'email' || ['email', 'username'].includes(f.getAttribute('autocomplete') ?? '') || EMAILISH.test(`${f.name} ${f.id}`));
+}
 export function installGuard(doc: Document) {
   doc.addEventListener(
     'submit',
     (e) => {
       if (Date.now() >= guard.until) return;
+      if (e.target instanceof Element && accountStep(e.target)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       guard.blocked++;

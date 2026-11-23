@@ -189,7 +189,7 @@ export function createExecutor(d: ExecDeps) {
           const url = (await info())?.url ?? '';
           const host = URL.canParse(url) ? new URL(url).hostname : '';
           const pw = host ? await d.password?.(secret, host).catch(() => null) : null;
-          if (!pw) return { ok: false, error: secret === 'new' ? 'Refused: Plato cannot make an account here (the seeker has not allowed it). Answer BLOCKED so the seeker creates the account there, then presses Try again.' : `Plato has no saved password for ${host || 'this site'} in this browser. Answer BLOCKED so the seeker signs in there (or uses Forgot password), then presses Try again.` };
+          if (!pw) return { ok: false, error: secret === 'new' ? 'Refused: Plato cannot make an account here (the seeker has not allowed it). Answer ACCOUNT_REQUIRED <the site>.' : `Refused: Plato did not make an account on ${host || 'this site'} (no saved password in this browser), so the account that exists is the seeker's own. Answer LOGIN_REQUIRED <that an account for the seeker's email already exists on this site>.` };
           await d.cdp('Input.insertText', { text: pw });
           await d.send({ op: 'typed' }).catch(() => undefined);
           await human(200, 400);

@@ -27,7 +27,7 @@ export type StopReason = 'account-signup' | 'login' | 'email-verification' | 'ca
 type SitePage = 'ACCOUNT_SIGNUP' | 'LOGIN' | 'EMAIL_VERIFICATION' | 'UNKNOWN';
 export const SITE_WHY: Record<SitePage, string> = {
   ACCOUNT_SIGNUP: 'This site requires creating an account. Create it in the job’s tab, then click Continue.',
-  LOGIN: 'This site asks you to sign in. Sign in in the job’s tab, then click Continue.',
+  LOGIN: 'This site asks you to sign in to an account that already exists for your email. Plato did not make it, so it does not know the password. Sign in in the job’s tab, then click Continue.',
   EMAIL_VERIFICATION: 'The site sent a code or a link to your email. Enter the code (or open the link) in the job’s tab, then click Continue.',
   UNKNOWN: 'Plato is not sure what this page is and will not guess. Look at the job’s tab, move it to the application if you can, then click Continue.',
 };

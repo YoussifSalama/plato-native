@@ -24,7 +24,8 @@ export function buildManifest(o: { flavor: Flavor; apiOrigin: string; webOrigin?
     // scripting + optional any-site access (owner, 2026-11-13): a job's Apply button can hand the application to the
     // company's own site. The seeker grants "any site" once (Start batch); Plato then loads its page reader only into a
     // tab its own run led to (the job's tab, or a tab that tab opened), never into anything else.
-    permissions: ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting'],
+    // notifications: the seeker hears each outcome (applied, needs you, skipped, not sent, batch finished) outside the panel.
+    permissions: ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting', 'notifications'],
     optional_host_permissions: ['https://*/*', 'http://*/*'],
     icons: ICONS,
     action: { default_title: 'Plato Apply', default_icon: ICONS },

@@ -55,7 +55,7 @@ await T('the extension id is the pinned one (fixed id from the manifest key)', a
 
 await T('loaded manifest has only the approved permissions and no host access', async () => {
   const m = await sw.evaluate(() => chrome.runtime.getManifest());
-  eq(m.permissions, ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting']); // scripting: off-board apply (owner, 2026-11-13)
+  eq(m.permissions, ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting', 'notifications']); // scripting: off-board apply (owner, 2026-11-13); notifications: outcomes outside the panel
   eq(m.optional_host_permissions, ['https://*/*', 'http://*/*']); // any-site access only as optional, asked at Start batch
   ok(!m.host_permissions && !m.externally_connectable, 'unexpected host access');
   eq(m.content_scripts.map((c) => c.matches), [['http://127.0.0.1:4012/*']]);

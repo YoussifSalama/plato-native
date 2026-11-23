@@ -17,7 +17,7 @@ export const settingsPatchSchema = z
   .partial()
   .strict();
 export type ExtensionSettings = Required<z.infer<typeof settingsPatchSchema>>;
-export const DEFAULT_SETTINGS: ExtensionSettings = { autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: false };
+export const DEFAULT_SETTINGS: ExtensionSettings = { autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: true }; // createAccounts on by default (owner, 2026-11-23): Plato makes the job-site account itself
 
 export const readSettings = (raw: unknown): ExtensionSettings => {
   const p = settingsPatchSchema.safeParse(raw ?? {});

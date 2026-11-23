@@ -1,9 +1,9 @@
 // Store screenshots (1280x800): the fixtures build in a real Chromium against the local stand-in servers (no live
 // site, no real model), the side panel composed next to the job page the way Chrome shows it.
 //   node scripts/build.mjs --flavor=fixtures --engine=v3 --out=dist/fixtures-v3 && node scripts/screens.mjs
-// Output: store/screens/0N-*.png
+// Output: store/screens/0N-*.png (1280x800, ready for the Web Store). Icons, tiles and the panel mark come from store/plato-logo.png (the owner's logo).
 import { chromium } from 'playwright-core';
-import { mkdtempSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServers } from '../test/runtime/servers.mjs';
@@ -40,6 +40,9 @@ const shot = async (name) => {
   await panel.locator('.toast').waitFor({ state: 'hidden', timeout: 10000 }).catch(() => undefined);
   // eslint-disable-next-line no-undef -- runs inside the page (page.evaluate)
   await panel.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('*').forEach((e) => { if (e.scrollTop) e.scrollTop = 0; }); });
+  // the fixtures provider is called "Local fixture"; the picture shows a real board name (text only, nothing else changes)
+  // eslint-disable-next-line no-undef -- runs inside the page
+  await panel.evaluate(() => { const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); for (let n; (n = w.nextNode()); ) n.nodeValue = n.nodeValue.replace('Local fixture', 'Greenhouse').replace('via fixture', 'via Greenhouse').replace('work at Acme', 'work at Northwind'); });
   await panel.waitForTimeout(250);
   await panel.screenshot({ path: join(out, `panel-${name}.png`) });
 };
@@ -63,8 +66,10 @@ const pageShot = async (name) => {
   return jobTab.screenshot({ path: join(out, `page-${name}.png`) });
 };
 
-await panel.locator('#code').fill('ABCD-EFGH');
-await panel.getByRole('button', { name: 'Link this browser' }).click();
+// the code screen is eight boxes since 2026-11-09: typing moves box to box
+await panel.locator('#code-0').click();
+await panel.keyboard.type('ABCDEFGH');
+await panel.getByRole('button', { name: 'Connect' }).click();
 await panel.locator('.job').first().waitFor({ timeout: 15000 });
 await panel.waitForTimeout(400);
 await shot('01-jobs');
@@ -94,6 +99,34 @@ await panel.locator('[data-item="7"]').getByText(/Press Submit on the job page y
 await panel.waitForTimeout(300);
 await shot('05-filled');
 await pageShot('05-filled');
+
+// The store frames (1280x800): the job page (or a caption on the brand gradient) on the left, the panel on the right.
+const img = (f) => `data:image/png;base64,${readFileSync(join(out, f)).toString('base64')}`;
+const CAPTIONS = {
+  '01-jobs': ['Pick the jobs.<br>Plato applies for you.', 'Up to 10 jobs at a time, from your picks and searches on Plato, in your own browser.'],
+  '02-review': ['Check the batch,<br>then press Start.', 'Choose the resume once. Plato fills each form from your profile and asks only when it must.'],
+};
+const frame = await ctx.newPage();
+await frame.setViewportSize({ width: 1280, height: 800 });
+for (const name of ['01-jobs', '02-review', '03-question', '04-question-2', '05-filled']) {
+  const page = name === '04-question-2' ? 'page-03-question.png' : `page-${name}.png`;
+  const cap = CAPTIONS[name];
+  const left = cap
+    ? `<div class="cap"><img src="${img('../plato-logo-white.png')}" style="height:80px;align-self:flex-start"><h1>${cap[0]}</h1><p>${cap[1]}</p></div>`
+    : `<img class="page" src="${img(page)}">`;
+  await frame.setContent(`<!doctype html><html><head><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;800&display=block" rel="stylesheet"><style>
+    body { margin: 0; width: 1280px; height: 800px; display: flex; overflow: hidden; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: #f5f8fc; }
+    .page { width: 860px; height: 800px; display: block; }
+    .cap { width: 860px; height: 800px; box-sizing: border-box; padding: 0 90px; display: flex; flex-direction: column; justify-content: center; color: #fff; background: radial-gradient(120% 140% at 0% 0%, #0A7FD0 0%, #005BA7 45%, #003A6E 100%); }
+    .cap h1 { margin: 36px 0 18px; font-size: 54px; line-height: 1.08; font-weight: 800; letter-spacing: -0.02em; }
+    .cap p { margin: 0; font-size: 22px; line-height: 1.45; font-weight: 500; color: #D6ECFB; max-width: 620px; }
+    .panel { width: 420px; height: 800px; display: block; box-shadow: -8px 0 24px rgba(14, 27, 44, .12); position: relative; }
+  </style></head><body>${left}<img class="panel" src="${img(`panel-${name}.png`)}"></body></html>`, { waitUntil: 'networkidle' });
+  await frame.evaluate(() => document.fonts.ready);
+  await frame.screenshot({ path: join(out, `${name}.png`) });
+}
+
+for (const f of readdirSync(out)) if (/^(panel|page)-/.test(f)) rmSync(join(out, f)); // intermediates: only the five frames are uploaded
 
 await ctx.close();
 servers.close();

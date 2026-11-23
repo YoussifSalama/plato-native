@@ -202,11 +202,14 @@ describe('Workable form normalizer', () => {
 
 describe('splitName', () => {
   it('handles single and multi-part names', () => {
-    expect(splitName('Youssif Salama Ali')).toEqual({
-      firstName: 'Youssif',
-      lastName: 'Salama Ali',
-    });
-    expect(splitName('Cher')).toEqual({ firstName: 'Cher', lastName: 'Cher' });
+    // first word, last word, the rest in the middle (an Arabic name with the father's name)
+    expect(splitName('Karim Adel Mansour')).toEqual({ firstName: 'Karim', middleName: 'Adel', lastName: 'Mansour' });
+    expect(splitName('Youssif Salama Ali Hassan')).toEqual({ firstName: 'Youssif', middleName: 'Salama Ali', lastName: 'Hassan' });
+    expect(splitName('Mona  Adel')).toEqual({ firstName: 'Mona', middleName: '', lastName: 'Adel' });
+    expect(splitName('Cher')).toEqual({ firstName: 'Cher', middleName: '', lastName: 'Cher' });
+    // compound Arabic names stay whole
+    expect(splitName('Abdel Rahman Mohamed El Sayed')).toEqual({ firstName: 'Abdel Rahman', middleName: 'Mohamed', lastName: 'El Sayed' });
+    expect(splitName('Abu Bakr Salem')).toEqual({ firstName: 'Abu Bakr', middleName: '', lastName: 'Salem' });
   });
 });
 

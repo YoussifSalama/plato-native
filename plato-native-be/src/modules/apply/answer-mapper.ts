@@ -361,6 +361,8 @@ const BY_ID: Record<string, (c: Candidate) => string | undefined> = {
   // Greenhouse ids.
   first_name: (c) => c.firstName,
   last_name: (c) => c.lastName,
+  middlename: (c) => c.middleName,
+  middle_name: (c) => c.middleName,
   email: (c) => c.email,
   phone: (c) => c.phone,
   location: (c) => c.location,
@@ -440,11 +442,19 @@ export function mapAnswers(
   return { answers, questions };
 }
 
+// First word = first name, last word = last (family) name, anything between = middle name: "Karim Adel Mansour" is
+// Karim / Adel / Mansour, not Karim / "Adel Mansour" (owner, 2026-11-23). A form without a middle-name field drops it.
+// Arabic compounds stay one name: "Abdel Rahman", "Abu Bakr", "El Sayed" (a prefix joins the word after it).
+// ponytail: word positions + a prefix list; other compound family names ("van der Berg") need the seeker's own split
+const JOINS_NEXT = /^(abd|abdel|abdul|abdal|abd-el|abu|abou|abo|el|al)$/i;
 export function splitName(fullName: string) {
-  const parts = fullName.trim().split(/\s+/);
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  const parts: string[] = [];
+  for (let i = 0; i < words.length; i++) parts.push(JOINS_NEXT.test(words[i]!) && i + 1 < words.length ? `${words[i]} ${words[++i]}` : words[i]!);
   return {
     firstName: parts[0] ?? '',
-    lastName: parts.slice(1).join(' ') || parts[0] || '',
+    middleName: parts.slice(1, -1).join(' '),
+    lastName: parts.length > 1 ? parts.at(-1)! : (parts[0] ?? ''),
   };
 }
 

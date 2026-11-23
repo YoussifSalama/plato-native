@@ -118,6 +118,8 @@ model JobSeekerDocument {
   storage_key      String
   status           JobSeekerDocumentStatus @default(UPLOADED)
   extracted_text   String?
+  // The CV as JSON for the extension's apply brain (src/modules/extension/v3/cv-facts.ts): { v, json }, made once per upload
+  apply_json       Json?
   processing_error String?
 
   created_at DateTime @default(now())

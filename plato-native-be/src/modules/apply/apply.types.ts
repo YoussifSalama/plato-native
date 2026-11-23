@@ -57,6 +57,7 @@ export type Answers = Record<string, AnswerValue>;
 export interface Candidate {
   fullName: string;
   firstName: string;
+  middleName?: string; // the words between the first and the last (splitName)
   lastName: string;
   email: string;
   phone: string;

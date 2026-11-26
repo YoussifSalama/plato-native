@@ -117,6 +117,7 @@ Sources to add: Himalayas, We Work Remotely, Remotive, Jobgether, Jobicy, Remote
 - [x] Admin view: `GET /admin/credits/report` (our cost vs tokens charged per feature and top 50 seekers, plus unattributed cost), `GET /admin/credits/:user`, `POST /admin/credits/:user/adjust`, `POST /admin/credits/:user/plan` (user id or email, `x-admin-key`)
 - [x] Top-ups: one-time packs (1,000 / 3,000 / 10,000 tokens), bought tokens spent last and never expire (carried over resets and plan changes); `/tokens` Top up section; admin can record a manual sale. Buying waits on the payment provider like plans
 - [ ] Re-measure with real traffic for 2 weeks, then fix prices
+- [ ] Voice billing can be skipped by a modified client (backlog, 2026-11-26). Today a voice call is billed from `voice/connected` to its last heartbeat, and a call that never reports connecting is released free. A client that never sends `voice/connected` (or never posts its transcript) gets the call for nothing; before this change it could do the same by never reporting. Fix it on OpenAI's side, not the client's: give each Realtime session a server-set length (`max` duration / expiry on the ephemeral key) equal to the reserved minutes, and bill from what OpenAI reports for the session (or charge the reservation when the key was used but no `connected` ever came). Code: `career/career-voice.service.ts` (`openSession`, `alive`, `cancel`), `credits/credits.service.ts` (`closeHold`)
 
 ---
 

@@ -112,7 +112,84 @@ function setup({ hasCv = false } = {}) {
 }
 
 describe('GuestService', () => {
-  it('sends two open jobs and only a count for the rest', async () => {
+  it('records live progress while it searches: the plan, each run, the filter, the ranking', async () => {
+    const updates: {
+      status?: string;
+      progress?: {
+        phase: string;
+        runs: { count: number | null }[];
+        found?: number;
+        kept?: number;
+      };
+    }[] = [];
+    const prisma = {
+      guestSearch: {
+        update: jest.fn(
+          async ({ data }) => (updates.push(structuredClone(data)), data),
+        ),
+      },
+      job: { findMany: jest.fn(async () => []) },
+    };
+    const linkedin = {
+      discover: jest.fn(
+        async (
+          _q: unknown,
+          hooks: {
+            onPlan: (r: unknown[]) => void;
+            onRunDone: (i: number, n: number) => void;
+          },
+        ) => {
+          hooks.onPlan([
+            { title: 'Backend Engineer', place: 'UAE' },
+            { title: 'Go Developer', place: 'UAE' },
+          ]);
+          hooks.onRunDone(1, 7);
+          hooks.onRunDone(0, 12);
+          return [];
+        },
+      ),
+    };
+    const discovery = { indexJobIds: jest.fn(async () => []) };
+    const svc = new GuestService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      linkedin as never,
+      discovery as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    await (
+      svc as unknown as {
+        runSearch: (id: string, q: unknown, s: unknown) => Promise<void>;
+      }
+    ).runSearch('x'.repeat(24), search.query, {
+      skills: ['Go'],
+      roles: ['Backend Engineer'],
+      experienceKeywords: [],
+    });
+    const steps = updates.filter((u) => u.progress).map((u) => u.progress!);
+    expect(steps[0].runs.map((r) => r.count)).toEqual([null, null]);
+    expect(steps.map((p) => p.runs.map((r) => r.count))).toContainEqual([
+      null,
+      7,
+    ]);
+    expect(steps.map((p) => p.runs.map((r) => r.count))).toContainEqual([
+      12, 7,
+    ]);
+    expect(steps.map((p) => p.phase)).toEqual(
+      expect.arrayContaining(['searching', 'filtering', 'ranking']),
+    );
+    expect(steps.at(-1)).toMatchObject({ phase: 'ranking', found: 0, kept: 0 });
+    expect(updates.at(-1)).toMatchObject({ status: 'DONE' });
+  });
+
+  it('sends two open jobs, and the rest only as a read-only preview with no id or link', async () => {
     const { svc, prisma } = setup();
     const view = await svc.searchView(search as never);
     expect(view.open.map((j) => j.id)).toEqual(ids.slice(0, 2));
@@ -120,8 +197,14 @@ describe('GuestService', () => {
     expect(prisma.job.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: { in: ids.slice(0, 2) } } }),
     );
-    const sent = JSON.stringify(view);
-    for (const id of ids.slice(2)) expect(sent).not.toContain(id);
+    // The locked three come back in ranked order, as titles and companies only.
+    expect(view.preview).toHaveLength(3);
+    for (const p of view.preview) {
+      expect(p).not.toHaveProperty('id');
+      expect(p).not.toHaveProperty('url');
+      expect(p).not.toHaveProperty('apply_url');
+      expect(p).not.toHaveProperty('description');
+    }
   });
 
   it('keeps only picks that were open', async () => {

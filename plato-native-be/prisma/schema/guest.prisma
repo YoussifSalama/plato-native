@@ -40,6 +40,8 @@ model GuestSearch {
   // Best first (BM25 against the CV); the first two are the open ones.
   job_ids  String[]           @default([]) @db.ObjectId
   error    String?
+  // Live progress for the page while it runs: { phase, runs: [{ title, place, count }], found, kept }.
+  progress Json?
 
   created_at DateTime @default(now())
 

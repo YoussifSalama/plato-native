@@ -21,3 +21,7 @@ logs/
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Desk research notes and reports (deep-research skill output), not code
+research_notes/
+reports/

@@ -5,7 +5,6 @@ jest.mock('../apify.service', () => ({ ApifyService: class {} }));
 it('DISABLED_BOARDS takes BOARD:COUNTRY to switch one market off', () => {
   process.env.DISABLED_BOARDS = 'DICE, GOOGLE_JOBS:EG';
   jest.isolateModules(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { BoardsAdapter } =
       require('./boards.adapter') as typeof import('./boards.adapter');
     const a = new BoardsAdapter({} as never);
@@ -29,7 +28,6 @@ it('caps runs per search and lets every market in before second titles', () => {
   process.env.DISABLED_BOARDS = '';
   process.env.BOARD_MAX_RUNS = '6';
   jest.isolateModules(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { BoardsAdapter } =
       require('./boards.adapter') as typeof import('./boards.adapter');
     const plan = new BoardsAdapter({} as never).plan({

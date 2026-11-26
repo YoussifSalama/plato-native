@@ -178,4 +178,13 @@ export class JobSeekerProfileService {
       },
     });
   }
+
+  /** Where the person lives (onboarding's "You live in"); the rest of the profile is untouched. */
+  setLocation(job_seeker_id: string, location: { city: string; country: string }) {
+    return this.prisma.jobSeeker.update({
+      where: { id: job_seeker_id },
+      data: { location },
+      select: { location: true },
+    });
+  }
 }

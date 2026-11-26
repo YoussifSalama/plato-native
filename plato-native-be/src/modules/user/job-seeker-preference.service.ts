@@ -16,6 +16,8 @@ const DEFAULT_PREFERENCES: PreferenceInput = {
   salary_currency: null,
   salary_period: 'MONTHLY',
   things_to_avoid: null,
+  avoid_companies: [],
+  avoid_words: [],
   source: 'AI_SUGGESTED',
   seniority: null,
   years_experience: null,

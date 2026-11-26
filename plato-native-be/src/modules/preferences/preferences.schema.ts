@@ -77,6 +77,9 @@ export const preferenceEditSchema = z
     salary_period: z.enum(['MONTHLY', 'YEARLY']).optional(),
     relocation_note: z.string().trim().max(120).nullable().optional(),
     sponsorship_note: z.string().trim().max(120).nullable().optional(),
+    // Left out of every search (the same limits as New search's Skip companies / Leave out).
+    avoid_companies: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
+    avoid_words: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
   })
   .refine(
     (p) =>

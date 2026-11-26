@@ -61,6 +61,8 @@ export interface PreferenceInput {
   salary_currency: string | null;
   salary_period: string;
   things_to_avoid: string | null;
+  avoid_companies: string[];
+  avoid_words: string[];
   source: string;
   seniority: string | null;
   years_experience: string | null;

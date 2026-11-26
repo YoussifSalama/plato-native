@@ -55,6 +55,7 @@ import { indexFilter, LocalIndexAdapter } from './adapters/local-index.adapter';
 import { PublicBoardsAdapter } from './adapters/public-boards.adapter';
 import {
   buildJobSeekerSnapshot,
+  withCv,
   residenceOf,
   type JobSeekerSnapshot,
 } from './job-seeker-snapshot';
@@ -66,12 +67,19 @@ import { DiscoveryQueryOverrides, mergeDiscoveryQuery } from './query-merge';
 import { RunProgressBus } from './run-progress.bus';
 import { NotificationsBus } from '../notifications/notifications.bus';
 import { resolvePlaces } from './country-resolver';
-import { countryName, marketScale, resolveCountry } from './countries';
+import {
+  countryName,
+  countryNamesOf,
+  marketScale,
+  resolveCountry,
+} from './countries';
 import { excludesCountry } from '../apply/eligibility';
 import { companyDomain, companyMark, normalizeCompany } from './company';
 import { jobEligibility } from './job-eligibility';
 import { previewSearch, type PreviewInput } from './search-preview';
 import { checkSearchFit, type SearchDraft } from './search-fit';
+import { reviewSearch } from './search-review';
+import type { CvAnalysis } from '../profile-extraction/cv-analysis.service';
 import { parseSearchSentence } from './search-sentence';
 import { recordUsage } from '../usage/usage';
 import { CreditsService } from '../credits/credits.service';
@@ -233,12 +241,27 @@ export class DiscoveryService implements OnModuleInit {
     jobSeekerId: string,
     overrides?: DiscoveryQueryOverrides,
   ): Promise<DiscoveryQuery> {
+    const snapshot = await this.snapshotFor(jobSeekerId, overrides?.cvId);
+    return this.queryFromSnapshot(snapshot, overrides);
+  }
+
+  /** The seeker's search profile; with a CV picked for this search, that CV's facts in place of the profile's. */
+  async snapshotFor(jobSeekerId: string, cvId?: string | null) {
     const snapshot = await buildJobSeekerSnapshot(
       this.prisma,
       this.preferenceService,
       jobSeekerId,
     );
-    return this.queryFromSnapshot(snapshot, overrides);
+    if (!cvId) return snapshot;
+    const cv = await this.prisma.searchCv.findFirst({
+      where: { id: cvId, job_seeker_id: jobSeekerId },
+      select: { analysis: true },
+    });
+    if (!cv)
+      throw new NotFoundException(
+        'That CV is no longer available. Upload it again.',
+      );
+    return withCv(snapshot, (cv.analysis as unknown as CvAnalysis).extraction);
   }
 
   /** buildQuery for a profile that is not on an account yet (the public search's guest). */
@@ -649,12 +672,13 @@ export class DiscoveryService implements OnModuleInit {
       const matched = await this.persistJobs(jobSeekerId, runId, fitting);
       await publish({ stage: 'filtering', merged: matched });
 
-      const snapshot = await buildJobSeekerSnapshot(
-        this.prisma,
-        this.preferenceService,
+      const snapshot = await this.snapshotFor(jobSeekerId, query.cvId);
+      await this.matchingService.rankMatches(
         jobSeekerId,
+        snapshot,
+        undefined,
+        await this.rankScope(jobSeekerId, runId, query.cvId),
       );
-      await this.matchingService.rankMatches(jobSeekerId, snapshot);
       const filtered = await this.prisma.jobSeekerJobMatch.count({
         where: { discovery_run_ids: { has: runId }, shortlisted: true },
       });
@@ -697,12 +721,12 @@ export class DiscoveryService implements OnModuleInit {
    * "New search": the titles a search for these roles will cover, planned from the seeker's background (the same
    * planner the search runs). Shown before Start so the seeker sees, and can trim, what gets searched.
    */
-  async planSearchTitles(jobSeekerId: string, roles: string[]) {
-    const snapshot = await buildJobSeekerSnapshot(
-      this.prisma,
-      this.preferenceService,
-      jobSeekerId,
-    );
+  async planSearchTitles(
+    jobSeekerId: string,
+    roles: string[],
+    cvId?: string | null,
+  ) {
+    const snapshot = await this.snapshotFor(jobSeekerId, cvId);
     return planTitles(this.titlePlannerModel, {
       requested: roles,
       preferenceRoles: snapshot.roles,
@@ -728,14 +752,49 @@ export class DiscoveryService implements OnModuleInit {
     });
   }
 
+  /**
+   * Which matches a run re-scores. A search with its own CV scores only its own jobs, against that CV; a profile
+   * search scores the rest, leaving jobs last found by a different-CV search scored as that search scored them.
+   */
+  private async rankScope(
+    jobSeekerId: string,
+    runId: string,
+    cvId?: string,
+  ): Promise<Prisma.JobSeekerJobMatchWhereInput | undefined> {
+    if (cvId) return { discovery_run_ids: { has: runId } };
+    // ponytail: reads every run's query (Mongo JSON can't be filtered by path in Prisma); a run column if runs pile up.
+    const runs = await this.prisma.discoveryRun.findMany({
+      where: { job_seeker_id: jobSeekerId },
+      select: { id: true, query: true },
+    });
+    const other = runs
+      .filter((r) => (r.query as { cvId?: string } | null)?.cvId)
+      .map((r) => r.id);
+    return other.length
+      ? {
+          OR: [
+            { discovery_run_id: { notIn: other } },
+            { discovery_run_id: null },
+            { discovery_run_id: { isSet: false } },
+          ],
+        }
+      : undefined;
+  }
+
   /** "New search", on Start: does this search fit the seeker's profile? If not, the closest one that does. */
-  async checkSearch(jobSeekerId: string, draft: SearchDraft) {
-    const snapshot = await buildJobSeekerSnapshot(
-      this.prisma,
-      this.preferenceService,
-      jobSeekerId,
+  async checkSearch(
+    jobSeekerId: string,
+    draft: SearchDraft,
+    cvId?: string | null,
+  ) {
+    const snapshot = await this.snapshotFor(jobSeekerId, cvId);
+    // Rules first (free, the same answer every time), then the AI's one judgement: a role from another field.
+    const questions = reviewSearch(
+      { ...snapshot, workAuthorization: snapshot.workAuthorization ?? [] },
+      draft,
     );
-    return checkSearchFit(this.titlePlannerModel, snapshot, draft);
+    const fit = await checkSearchFit(this.titlePlannerModel, snapshot, draft);
+    return { ...fit, questions };
   }
 
   /** "New search" live preview over Plato's own index (fresh, open postings): no AI, no tokens. */
@@ -1347,12 +1406,10 @@ export class DiscoveryService implements OnModuleInit {
       this.preferenceService.get(jobSeekerId),
     ]);
     const home = residenceOf(seeker?.location);
-    return [
+    return countryNamesOf([
       ...(home ? [countryName(home)] : []),
       ...(('work_authorization' in prefs && prefs.work_authorization) || []),
-    ]
-      .map((c) => c.toLowerCase().trim())
-      .filter(Boolean);
+    ]);
   }
 
   // "Only ones that accept Egypt": posting restrictions live in the text, so

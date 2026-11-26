@@ -93,7 +93,7 @@ export type DiscoveryRun = {
   status: "RUNNING" | "DONE" | "FAILED"
   // titles: everything searched (planned from the seeker's background).
   // requestedTitles: what they asked for. titlePlan: why each title is there.
-  query: { titles: string[]; locations: string[]; countries?: string[]; remoteTypes: string[]; jobTypes?: string[]; sentence?: string; requestedTitles?: string[]; titlePlan?: { title: string; reason: string }[] }
+  query: { cvId?: string; titles: string[]; locations: string[]; countries?: string[]; remoteTypes: string[]; jobTypes?: string[]; sentence?: string; requestedTitles?: string[]; titlePlan?: { title: string; reason: string }[] }
   progress: RunProgress | null
   fetched: number
   matched: number
@@ -284,7 +284,7 @@ export type ParsedSearch = {
   willingToRelocate: boolean | null
 }
 const parseSearch = (text: string, polish = false) => request<ParsedSearch>(apiClient.post("/job-seeker/discover/parse", { text, ...(polish && { polish }) }))
-export type StartSearch = SearchRules & { threadId: string; sentence?: string; titles: string[]; strictTitles?: boolean; exact?: boolean; countries?: string[]; remoteTypes?: string[]; jobTypes?: string[]; visaSponsorshipRequired?: boolean }
+export type StartSearch = SearchRules & { threadId: string; cvId?: string; sentence?: string; titles: string[]; strictTitles?: boolean; exact?: boolean; countries?: string[]; remoteTypes?: string[]; jobTypes?: string[]; visaSponsorshipRequired?: boolean }
 const startSearch = (body: StartSearch) => request<DiscoveryRun>(apiClient.post("/job-seeker/discover", body))
 // On Start: does the search fit the profile? If not, why, and the closest search that does (one AI call).
 // New search rules, all enforced by the search on every job (server: fitsSearch).
@@ -310,11 +310,24 @@ export type SearchDraft = {
   visaSponsorshipRequired: boolean
   salary: { amount: number; currency: string; period: "MONTHLY" | "YEARLY" } | null
   advanced?: Omit<SearchRules, "level" | "salary">
+  cvId?: string | null
 }
-export type SearchFit = { fits: boolean; reasons: string[]; suggestion: (Omit<SearchDraft, "advanced"> & { level: "entry" | "mid" | "senior"; postedWithinDays: number | null; includeKeywords: string[]; excludeKeywords: string[]; excludeCompanies: string[]; salaryShownOnly: boolean; willingToRelocate: boolean }) | null }
+// Plain checks before a search (server rules, the same answer every time): each answer changes the search in one tap.
+export type ReviewPatch = { level?: "entry" | "mid" | "senior"; remoteTypes?: string[]; visaSponsorshipRequired?: boolean; willingToRelocate?: boolean; residenceCountry?: string; clearSalary?: boolean }
+export type ReviewQuestion = { id: "residence" | "visa" | "relocate" | "level" | "salary"; title: string; why: string; options: { label: string; patch: ReviewPatch }[] }
+export type SearchFit = { fits: boolean; reasons: string[]; questions?: ReviewQuestion[]; suggestion: (Omit<SearchDraft, "advanced"> & { level: "entry" | "mid" | "senior"; postedWithinDays: number | null; includeKeywords: string[]; excludeKeywords: string[]; excludeCompanies: string[]; salaryShownOnly: boolean; willingToRelocate: boolean }) | null }
 // The titles a search will cover, planned from the profile (the same planner the search runs), with why.
 const planSearchTitles = (roles: string[]) => request<{ title: string; reason: string }[]>(apiClient.post("/job-seeker/discover/plan-titles", { roles }))
 const checkSearch = (body: SearchDraft) => request<SearchFit>(apiClient.post("/job-seeker/discover/check", body))
+// "Search with a different CV": read for searches only (paid, like reading the profile's CV); the profile and its CV
+// stay as they are. The search ranks against it and applications from that search send it.
+export type SearchCv = { id: string; name: string; roles: string[]; years: number | null; created_at: string }
+const uploadSearchCv = (file: File) => {
+  const form = new FormData()
+  form.append("file", file)
+  return request<SearchCv>(apiClient.post("/job-seeker/discover/cv", form))
+}
+const listSearchCvs = () => request<SearchCv[]>(apiClient.get("/job-seeker/discover/cvs"))
 // Live preview of the New search form over Plato's own index: what each rule removes, the best few left. No tokens.
 export type SearchPreview = { found: number; relocate: number; payBelow: number; noVisa: number; other: number; canTake: number; top: { id: string; title: string; company: string; location: string | null; fit: number }[] }
 const previewSearch = (body: SearchRules & { titles: string[]; countries: string[]; remoteTypes: string[]; jobTypes: string[]; visaSponsorshipRequired: boolean }) =>
@@ -469,6 +482,8 @@ const submitApplicationAnswers = (id: string, answers: Record<string, AnswerValu
 const markApplicationSubmitted = (id: string) => request<JobApplication>(apiClient.post(`/job-seeker/applications/${id}/mark-submitted`))
 
 export {
+  uploadSearchCv,
+  listSearchCvs,
   createThread,
   listThreads,
   getThread,

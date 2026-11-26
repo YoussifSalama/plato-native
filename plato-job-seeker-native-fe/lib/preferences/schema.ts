@@ -8,6 +8,9 @@ export type Preferences = {
   salary_max: number | null
   salary_currency: string | null
   things_to_avoid: string | null
+  // Left out of every search; New search shows them prefilled under Advanced. Optional on older servers.
+  avoid_companies?: string[]
+  avoid_words?: string[]
   seniority: string | null
   years_experience: string | null
   availability: string | null

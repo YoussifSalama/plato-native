@@ -23,6 +23,8 @@ function formatPreferenceSummary(p: {
   salary_max: number | null
   salary_currency: string | null
   things_to_avoid: string | null
+  avoid_companies?: string[]
+  avoid_words?: string[]
   seniority: string | null
   years_experience: string | null
   availability: string | null
@@ -52,7 +54,10 @@ function formatPreferenceSummary(p: {
       ? `${money(expected)} ${per}${p.salary_min && p.salary_max && p.salary_min !== p.salary_max ? ` (minimum ${money(p.salary_min)})` : ""}${p.salary_currency ? "" : " · currency not set"}`
       : "Not set",
     industries: p.preferred_industries.map((v) => labelFor(INDUSTRIES, v)).join(", ") || "Not set",
-    things_to_avoid: p.things_to_avoid || "None",
+    things_to_avoid:
+      [p.avoid_companies?.length ? `Companies: ${p.avoid_companies.join(", ")}` : "", p.avoid_words?.length ? `Title words: ${p.avoid_words.join(", ")}` : ""].filter(Boolean).join(" · ") ||
+      p.things_to_avoid ||
+      "None",
     experience: [
       p.seniority ? labelFor(SENIORITY_LEVELS, p.seniority) : null,
       p.years_experience ? `${labelFor(YEARS_EXPERIENCE, p.years_experience)} years` : null,

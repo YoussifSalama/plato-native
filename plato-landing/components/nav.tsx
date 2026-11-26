@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LOGIN, NAV, SIGNUP } from "./links";
+import { APP, LOGIN, NAV } from "./links";
 
 export function Logo({ size = 32 }: { size?: number }) {
   // eslint-disable-next-line @next/next/no-img-element
@@ -21,10 +21,10 @@ export function Nav() {
         </div>
         <div className="nav-right">
           <a className="login" href={LOGIN}>Log in</a>
-          <a className="btn white sm" href={SIGNUP}>Start free</a>
+          <a className="btn white sm" href={APP}>Find a job</a>
           <details className="menu">
             <summary aria-label="Menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M4 12h16M4 17h16" /></svg></summary>
-            <div className="sheet">{NAV.map((n) => <Link key={n.href} href={n.href}>{n.label}</Link>)}<a href={LOGIN}>Log in</a></div>
+            <div className="sheet">{NAV.map((n) => <Link key={n.href} href={n.href}>{n.label}</Link>)}<a href={LOGIN}>Log in</a><a href={APP}>Find a job</a></div>
           </details>
         </div>
       </nav>

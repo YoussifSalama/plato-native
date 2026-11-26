@@ -241,7 +241,7 @@ function ProfileContent() {
             <Card title="What I'm looking for" icon={Compass} tour="profile-looking" action={<Link href={editPrefs("looking")} data-tour="profile-looking-edit">Edit</Link>}>
               {prefs ? (
                 <dl className="flex flex-col divide-y divide-divider">
-                  {Object.entries({ Roles: "roles", Locations: "locations", "Work setup": "work_setup", "Job type": "employment_type", Experience: "experience", "Expected salary": "salary", Industries: "industries", "Things to avoid": "things_to_avoid" } as const).map(([label, k]) => (
+                  {Object.entries({ Roles: "roles", Locations: "locations", "Work setup": "work_setup", "Job type": "employment_type", Experience: "experience", "Expected salary": "salary", Industries: "industries", "Left out of searches": "things_to_avoid" } as const).map(([label, k]) => (
                     <div key={k} className={cn("-mx-2 grid grid-cols-1 gap-1 rounded-lg px-2 py-2.5 sm:grid-cols-[200px_1fr]", ROW)}>
                       <dt className="text-text-secondary">{label}</dt>
                       <dd className="font-semibold">{formatPreferenceSummary(prefs)[k]}</dd>

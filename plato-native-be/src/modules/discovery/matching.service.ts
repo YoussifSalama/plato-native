@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import BM25 from 'okapibm25';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobSeekerSnapshot } from './job-seeker-snapshot';
 
@@ -23,9 +24,11 @@ export class MatchingService {
     jobSeekerId: string,
     snapshot: JobSeekerSnapshot,
     shortlistSize = DEFAULT_SHORTLIST_SIZE,
+    // Only these matches (a different-CV search ranks its own jobs against its CV). Default: all of them.
+    only: Prisma.JobSeekerJobMatchWhereInput = {},
   ) {
     const matches = await this.prisma.jobSeekerJobMatch.findMany({
-      where: { job_seeker_id: jobSeekerId },
+      where: { ...only, job_seeker_id: jobSeekerId },
       include: { job: true },
     });
     if (!matches.length) return { ranked: 0, shortlisted: 0 };

@@ -1,6 +1,6 @@
 "use client"
 
-import { NextSteps } from "@/components/next-steps"
+import { NextSteps, type NextAction } from "@/components/next-steps"
 import { InfoTip } from "@/components/info-tip"
 import { PAGE } from "@/components/page-header"
 import { useEffect, useState, type ReactNode } from "react"
@@ -18,7 +18,7 @@ import { getMe } from "@/lib/auth/api"
 import { getProfile } from "@/lib/documents/api"
 import { getDigests, getInsights, type Digest } from "@/lib/insights/api"
 import { getDiscoveryStats, getMatches, listApplications, setSaved, type DiscoveryStats, type JobApplication, type JobMatch } from "@/lib/jobs/api"
-import { statusView } from "@/lib/jobs/application-status"
+import { needsAttention, statusView } from "@/lib/jobs/application-status"
 import { timeAgo } from "@/lib/jobs/links"
 import { staggerContainer, fadeUpItem } from "@/lib/motion-variants"
 
@@ -134,6 +134,19 @@ export default function Home() {
   // As on Following: open roles in the latest digest at companies you follow.
   const hiring = digest?.jobs.filter((j) => !j.closed && followed?.includes(j.company.toLowerCase())) ?? []
   const recent = [...(apps ?? [])].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)).slice(0, 3)
+  // The one thing to do now, once setup is done: what needs the seeker, an interview to prepare for,
+  // this week's goal, then interview practice.
+  const needs = apps?.filter(needsAttention).length ?? 0
+  const interview = apps?.find((a) => a.outcome === "INTERVIEW")
+  const then: NextAction | null = !apps
+    ? null
+    : needs
+      ? { title: `${needs} application${needs === 1 ? " needs" : "s need"} you`, body: "Plato can't finish them alone. Answer what's missing and they go out.", href: "/applications?tab=needs", cta: "Open" }
+      : interview
+        ? { title: `Prepare for your ${interview.job.company} interview`, body: "Practise with questions built from that job post.", href: `/career/interviews/new?${new URLSearchParams({ target: "job", job: interview.job.id, jt: interview.job.title, jc: interview.job.company })}`, cta: "Prep" }
+        : sentWeek < WEEK_GOAL && (topTotal ?? 0) > 0
+          ? { title: `Send ${WEEK_GOAL - sentWeek} more application${WEEK_GOAL - sentWeek === 1 ? "" : "s"} this week`, body: `${topTotal} matches are waiting. Pick the best and Plato applies.`, href: "/jobs", cta: "Pick jobs" }
+          : { title: "Get ready for your interviews", body: "Practise for the jobs you applied to, and see how ready you are.", href: "/career", cta: "Practise" }
   // The one line under the greeting: what changed and what Plato is doing.
   // The owner's line once there is something to show; a first step before that.
   const summary =
@@ -198,6 +211,9 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* Right under the greeting: setup steps while there are any, then the one thing to do now. */}
+      <NextSteps stats={stats} onNewSearch={newSearch} then={then} />
 
       {/* Top matches. */}
       <section data-tour="home-top-matches" className="flex flex-col gap-3">
@@ -392,8 +408,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Plato's add-on, below the owner's sections: the next steps for this account (profile, extension, search). */}
-      <NextSteps stats={stats} onNewSearch={newSearch} />
 
       <ExtensionApplyModal open={!!apply} count={1} req={{ jobIds: apply ? [apply] : [] }} onClose={() => setApply(null)} />
     </div>

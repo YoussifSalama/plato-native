@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react"
+import { useSearchParams } from "next/navigation"
 import { ArrowRight, Ban, Briefcase, Building2, Check, ChevronRight, CircleAlert, Clock, Heart, Laptop, ListChecks, Loader2, MapPin, TrendingUp, Wallet, X, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { InfoTip } from "@/components/info-tip"
@@ -17,7 +18,9 @@ import { getIntake, saveIntake, type IntakeItem } from "@/lib/jobs/api"
 import { AVAILABILITY, EMPLOYMENT_STATUS, INDUSTRIES, YEARS_EXPERIENCE } from "@/lib/preference-options"
 import { estimatePreferences, getPreferences, savePreferences } from "@/lib/preferences/api"
 import type { PreferenceEstimate, Preferences } from "@/lib/preferences/schema"
-import { getProfile } from "@/lib/documents/api"
+import { getProfile, saveLocation } from "@/lib/documents/api"
+import { getMe, updateMe } from "@/lib/auth/api"
+import { ALL_COUNTRIES, codeOf, nameOf } from "@/lib/countries"
 import { PlatoMark } from "@/components/plato-orb"
 import { CARD, EmptyState, SectionHeader } from "@/components/plato-ui"
 
@@ -58,8 +61,10 @@ const REGION = typeof Intl !== "undefined" && "DisplayNames" in Intl ? new Intl.
 const countryNames = (s: string) => s.replace(/\b[A-Z]{2}\b/g, (c) => REGION?.of(c) ?? c).replace(/\//g, " or ")
 // Shown in the answers column; every other intake question sits under "More answers".
 const MAIN_FACTS = ["travel", "earliest_start_date", "salary_negotiable"]
-const AVOID_SUGGESTIONS = ["Commission-only pay", "Night shifts", "Travel over 50%", "Unpaid test tasks", "Agencies and recruiters"]
-// things_to_avoid is one text field: the chips are stored as a "; " list.
+const WORD_SUGGESTIONS = ["Sales", "Commission", "Night shift", "Intern"]
+// "Complete my details" (?focus=<readiness key>) lands on the field that is missing.
+const FOCUS: Record<string, string> = { phone: "ans-phone", location: "ans-country", salary: "pref-salary", years_experience: "ans-years", availability: "ans-notice", work_authorization: "ans-auth" }
+// The older free-text things_to_avoid, "; " separated: shown as title words until saved as the lists.
 const splitAvoid = (s: string | null) => (s ?? "").split(/[;\n]/).map((x) => x.trim()).filter(Boolean)
 
 // `editing`: opened from Profile after onboarding. Save and Cancel, then back there.
@@ -68,8 +73,12 @@ function PreferencesStep({ onContinue, onBack, editing }: { onContinue: () => vo
   const [intake, setIntake] = useState<IntakeItem[]>([])
   const [facts, setFacts] = useState<Record<string, string>>({})
   const [alerts, setAlerts] = useState<JobAlert[]>([])
-  const [avoid, setAvoid] = useState<string[]>([])
-  const [home, setHome] = useState<string | null>(null)
+  const [avoidCompanies, setAvoidCompanies] = useState<string[]>([])
+  const [avoidWords, setAvoidWords] = useState<string[]>([])
+  // About the person (asked here so "Complete my details" can finish everything applying needs): saved only if changed.
+  const [phone, setPhone] = useState<{ now: string; was: string }>({ now: "", was: "" })
+  const [where, setWhere] = useState<{ city: string; country: string | null; was: string }>({ city: "", country: null, was: "" })
+  const focus = useSearchParams().get("focus")
   const [estimate, setEstimate] = useState<PreferenceEstimate | null>(null)
   const [extra, setExtra] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
@@ -79,7 +88,8 @@ function PreferencesStep({ onContinue, onBack, editing }: { onContinue: () => vo
     getPreferences()
       .then((x) => {
         setP(x)
-        setAvoid(splitAvoid(x.things_to_avoid))
+        setAvoidCompanies(x.avoid_companies ?? [])
+        setAvoidWords(x.avoid_companies?.length || x.avoid_words?.length ? (x.avoid_words ?? []) : splitAvoid(x.things_to_avoid).slice(0, 10))
       })
       .catch(() => setError("Could not load your preferences"))
     getIntake()
@@ -92,9 +102,24 @@ function PreferencesStep({ onContinue, onBack, editing }: { onContinue: () => vo
       .then((i) => setAlerts(i.alerts.filter((a) => a.kind === "COMPANY")))
       .catch(() => setAlerts([]))
     getProfile()
-      .then((pr) => setHome(pr.location?.country ?? null))
-      .catch(() => setHome(null))
+      .then((pr) => {
+        const w = { city: pr.location?.city ?? "", country: codeOf(pr.location?.country) }
+        setWhere({ ...w, was: JSON.stringify(w) })
+      })
+      .catch(() => undefined)
+    getMe()
+      .then((me) => setPhone({ now: me.phone ?? "", was: me.phone ?? "" }))
+      .catch(() => undefined)
   }, [])
+
+  // Arrived from "Complete my details": bring the missing field into view, ready to type.
+  const loaded = !!p
+  useEffect(() => {
+    const el = loaded && focus && FOCUS[focus] ? document.getElementById(FOCUS[focus]) : null
+    if (!el) return
+    el.scrollIntoView({ block: "center", behavior: "smooth" })
+    el.focus({ preventScroll: true })
+  }, [loaded, focus])
 
   // "Plato sees about N open jobs", and what adding a work style would add. Debounced.
   const draftKey = p ? JSON.stringify([p.roles, p.preferred_locations, p.work_setup, p.willing_to_relocate, p.salary_min, p.salary_max, p.salary_currency, p.salary_period]) : ""
@@ -133,7 +158,7 @@ function PreferencesStep({ onContinue, onBack, editing }: { onContinue: () => vo
     )
   const set = (patch: Partial<Preferences>) => setP((cur) => (cur ? { ...cur, ...patch } : cur))
   const toggle = (key: "preferred_job_types" | "work_setup" | "preferred_industries", v: string) => set({ [key]: p[key].includes(v) ? p[key].filter((x) => x !== v) : [...p[key], v] })
-  const country = home ?? "my country"
+  const country = where.country ? nameOf(where.country) : "my country"
   const visa = !p.visa_sponsorship_required ? "no" : p.sponsorship_note ? "outside" : "yes"
   const relocate = RELOCATE.find(([, , on, note]) => on === p.willing_to_relocate && (note ?? null) === (p.relocation_note ?? null))?.[0] ?? (p.willing_to_relocate ? "anywhere" : "no")
   const fact = (k: string) => intake.find((q) => q.key === k)
@@ -171,7 +196,9 @@ function PreferencesStep({ onContinue, onBack, editing }: { onContinue: () => vo
         relocation_note: p.relocation_note ?? null,
         sponsorship_note: p.sponsorship_note ?? null,
         salary_currency: p.salary_currency,
-        things_to_avoid: avoid.join("; ") || null,
+        things_to_avoid: null,
+        avoid_companies: avoidCompanies,
+        avoid_words: avoidWords,
         seniority: p.seniority,
         years_experience: p.years_experience,
         availability: p.availability,
@@ -183,6 +210,8 @@ function PreferencesStep({ onContinue, onBack, editing }: { onContinue: () => vo
         portfolio_url: p.portfolio_url,
         work_authorization: p.work_authorization,
       })
+      if (phone.now.trim() !== phone.was) await updateMe({ phone: phone.now.trim() })
+      if (where.country && JSON.stringify({ city: where.city, country: where.country }) !== where.was) await saveLocation({ city: where.city.trim(), country: nameOf(where.country) })
       if (intake.length) await saveIntake(Object.fromEntries(intake.map((i) => [i.key, facts[i.key]?.trim() || null])))
       onContinue()
     } catch (e) {
@@ -331,6 +360,26 @@ function PreferencesStep({ onContinue, onBack, editing }: { onContinue: () => vo
         <Column index={2} tour="onboarding-prefs-answers">
           <Group icon={ListChecks} title="Answers for your applications" hint="Set once, so Plato never stops to ask you.">
             <div className="flex flex-col divide-y divide-divider">
+              <Row label="Phone" id="ans-phone">
+                <Input id="ans-phone" type="tel" autoComplete="tel" value={phone.now} onChange={(e) => setPhone((x) => ({ ...x, now: e.target.value }))} placeholder="+20 100 000 0000" />
+              </Row>
+              <Row label="You live in" tip={<InfoTip text="Forms ask where you live, and Plato uses it to keep jobs you can legally take and to judge pay." label="Why Plato asks where you live" />} id="ans-country" wide>
+                <div className="flex min-w-0 gap-2">
+                  <Select items={ALL_COUNTRIES.map((c) => ({ value: c.code, label: c.name }))} value={where.country ?? null} onValueChange={(v) => v && setWhere((x) => ({ ...x, country: v as string }))}>
+                    <SelectTrigger id="ans-country" aria-label="Country" className="min-w-0 flex-1">
+                      <SelectValue placeholder="Country" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {ALL_COUNTRIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input aria-label="City" value={where.city} onChange={(e) => setWhere((x) => ({ ...x, city: e.target.value }))} placeholder="City" className="min-w-0 flex-1" />
+                </div>
+              </Row>
               <Row label="Notice period" id="ans-notice">
                 <FormSelect id="ans-notice" value={p.availability ?? ""} onChange={(v) => set({ availability: v || null })} options={AVAILABILITY} optional />
               </Row>
@@ -387,18 +436,19 @@ function PreferencesStep({ onContinue, onBack, editing }: { onContinue: () => vo
               </div>
             </details>
           )}
-          <Group icon={Ban} title="Things to avoid" hint="Jobs with any of these never reach you.">
-            <AddInput id="avoid-company" placeholder="Companies, e.g. your current employer" onAdd={(v) => setAvoid((a) => [...new Set([...a, v])])} />
-            <AddInput id="avoid-industry" placeholder="Industries, e.g. gambling, tobacco" onAdd={(v) => setAvoid((a) => [...new Set([...a, v])])} />
+          <Group icon={Ban} title="Leave out of every search" hint="New search shows these under Advanced, so you can change them for one search.">
+            <span className="text-sm font-semibold">Companies</span>
+            <Removable items={avoidCompanies} onRemove={(v) => setAvoidCompanies((a) => a.filter((x) => x !== v))} />
+            <AddInput id="avoid-company" placeholder="e.g. your current employer" onAdd={(v) => setAvoidCompanies((a) => [...new Set([...a, v])].slice(0, 10))} />
+            <span className="mt-2 text-sm font-semibold">Words in a job title</span>
+            <Removable items={avoidWords} onRemove={(v) => setAvoidWords((a) => a.filter((x) => x !== v))} />
+            <AddInput id="avoid-word" placeholder="e.g. PHP, Sales" onAdd={(v) => setAvoidWords((a) => [...new Set([...a, v])].slice(0, 10))} />
             <div className="flex flex-wrap gap-2">
-              {[...new Set([...avoid, ...AVOID_SUGGESTIONS])].map((v) => {
-                const on = avoid.includes(v)
-                return (
-                  <FilterChip key={v} on={on} onClick={() => setAvoid((a) => (on ? a.filter((x) => x !== v) : [...a, v]))}>
-                    {on ? v : `+ ${v}`}
-                  </FilterChip>
-                )
-              })}
+              {WORD_SUGGESTIONS.filter((v) => !avoidWords.includes(v)).map((v) => (
+                <FilterChip key={v} on={false} onClick={() => setAvoidWords((a) => [...a, v].slice(0, 10))}>
+                  + {v}
+                </FilterChip>
+              ))}
             </div>
           </Group>
         </Column>
@@ -508,9 +558,10 @@ function AddInput({ id, placeholder, hint, onAdd }: { id: string; placeholder: s
     </InputGroup>
   )
 }
-function Row({ label, tip, id, children }: { label: string; tip?: ReactNode; id: string; children: ReactNode }) {
+// wide: the field takes the whole row under its label (two fields side by side).
+function Row({ label, tip, id, wide, children }: { label: string; tip?: ReactNode; id: string; wide?: boolean; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-1 items-center gap-2 py-2.5 sm:grid-cols-[1fr_minmax(0,1fr)]">
+    <div className={cn("grid grid-cols-1 items-center gap-2 py-2.5", !wide && "sm:grid-cols-[1fr_minmax(0,1fr)]")}>
       <span className="flex items-center gap-1.5">
         <label htmlFor={id} className="text-[15px] text-text-secondary">
           {label}

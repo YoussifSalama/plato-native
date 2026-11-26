@@ -1,6 +1,7 @@
 import { Agent, run } from '@openai/agents';
 import { z } from 'zod';
 import { metered } from '../usage/usage';
+import { steady } from '../ai/steady';
 import { isCountryCode } from './countries';
 import type { JobSeekerSnapshot } from './job-seeker-snapshot';
 
@@ -119,6 +120,8 @@ export async function checkSearchFit(
     instructions: INSTRUCTIONS,
     model,
     outputType: fitSchema,
+    // The same search and profile get the same verdict (search quality control).
+    ...steady(model),
   });
   const result = await Promise.race([
     run(

@@ -46,7 +46,7 @@ it('maps the Gulf boards', () => {
         job_id: '121026000282',
         jd_url: 'https://www.naukrigulf.com/x-121026000282',
         latest_posted_date: '1791831511',
-      } as never,
+      },
       'AE',
     ),
   ).toMatchObject({
@@ -61,7 +61,7 @@ it('maps the Gulf boards', () => {
       company: { name: 'C' },
       jd_url: 'u',
       latest_posted_date: '1791831511',
-    } as never,
+    },
     'AE',
   )!.posted_at!;
   expect(posted.getUTCFullYear()).toBe(2026);
@@ -80,7 +80,7 @@ it('maps the Gulf boards', () => {
         salaryPeriod: 'month',
         salaryLabel: 'AED 8,000 - 12,000',
         postedAt: '2026-10-10T00:00:00Z',
-      } as never,
+      },
       'AE',
     ),
   ).toMatchObject({
@@ -103,7 +103,7 @@ it('maps the Gulf boards', () => {
         salaryMin: 2000,
         salaryMax: 3000,
         date_posted: '2026-10-10T06:00:00.000Z',
-      } as never,
+      },
       'AE',
     ),
   ).toMatchObject({
@@ -124,7 +124,7 @@ it('maps the remote boards and skips unusable items', () => {
         published_date: '2026-10-08T12:54:14-04:00',
         location: 'Time zone: CET',
         description: 'About us',
-      } as never,
+      },
       'ANY',
     ),
   ).toMatchObject({
@@ -143,14 +143,14 @@ it('maps the remote boards and skips unusable items', () => {
         region: 'Anywhere in the World',
         url: 'https://weworkremotely.com/remote-jobs/1',
         posted_at: '2026-10-01T00:00:00Z',
-      } as never,
+      },
       'ANY',
     ),
   ).toMatchObject({
     title: 'Senior Backend Engineer',
     location: 'Anywhere in the World',
   });
-  expect(weworkremotely.map({ title: 'x' } as never, 'ANY')).toBeNull();
+  expect(weworkremotely.map({ title: 'x' }, 'ANY')).toBeNull();
   expect(
     wellfound.map(
       {
@@ -162,7 +162,7 @@ it('maps the remote boards and skips unusable items', () => {
         jobType: 'Full-time',
         jobUrl: 'https://wellfound.com/company/a/jobs/x',
         postedAtIso: '2026-10-09T00:00:00Z',
-      } as never,
+      },
       'ANY',
     ),
   ).toMatchObject({
@@ -210,7 +210,7 @@ it('maps Arc, Dynamite Jobs, Jobgether and NoDesk (shapes from live runs)', () =
         jobType: 'permanent',
         requiredCountries: ['US'],
         minAnnualSalary: null,
-      } as never,
+      },
       'ANY',
     ),
   ).toMatchObject({
@@ -237,7 +237,7 @@ it('maps Arc, Dynamite Jobs, Jobgether and NoDesk (shapes from live runs)', () =
         salaryPeriod: 'yearly',
         description: 'About IPInfo',
         publishedAt: '2026-10-11T23:38:06.204000+00:00',
-      } as never,
+      },
       'ANY',
     ),
   ).toMatchObject({
@@ -278,7 +278,7 @@ it('maps Arc, Dynamite Jobs, Jobgether and NoDesk (shapes from live runs)', () =
         remoteLocation: 'Worldwide',
         publishedAt: '2026-10-06T00:00:00.000Z',
         companyWebsite: 'https://www.spiralyze.com/',
-      } as never,
+      },
       'ANY',
     ),
   ).toMatchObject({

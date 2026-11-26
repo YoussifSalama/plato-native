@@ -1,3 +1,5 @@
+import { countryNamesOf } from './countries';
+import { excludesCountry } from '../apply/eligibility';
 import {
   countriesOf,
   inCountries,
@@ -185,5 +187,25 @@ describe('country in the query', () => {
         countries: ['US'],
       }).countries,
     ).toEqual(['US']);
+  });
+});
+
+describe('countryNamesOf: codes and names both become the names postings use', () => {
+  it('turns an ISO code into the country names (EG -> egypt), keeps names, drops blanks', () => {
+    const names = countryNamesOf(['EG', 'United Arab Emirates', '', null]);
+    expect(names).toContain('egypt');
+    expect(names).toContain('united arab emirates');
+    expect(names).not.toContain('eg');
+  });
+
+  it('a seeker authorised as "IN" is not excluded from an India-only posting', () => {
+    const job = {
+      title: 'Backend Engineer',
+      description: 'Only candidates based in India.',
+    };
+    expect(excludesCountry(job, countryNamesOf(['IN']))).toBe(false);
+    expect(excludesCountry(job, countryNamesOf(['DE']))).toBe(true);
+    // Before the fix the code stayed "in" and never matched "india".
+    expect(excludesCountry(job, ['in'])).toBe(true);
   });
 });

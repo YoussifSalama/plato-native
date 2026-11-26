@@ -69,7 +69,7 @@ it('maps every feed to a normalised job that links to the original listing', () 
   });
 
   // the first Remote OK item is a legal notice, not a job
-  expect(fromRemoteOk({ id: undefined } as never)).toBeNull();
+  expect(fromRemoteOk({ id: undefined })).toBeNull();
   expect(
     fromRemoteOk({
       id: 9,

@@ -1,9 +1,18 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { createHash } from 'crypto';
-import { compactCv, CV_JSON_VERSION, CV_PROMPT, CV_SCHEMA, grounded, withName, type CvJson } from './cv-facts';
+import {
+  compactCv,
+  CV_JSON_VERSION,
+  CV_PROMPT,
+  CV_SCHEMA,
+  grounded,
+  withName,
+  type CvJson,
+} from './cv-facts';
 import { errorCode, resultContent } from './v3-results';
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { searchCvOfBatch } from '../../discovery/search-cv-of-batch';
 import { recordUsage } from '../../usage/usage';
 import { ExtensionBatchService } from '../batch.service';
 import { CandidateService } from '../candidate.service';
@@ -12,8 +21,25 @@ import { profileSummary } from '../profile-summary';
 import { readSettings } from '../settings';
 import { INTAKE } from '../../apply/intake';
 import type { AnswerValue } from '../../apply/apply.types';
-import { buildReview, parseFieldList, profileEntries, REASK, saidEntries, type Entry, type ReviewContext } from './review';
-import { applyPageOf, parseOutcome, type BrowserCall, type CallResult, type Outcome, type StoredReview, type TurnRequest, type TurnResponse } from './v3-contract';
+import {
+  buildReview,
+  parseFieldList,
+  profileEntries,
+  REASK,
+  saidEntries,
+  type Entry,
+  type ReviewContext,
+} from './review';
+import {
+  applyPageOf,
+  parseOutcome,
+  type BrowserCall,
+  type CallResult,
+  type Outcome,
+  type StoredReview,
+  type TurnRequest,
+  type TurnResponse,
+} from './v3-contract';
 
 // Engine v3: one Claude conversation per application, driven by the browser use tool. The backend is the brain:
 // it builds the prompt from the seeker's profile, asks Claude for the next browser actions, checks them, and hands
@@ -26,7 +52,10 @@ import { applyPageOf, parseOutcome, type BrowserCall, type CallResult, type Outc
 const WINDOW_MS = 5 * 60_000;
 const IDLE_MS = 2 * 60 * 60_000; // a session nobody has touched for 2 h is dropped (its screenshots stay in memory until then)
 const MODEL = () => process.env.V3_MODEL ?? 'claude-sonnet-5-5';
-const PRICE: Record<string, { in: number; out: number; cacheRead: number; cacheWrite: number }> = {
+const PRICE: Record<
+  string,
+  { in: number; out: number; cacheRead: number; cacheWrite: number }
+> = {
   'claude-sonnet-5-5': { in: 2, out: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   'claude-opus-5-5': { in: 4, out: 20, cacheRead: 0.2, cacheWrite: 5 },
   'claude-haiku-5-5': { in: 0.1, out: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
@@ -47,7 +76,9 @@ interface Session {
   submitAllowed: boolean; // the item is armed: the next submit press may run, once
   submitPressed: boolean;
   batchId: string;
-  sources: Omit<ReviewContext, 'answers' | 'resumeUploaded'> & { saved: Entry[] }; // what the prompt gave the model, to check its field list against
+  sources: Omit<ReviewContext, 'answers' | 'resumeUploaded'> & {
+    saved: Entry[];
+  }; // what the prompt gave the model, to check its field list against
   said: Entry[]; // what the seeker told the model in this conversation
   resumeUploaded: boolean;
   listAsked: boolean; // a SUBMIT_READY came without a valid field list and the model was asked once more
@@ -58,10 +89,14 @@ interface Session {
 }
 
 const SITE_WORDS = {
-  ACCOUNT_SIGNUP: 'This site requires creating an account. Create it in the job’s tab, then press Try again.',
-  LOGIN: 'This site asks you to sign in. Sign in in the job’s tab, then press Try again.',
-  EMAIL_VERIFICATION: 'The site sent a code or a link to your email. Enter it in the job’s tab, then press Try again.',
-  UNKNOWN: 'Plato is not sure what this page is and will not guess. Look at the job’s tab, then press Try again.',
+  ACCOUNT_SIGNUP:
+    'This site requires creating an account. Create it in the job’s tab, then press Try again.',
+  LOGIN:
+    'This site asks you to sign in. Sign in in the job’s tab, then press Try again.',
+  EMAIL_VERIFICATION:
+    'The site sent a code or a link to your email. Enter it in the job’s tab, then press Try again.',
+  UNKNOWN:
+    'Plato is not sure what this page is and will not guess. Look at the job’s tab, then press Try again.',
 } as const;
 
 // Passwords: the model never sees or chooses one. With the seeker's "create accounts" setting on it types a placeholder
@@ -123,10 +158,26 @@ const TIME_CHECK = `TIME: 5 more minutes of this application have passed. Decide
 
 // The site a host belongs to, for the URL policy: "jobs.lever.co" -> "lever.co". A country second level
 // ("careers.acme.co.uk", "jobs.acme.com.eg") keeps three labels, or the policy would open every *.co.uk.
-const SECOND_LEVEL = new Set(['co', 'com', 'net', 'org', 'gov', 'edu', 'ac', 'or', 'ne', 'go']);
+const SECOND_LEVEL = new Set([
+  'co',
+  'com',
+  'net',
+  'org',
+  'gov',
+  'edu',
+  'ac',
+  'or',
+  'ne',
+  'go',
+]);
 export const registrable = (host: string) => {
   const parts = host.toLowerCase().split('.');
-  const n = parts.length >= 3 && parts.at(-1)!.length === 2 && SECOND_LEVEL.has(parts.at(-2)!) ? 3 : 2;
+  const n =
+    parts.length >= 3 &&
+    parts.at(-1)!.length === 2 &&
+    SECOND_LEVEL.has(parts.at(-2)!)
+      ? 3
+      : 2;
   return parts.slice(-n).join('.');
 };
 
@@ -142,7 +193,11 @@ export class V3SessionService {
     private readonly candidates: CandidateService,
   ) {}
 
-  async turn(p: ExtensionPrincipal, itemId: string, req: TurnRequest): Promise<TurnResponse> {
+  async turn(
+    p: ExtensionPrincipal,
+    itemId: string,
+    req: TurnRequest,
+  ): Promise<TurnResponse> {
     const item = await this.batches.assertWorking(p, itemId); // only the device that holds the item
     this.evictIdle();
     let s = this.sessions.get(itemId);
@@ -153,32 +208,66 @@ export class V3SessionService {
     const user: Anthropic.Beta.BetaContentBlockParam[] = [];
     if (req.page) s.page = req.page.kind;
     if (req.event !== 'results') s.window = Date.now(); // the seeker acted: their time is not the model's
-    if (req.event === 'results') user.push(...this.resultsToBlocks(s, req.results ?? []));
+    if (req.event === 'results')
+      user.push(...this.resultsToBlocks(s, req.results ?? []));
     else if (req.event === 'seeker_answer') {
       s.said.push(...saidEntries(req.text, req.answers));
-      const each = req.answers?.length ? `Their answers, one per question:\n${req.answers.map((a) => `- ${a.label}: ${a.value}`).join('\n')}\n` : '';
-      user.push({ type: 'text', text: `The seeker answered your questions:\n${req.text ?? ''}\n${each}Use these answers exactly where the form asks them; do not ask them again. Continue the application.` });
-    }
-    else if (req.event === 'solved') user.push({ type: 'text', text: 'The seeker solved the human check on the page. Read the page again and continue.' });
-    else if (req.event === 'continue') user.push({ type: 'text', text: 'The seeker did what the site needed (made the account, signed in or confirmed the email) or looked at the page, and pressed Continue. Read the page again and continue the application from where it is now.' });
+      const each = req.answers?.length
+        ? `Their answers, one per question:\n${req.answers.map((a) => `- ${a.label}: ${a.value}`).join('\n')}\n`
+        : '';
+      user.push({
+        type: 'text',
+        text: `The seeker answered your questions:\n${req.text ?? ''}\n${each}Use these answers exactly where the form asks them; do not ask them again. Continue the application.`,
+      });
+    } else if (req.event === 'solved')
+      user.push({
+        type: 'text',
+        text: 'The seeker solved the human check on the page. Read the page again and continue.',
+      });
+    else if (req.event === 'continue')
+      user.push({
+        type: 'text',
+        text: 'The seeker did what the site needed (made the account, signed in or confirmed the email) or looked at the page, and pressed Continue. Read the page again and continue the application from where it is now.',
+      });
     else if (req.event === 'submit') {
       // Submit only after a SUBMIT_READY, and a held review only with the seeker's own approval of the list they saw
       const r = s.review;
       if (!r) throw new ConflictException('submit_not_ready');
       if (r.hold && !req.approved) throw new ConflictException('review_needed');
       if (!r.approvedBy) {
-        s.review = { ...r, approvedBy: req.approved ? 'user' : 'auto', approvedAt: new Date().toISOString() };
+        s.review = {
+          ...r,
+          approvedBy: req.approved ? 'user' : 'auto',
+          approvedAt: new Date().toISOString(),
+        };
         await this.batches.saveReview(itemId, s.review);
       }
       s.submitAllowed = true;
-      user.push({ type: 'text', text: 'The seeker allows Submit now. Press the Submit control ONCE, wait for the page, read it, and answer CONFIRMED <quote> / REFUSED <quote> / CAPTCHA / UNCONFIRMED <what you see>.' });
-    } else if (req.event === 'check') user.push({ type: 'text', text: 'Read the page again now and answer exactly one of: CONFIRMED <quote> / REFUSED <quote> / CAPTCHA / UNCONFIRMED <what you see>. Do not press anything.' });
-    else if (req.event === 'start') user.push({ type: 'text', text: s.messages.length ? 'Start again from the page as it is now: read it, keep what is filled, fill the rest.' : `Apply to this job: ${(await this.jobUrl(item.job_id)) ?? ''}` });
+      user.push({
+        type: 'text',
+        text: 'The seeker allows Submit now. Press the Submit control ONCE, wait for the page, read it, and answer CONFIRMED <quote> / REFUSED <quote> / CAPTCHA / UNCONFIRMED <what you see>.',
+      });
+    } else if (req.event === 'check')
+      user.push({
+        type: 'text',
+        text: 'Read the page again now and answer exactly one of: CONFIRMED <quote> / REFUSED <quote> / CAPTCHA / UNCONFIRMED <what you see>. Do not press anything.',
+      });
+    else if (req.event === 'start')
+      user.push({
+        type: 'text',
+        text: s.messages.length
+          ? 'Start again from the page as it is now: read it, keep what is filled, fill the rest.'
+          : `Apply to this job: ${(await this.jobUrl(item.job_id)) ?? ''}`,
+      });
     if (req.event === 'results' && Date.now() - s.window >= WINDOW_MS) {
       s.timeAsked = true;
       user.push({ type: 'text', text: TIME_CHECK });
     }
-    if (req.page) user.push({ type: 'text', text: `PAGE (detected): ${req.page.kind} at ${req.page.url.slice(0, 300)} (${req.page.fields} fields)` });
+    if (req.page)
+      user.push({
+        type: 'text',
+        text: `PAGE (detected): ${req.page.kind} at ${req.page.url.slice(0, 300)} (${req.page.fields} fields)`,
+      });
     if (user.length) s.messages.push({ role: 'user', content: user });
     s.lastAt = Date.now();
     return this.advance(s);
@@ -193,41 +282,93 @@ export class V3SessionService {
         response = await this.client.beta.messages.create({
           model: s.model,
           max_tokens: 4096,
-          system: [{ type: 'text', text: s.system, cache_control: { type: 'ephemeral' } }],
-          tools: [{ type: 'browser_toolset_20260801', configs: { file_upload: { enabled: true } }, cache_control: { type: 'ephemeral' } } as unknown as Anthropic.Beta.BetaToolUnion],
+          system: [
+            {
+              type: 'text',
+              text: s.system,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+          tools: [
+            {
+              type: 'browser_toolset_20260801',
+              configs: { file_upload: { enabled: true } },
+              cache_control: { type: 'ephemeral' },
+            } as unknown as Anthropic.Beta.BetaToolUnion,
+          ],
           messages: s.messages,
           // The history is append-only: thinking blocks are bound to everything before them, and an edited history fails
           // the request (400 "Invalid signature in thinking block", PL-KDJSKX 2026-11-23: old screenshots were rewritten).
           // Old tool results (screenshots included) are cleared by the API itself (context editing), which is not an edit.
           // drop_block: should the history ever differ, the stale thinking is dropped instead of failing the application.
-          thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } } as unknown as Anthropic.Beta.BetaThinkingConfigParam,
-          betas: ['context-management-2025-06-27', 'thinking-binding-controls-2026-08-01'],
+          thinking: {
+            type: 'adaptive',
+            block_binding: { prefix_mismatch_behavior: 'drop_block' },
+          } as unknown as Anthropic.Beta.BetaThinkingConfigParam,
+          betas: [
+            'context-management-2025-06-27',
+            'thinking-binding-controls-2026-08-01',
+          ],
           context_management: { edits: [{ type: 'clear_tool_uses_20250919' }] },
         });
-        const dropped = (response as { input_transformations?: unknown[] }).input_transformations;
-        if (dropped?.length) this.log.warn(`item ${s.itemId} turn ${s.turns}: thinking dropped ${JSON.stringify(dropped).slice(0, 500)}`);
+        const dropped = (response as { input_transformations?: unknown[] })
+          .input_transformations;
+        if (dropped?.length)
+          this.log.warn(
+            `item ${s.itemId} turn ${s.turns}: thinking dropped ${JSON.stringify(dropped).slice(0, 500)}`,
+          );
       } catch (e) {
         s.turns--; // not a turn: the extension may retry the same event
         const msg = e instanceof Error ? e.message : String(e);
         // The SDK already retried 408/409/429/5xx (529 too) with backoff. A 4xx other than 429 is a bad request: no retry.
         const status = e instanceof Anthropic.APIError ? e.status : undefined;
-        const fatal = !!status && status >= 400 && status < 500 && status !== 429;
-        const body = e instanceof Anthropic.APIError ? JSON.stringify(e.error) : '';
+        const fatal =
+          !!status && status >= 400 && status < 500 && status !== 429;
+        const body =
+          e instanceof Anthropic.APIError ? JSON.stringify(e.error) : '';
         const code = errorCode();
-        this.log.error(`${code} item ${s.itemId} turn ${s.turns + 1}: Claude call failed (${status ?? 'no status'}${fatal ? ', not retryable' : ''}): ${msg} ${body}`);
+        this.log.error(
+          `${code} item ${s.itemId} turn ${s.turns + 1}: Claude call failed (${status ?? 'no status'}${fatal ? ', not retryable' : ''}): ${msg} ${body}`,
+        );
         // message: the raw error, for the stop record (the panel shows its own words and the code, never this)
-        return { version: 1, turn: s.turns, outcome: { kind: 'error', message: `${status ?? 'no status'}: ${msg}`.slice(0, 2000), code, ...(fatal && { fatal: true }) } };
+        return {
+          version: 1,
+          turn: s.turns,
+          outcome: {
+            kind: 'error',
+            message: `${status ?? 'no status'}: ${msg}`.slice(0, 2000),
+            code,
+            ...(fatal && { fatal: true }),
+          },
+        };
       }
       this.bill(s, response);
       s.messages.push({ role: 'assistant', content: response.content });
-      const uses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
-      const texts = response.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map((b) => b.text).join('\n');
+      const uses = response.content.filter(
+        (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use',
+      );
+      const texts = response.content
+        .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('\n');
       if (s.timeAsked && /^\s*RENEW\b/m.test(texts)) {
         s.window = Date.now();
         s.timeAsked = false;
-        this.log.log(`item ${s.itemId} turn ${s.turns}: renewed 5 minutes (${texts.match(/RENEW\b(.*)/)?.[1]?.trim().slice(0, 200) ?? ''})`);
+        this.log.log(
+          `item ${s.itemId} turn ${s.turns}: renewed 5 minutes (${
+            texts
+              .match(/RENEW\b(.*)/)?.[1]
+              ?.trim()
+              .slice(0, 200) ?? ''
+          })`,
+        );
         if (!uses.length) {
-          s.messages.push({ role: 'user', content: [{ type: 'text', text: 'Renewed. Continue the application.' }] });
+          s.messages.push({
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Renewed. Continue the application.' },
+            ],
+          });
           continue;
         }
       }
@@ -238,16 +379,29 @@ export class V3SessionService {
           const list = parseFieldList(texts);
           if (!list && !s.listAsked) {
             s.listAsked = true;
-            s.messages.push({ role: 'user', content: [{ type: 'text', text: REASK }] });
+            s.messages.push({
+              role: 'user',
+              content: [{ type: 'text', text: REASK }],
+            });
             continue;
           }
           s.listAsked = false;
           outcome = { ...parsed, review: await this.review(s, list) };
         } else outcome = parsed;
-        this.log.log(`item ${s.itemId} turn ${s.turns} [${s.page ?? '-'}]: ${outcome.kind}${outcome.kind === 'site' ? ` ${outcome.page}` : ''}`);
+        this.log.log(
+          `item ${s.itemId} turn ${s.turns} [${s.page ?? '-'}]: ${outcome.kind}${outcome.kind === 'site' ? ` ${outcome.page}` : ''}`,
+        );
         // An extension older than the page classifier (store 0.1.9 and before) sends no `page` and has no "site" stop:
         // it gets the same stop as BLOCKED, which it knows.
-        if (outcome.kind === 'site' && !s.page) return { version: 1, turn: s.turns, outcome: { kind: 'blocked', reason: `${SITE_WORDS[outcome.page]}${outcome.reason ? ` (${outcome.reason})` : ''}` } };
+        if (outcome.kind === 'site' && !s.page)
+          return {
+            version: 1,
+            turn: s.turns,
+            outcome: {
+              kind: 'blocked',
+              reason: `${SITE_WORDS[outcome.page]}${outcome.reason ? ` (${outcome.reason})` : ''}`,
+            },
+          };
         return { version: 1, turn: s.turns, outcome };
       }
       // the URL policy runs here, before anything reaches the browser; a refused call stops the rest of the turn
@@ -255,11 +409,22 @@ export class V3SessionService {
       const refused: Anthropic.Beta.BetaToolResultBlockParam[] = [];
       for (const u of uses) {
         const input = (u.input ?? {}) as Record<string, unknown>;
-        const bad = refused.length ? 'Not executed: an earlier action in this turn failed.' : this.refuse(s, u.name, input);
-        if (bad) refused.push({ type: 'tool_result', tool_use_id: u.id, content: bad, is_error: true, ...({ toolset_name: 'browser' } as object) });
+        const bad = refused.length
+          ? 'Not executed: an earlier action in this turn failed.'
+          : this.refuse(s, u.name, input);
+        if (bad)
+          refused.push({
+            type: 'tool_result',
+            tool_use_id: u.id,
+            content: bad,
+            is_error: true,
+            ...({ toolset_name: 'browser' } as object),
+          });
         else calls.push({ call_id: u.id, name: u.name, input });
       }
-      this.log.log(`item ${s.itemId} turn ${s.turns} [${s.page ?? '-'}]: ${uses.map((u) => u.name).join(', ')}${refused.length ? ` (${refused.length} refused)` : ''}`);
+      this.log.log(
+        `item ${s.itemId} turn ${s.turns} [${s.page ?? '-'}]: ${uses.map((u) => u.name).join(', ')}${refused.length ? ` (${refused.length} refused)` : ''}`,
+      );
       if (refused.length && !calls.length) {
         s.messages.push({ role: 'user', content: refused });
         continue; // the whole turn was refused: ask the model again
@@ -267,53 +432,117 @@ export class V3SessionService {
       if (refused.length) {
         // some ran, the rest refused: the executor runs the accepted ones; the refusals go back with the results
         s.pending = new Map(calls.map((c) => [c.call_id, c]));
-        (s as Session & { carry?: Anthropic.Beta.BetaToolResultBlockParam[] }).carry = refused;
-        return { version: 1, turn: s.turns, calls, submit_allowed: s.submitAllowed && !s.submitPressed };
+        (
+          s as Session & { carry?: Anthropic.Beta.BetaToolResultBlockParam[] }
+        ).carry = refused;
+        return {
+          version: 1,
+          turn: s.turns,
+          calls,
+          submit_allowed: s.submitAllowed && !s.submitPressed,
+        };
       }
       s.pending = new Map(calls.map((c) => [c.call_id, c]));
-      return { version: 1, turn: s.turns, calls, submit_allowed: s.submitAllowed && !s.submitPressed };
+      return {
+        version: 1,
+        turn: s.turns,
+        calls,
+        submit_allowed: s.submitAllowed && !s.submitPressed,
+      };
     }
-    return { version: 1, turn: s.turns, outcome: { kind: 'blocked', reason: 'Every action the model chose was refused.' } };
+    return {
+      version: 1,
+      turn: s.turns,
+      outcome: {
+        kind: 'blocked',
+        reason: 'Every action the model chose was refused.',
+      },
+    };
   }
 
   /** Why a call may not run: another host, a member we do not serve, a second Submit. Empty = fine. */
-  private refuse(s: Session, name: string, input: Record<string, unknown>): string {
+  private refuse(
+    s: Session,
+    name: string,
+    input: Record<string, unknown>,
+  ): string {
     if (name === 'navigate') {
       const url = String(input.url ?? '');
       if (['back', 'forward', 'reload'].includes(url)) return '';
       try {
-        const u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`);
-        if (!['http:', 'https:'].includes(u.protocol) || !s.hosts.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`))) return `Refused: ${u.hostname} is not part of this application. Stay on the job's site.`;
+        const u = new URL(
+          /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`,
+        );
+        if (
+          !['http:', 'https:'].includes(u.protocol) ||
+          !s.hosts.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`))
+        )
+          return `Refused: ${u.hostname} is not part of this application. Stay on the job's site.`;
       } catch {
         return 'Refused: that is not a valid URL.';
       }
     }
-    if (name === 'type' && !s.createAccounts && [NEW_PASSWORD, SAVED_PASSWORD].some((x) => String(input.text ?? '').includes(x))) return 'Refused: creating or signing in to site accounts is off in the seeker\'s settings. Answer ACCOUNT_REQUIRED or LOGIN_REQUIRED.';
-    if (name === 'javascript_exec' || name === 'read_console' || name === 'read_network') return `Refused: ${name} is not available.`;
+    if (
+      name === 'type' &&
+      !s.createAccounts &&
+      [NEW_PASSWORD, SAVED_PASSWORD].some((x) =>
+        String(input.text ?? '').includes(x),
+      )
+    )
+      return "Refused: creating or signing in to site accounts is off in the seeker's settings. Answer ACCOUNT_REQUIRED or LOGIN_REQUIRED.";
+    if (
+      name === 'javascript_exec' ||
+      name === 'read_console' ||
+      name === 'read_network'
+    )
+      return `Refused: ${name} is not available.`;
     if (name === 'file_upload') {
       const ids = (input.document_ids as string[] | undefined) ?? [];
-      if (input.paths || ids.length !== 1 || ids[0] !== 'resume') return 'Refused: upload only the staged resume (document_ids: ["resume"]).';
+      if (input.paths || ids.length !== 1 || ids[0] !== 'resume')
+        return 'Refused: upload only the staged resume (document_ids: ["resume"]).';
     }
     return '';
   }
 
   /** The executor's results become tool_result blocks, in the order the calls were handed out. */
-  private resultsToBlocks(s: Session, results: CallResult[]): Anthropic.Beta.BetaContentBlockParam[] {
+  private resultsToBlocks(
+    s: Session,
+    results: CallResult[],
+  ): Anthropic.Beta.BetaContentBlockParam[] {
     const out: Anthropic.Beta.BetaToolResultBlockParam[] = [];
-    const carry = (s as Session & { carry?: Anthropic.Beta.BetaToolResultBlockParam[] }).carry ?? [];
+    const carry =
+      (s as Session & { carry?: Anthropic.Beta.BetaToolResultBlockParam[] })
+        .carry ?? [];
     for (const [id, call] of s.pending) {
       const r = results.find((x) => x.call_id === id);
-      const { content, isError } = r ? resultContent(call.name, r) : { content: [{ type: 'text' as const, text: 'Not executed: the browser gave no result for this action.' }], isError: true };
+      const { content, isError } = r
+        ? resultContent(call.name, r)
+        : {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'Not executed: the browser gave no result for this action.',
+              },
+            ],
+            isError: true,
+          };
       // A site the page itself led to (an Apply link to the company's own site) is part of this application from now on.
       const at = r?.ok ? r.state?.tabs.find((t) => t.active)?.url : undefined;
       if (at && URL.canParse(at)) {
         const h = new URL(at).hostname;
-        if (!s.hosts.some((x) => h === x || h.endsWith(`.${x}`))) s.hosts.push(h, registrable(h));
+        if (!s.hosts.some((x) => h === x || h.endsWith(`.${x}`)))
+          s.hosts.push(h, registrable(h));
       }
       // the executor's own word that a gated control was pressed (a click, or Enter in the form), never the result's text
       if (s.submitAllowed && r?.ok && r.submit_pressed) s.submitPressed = true;
       if (call.name === 'file_upload' && r?.ok) s.resumeUploaded = true; // refuse() lets only the staged resume through
-      out.push({ type: 'tool_result', tool_use_id: id, content, ...(isError && { is_error: true }), ...({ toolset_name: 'browser' } as object) });
+      out.push({
+        type: 'tool_result',
+        tool_use_id: id,
+        content,
+        ...(isError && { is_error: true }),
+        ...({ toolset_name: 'browser' } as object),
+      });
     }
     s.pending = new Map();
     (s as Session & { carry?: unknown }).carry = undefined;
@@ -325,11 +554,28 @@ export class V3SessionService {
     // 'review' if either the batch or the seeker's current setting says so (owner 2026-11-26): a batch made on the web
     // ("Apply now", the queue) carries no mode, and a seeker who switched back to review mid-batch is never auto-sent
     const batch = await this.batches.submitModeOf(s.batchId);
-    const setting = readSettings((await this.prisma.jobSeeker.findUnique({ where: { id: s.jobSeekerId }, select: { extension_settings: true } }))?.extension_settings).submitMode;
+    const setting = readSettings(
+      (
+        await this.prisma.jobSeeker.findUnique({
+          where: { id: s.jobSeekerId },
+          select: { extension_settings: true },
+        })
+      )?.extension_settings,
+    ).submitMode;
     const mode = batch === 'review' || setting === 'review' ? 'review' : 'auto';
     const { saved, ...rest } = s.sources;
-    const review = buildReview(list, { ...rest, answers: [...saved, ...s.said], resumeUploaded: s.resumeUploaded }, mode);
-    this.log.log(`item ${s.itemId}: review ${list ? `${review.fields.length} fields` : 'no list'}, ${review.fields.filter((f) => f.status !== 'ok').length} not ok, hold ${review.holdReason ?? 'none'} (${mode})`);
+    const review = buildReview(
+      list,
+      {
+        ...rest,
+        answers: [...saved, ...s.said],
+        resumeUploaded: s.resumeUploaded,
+      },
+      mode,
+    );
+    this.log.log(
+      `item ${s.itemId}: review ${list ? `${review.fields.length} fields` : 'no list'}, ${review.fields.filter((f) => f.status !== 'ok').length} not ok, hold ${review.holdReason ?? 'none'} (${mode})`,
+    );
     // once Submit is allowed the list the seeker approved stays the one on record
     if (!s.submitAllowed) {
       s.review = { ...review, at: new Date().toISOString() };
@@ -339,55 +585,137 @@ export class V3SessionService {
   }
 
   /** The seeker's newest CV as JSON (cv-facts.ts) with the text it was made from: the JSON is made once per upload and kept on the document; null = none. */
-  private async cvFacts(jobSeekerId: string): Promise<{ json: CvJson; text: string } | null> {
-    const doc = await this.prisma.jobSeekerDocument.findFirst({
-      where: { job_seeker_id: jobSeekerId, type: 'CV_RESUME', status: 'READY' },
-      orderBy: { created_at: 'desc' },
-      select: { id: true, extracted_text: true, apply_json: true },
-    });
+  private async cvFacts(
+    jobSeekerId: string,
+    batchId?: string,
+  ): Promise<{ json: CvJson; text: string } | null> {
+    // A search run with its own CV applies with that CV's facts (search-cv.service.ts); otherwise the profile's.
+    const alt = batchId
+      ? await searchCvOfBatch(this.prisma, jobSeekerId, batchId)
+      : null;
+    const doc = alt
+      ? { id: alt.id, extracted_text: alt.text, apply_json: alt.apply_json }
+      : await this.prisma.jobSeekerDocument.findFirst({
+          where: {
+            job_seeker_id: jobSeekerId,
+            type: 'CV_RESUME',
+            status: 'READY',
+          },
+          orderBy: { created_at: 'desc' },
+          select: { id: true, extracted_text: true, apply_json: true },
+        });
     const text = doc?.extracted_text?.trim();
     if (!doc || !text) return null;
     // Keyed on the text it was made from: a replaced CV never reuses the old one's facts.
     const hash = createHash('sha256').update(text).digest('hex');
-    const cached = doc.apply_json as { v?: number; json?: CvJson; hash?: string } | null;
-    if (cached?.v === CV_JSON_VERSION && cached.hash === hash && cached.json) return { json: withName(cached.json), text };
+    const cached = doc.apply_json as {
+      v?: number;
+      json?: CvJson;
+      hash?: string;
+    } | null;
+    if (cached?.v === CV_JSON_VERSION && cached.hash === hash && cached.json)
+      return { json: withName(cached.json), text };
     const model = MODEL();
     const r = await this.client.messages.create({
       model,
       max_tokens: 16000,
       system: CV_PROMPT,
-      output_config: { effort: 'low', format: { type: 'json_schema', schema: CV_SCHEMA } },
+      output_config: {
+        effort: 'low',
+        format: { type: 'json_schema', schema: CV_SCHEMA },
+      },
       messages: [{ role: 'user', content: text.slice(0, 30_000) }],
     });
-    const p = PRICE[model] ?? PRICE['claude-sonnet-5-5']!;
-    recordUsage({ feature: 'extension.v3.cv', model, input_tokens: r.usage.input_tokens, output_tokens: r.usage.output_tokens, cost_usd: (r.usage.input_tokens * p.in + r.usage.output_tokens * p.out) / 1e6, meta: { document: doc.id } });
-    const out = r.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text;
-    if (r.stop_reason !== 'end_turn' || !out) throw new Error(`CV JSON not made (${r.stop_reason})`);
+    const p = PRICE[model] ?? PRICE['claude-sonnet-5-5'];
+    recordUsage({
+      feature: 'extension.v3.cv',
+      model,
+      input_tokens: r.usage.input_tokens,
+      output_tokens: r.usage.output_tokens,
+      cost_usd:
+        (r.usage.input_tokens * p.in + r.usage.output_tokens * p.out) / 1e6,
+      meta: { document: doc.id },
+    });
+    const out = r.content.find(
+      (b): b is Anthropic.TextBlock => b.type === 'text',
+    )?.text;
+    if (r.stop_reason !== 'end_turn' || !out)
+      throw new Error(`CV JSON not made (${r.stop_reason})`);
     const json = grounded(JSON.parse(out) as CvJson, text);
-    await this.prisma.jobSeekerDocument.update({ where: { id: doc.id }, data: { apply_json: { v: CV_JSON_VERSION, json, hash } as object } });
+    const apply_json = { v: CV_JSON_VERSION, json, hash } as object;
+    if (alt)
+      await this.prisma.searchCv.update({
+        where: { id: doc.id },
+        data: { apply_json },
+      });
+    else
+      await this.prisma.jobSeekerDocument.update({
+        where: { id: doc.id },
+        data: { apply_json },
+      });
     this.log.log(`CV JSON made for document ${doc.id} (${out.length} chars)`);
     return { json: withName(json), text };
   }
 
-  private async open(p: ExtensionPrincipal, itemId: string, jobId: string, batchId: string): Promise<Session> {
-    const job = await this.prisma.job.findUniqueOrThrow({ where: { id: jobId }, select: { title: true, company: true, description: true, location: true, url: true, apply_url: true } });
+  private async open(
+    p: ExtensionPrincipal,
+    itemId: string,
+    jobId: string,
+    batchId: string,
+  ): Promise<Session> {
+    const job = await this.prisma.job.findUniqueOrThrow({
+      where: { id: jobId },
+      select: {
+        title: true,
+        company: true,
+        description: true,
+        location: true,
+        url: true,
+        apply_url: true,
+      },
+    });
     const candidate = await this.candidates.load(p.jobSeekerId);
-    const settings = readSettings((await this.prisma.jobSeeker.findUnique({ where: { id: p.jobSeekerId }, select: { extension_settings: true } }))?.extension_settings);
+    const settings = readSettings(
+      (
+        await this.prisma.jobSeeker.findUnique({
+          where: { id: p.jobSeekerId },
+          select: { extension_settings: true },
+        })
+      )?.extension_settings,
+    );
     const url = applyPageOf(job);
     const host = new URL(url).hostname;
-    const hosts = [host, registrable(host), ...(job.url ? [new URL(job.url).hostname] : [])];
+    const hosts = [
+      host,
+      registrable(host),
+      ...(job.url ? [new URL(job.url).hostname] : []),
+    ];
     const today = new Date().toISOString().slice(0, 10);
-    const facts = await this.cvFacts(p.jobSeekerId).catch((e) => (this.log.warn(`item ${itemId}: CV JSON not available (${e instanceof Error ? e.message : String(e)}); the profile alone is used`), null));
+    const facts = await this.cvFacts(p.jobSeekerId, batchId).catch(
+      (e) => (
+        this.log.warn(
+          `item ${itemId}: CV JSON not available (${e instanceof Error ? e.message : String(e)}); the profile alone is used`,
+        ),
+        null
+      ),
+    );
     const cvJson = facts?.json;
     const cv = cvJson && compactCv(cvJson);
     // the CV's contact wins over the account's: the rules say "Email" / "Phone", and the account's went on Amazon (2026-11-24)
-    const n = cvJson?.name as { full?: string; first?: string; middle?: string; last?: string } | undefined;
+    const n = cvJson?.name as
+      | { full?: string; first?: string; middle?: string; last?: string }
+      | undefined;
     const c = cvJson?.contact;
     const seeker = {
       ...candidate,
       ...(c?.emails?.[0] && { email: c.emails[0] }),
       ...(c?.phones?.[0] && { phone: c.phones[0] }),
-      ...(n?.full && { fullName: n.full, firstName: n.first ?? '', middleName: n.middle || undefined, lastName: n.last ?? '' }), // the CV's whole name, never mixed with the account's
+      ...(n?.full && {
+        fullName: n.full,
+        firstName: n.first ?? '',
+        middleName: n.middle || undefined,
+        lastName: n.last ?? '',
+      }), // the CV's whole name, never mixed with the account's
     };
     const profile = profileSummary(seeker, 4500, !cv);
     const description = (job.description ?? '').slice(0, 2500);
@@ -400,7 +728,9 @@ SETTINGS: cover letters ${settings.coverLetter ? 'allowed' : 'not allowed (leave
 JOB: ${job.title} at ${job.company}${job.location ? ` (${job.location})` : ''}. Apply page: ${url}
 ${description}
 
-${cv ? `SOURCES, in this order:
+${
+  cv
+    ? `SOURCES, in this order:
 1. CV: the seeker's resume as JSON, the main source and the basis of the application. Every fact it states comes from it: name (its "name" first / middle / last), email, phone, address, job titles, dates, education, skills. PROFILE's Name, Email and Phone lines already hold the CV's values.
 2. The seeker's own answers, for what the CV does not state: the "Seeker's answer for forms" and "Answered before" lines in PROFILE, and answers given in this conversation.
 3. PROFILE (the account): a fallback only, for what neither states (preferences, salary, work authorization, relocation).
@@ -409,9 +739,18 @@ A fact in none of them is not known: never invent it.
 CV (JSON)
 ${cv}
 
-` : ''}PROFILE
+`
+    : ''
+}PROFILE
 ${profile}`;
-    const text = (v: AnswerValue) => (Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v));
+    const text = (v: AnswerValue) =>
+      Array.isArray(v)
+        ? v.join(', ')
+        : typeof v === 'boolean'
+          ? v
+            ? 'Yes'
+            : 'No'
+          : String(v);
     const sources: Session['sources'] = {
       cv: `${facts?.text ?? ''}\n${cv ?? ''}`,
       profile: profileEntries(profile),
@@ -419,36 +758,96 @@ ${profile}`;
       today,
       coverLetter: settings.coverLetter,
       saved: [
-        ...Object.entries(candidate.answerBank ?? {}).map(([q, v]) => ({ key: q, value: text(v) })),
-        ...Object.entries(candidate.facts ?? {}).map(([k, v]) => ({ key: `${k.replace(/_/g, ' ')} ${INTAKE.find((q) => q.key === k)?.question ?? ''}`, value: text(v) })),
+        ...Object.entries(candidate.answerBank ?? {}).map(([q, v]) => ({
+          key: q,
+          value: text(v),
+        })),
+        ...Object.entries(candidate.facts ?? {}).map(([k, v]) => ({
+          key: `${k.replace(/_/g, ' ')} ${INTAKE.find((q) => q.key === k)?.question ?? ''}`,
+          value: text(v),
+        })),
       ],
     };
-    const s: Session = { itemId, jobSeekerId: p.jobSeekerId, model: MODEL(), system, messages: [], turns: 0, window: Date.now(), timeAsked: false, hosts, pending: new Map(), createAccounts: settings.createAccounts, submitAllowed: false, submitPressed: false, batchId, sources, said: [], resumeUploaded: false, listAsked: false, startedAt: Date.now(), lastAt: Date.now() };
+    const s: Session = {
+      itemId,
+      jobSeekerId: p.jobSeekerId,
+      model: MODEL(),
+      system,
+      messages: [],
+      turns: 0,
+      window: Date.now(),
+      timeAsked: false,
+      hosts,
+      pending: new Map(),
+      createAccounts: settings.createAccounts,
+      submitAllowed: false,
+      submitPressed: false,
+      batchId,
+      sources,
+      said: [],
+      resumeUploaded: false,
+      listAsked: false,
+      startedAt: Date.now(),
+      lastAt: Date.now(),
+    };
     this.sessions.set(itemId, s);
     this.log.log(`item ${itemId}: session opened (${s.model}, host ${host})`);
     return s;
   }
 
   private async jobUrl(jobId: string) {
-    const job = await this.prisma.job.findUnique({ where: { id: jobId }, select: { url: true, apply_url: true } });
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId },
+      select: { url: true, apply_url: true },
+    });
     return job ? applyPageOf(job) : undefined;
   }
 
   private bill(s: Session, r: Anthropic.Beta.BetaMessage) {
     const u = r.usage;
-    const p = PRICE[s.model] ?? PRICE['claude-sonnet-5-5']!;
-    const cost = ((u.input_tokens ?? 0) * p.in + (u.output_tokens ?? 0) * p.out + (u.cache_read_input_tokens ?? 0) * p.cacheRead + (u.cache_creation_input_tokens ?? 0) * p.cacheWrite) / 1e6;
-    recordUsage({ feature: 'extension.v3.turn', model: s.model, input_tokens: (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0), output_tokens: u.output_tokens ?? 0, cost_usd: cost, meta: { item: s.itemId, turn: s.turns, cache_read: u.cache_read_input_tokens ?? 0 } });
+    const p = PRICE[s.model] ?? PRICE['claude-sonnet-5-5'];
+    const cost =
+      ((u.input_tokens ?? 0) * p.in +
+        (u.output_tokens ?? 0) * p.out +
+        (u.cache_read_input_tokens ?? 0) * p.cacheRead +
+        (u.cache_creation_input_tokens ?? 0) * p.cacheWrite) /
+      1e6;
+    recordUsage({
+      feature: 'extension.v3.turn',
+      model: s.model,
+      input_tokens:
+        (u.input_tokens ?? 0) +
+        (u.cache_read_input_tokens ?? 0) +
+        (u.cache_creation_input_tokens ?? 0),
+      output_tokens: u.output_tokens ?? 0,
+      cost_usd: cost,
+      meta: {
+        item: s.itemId,
+        turn: s.turns,
+        cache_read: u.cache_read_input_tokens ?? 0,
+      },
+    });
   }
 
   private evictIdle(now = Date.now()) {
-    for (const [id, s] of this.sessions) if (now - s.lastAt > IDLE_MS) this.sessions.delete(id);
+    for (const [id, s] of this.sessions)
+      if (now - s.lastAt > IDLE_MS) this.sessions.delete(id);
   }
 
   /** For the panel and the audit: where a session stands. Only the seeker's own items. */
   status(p: ExtensionPrincipal, itemId: string) {
     const s = this.sessions.get(itemId);
-    return s && s.jobSeekerId === p.jobSeekerId ? { turns: s.turns, model: s.model, seconds: Math.round((Date.now() - s.startedAt) / 1000), submitAllowed: s.submitAllowed, submitPressed: s.submitPressed } : null;
+    return s && s.jobSeekerId === p.jobSeekerId
+      ? {
+          turns: s.turns,
+          model: s.model,
+          seconds: Math.round((Date.now() - s.startedAt) / 1000),
+          submitAllowed: s.submitAllowed,
+          submitPressed: s.submitPressed,
+        }
+      : null;
   }
-  end(itemId: string) { this.sessions.delete(itemId); }
+  end(itemId: string) {
+    this.sessions.delete(itemId);
+  }
 }

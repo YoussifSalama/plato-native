@@ -15,9 +15,19 @@ import { RunProgressBus } from './run-progress.bus';
 import { LocalIndexAdapter } from './adapters/local-index.adapter';
 import { PublicBoardsAdapter } from './adapters/public-boards.adapter';
 import { CreditsModule } from '../credits/credits.module';
+import { DocumentsModule } from '../documents/documents.module';
+import { ProfileExtractionModule } from '../profile-extraction/profile-extraction.module';
+import { SearchCvService } from './search-cv.service';
 
 @Module({
-  imports: [UserModule, AuthModule, ApplyModule, CreditsModule],
+  imports: [
+    UserModule,
+    AuthModule,
+    ApplyModule,
+    CreditsModule,
+    DocumentsModule,
+    ProfileExtractionModule,
+  ],
   controllers: [DiscoveryController],
   providers: [
     DiscoveryService,
@@ -31,6 +41,7 @@ import { CreditsModule } from '../credits/credits.module';
     RunProgressBus,
     LocalIndexAdapter,
     PublicBoardsAdapter,
+    SearchCvService,
   ],
   exports: [
     DiscoveryService,

@@ -15,6 +15,8 @@ export function proxy(request: NextRequest) {
   const hasSession = request.cookies.has("access_token")
   if (under(pathname, AUTH)) return hasSession ? NextResponse.redirect(new URL("/", request.url)) : NextResponse.next()
   if (under(pathname, PUBLIC)) return NextResponse.next()
+  // The app's front door: a visitor without a session sees the job-seeker landing, at the same address.
+  if (!hasSession && pathname === "/") return NextResponse.rewrite(new URL("/welcome", request.url))
   if (!hasSession) {
     // Back to the page they asked for once they have logged in.
     const login = new URL("/login", request.url)

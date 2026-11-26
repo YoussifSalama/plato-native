@@ -1,5 +1,6 @@
 "use client"
 
+import { detailsHref } from "@/lib/readiness-link"
 import { useEffect, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { motion } from "motion/react"
@@ -14,8 +15,9 @@ import { getApplyReadiness, type DiscoveryStats } from "@/lib/jobs/api"
 
 // The path through Plato, in the order it has to happen. Each step is checked
 // against the seeker's real data, the first open one is "Next", and the card
-// disappears once everything is done (or when they hide it).
+// gives way, once everything is done (or when they hide it), to the one thing to do now (`then`).
 type Step = { key: string; title: string; body: string; href: string; cta: string; icon: typeof Search; done: boolean | null }
+export type NextAction = { title: string; body: string; href: string; cta: string }
 
 const HIDE_KEY = "plato:next-steps-hidden"
 const hideListeners = new Set<() => void>()
@@ -33,23 +35,24 @@ const setHidden = (v: boolean) => {
   hideListeners.forEach((l) => l())
 }
 
-export function NextSteps({ stats, onNewSearch }: { stats: DiscoveryStats | null; onNewSearch: () => void }) {
+export function NextSteps({ stats, onNewSearch, then }: { stats: DiscoveryStats | null; onNewSearch: () => void; then?: NextAction | null }) {
   const [ready, setReady] = useState<boolean | null>(null)
   const [linked, setLinked] = useState<boolean | null>(null)
   const [alerts, setAlerts] = useState<boolean | null>(null)
+  const [missing, setMissing] = useState<{ key: string }[]>([])
   const [open, setOpen] = useState(true)
   const hidden = useSyncExternalStore((cb) => (hideListeners.add(cb), () => hideListeners.delete(cb)), readHidden, () => false)
 
   useEffect(() => {
-    getApplyReadiness().then((r) => setReady(r.ready)).catch(() => setReady(null))
+    getApplyReadiness().then((r) => (setReady(r.ready), setMissing(r.missing))).catch(() => setReady(null))
     getExtensionProgress().then((p) => setLinked(p.linked)).catch(() => setLinked(null))
     getInsights().then((i) => setAlerts(i.alerts.length > 0)).catch(() => setAlerts(null))
   }, [])
 
   const applied = stats ? Object.values(stats.applications).reduce((n, c) => n + (c ?? 0), 0) > 0 : null
   const steps: Step[] = [
-    { key: "profile", title: "Make your profile ready to apply", body: "Plato fills every form from it, so it needs your details once.", href: "/onboarding?step=2&return=/", cta: "Complete my details", icon: UserCheck, done: ready },
-    { key: "extension", title: "Link the browser extension", body: "It applies in your own browser. You always press Submit.", href: "/extension", cta: "Link my browser", icon: Puzzle, done: linked },
+    { key: "profile", title: "Make your profile ready to apply", body: "Plato fills every form from it, so it needs your details once.", href: detailsHref(missing, "/"), cta: "Complete my details", icon: UserCheck, done: ready },
+    { key: "extension", title: "Link the browser extension", body: "It applies in your own browser, in tabs you can watch, and presses Submit once per job.", href: "/extension", cta: "Link my browser", icon: Puzzle, done: linked },
     { key: "search", title: "Run your first search", body: "Say the role in your own words. Plato searches every board and ranks the results.", href: "#new-search", cta: "Start a search", icon: Search, done: stats ? stats.threads > 0 : null },
     { key: "apply", title: "Apply to your best matches", body: "Open a search and send the top jobs to Plato in one go.", href: "/jobs", cta: "Pick jobs to apply", icon: FileText, done: applied },
     { key: "alerts", title: "Turn on a job alert", body: "New jobs in your roles, in one digest. Free.", href: "/following", cta: "Set an alert", icon: BellRing, done: alerts },
@@ -57,7 +60,7 @@ export function NextSteps({ stats, onNewSearch }: { stats: DiscoveryStats | null
   const known = steps.every((s) => s.done !== null)
   const doneCount = steps.filter((s) => s.done).length
   const next = steps.find((s) => s.done === false)
-  if (hidden || (known && !next)) return null
+  if (hidden || (known && !next)) return then ? <NextActionCard a={then} /> : null
   const pct = Math.round((doneCount / steps.length) * 100)
 
   return (
@@ -139,6 +142,23 @@ export function NextSteps({ stats, onNewSearch }: { stats: DiscoveryStats | null
           })}
         </ol>
       )}
+    </motion.section>
+  )
+}
+
+// After setup: one line, one button. Not dismissible: it is the page's main call to action.
+function NextActionCard({ a }: { a: NextAction }) {
+  return (
+    <motion.section data-tour="next-action" aria-label="What to do now" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn(CARD, "flex flex-wrap items-center gap-x-4 gap-y-3 border-primary-line p-5")}>
+      <div className="min-w-[200px] flex-1">
+        <span className="eyebrow">Next for you</span>
+        <p className="type-card-title mt-0.5 text-foreground">{a.title}</p>
+        <p className="mt-0.5 text-[13px] text-text-secondary">{a.body}</p>
+      </div>
+      <Link href={a.href} data-ai="home.next-action" className={cn(buttonVariants({ size: "sm" }), "group/cta")}>
+        {a.cta}
+        <ArrowRight className="transition-transform group-hover/cta:translate-x-0.5" />
+      </Link>
     </motion.section>
   )
 }

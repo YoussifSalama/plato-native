@@ -3,7 +3,7 @@ import { AuthShell } from "@/components/auth/auth-shell"
 import { AuthForm } from "@/components/auth-form"
 
 export const metadata: Metadata = {
-  title: "Sign up | Plato",
+  title: "Sign up | Plato Job Seeker",
   description: "Create your Plato account. It searches, ranks and applies to jobs for you.",
 }
 

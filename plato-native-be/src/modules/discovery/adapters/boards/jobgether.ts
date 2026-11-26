@@ -33,7 +33,7 @@ export const jobgether = defineBoard<JobgetherItem>({
   }),
   // Jobgether lists the countries a job accepts: use it instead of guessing from text.
   accepts: (item, countries) => {
-    const raw = item as unknown as JobgetherItem;
+    const raw = item as JobgetherItem;
     return (
       !raw.locations?.length ||
       countries.some((c) => raw.locations!.includes(c))

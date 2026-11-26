@@ -78,8 +78,10 @@ function AuthFormShell({
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="group/submit h-11 w-full shadow-md shadow-primary/30 transition-[background-color,box-shadow] duration-200 hover:shadow-lg hover:shadow-primary/40"
+          className="group/submit relative h-11 w-full overflow-hidden shadow-md shadow-primary/30 transition-[background-color,box-shadow] duration-200 hover:shadow-lg hover:shadow-primary/40"
         >
+          {/* A light sweeps across on hover. */}
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/3 -skew-x-12 bg-white/25 opacity-0 transition-[left,opacity] duration-700 ease-out group-hover/submit:left-[120%] group-hover/submit:opacity-100 motion-reduce:hidden" />
           {isSubmitting && <Loader2 className="size-4 animate-spin" />}
           {submitLabel}
           {!isSubmitting && <ArrowRight className="size-4 transition-transform duration-200 group-hover/submit:translate-x-0.5" />}
@@ -149,12 +151,17 @@ function SignupForm() {
     <>
       <AuthFormShell
         heading="Create your account"
-        subheading="Set up once. Plato searches, ranks and applies for you from then on."
+        subheading="Set up once. Plato searches, ranks and applies for you from then on. A search you started from your CV comes with you."
         formError={formError}
         submitLabel={isSubmitting ? "Creating your account…" : "Create account"}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit(onSubmit)}
-        footer={<FooterLink href="/login" label="Already have an account? Log in" />}
+        footer={
+          <div className="flex flex-col gap-2">
+            <FooterLink href="/login" label="Already have an account? Log in" />
+            <FooterLink href="/search" label="Just looking? See jobs from your CV first, no account" />
+          </div>
+        }
       >
         <Field data-invalid={!!errors.fullName}>
           <FieldLabel htmlFor="fullName">
@@ -260,7 +267,12 @@ function LoginForm() {
       submitLabel={isSubmitting ? "Logging in…" : "Log in"}
       isSubmitting={isSubmitting}
       onSubmit={handleSubmit(onSubmit)}
-      footer={<FooterLink href="/signup" label="New here? Create an account" />}
+      footer={
+        <div className="flex flex-col gap-2">
+          <FooterLink href="/signup" label="New here? Create an account" />
+          <FooterLink href="/search" label="Just looking? See jobs from your CV first, no account" />
+        </div>
+      }
     >
       <Field data-invalid={!!errors.email}>
         <FieldLabel htmlFor="email">

@@ -116,13 +116,18 @@ export class PreferencesController {
   ) {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
 
-    const parsed = preferenceEditSchema.safeParse(body);
+    // `confirm: false` saves without confirming (Profile > Links): only the seeker's own Continue
+    // (onboarding, a search saved as preferences) marks the preferences confirmed, which is what
+    // "onboarding done" reads. Absent means confirm, as before.
+    const { confirm, ...fields } =
+      body && typeof body === 'object' ? (body as { confirm?: unknown }) : {};
+    const parsed = preferenceEditSchema.safeParse(fields);
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
 
-    // Continue always means confirmed — source is never client-supplied.
+    // The source is never client-supplied.
     return this.preferenceService.upsert(jobSeekerId, {
       ...parsed.data,
-      source: 'USER_CONFIRMED',
+      ...(confirm !== false && { source: 'USER_CONFIRMED' as const }),
     });
   }
 

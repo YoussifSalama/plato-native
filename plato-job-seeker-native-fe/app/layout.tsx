@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Plato",
+  title: "Plato Job Seeker",
   description: "Plato searches live job sources, ranks every posting against your profile and applies to the ones you choose.",
   icons: { icon: "/favicon.ico", apple: "/logo.png" },
 };

@@ -12,8 +12,12 @@ import {
   Req,
   Res,
   Sse,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { extname } from 'path';
 import type { Response } from 'express';
 import { JobRemoteType, JobSource } from '@prisma/client';
 import { concat, map, of } from 'rxjs';
@@ -22,6 +26,7 @@ import { RunProgress } from './discovery-run.helpers';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JobSeekerService } from '../user/job-seeker.service';
 import { DiscoveryService } from './discovery.service';
+import { SearchCvService } from './search-cv.service';
 import { buildMatchesWorkbook } from './match-export';
 import { parseSearchSentence } from './search-sentence';
 import { monthlyUsd } from './salary-sanity';
@@ -77,9 +82,22 @@ const toRules = <T extends SearchRulesInput>({
   ...(postedWithinDays && { postedWithinDays }),
 });
 
+// A CV picked for one search (SearchCv), by id.
+const cvId = z
+  .string()
+  .regex(/^[a-f0-9]{24}$/)
+  .nullable()
+  .optional();
+const CV_EXT = new Set(['.pdf', '.docx']);
+const CV_MIME = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
 // The same overrides the chat's start_job_search passes, so a search can be replayed exactly.
 const startRunSchema = z.object({
   threadId: z.string().optional(),
+  cvId,
   titles: z.array(z.string().min(1)).max(8).optional(),
   strictTitles: z.boolean().optional(),
   exact: z.boolean().optional(),
@@ -167,6 +185,7 @@ export class DiscoveryController {
     private readonly jobSeekerService: JobSeekerService,
     private readonly discoveryService: DiscoveryService,
     private readonly applyService: ApplyService,
+    private readonly searchCvs: SearchCvService,
   ) {}
 
   private async requireJobSeekerId(userId: string) {
@@ -187,8 +206,8 @@ export class DiscoveryController {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
     const parsed = startRunSchema.safeParse(body ?? {});
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
-    const { threadId, ...request } = parsed.data;
-    const overrides = toRules(request);
+    const { threadId, cvId, ...request } = parsed.data;
+    const overrides = { ...toRules(request), ...(cvId && { cvId }) };
     if (threadId) {
       const { run } = await this.discoveryService.startRunForThread(
         jobSeekerId,
@@ -233,13 +252,41 @@ export class DiscoveryController {
     const parsed = z
       .object({
         roles: z.array(z.string().trim().min(1).max(120)).min(1).max(8),
+        cvId,
       })
       .safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
     return this.discoveryService.planSearchTitles(
       jobSeekerId,
       parsed.data.roles,
+      parsed.data.cvId,
     );
+  }
+
+  // "Search with a different CV": read a CV for searches only; the profile and its CV stay as they are. Paid.
+  @Post('discover/cv')
+  @HttpCode(200)
+  @UseGuards(TokensGuard)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
+  async uploadSearchCv(
+    @Req() req: AuthenticatedRequest,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    const jobSeekerId = await this.requireJobSeekerId(req.userId);
+    if (!file) throw new BadRequestException('No file provided');
+    if (
+      !CV_EXT.has(extname(file.originalname).toLowerCase()) ||
+      !CV_MIME.has(file.mimetype)
+    )
+      throw new BadRequestException('Only PDF or DOCX files are accepted');
+    return this.searchCvs.upload(jobSeekerId, file);
+  }
+
+  @Get('discover/cvs')
+  async searchCvList(@Req() req: AuthenticatedRequest) {
+    return this.searchCvs.list(await this.requireJobSeekerId(req.userId));
   }
 
   // "New search", on Start: whether the search fits the profile, and if not the closest search that does.
@@ -260,6 +307,7 @@ export class DiscoveryController {
           .array(z.enum(['onsite', 'hybrid', 'remote']))
           .default([]),
         visaSponsorshipRequired: z.boolean().default(false),
+        cvId,
         advanced: z
           .object({
             residenceCountry: z.enum(COUNTRY_CODES).nullable().optional(),
@@ -288,7 +336,8 @@ export class DiscoveryController {
       })
       .safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
-    return this.discoveryService.checkSearch(jobSeekerId, parsed.data);
+    const { cvId: cv, ...draft } = parsed.data;
+    return this.discoveryService.checkSearch(jobSeekerId, draft, cv);
   }
 
   // "New search" live preview: what Plato's own index holds for the form as it stands, and what each rule removes.

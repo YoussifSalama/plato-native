@@ -261,7 +261,8 @@ function LinksCard({ prefs, onPrefs }: { prefs: Preferences | null; onPrefs: (p:
     setNote(null)
     try {
       // The whole preferences object goes back (the server ignores `source`), only the links changed.
-      const saved = await savePreferences({ ...prefs, linkedin_url: value.linkedin_url.trim() || null, github_url: value.github_url.trim() || null, portfolio_url: value.portfolio_url.trim() || null })
+      // confirm: false: saving links is not finishing onboarding.
+      const saved = await savePreferences({ ...prefs, linkedin_url: value.linkedin_url.trim() || null, github_url: value.github_url.trim() || null, portfolio_url: value.portfolio_url.trim() || null, confirm: false })
       onPrefs(saved)
       setDraft(null)
       setNote({ ok: true, text: "Saved. Plato uses these on every form that asks." })

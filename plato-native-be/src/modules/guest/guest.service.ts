@@ -31,9 +31,11 @@ import { LinkedInAdapter } from '../discovery/adapters/linkedin.adapter';
 import { DiscoveryQuery } from '../discovery/adapters/types';
 import { countryName, resolveCountry } from '../discovery/countries';
 import { fitsSearch, isFresh } from '../discovery/discovery-run.helpers';
+import { companyMark } from '../discovery/company';
 import { DiscoveryService } from '../discovery/discovery.service';
 import {
   buildJobSeekerSnapshot,
+  cvFacts,
   residenceOf,
   type JobSeekerSnapshot,
 } from '../discovery/job-seeker-snapshot';
@@ -86,7 +88,33 @@ const OPEN_SELECT = {
   salary_min: true,
   salary_max: true,
   salary_currency: true,
+  company_url: true, // with raw: for the employer's logo (companyMark); neither is sent
+  raw: true,
 } satisfies Prisma.JobSelect;
+
+// The locked jobs, shown read-only behind a blur (owner, 2026-11-26): enough to see what is waiting, never how to
+// apply. No id, no link, no description: opening or applying to them needs an account.
+const PREVIEW_SELECT = {
+  id: true, // only to keep the ranked order; stripped before sending
+  title: true,
+  company: true,
+  location: true,
+  remote_type: true,
+  posted_at: true,
+  company_url: true,
+  raw: true,
+} satisfies Prisma.JobSelect;
+const PREVIEW_MAX = 30;
+
+// The employer's logo the source gave, or its website (for the app's favicon fallback); never the raw row.
+const withMark = <T extends { company_url: string | null; raw: unknown }>({
+  company_url,
+  raw,
+  ...job
+}: T) => {
+  const mark = companyMark({ company_url, raw });
+  return { ...job, company_logo: mark.logo, company_domain: mark.domain };
+};
 
 /** The search profile a guest's CV gives, in the shape every search reads (as an account's snapshot would). */
 export function guestSnapshot(
@@ -94,29 +122,20 @@ export function guestSnapshot(
   suggestion: PreferenceSuggestion | null,
   input: GuestSearchInput,
 ): JobSeekerSnapshot {
-  const exps = [...analysis.extraction.experience].sort((a, b) =>
-    (b.start_date ?? '').localeCompare(a.start_date ?? ''),
+  const { skills, experienceKeywords, experiences } = cvFacts(
+    analysis.extraction,
   );
   return {
-    skills: analysis.extraction.skills,
+    skills,
     roles: input.roles,
     preferredIndustries: suggestion?.industries ?? [],
     preferredLocations: input.countries.map((c) => countryName(c)),
     workSetup: input.remoteTypes,
     jobTypes: suggestion?.employment_types ?? [],
-    experienceKeywords: [
-      ...exps.map((e) => e.title),
-      ...exps.flatMap((e) => e.technologies),
-    ],
+    experienceKeywords,
     yearsExperience: suggestion?.years_experience ?? null,
     seniority: input.level ?? suggestion?.seniority ?? null,
-    experiences: exps.map((e) => ({
-      title: e.title,
-      technologies: e.technologies,
-      description: e.description,
-      start: e.start_date,
-      end: e.end_date,
-    })),
+    experiences,
     willingToRelocate: false,
     visaSponsorshipRequired: false,
     residenceCountry: residenceOf(analysis.extraction.location),
@@ -124,6 +143,14 @@ export function guestSnapshot(
     salary: { min: null, currency: null, period: 'MONTHLY' },
   };
 }
+
+/** Live progress of a guest search (GuestSearch.progress), read by the page while it polls. */
+export type GuestSearchProgress = {
+  phase: 'searching' | 'filtering' | 'ranking';
+  runs: { title: string; place: string | null; count: number | null }[];
+  found?: number;
+  kept?: number;
+};
 
 @Injectable()
 export class GuestService implements OnModuleInit, OnModuleDestroy {
@@ -386,9 +413,34 @@ export class GuestService implements OnModuleInit, OnModuleDestroy {
     query: DiscoveryQuery,
     snapshot: JobSeekerSnapshot,
   ) {
+    // What the page shows while it waits: each LinkedIn run as it finishes, then the filter and the ranking.
+    // Every step writes the real numbers; nothing is estimated.
+    const progress: GuestSearchProgress = { phase: 'searching', runs: [] };
+    const save = () =>
+      this.prisma.guestSearch
+        .update({
+          where: { id },
+          data: { progress: progress },
+        })
+        .catch(() => undefined); // progress is a nicety; never fail the search for it
     try {
-      const found = await this.linkedin.discover(query);
+      const found = await this.linkedin.discover(query, {
+        onPlan: (runs) => {
+          progress.runs = runs.map((r) => ({ ...r, count: null }));
+          void save();
+        },
+        onRunDone: (i, count) => {
+          if (progress.runs[i]) progress.runs[i].count = count;
+          void save();
+        },
+      });
+      progress.phase = 'filtering';
+      progress.found = found.length;
+      await save();
       const kept = found.filter((j) => isFresh(j) && fitsSearch(j, query));
+      progress.phase = 'ranking';
+      progress.kept = kept.length;
+      await save();
       const ids = await this.discovery.indexJobIds(kept);
       // Best first against the CV, so the two open jobs are the strongest.
       const jobs = await this.prisma.job.findMany({
@@ -433,20 +485,40 @@ export class GuestService implements OnModuleInit, OnModuleDestroy {
       status: row.status,
       roles: query.requestedTitles ?? query.titles,
       countries: query.countries,
+      progress: (row.progress as unknown as GuestSearchProgress | null) ?? null,
     };
     if (row.status !== 'DONE')
-      return { ...base, total: 0, open: [], locked: 0 };
+      return { ...base, total: 0, open: [], locked: 0, preview: [] };
     const openIds = row.job_ids.slice(0, GUEST_OPEN);
-    const jobs = await this.prisma.job.findMany({
-      where: { id: { in: openIds } },
-      select: OPEN_SELECT,
-    });
-    const open = openIds.flatMap((jid) => jobs.filter((j) => j.id === jid));
+    const previewIds = row.job_ids.slice(GUEST_OPEN, GUEST_OPEN + PREVIEW_MAX);
+    const [jobs, rest] = await Promise.all([
+      this.prisma.job.findMany({
+        where: { id: { in: openIds } },
+        select: OPEN_SELECT,
+      }),
+      this.prisma.job.findMany({
+        where: { id: { in: previewIds } },
+        select: PREVIEW_SELECT,
+      }),
+    ]);
+    const open = openIds.flatMap((jid) =>
+      jobs.filter((j) => j.id === jid).map(withMark),
+    );
+    const preview = previewIds.flatMap((jid) =>
+      rest
+        .filter((j) => j.id === jid)
+        .map((j) => {
+          const { id, ...job } = withMark(j);
+          void id; // the ranked order only; never sent
+          return job;
+        }),
+    );
     return {
       ...base,
       total: row.job_ids.length,
       open,
       locked: Math.max(0, row.job_ids.length - open.length),
+      preview,
     };
   }
 

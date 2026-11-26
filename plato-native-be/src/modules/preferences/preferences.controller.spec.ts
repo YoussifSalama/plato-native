@@ -70,7 +70,7 @@ describe('PreferencesController.estimate (onboarding: "Plato sees about N open j
 });
 
 describe('PreferencesController.getPreferences (first load)', () => {
-  const { run } = jest.requireMock('@openai/agents') as { run: jest.Mock };
+  const { run } = jest.requireMock('@openai/agents');
   function setup(experiences: object[]) {
     const prefs = {
       get: jest.fn(() => ({ job_seeker_id: 's', roles: [] })),
@@ -170,5 +170,60 @@ describe('preferenceEditSchema: what the extension may paste into forms', () => 
       expect(preferenceEditSchema.safeParse({ ...base, ...bad }).success).toBe(
         false,
       );
+  });
+});
+
+describe('PreferencesController.savePreferences: only a real Continue confirms', () => {
+  const body = {
+    roles: ['ERP Consultant'],
+    preferred_locations: ['Cairo'],
+    work_setup: ['remote'],
+    preferred_job_types: ['full_time'],
+    preferred_industries: [],
+    salary_min: 1000,
+    salary_max: 2000,
+    salary_currency: 'USD',
+    things_to_avoid: null,
+    seniority: null,
+    years_experience: null,
+    availability: null,
+    employment_status: null,
+    willing_to_relocate: false,
+    visa_sponsorship_required: false,
+    linkedin_url: null,
+    github_url: null,
+    portfolio_url: null,
+  };
+  const setup = () => {
+    const upsert = jest.fn(
+      async (_id: string, data: Record<string, unknown>) => data,
+    );
+    const ctrl = new PreferencesController(
+      {} as never,
+      { upsert, get: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    (
+      ctrl as unknown as { requireJobSeekerId: () => Promise<string> }
+    ).requireJobSeekerId = async () => 'js';
+    return { ctrl, upsert };
+  };
+
+  it('a normal save confirms (onboarding Continue)', async () => {
+    const { ctrl, upsert } = setup();
+    await ctrl.savePreferences({ userId: 'u' } as never, body);
+    expect(upsert.mock.calls[0][1]).toMatchObject({ source: 'USER_CONFIRMED' });
+  });
+
+  it('confirm: false (Profile links) saves without touching the source', async () => {
+    const { ctrl, upsert } = setup();
+    await ctrl.savePreferences({ userId: 'u' } as never, {
+      ...body,
+      confirm: false,
+    });
+    expect(upsert.mock.calls[0][1]).not.toHaveProperty('source');
+    expect(upsert.mock.calls[0][1]).not.toHaveProperty('confirm');
   });
 });

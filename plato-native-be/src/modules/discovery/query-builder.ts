@@ -51,5 +51,9 @@ export function buildDiscoveryQuery(
     yearsExperience: snapshot.yearsExperience,
     willingToRelocate: snapshot.willingToRelocate,
     visaSponsorshipRequired: snapshot.visaSponsorshipRequired,
+    ...(snapshot.avoidCompanies?.length && {
+      excludeCompanies: snapshot.avoidCompanies,
+    }),
+    ...(snapshot.avoidWords?.length && { excludeKeywords: snapshot.avoidWords }),
   };
 }

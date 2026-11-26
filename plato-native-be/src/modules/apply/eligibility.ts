@@ -1,5 +1,6 @@
 import { Candidate } from './apply.types';
 import { normalizeCompany } from '../discovery/company';
+import { countryNamesOf } from '../discovery/countries';
 
 // Should Plato apply to this job at all? Cheap, explainable rules on the
 // job's own words. Deliberately conservative: only the TITLE decides stack
@@ -333,9 +334,11 @@ export function checkEligibility(
       reason: "It's a management role and your history doesn't show one.",
     };
 
-  const countries = [c.country, ...c.preferences.workAuthorization]
-    .filter(Boolean)
-    .map((x) => x.toLowerCase().trim());
+  // Codes ("EG") and names ("Egypt") both become the names postings use.
+  const countries = countryNamesOf([
+    c.country,
+    ...c.preferences.workAuthorization,
+  ]);
   // Several regions listed ("LATAM or Europe") means any of them will do.
   if (excludesCountry(job, countries)) {
     const regions = regionRestrictions(

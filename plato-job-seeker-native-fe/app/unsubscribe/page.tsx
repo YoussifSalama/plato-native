@@ -3,7 +3,7 @@ import { Suspense } from "react"
 import { UnsubscribeCard } from "./unsubscribe-card"
 
 export const metadata: Metadata = {
-  title: "Stop alert emails | Plato",
+  title: "Stop alert emails | Plato Job Seeker",
   description: "Stop Plato job alert emails.",
 }
 

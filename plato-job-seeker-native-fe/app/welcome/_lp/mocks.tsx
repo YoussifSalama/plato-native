@@ -13,9 +13,9 @@ function Win({ url, dark, children }: { url: string; dark?: boolean; children: R
 
 const JOBS = [
   { a: "N", c: "#005ba7", t: "Frontend Engineer", m: "Northwind · Lever · Remote, Europe", p: 92, l: "Excellent match" },
-  { a: "C", c: "#1c9a4b", t: "Full Stack Developer", m: "Contoso · Greenhouse · Cairo", p: 88, l: "Excellent match" },
+  { a: "C", c: "#1c9a4b", t: "Full Stack Developer", m: "Contoso · Greenhouse · Cairo", p: 88, l: "Strong match" },
   { a: "F", c: "#0d9488", t: "Product Engineer", m: "Fabrikam · LinkedIn · Berlin, hybrid", p: 76, l: "Strong match" },
-  { a: "L", c: "#d97706", t: "React Developer", m: "Litware · Workable · Dubai", p: 71, l: "Strong match" },
+  { a: "L", c: "#d97706", t: "React Developer", m: "Litware · Workable · Dubai", p: 71, l: "Match" },
 ];
 
 export function ProfileMock() {
@@ -109,7 +109,7 @@ export function AskMock() {
 export function ApplicationsMock() {
   const rows = [
     ["Frontend Engineer", "Northwind", "Applied", "g"], ["Product Engineer", "Fabrikam", "Needs you", "a"], ["React Developer", "Litware", "Applying now", "v"],
-    ["Data Analyst", "Adatum", "Verify you're human", "a"], ["Backend Engineer", "Tailspin", "Posting closed", "n"],
+    ["Data Analyst", "Adatum", "Applied", "g"], ["Backend Engineer", "Tailspin", "Posting closed", "n"],
   ];
   return (
     <Win url="jobs.platohiring.com/applications">
@@ -120,25 +120,6 @@ export function ApplicationsMock() {
             <span><b>{t}</b> <span className="muted">· {c}</span></span><span className={`pill ${k}`}>{s}</span>
           </div>
         ))}
-      </div>
-    </Win>
-  );
-}
-
-export function DashboardMock() {
-  return (
-    <Win url="jobs.platohiring.com/jobs">
-      <div className="kpis">
-        {[["Searches", "6"], ["Jobs ready", "38"], ["Applications", "24"], ["Analyzed", "1,412"]].map(([l, v]) => (
-          <div key={l} style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 10 }}><div className="muted" style={{ fontSize: 11 }}>{l}</div><b className="num" style={{ fontSize: 20 }}>{v}</b></div>
-        ))}
-      </div>
-      <div className="mt2 ringrow">
-        <div className="ring" style={{ ["--p" as string]: 72 } as React.CSSProperties}><div><span className="num">72%</span><small>strong+</small></div></div>
-        <div className="bars">
-          <b style={{ fontSize: 13 }}>Where jobs come from</b>
-          {[["LinkedIn", 38], ["Greenhouse", 24], ["Lever", 18], ["Workable", 12]].map(([n, w]) => <div key={n}><span>{n}</span><i style={{ ["--w" as string]: `${Number(w) * 2.4}%` } as React.CSSProperties} /><span className="num">{w}</span></div>)}
-        </div>
       </div>
     </Win>
   );

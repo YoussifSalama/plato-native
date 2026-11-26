@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { AlertTriangle, ChevronDown, Eye, SlidersHorizontal, Loader2, MapPin, Plus, RefreshCw, Sparkles, Tag, X } from "lucide-react"
+import { AlertTriangle, ChevronDown, FileText, Upload, Eye, SlidersHorizontal, Loader2, MapPin, Plus, RefreshCw, Save, Sparkles, Tag, X } from "lucide-react"
 import { cn } from "cn"
 import { PAGE, PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
@@ -11,8 +11,9 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FilterChip } from "@/components/filter-controls"
-import { checkSearch, createThread, getRun, listThreads, parseSearch, previewSearch, startSearch, type DiscoveryRun, type SearchFit, type SearchPreview, type ThreadSummary } from "@/lib/jobs/api"
+import { checkSearch, createThread, getRun, listSearchCvs, listThreads, parseSearch, previewSearch, startSearch, uploadSearchCv, type DiscoveryRun, type ReviewPatch, type SearchCv, type SearchFit, type SearchPreview, type ThreadSummary } from "@/lib/jobs/api"
 import { JOBS_HOME, threadHref } from "@/lib/jobs/links"
+import { ALL_COUNTRIES, codeOf, nameOf } from "@/lib/countries"
 import { getPreferences, savePreferences } from "@/lib/preferences/api"
 import type { Preferences } from "@/lib/preferences/schema"
 import { getProfile } from "@/lib/documents/api"
@@ -25,36 +26,6 @@ import { useTokens } from "@/components/plato-tokens"
 // updates as the seeker edits, Start runs the search. Replaces searching by chat. Pay, level and visa are saved to
 // preferences (ranking and the pay check read them); the rest goes to the search itself.
 
-const REGION = new Intl.DisplayNames(["en"], {
-  type: "region",
-  fallback: "none",
-})
-const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-const ALL_COUNTRIES = [...A]
-  .flatMap((a) => [...A].map((b) => a + b))
-  .flatMap((c) => (REGION.of(c) ? [{ code: c, name: c === "AE" ? "UAE" : REGION.of(c)! }] : []))
-  .sort((x, y) => x.name.localeCompare(y.name))
-const nameOf = (code: string) => ALL_COUNTRIES.find((c) => c.code === code)?.name ?? code
-const codeOf = (text: string | null | undefined) => {
-  const t = (text ?? "").trim().toLowerCase()
-  if (!t) return null
-  const alias: Record<string, string> = {
-    uae: "AE",
-    emirates: "AE",
-    "united arab emirates": "AE",
-    ksa: "SA",
-    saudi: "SA",
-    uk: "GB",
-    britain: "GB",
-    england: "GB",
-    usa: "US",
-    us: "US",
-    america: "US",
-  }
-  if (alias[t]) return alias[t]
-  const last = t.split(",").at(-1)!.trim()
-  return ALL_COUNTRIES.find((c) => [t, last].includes(c.name.toLowerCase()) || c.code.toLowerCase() === t)?.code ?? null
-}
 const SUGGESTED_COUNTRIES = ["SA", "AE", "QA", "KW", "EG"]
 const LEVELS = [
   { value: "entry", label: "Junior / Entry" },
@@ -83,6 +54,8 @@ const WORK = [
 const CURRENCIES = ["USD", "EUR", "GBP", "SAR", "AED", "QAR", "KWD", "EGP", "CAD", "AUD", "INR"]
 
 type Draft = {
+  // A CV for this search only (null: the profile's). The search ranks against it; applications from it send it.
+  cv?: { id: string; name: string } | null
   roles: string[]
   level: "entry" | "mid" | "senior" | null
   employment: string[]
@@ -112,6 +85,7 @@ const ADVANCED: Pick<Draft, "posted" | "include" | "exclude" | "companies" | "sa
 const advancedCount = (d: Draft) => [d.posted, d.include.length, d.exclude.length, d.companies.length, d.salaryShown, d.relocate].filter(Boolean).length
 const levelOf = (s: string | null | undefined): Draft["level"] => (s === "internship" || s === "entry" ? "entry" : s === "mid" ? "mid" : s ? "senior" : null)
 const fromPrefs = (p: Preferences | null, home: string | null): Draft => ({
+  cv: null,
   roles: (p?.roles ?? []).slice(0, 2),
   level: levelOf(p?.seniority),
   employment: (p?.preferred_job_types ?? []).filter((t) => EMPLOYMENT.some((e) => e.value === t)),
@@ -123,6 +97,9 @@ const fromPrefs = (p: Preferences | null, home: string | null): Draft => ({
   currency: p?.salary_currency ?? "USD",
   period: p?.salary_period ?? "MONTHLY",
   ...ADVANCED,
+  // The profile's "Leave out of every search", shown here so the form stays the whole search.
+  exclude: (p?.avoid_words ?? []).slice(0, 10),
+  companies: (p?.avoid_companies ?? []).slice(0, 10),
   relocate: !!p?.willing_to_relocate,
 })
 // Everything the search enforces, as the server takes it (start, preview and the fit check share it).
@@ -177,6 +154,14 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
       </div>
     </div>
   )
+}
+
+// What the CV row says: what Plato read from the picked CV, or what another CV would change.
+function cvHint(cv: Draft["cv"], cvs: SearchCv[], cost: number) {
+  if (!cv) return `Jobs are matched to the CV on your profile. Trying another career or another version of your CV? Use it for this search only${cost ? ` (reading it costs about ${formatTokens(cost)} tokens)` : ""}.`
+  const c = cvs.find((x) => x.id === cv.id)
+  const read = c && [c.roles.join(", "), c.years !== null ? `about ${c.years} year${c.years === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")
+  return `${read ? `Plato read: ${read}. ` : ""}This search ranks jobs against this CV, and applications from it send this CV. Your profile and its CV stay as they are.`
 }
 
 // Words or names the seeker adds one by one (Enter adds; × removes).
@@ -256,6 +241,8 @@ export default function NewSearchPage() {
   const justFixed = useRef(false)
   const [preview, setPreview] = useState<SearchPreview | null>(null)
   const [watch, setWatch] = useState(true)
+  // A search never changes the saved preferences on its own (owner, 2026-11-26): only when the seeker asks.
+  const [keep, setKeep] = useState(false)
   const [tokens, setTokens] = useState<{
     cost: number
     balance: number
@@ -263,6 +250,9 @@ export default function NewSearchPage() {
     awaitingEmail: boolean
   } | null>(null)
   const [starting, setStarting] = useState(false)
+  const [cvs, setCvs] = useState<SearchCv[]>([]) // CVs read for earlier searches, to pick again
+  const [cvBusy, setCvBusy] = useState(false)
+  const [cvCost, setCvCost] = useState(0)
   // The live balance (refreshed after charges, on focus, every minute) wins over the one read on load.
   const live = useTokens()
   if (tokens && live && (live.balance !== tokens.balance || live.awaitingEmail !== tokens.awaitingEmail)) setTokens({ ...tokens, balance: live.balance, awaitingEmail: live.awaitingEmail, refillsOn: live.resetsAt })
@@ -282,6 +272,7 @@ export default function NewSearchPage() {
           ? {
               ...draft,
               roles: (q.requestedTitles?.length ? q.requestedTitles : q.titles).slice(0, 8),
+              cv: q.cvId ? { id: q.cvId, name: "The CV from that search" } : null,
               countries: q.countries ?? draft.countries,
               work: q.remoteTypes.filter((w) => WORK.some((x) => x.value === w)),
               employment: (q.jobTypes ?? draft.employment).filter((t) => EMPLOYMENT.some((e) => e.value === t)),
@@ -299,7 +290,11 @@ export default function NewSearchPage() {
     listThreads()
       .then((ts) => setRecent(ts.filter((t) => t.discovery_runs[0]?.query?.titles?.length).slice(0, 2)))
       .catch(() => undefined)
+    listSearchCvs()
+      .then(setCvs)
+      .catch(() => undefined)
     getTokenEstimates()
+      .then((e) => (setCvCost(e.estimates.find((x) => x.action === "cv_analysis")?.about ?? 0), e))
       .then((e) =>
         setTokens({
           cost: e.estimates.find((x) => x.action === "deep_search")?.about ?? 0,
@@ -312,6 +307,21 @@ export default function NewSearchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on load: after Start the address changes and nothing must reload
   }, [])
 
+  // "Use another CV": read once (paid), then this search uses it; the profile's CV stays as it is.
+  async function addCv(file: File) {
+    setCvBusy(true)
+    setError(null)
+    try {
+      const c = await uploadSearchCv(file)
+      setCvs((xs) => [c, ...xs.filter((x) => x.id !== c.id)].slice(0, 5))
+      set({ cv: { id: c.id, name: c.name } })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Plato could not read that CV. Try a PDF or Word file.")
+    } finally {
+      setCvBusy(false)
+    }
+  }
+
   // "Start from": an earlier search's details, or the roles on the profile.
   function startFrom(t: ThreadSummary | "profile") {
     if (t === "profile") {
@@ -322,6 +332,7 @@ export default function NewSearchPage() {
     setFrom(t.id)
     set({
       roles: (q.requestedTitles?.length ? q.requestedTitles : q.titles).slice(0, 3),
+      cv: q.cvId ? { id: q.cvId, name: cvs.find((c) => c.id === q.cvId)?.name ?? "The CV from that search" } : null,
       countries: q.countries?.length ? q.countries : d.countries,
       work: q.remoteTypes?.filter((w) => WORK.some((x) => x.value === w)) ?? d.work,
     })
@@ -431,6 +442,7 @@ export default function NewSearchPage() {
       setStarting(true)
       setError(null)
       const fit = await checkSearch({
+        cvId: d.cv?.id ?? null,
         sentence,
         roles: d.roles,
         level: d.level,
@@ -449,7 +461,7 @@ export default function NewSearchPage() {
           willingToRelocate: d.relocate,
         },
       }).catch(() => null)
-      if (fit && !fit.fits) {
+      if (fit && (!fit.fits || fit.questions?.length)) {
         setStarting(false)
         return setMisfit(fit)
       }
@@ -484,51 +496,55 @@ export default function NewSearchPage() {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  async function run() {
+  // dd: the search to run (the review dialog passes the one its answers changed; state updates land a render later).
+  async function run(dd: Draft = d) {
     setMisfit(null)
     setStarting(true)
     setError(null)
     try {
-      if (prefs) {
+      if (prefs && keep) {
         const { source: _source, ...rest } = prefs
         void _source
         await savePreferences({
           ...rest,
-          salary_min: d.pay,
-          salary_currency: d.currency,
-          salary_period: d.period,
-          seniority: d.level ?? rest.seniority,
-          visa_sponsorship_required: d.visa,
+          roles: dd.roles,
+          salary_min: dd.pay,
+          salary_currency: dd.currency,
+          salary_period: dd.period,
+          // The saved level is finer (Lead, Manager...): keep it unless the seeker picked a different band.
+          seniority: dd.level && dd.level !== levelOf(rest.seniority) ? dd.level : rest.seniority,
+          visa_sponsorship_required: dd.visa,
         })
       }
       const id = threadId ?? (await createThread()).id
       const started = await startSearch({
         threadId: id,
-        titles: d.roles,
+        ...(dd.cv?.id && { cvId: dd.cv.id }),
+        titles: dd.roles,
         ...(sentence.trim() && { sentence: sentence.trim() }),
-        ...(d.countries.length && { countries: d.countries }),
+        ...(dd.countries.length && { countries: dd.countries }),
         // The form is the whole search: an empty work mode or employment means any, never the saved preference.
         exact: true,
-        remoteTypes: d.work,
-        jobTypes: d.employment,
-        visaSponsorshipRequired: d.visa,
-        ...rulesOf(d),
+        remoteTypes: dd.work,
+        jobTypes: dd.employment,
+        visaSponsorshipRequired: dd.visa,
+        ...rulesOf(dd),
       })
       // "Alert me about new matches": new matches for this role land on Home (a job alert per role, where it's wanted).
       if (watch)
         await Promise.all(
-          d.roles.slice(0, 2).map((title) =>
+          dd.roles.slice(0, 2).map((title) =>
             createAlert({
               kind: "FIELD",
               title,
-              location: d.countries.length === 1 ? nameOf(d.countries[0]!) : null,
-              remote_only: d.work.length === 1 && d.work[0] === "remote",
+              location: dd.countries.length === 1 ? nameOf(dd.countries[0]!) : null,
+              remote_only: dd.work.length === 1 && dd.work[0] === "remote",
             }).catch(() => undefined),
           ),
         )
       setRunning({ run: started, threadId: id })
       // The address carries the search, so a refresh shows its progress again instead of an empty form.
-      writeStored(RUN_KEY(started.id), { d, sentence })
+      writeStored(RUN_KEY(started.id), { d: dd, sentence })
       writeStored(DRAFT_KEY(threadId), null)
       router.replace(`/jobs/search?thread=${id}&run=${started.id}`, { scroll: false })
       window.scrollTo({ top: 0, behavior: "smooth" })
@@ -604,6 +620,37 @@ export default function NewSearchPage() {
                 </span>
               )}
             </div>
+            <Row label="CV" hint={cvHint(d.cv ?? null, cvs, cvCost)}>
+              <FilterChip on={!d.cv} onClick={() => set({ cv: null })}>
+                My profile CV
+              </FilterChip>
+              {[...cvs, ...(d.cv && !cvs.some((c) => c.id === d.cv!.id) ? [{ id: d.cv.id, name: d.cv.name }] : [])].map((c) => (
+                <FilterChip key={c.id} on={d.cv?.id === c.id} onClick={() => set({ cv: { id: c.id, name: c.name } })}>
+                  <FileText className="size-3.5" />
+                  <span className="max-w-44 truncate">{c.name}</span>
+                </FilterChip>
+              ))}
+              <label
+                className={cn(
+                  "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-dashed px-3 text-sm text-text-secondary transition-colors hover:border-primary hover:text-primary focus-within:ring-2 focus-within:ring-ring",
+                  cvBusy && "pointer-events-none opacity-70",
+                )}
+              >
+                {cvBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+                {cvBusy ? "Plato is reading it…" : "Use another CV"}
+                <input
+                  type="file"
+                  accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  className="sr-only"
+                  disabled={cvBusy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    e.target.value = ""
+                    if (f) void addCv(f)
+                  }}
+                />
+              </label>
+            </Row>
             <Row label="Roles">
               {d.roles.map((r) => (
                 <FilterChip key={r} on onClick={() => set({ roles: d.roles.filter((x) => x !== r) })} aria-label={`Remove ${r}`}>
@@ -846,6 +893,18 @@ export default function NewSearchPage() {
               </span>
               <Switch checked={watch} onCheckedChange={setWatch} aria-label="Alert me about new matches" />
             </label>
+            {prefs && (
+              <label className="flex cursor-pointer items-center gap-3 border-t border-divider py-3.5">
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-text-secondary">
+                  <Save className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">Save as my search preferences</span>
+                  <span className="block text-xs text-text-tertiary">Off: this search is just this search, and your profile stays as it is.</span>
+                </span>
+                <Switch checked={keep} onCheckedChange={setKeep} aria-label="Save as my search preferences" />
+              </label>
+            )}
           </section>
         </aside>
       </div>
@@ -882,69 +941,155 @@ export default function NewSearchPage() {
           )}
         </div>
       </footer>
-      <MisfitDialog fit={misfit} tokens={tokens?.cost ?? null} onFix={applyFix} onProceed={() => void run()} onClose={() => setMisfit(null)} />
+      <ReviewDialog
+        fit={misfit}
+        draft={d}
+        tokens={tokens?.cost ?? null}
+        onFix={applyFix}
+        onProceed={(next) => {
+          setD(next)
+          void run(next)
+        }}
+        onClose={() => setMisfit(null)}
+      />
     </div>
   )
 }
 
-function MisfitDialog({ fit, tokens, onFix, onProceed, onClose }: { fit: SearchFit | null; tokens: number | null; onFix: (f: SearchFit) => void; onProceed: () => void; onClose: () => void }) {
+// A review answer, in the form's own fields.
+function patchDraft(x: Draft, p: ReviewPatch): Draft {
+  return {
+    ...x,
+    ...(p.level && { level: p.level }),
+    ...(p.remoteTypes && { work: p.remoteTypes }),
+    ...(p.visaSponsorshipRequired !== undefined && { visa: p.visaSponsorshipRequired }),
+    ...(p.willingToRelocate !== undefined && { relocate: p.willingToRelocate }),
+    ...(p.residenceCountry && { home: p.residenceCountry }),
+    ...(p.clearSalary && { pay: null }),
+  }
+}
+
+// "Before we search": Plato's questions about this search (rules), and the AI's warning when the role is from another
+// field. Each answer changes the search; unanswered ones leave it as it is.
+function ReviewDialog({ fit, draft, tokens, onFix, onProceed, onClose }: { fit: SearchFit | null; draft: Draft; tokens: number | null; onFix: (f: SearchFit) => void; onProceed: (d: Draft) => void; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
+  const [picked, setPicked] = useState<Record<string, number>>({})
+  const [home, setHome] = useState<string | null>(null)
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    if (fit && !el.open) el.showModal()
+    if (fit && !el.open) {
+      setPicked({})
+      setHome(null)
+      el.showModal()
+    }
     if (!fit && el.open) el.close()
   }, [fit])
+  const questions = fit?.questions ?? []
+  const answered = Object.keys(picked).length + (home ? 1 : 0)
+  const next = () => {
+    let x = home ? { ...draft, home } : draft
+    for (const q of questions) {
+      const o = q.options[picked[q.id] ?? -1]
+      if (o) x = patchDraft(x, o.patch)
+    }
+    return x
+  }
   return (
     <dialog
       ref={ref}
-      aria-labelledby="misfit-title"
+      aria-labelledby="review-title"
       onCancel={(e) => (e.preventDefault(), onClose())}
       onClick={(e) => e.target === ref.current && onClose()}
-      className="m-auto w-[min(520px,calc(100vw-2rem))] rounded-2xl border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[min(560px,calc(100vw-2rem))] rounded-2xl border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40"
     >
       {fit && (
         <div className="flex flex-col gap-4 p-6">
           <div className="flex items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-warning-soft text-warning-ink">
-              <AlertTriangle className="size-5" />
+            <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", fit.fits ? "bg-primary/10 text-primary" : "bg-warning-soft text-warning-ink")}>
+              {fit.fits ? <Sparkles className="size-5" /> : <AlertTriangle className="size-5" />}
             </span>
             <div className="min-w-0 flex-1">
-              <h2 id="misfit-title" className="text-lg font-semibold">
-                This search doesn&apos;t match your profile
+              <h2 id="review-title" className="text-lg font-semibold">
+                {fit.fits ? "Before we search" : "This search doesn\u2019t match your profile"}
               </h2>
               <p className="mt-1 text-sm text-text-secondary">
-                Plato would search for jobs your profile is unlikely to land. If you go ahead, the search still uses your tokens
-                {tokens ? ` (about ${formatTokens(tokens)})` : ""}.
+                {fit.fits
+                  ? `A few quick answers so Plato keeps only jobs you can take. The search uses your tokens${tokens ? ` (about ${formatTokens(tokens)})` : ""}.`
+                  : `Plato would search for jobs your profile is unlikely to land. If you go ahead, the search still uses your tokens${tokens ? ` (about ${formatTokens(tokens)})` : ""}.`}
               </p>
             </div>
             <button type="button" onClick={onClose} aria-label="Close" className="grid size-8 place-items-center rounded-full text-text-tertiary hover:bg-muted">
               <X className="size-4" />
             </button>
           </div>
-          {fit.reasons.length > 0 && (
-            <ul className="flex flex-col gap-1.5 rounded-xl border border-warning-line bg-warning-soft/60 px-4 py-3 text-sm text-foreground">
-              {fit.reasons.map((r) => (
-                <li key={r} className="flex gap-2">
-                  <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-warning-ink" />
-                  {r}
+          {!fit.fits && fit.reasons.length > 0 && (
+            <div className="flex flex-col gap-3 rounded-xl border border-warning-line bg-warning-soft/60 px-4 py-3 text-sm">
+              <ul className="flex flex-col gap-1.5">
+                {fit.reasons.map((r) => (
+                  <li key={r} className="flex gap-2">
+                    <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-warning-ink" />
+                    {r}
+                  </li>
+                ))}
+              </ul>
+              {fit.suggestion && (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-warning-line pt-3">
+                  <p className="text-text-secondary">
+                    A closer fit: <span className="font-medium text-foreground">{fit.suggestion.roles.join(", ")}</span>
+                  </p>
+                  <Button size="sm" onClick={() => onFix(fit)} className="gap-1.5 rounded-full">
+                    <Sparkles className="size-3.5" />
+                    Fix it with Plato AI
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          {questions.length > 0 && (
+            <ol className="flex flex-col gap-3">
+              {questions.map((q, i) => (
+                <li key={q.id} className="rounded-xl border bg-background/60 p-4">
+                  <p className="flex gap-2 text-sm font-semibold">
+                    <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] text-primary">{i + 1}</span>
+                    {q.title}
+                  </p>
+                  <p className="mt-1 pl-7 text-xs text-text-secondary">{q.why}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 pl-7">
+                    {q.id === "residence" ? (
+                      <Select items={ALL_COUNTRIES.map((c) => ({ value: c.code, label: c.name }))} value={home ?? ""} onValueChange={(v) => v && setHome(v)}>
+                        <SelectTrigger aria-label="Where you live" className="h-9 gap-1.5 rounded-full px-3 font-semibold">
+                          <MapPin className="size-4 text-text-tertiary" />
+                          <SelectValue placeholder="Pick your country" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          {ALL_COUNTRIES.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      q.options.map((o, j) => (
+                        <FilterChip key={o.label} on={picked[q.id] === j} onClick={() => setPicked((p) => (p[q.id] === j ? Object.fromEntries(Object.entries(p).filter(([k]) => k !== q.id)) : { ...p, [q.id]: j }))}>
+                          {o.label}
+                          {j === 0 && q.options.length > 1 && <span className="ml-1 text-[10px] font-medium uppercase tracking-wide text-primary">Suggested</span>}
+                        </FilterChip>
+                      ))
+                    )}
+                  </div>
                 </li>
               ))}
-            </ul>
+            </ol>
           )}
-          {fit.suggestion && (
-            <p className="text-sm text-text-secondary">
-              Plato can set up a search that fits you instead: <span className="font-medium text-foreground">{fit.suggestion.roles.join(", ")}</span>. You can review every detail before it starts.
-            </p>
-          )}
-          <div className="mt-1 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="outline" onClick={onProceed} className="rounded-full">
-              Search anyway
+          <div className="sticky bottom-0 -mx-6 -mb-6 mt-1 flex flex-col-reverse gap-2 border-t bg-card px-6 py-4 sm:static sm:m-0 sm:flex-row sm:justify-end sm:border-0 sm:p-0">
+            <Button variant="outline" onClick={() => onProceed(draft)} className="rounded-full">
+              {fit.fits ? "Search as it is" : "Search anyway"}
             </Button>
-            {fit.suggestion && (
-              <Button onClick={() => onFix(fit)} className="gap-2 rounded-full">
-                <Sparkles className="size-4" />
-                Fix it with Plato AI
+            {questions.length > 0 && (
+              <Button disabled={!answered} onClick={() => onProceed(next())} className="rounded-full">
+                Search with {answered === 1 ? "this answer" : "these answers"}
               </Button>
             )}
           </div>

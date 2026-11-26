@@ -287,7 +287,7 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
       steps: [
         { target: '[data-tour="results-tabs"]', title: "Best from all your searches", body: "Jobs at 75% match or more from every search, minus the ones you hid or applied to." },
         { target: '[data-tour="results-list"]', title: "Tick, open, save", body: "The title opens the posting. Tick jobs to apply, or bookmark them." },
-        { target: '[data-ai="results.apply-top"]', title: "Apply in one go", body: "Sends the best matches to the browser extension. It fills each form; you press Submit." },
+        { target: '[data-ai="results.apply-top"]', title: "Apply in one go", body: "Sends the best matches to the browser extension. It fills each form and presses Submit once, in tabs you can watch." },
         { target: '[data-tour="plato-ai"]', title: "Talk to it", body: "Ask Plato AI to compare jobs or explain a match." },
         ...SHELL.slice(3),
       ],
@@ -300,7 +300,7 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
       name: "Search results",
       steps: [
         { target: '[data-tour="results-summary"]', title: "What Plato found", body: "How many strong and excellent matches, and how well the best one fits your profile." },
-        { target: '[data-ai="results.apply-top"]', title: "Apply in one go", body: "Sends the 15 best matches to the browser extension. It fills each form; you press Submit." },
+        { target: '[data-ai="results.apply-top"]', title: "Apply in one go", body: "Sends the 15 best matches to the browser extension. It fills each form and presses Submit once, in tabs you can watch." },
         { target: '[data-tour="results-tabs"]', title: "Discover, saved, applied", body: "Discover is this search. Saved, Applied and Recommended gather jobs from all your searches." },
         { target: '[data-ai="results.filters"]', title: "Narrow it down", body: "One row of filters: where you can apply from, remote only, then location, level, job type, how recent, salary and source. Each menu shows how many jobs it keeps. Sort, rows or cards, and export sit above it; the box at the top searches by title or company." },
         { target: '[data-tour="results-list"]', title: "Tick, open, save", body: "The title opens the posting. Tick jobs to apply to them; the bookmark saves one." },
@@ -555,7 +555,7 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
       id: "extension-linked",
       name: "Extension",
       steps: [
-        { target: '[data-tour="page-header"]', title: "Plato applies in your browser", body: "The extension fills application forms in your own Chrome. You press Submit yourself." },
+        { target: '[data-tour="page-header"]', title: "Plato applies in your browser", body: "The extension fills application forms in your own Chrome and presses Submit once per job. You can watch every tab." },
         { target: '[data-tour="extension-devices"]', title: "Linked browsers", body: "Each browser signed in to your account, when it was linked and last used. Unlink signs it out." },
         { target: '[data-tour="extension-searches"]', title: "Feature a search", body: "Ticked searches show first in the extension, so you can pick them fast." },
         { target: '[data-ai="extension.generate"]', title: "Another browser", body: "Link another browser makes a new code." },
@@ -570,7 +570,7 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
       id: "extension",
       name: "Extension",
       steps: [
-        { target: '[data-tour="page-header"]', title: "Plato applies in your browser", body: "The extension fills application forms in your own Chrome. You press Submit yourself." },
+        { target: '[data-tour="page-header"]', title: "Plato applies in your browser", body: "The extension fills application forms in your own Chrome and presses Submit once per job. You can watch every tab." },
         { target: '[data-ai="extension.generate"]', title: "Link it once", body: "Generate a code, then type it into the extension's side panel." },
         { target: '[data-tour="extension-steps"]', title: "How linking works", body: "Open the extension, type the code, press Link this browser. The code works once and expires in two minutes." },
         { target: '[data-tour="extension-searches"]', title: "Feature a search", body: "Ticked searches show first in the extension." },

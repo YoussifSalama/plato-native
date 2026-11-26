@@ -20,6 +20,8 @@ export interface DiscoveryQuery {
   salaryShownOnly?: boolean;
   // Remote jobs abroad count when they hire from where the seeker lives (not limited to a region that leaves it out).
   remoteAnywhere?: boolean;
+  // A CV picked for this search only (SearchCv): the search ranks against it and applications from it send it.
+  cvId?: string;
   // Why each searched title is there, shown to the seeker.
   titlePlan?: { title: string; reason: string }[];
   locations: string[];

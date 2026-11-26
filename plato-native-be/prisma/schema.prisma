@@ -286,6 +286,8 @@ model GuestSearch {
   // Best first (BM25 against the CV); the first two are the open ones.
   job_ids  String[]           @default([]) @db.ObjectId
   error    String?
+  // Live progress for the page while it runs: { phase, runs: [{ title, place, count }], found, kept }.
+  progress Json?
 
   created_at DateTime @default(now())
 
@@ -1326,7 +1328,10 @@ model JobSeekerPreference {
   salary_max           Int?
   salary_currency      String?
   salary_period        String   @default("MONTHLY")
-  things_to_avoid      String?
+  things_to_avoid      String? // older free text; replaced by the two lists below
+  // Left out of every search (New search shows them, prefilled, under Advanced): companies, and words in a job title.
+  avoid_companies      String[] @default([])
+  avoid_words          String[] @default([])
   source               String   @default("AI_SUGGESTED")
 
   seniority                 String?
@@ -1352,4 +1357,19 @@ model JobSeekerPreference {
   updated_at DateTime @updatedAt
 
   @@map("job_seeker_preferences")
+}
+// A CV for one search only ("Search with a different CV" on New search): read like the profile's CV, but never
+// written to the profile. The search ranks against it and applications from that search send it.
+model SearchCv {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  job_seeker_id String   @db.ObjectId
+  name          String
+  storage_key   String
+  text          String
+  analysis      Json // CvAnalysis (profile-extraction/cv-analysis.service.ts)
+  apply_json    Json? // the extension's CV facts, made once (as on JobSeekerDocument)
+  created_at    DateTime @default(now())
+
+  @@index([job_seeker_id])
+  @@map("search_cvs")
 }

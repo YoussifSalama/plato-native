@@ -192,9 +192,14 @@ function Frame({ children }: { children: ReactNode }) {
       {/* Sidebar (owner screens 05-12): the job hunt, the account, profile strength. */}
       <aside data-tour="sidebar" className="hidden border-r lg:z-40 bg-linear-to-b from-white to-[color-mix(in_oklch,var(--background),white_30%)] px-3 pb-4 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:gap-5">
         {/* Same height as the top bar so the two borders line up. */}
-        <Link href="/" data-ai="nav.logo" className={cn("flex h-16 shrink-0 items-center gap-2.5 px-2.5", collapsed && "justify-center px-0")} title="Plato">
+        <Link href="/" data-ai="nav.logo" className={cn("flex h-16 shrink-0 items-center gap-2.5 px-2.5", collapsed && "justify-center px-0")} title="Plato Job Seeker">
           <PlatoMark size={30} />
-          {!collapsed && <span className="text-[15px] font-extrabold tracking-[0.22em] text-primary">PLATO</span>}
+          {!collapsed && (
+            <span className="flex flex-col leading-none">
+              <span className="text-[15px] font-extrabold tracking-[0.22em] text-primary">PLATO</span>
+              <span className="mt-1 text-[9.5px] font-bold tracking-[0.3em] text-text-secondary">JOB SEEKER</span>
+            </span>
+          )}
         </Link>
         {/* Expand / collapse: always right under the logo, open or collapsed. */}
         <button type="button" onClick={toggleSidebar} aria-expanded={!collapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} className={cn("group/tip relative -mt-3 flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium text-text-secondary transition-colors hover:bg-foreground/[0.04] hover:text-foreground", collapsed && "justify-center px-0")}>

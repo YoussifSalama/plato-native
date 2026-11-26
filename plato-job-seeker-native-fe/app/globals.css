@@ -184,8 +184,8 @@
   }
 }
 
-/* Brand scrollbars, everywhere. The thumb is the primary colour at low
-   alpha so it reads as "Plato" without shouting; it saturates on hover.
+/* Brand scrollbars, everywhere. The thumb is the primary colour at half
+   alpha so it clearly reads as Plato's cobalt; it saturates on hover.
    Track stays transparent so bars sit on any card / canvas colour. Both
    the standard properties (Firefox) and the WebKit pseudo-elements
    (Chrome / Safari / Edge) are set so every browser matches. */
@@ -194,7 +194,7 @@
 @layer base {
   * {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in oklch, var(--primary) 28%, transparent) transparent;
+    scrollbar-color: color-mix(in oklch, var(--primary) 50%, transparent) transparent;
   }
   *::-webkit-scrollbar {
     width: 10px;
@@ -204,14 +204,14 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: color-mix(in oklch, var(--primary) 28%, transparent);
+    background: color-mix(in oklch, var(--primary) 50%, transparent);
     border-radius: 9999px;
     /* Transparent border shrinks the visible thumb inside the gutter. */
     border: 3px solid transparent;
     background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklch, var(--primary) 55%, transparent);
+    background: color-mix(in oklch, var(--primary) 75%, transparent);
     background-clip: padding-box;
   }
   *::-webkit-scrollbar-corner {

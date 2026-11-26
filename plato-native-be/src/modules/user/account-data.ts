@@ -11,6 +11,7 @@ export const ACCOUNT_DATA: [model: string, scope: Scope][] = [
   ['careerMessage', 'thread'],
   ['jobSeekerJobMatch', 'seeker'], // before discoveryRun (SetNull relation)
   ['discoveryRun', 'seeker'], // before chatThread (SetNull relation)
+  ['searchCv', 'seeker'],
   ['careerResume', 'seeker'], // before careerThread (SetNull relation)
   ['chatThread', 'seeker'],
   ['careerThread', 'seeker'],
@@ -70,6 +71,7 @@ export const STORAGE_PREFIXES = [
   'proofs',
   'resumes',
   'career-resumes',
+  'search-cvs',
 ];
 
 const OBJECT_ID = /^[a-f0-9]{24}$/;

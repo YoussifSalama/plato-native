@@ -149,7 +149,7 @@ export default function ExtensionPage() {
 
   return (
     <div data-tour-state={pairing ? "extension.code" : devices === null ? undefined : devices.length ? "extension.linked" : "extension.unlinked"} className={PAGE}>
-      <PageHeader section="Account" title="Browser extension" description="Link the Plato extension to your account. It fills applications in your own browser, and you always press Submit yourself." />
+      <PageHeader section="Account" title="Browser extension" description="Link the Plato extension to your account. It fills applications in your own browser and presses Submit once per job, in tabs you can watch." />
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

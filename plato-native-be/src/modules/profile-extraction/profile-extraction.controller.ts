@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   BadRequestException,
   Body,
@@ -180,6 +181,20 @@ export class ProfileExtractionController {
 
     const profile = await this.profileService.getFullProfile(jobSeekerId);
     return { profile, evaluation };
+  }
+
+  // Where the person lives, on its own (onboarding asks it; the full profile edit is the Profile page's).
+  @Patch('location')
+  async saveLocation(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    const jobSeekerId = await this.requireJobSeekerId(req.userId);
+    const parsed = z
+      .object({
+        city: z.string().trim().max(120).default(''),
+        country: z.string().trim().min(2).max(80),
+      })
+      .safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    return this.profileService.setLocation(jobSeekerId, parsed.data);
   }
 
   @Get()

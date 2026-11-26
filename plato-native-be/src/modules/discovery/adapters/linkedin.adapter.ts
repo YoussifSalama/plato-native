@@ -114,7 +114,17 @@ function buildSearchUrl(
 export class LinkedInAdapter implements DiscoveryAdapter {
   constructor(private readonly apify: ApifyService) {}
 
-  async discover(query: DiscoveryQuery): Promise<NormalizedJob[]> {
+  /**
+   * `hooks` (optional) report progress as it happens: the runs planned (one per title and place), then each run's
+   * count the moment it finishes. The public guest search shows them live.
+   */
+  async discover(
+    query: DiscoveryQuery,
+    hooks?: {
+      onPlan?: (runs: { title: string; place: string | null }[]) => void;
+      onRunDone?: (index: number, count: number) => void;
+    },
+  ): Promise<NormalizedJob[]> {
     if (!query.titles.length) return [];
 
     // One place per country the seeker works in; none = no location filter.
@@ -144,16 +154,25 @@ export class LinkedInAdapter implements DiscoveryAdapter {
           );
     if (query.budget === 0) return [];
 
-    const runs = titles.flatMap((title) =>
-      places.map((place) =>
-        this.apify.runActor<LinkedInJobItem>(ACTOR_ID, {
+    const plan = titles.flatMap((title) =>
+      places.map((place) => ({ title, place })),
+    );
+    hooks?.onPlan?.(
+      plan.map((r) => ({ title: r.title, place: r.place ?? null })),
+    );
+    const runs = plan.map(({ title, place }, i) =>
+      this.apify
+        .runActor<LinkedInJobItem>(ACTOR_ID, {
           urls: [buildSearchUrl(title, query, place)],
           limitPerSource: perUrl,
           datePosted: LINKEDIN_WINDOW,
           scrapeCompany: false,
           autoConvertToAiSearch: true,
+        })
+        .then((items) => {
+          hooks?.onRunDone?.(i, items.length);
+          return items;
         }),
-      ),
     );
     const items = (await Promise.all(runs)).flat();
 

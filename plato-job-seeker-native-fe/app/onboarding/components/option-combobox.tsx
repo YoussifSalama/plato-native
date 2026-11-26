@@ -64,6 +64,7 @@ function OptionCombobox({
       isItemEqualToValue={(a, b) => a.value === b.value}
       open={open && !atMax}
       onOpenChange={setOpen}
+      autoHighlight
     >
       <ComboboxChips ref={anchorRef}>
         <ComboboxSearchIcon />
@@ -76,7 +77,7 @@ function OptionCombobox({
         <ComboboxInput
           id={id}
           placeholder={atMax ? `Max ${max} selected` : placeholder}
-          disabled={atMax}
+          readOnly={atMax} // not disabled: disabled fades the chips and their remove buttons
           onKeyDown={handleKeyDown}
         />
       </ComboboxChips>

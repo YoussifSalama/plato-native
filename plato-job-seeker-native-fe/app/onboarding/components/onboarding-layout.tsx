@@ -21,7 +21,7 @@ export type Step = (typeof STEPS)[number]["id"]
 // The onboarding chat's backend stages predate the 3-step flow: documents=1, preferences=3, ready=4.
 const ASSISTANT_STAGE: Record<Step, 1 | 3 | 4> = { 1: 1, 2: 3, 3: 4 }
 
-// Flat paper page: the PLATO logo on the left, "STEP n OF 3 · NAME" and three bars on the right.
+// Flat paper page: the PLATO JOB SEEKER logo on the left, "STEP n OF 3 · NAME" and three bars on the right.
 function OnboardingLayout({ step, faqs, children }: { step: Step; faqs: string[]; children: ReactNode }) {
   const name = STEPS.find((s) => s.id === step)?.name
   const reduced = !!useReducedMotion()
@@ -30,9 +30,12 @@ function OnboardingLayout({ step, faqs, children }: { step: Step; faqs: string[]
       {/* The soft brand glow behind the page head, as on Home. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] bg-[radial-gradient(45%_70%_at_0%_0%,color-mix(in_oklch,var(--primary)_8%,transparent),transparent_65%),radial-gradient(40%_60%_at_100%_0%,color-mix(in_oklch,var(--azure)_8%,transparent),transparent_70%)]" />
       <header className="flex w-full flex-wrap items-center justify-between gap-4 px-4 pt-7 sm:px-11">
-        <Link href="/" className="flex items-center gap-3 rounded-lg transition-opacity duration-200 hover:opacity-80" aria-label="Plato">
+        <Link href="/" className="flex items-center gap-3 rounded-lg transition-opacity duration-200 hover:opacity-80" aria-label="Plato Job Seeker">
           <PlatoMark size={40} />
-          <span className="text-[19px] font-extrabold tracking-[0.22em] text-primary">PLATO</span>
+          <span className="flex flex-col leading-none">
+            <span className="text-[19px] font-extrabold tracking-[0.22em] text-primary">PLATO</span>
+            <span className="mt-1 text-[11px] font-bold tracking-[0.3em] text-text-secondary">JOB SEEKER</span>
+          </span>
         </Link>
         <div data-tour="onboarding-progress" className="flex items-center gap-3 sm:gap-4" aria-label={`Step ${step} of ${STEPS.length}: ${name}`}>
           <span className="font-mono text-[11px] tracking-[0.18em] whitespace-nowrap text-text-secondary uppercase sm:text-[13px]">

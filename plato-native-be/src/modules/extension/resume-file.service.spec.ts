@@ -29,13 +29,31 @@ describe('ResumeFileService', () => {
   });
 
   it('file: the profile resume comes from object storage by its storage key', async () => {
-    const prisma: any = { jobSeekerDocument: { findFirst: async () => ({ url: '/uploads/job-seeker-documents/abc-cv.pdf', name: 'Youssif CV.pdf', storage_key: 'docs/js1/abc-cv.pdf' }) } };
-    const batches: any = { assertWorking: async () => ({ id: 'i1', job_id: 'j1', detail: { resume_choice: 'profile' } }) };
+    const prisma: any = { applyBatch: { findUnique: async () => ({ search_id: null }) }, jobSeekerDocument: { findFirst: async () => ({ url: '/uploads/job-seeker-documents/abc-cv.pdf', name: 'Youssif CV.pdf', storage_key: 'docs/js1/abc-cv.pdf' }) } };
+    const batches: any = { assertWorking: async () => ({ id: 'i1', batch_id: 'b1', job_id: 'j1', detail: { resume_choice: 'profile' } }) };
     let asked = '';
     const storage: any = { getObjectBuffer: async (k: string) => ((asked = k), Buffer.from('%PDF-1.4 y')) };
     const out = await new ResumeFileService(prisma, batches, {} as any, storage).file({ jobSeekerId: 'js1', deviceId: 'd1', scopes: [] } as any, 'i1');
     expect(asked).toBe('docs/js1/abc-cv.pdf');
     expect(out).toEqual({ name: 'Youssif CV.pdf', mime: 'application/pdf', data: Buffer.from('%PDF-1.4 y').toString('base64') });
+  });
+
+  it('file: a search run with its own CV applies with that CV, not the profile one (and only the seeker\'s own)', async () => {
+    let cvWhere: any;
+    const prisma: any = {
+      applyBatch: { findUnique: async () => ({ search_id: 'r1' }) },
+      discoveryRun: { findUnique: async () => ({ query: { titles: ['PM'], cvId: 'cv1' } }) },
+      searchCv: { findFirst: async (a: any) => ((cvWhere = a.where), { id: 'cv1', name: 'Product CV.pdf', storage_key: 'search-cvs/js1/pm.pdf' }) },
+      jobSeekerDocument: { findFirst: jest.fn() },
+    };
+    const batches: any = { assertWorking: async () => ({ id: 'i1', batch_id: 'b1', job_id: 'j1', resume_choice: 'profile' }) };
+    let asked = '';
+    const storage: any = { getObjectBuffer: async (k: string) => ((asked = k), Buffer.from('%PDF-1.4 z')) };
+    const out = await new ResumeFileService(prisma, batches, {} as any, storage).file(p, 'i1');
+    expect(cvWhere).toEqual({ id: 'cv1', job_seeker_id: 'js1' });
+    expect(prisma.jobSeekerDocument.findFirst).not.toHaveBeenCalled();
+    expect(asked).toBe('search-cvs/js1/pm.pdf');
+    expect(out.name).toBe('Product CV.pdf');
   });
 
   it('file: tailored and approved on the review screen for this job: that exact file, no new build', async () => {

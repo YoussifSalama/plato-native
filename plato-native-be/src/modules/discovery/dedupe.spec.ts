@@ -1,20 +1,19 @@
 import { dedupeJobs, dedupeKey } from './dedupe';
 import { NormalizedJob } from './adapters/types';
 
-const job = (over: Partial<NormalizedJob>): NormalizedJob =>
-  ({
-    source: 'INDEED',
-    external_id: '1',
-    title: 'Backend Engineer',
-    company: 'Microsoft Corp.',
-    location: 'Cairo, Egypt',
-    remote_type: 'ONSITE',
-    easy_apply: false,
-    url: 'https://indeed.com/1',
-    description: 'short',
-    raw: {},
-    ...over,
-  }) as NormalizedJob;
+const job = (over: Partial<NormalizedJob>): NormalizedJob => ({
+  source: 'INDEED',
+  external_id: '1',
+  title: 'Backend Engineer',
+  company: 'Microsoft Corp.',
+  location: 'Cairo, Egypt',
+  remote_type: 'ONSITE',
+  easy_apply: false,
+  url: 'https://indeed.com/1',
+  description: 'short',
+  raw: {},
+  ...over,
+});
 
 it('one posting from many boards gets one key and one survivor', () => {
   const a = job({});

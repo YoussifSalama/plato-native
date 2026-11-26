@@ -92,6 +92,24 @@ export const countryNames = (code: CountryCode): string[] => [
 export const countryName = (code: CountryCode) =>
   COUNTRIES[code]?.name ?? REGION_NAMES.of(code) ?? code;
 
+/**
+ * Countries as the lowercase names postings use, whatever form they were saved in: an ISO code ("EG", saved by
+ * the assistant and the guest flow) becomes every name of that country ("egypt"); a name stays a name. Eligibility
+ * compares against posting text, so a bare "eg" would never match "egypt".
+ */
+export function countryNamesOf(
+  values: (string | null | undefined)[],
+): string[] {
+  const out = values.flatMap((v) => {
+    const t = (v ?? '').trim();
+    if (!t) return [];
+    if (t.length === 2 && isCountryCode(t))
+      return countryNames(t.toUpperCase());
+    return [t];
+  });
+  return [...new Set(out.map((n) => n.toLowerCase()))];
+}
+
 const BY_NAME = new Map<string, CountryCode>();
 for (const [code, { name, aliases = [] }] of Object.entries(COUNTRIES))
   for (const n of [name, ...aliases]) BY_NAME.set(n.toLowerCase(), code);

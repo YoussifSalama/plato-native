@@ -34,6 +34,7 @@ export type DiscoveryQueryOverrides = Partial<
       | 'salaryShownOnly'
       | 'willingToRelocate'
       | 'remoteAnywhere'
+      | 'cvId'
     >
   >;
 
@@ -45,6 +46,8 @@ export function mergeDiscoveryQuery(
 ): DiscoveryQuery {
   const pick = <T>(next: T[] | undefined, fallback: T[]) =>
     next && next.length ? [...new Set(next)] : fallback;
+  const avoid = (next?: string[], saved?: string[]) =>
+    next?.length ? next : overrides.exact || !saved?.length ? undefined : saved;
   const locations = pick(overrides.locations, base.locations);
   // An explicit country list wins. New places re-derive it (the saved
   // countries described the old places); otherwise the saved ones stand.
@@ -80,13 +83,12 @@ export function mergeDiscoveryQuery(
     ...(overrides.includeKeywords?.length && {
       includeKeywords: overrides.includeKeywords,
     }),
-    ...(overrides.excludeKeywords?.length && {
-      excludeKeywords: overrides.excludeKeywords,
-    }),
-    ...(overrides.excludeCompanies?.length && {
-      excludeCompanies: overrides.excludeCompanies,
-    }),
+    // Leave out / Skip companies: the profile's lists stand unless the search says otherwise. New search (exact)
+    // shows them prefilled, so there an empty field means none.
+    excludeKeywords: avoid(overrides.excludeKeywords, base.excludeKeywords),
+    excludeCompanies: avoid(overrides.excludeCompanies, base.excludeCompanies),
     ...(overrides.remoteAnywhere && { remoteAnywhere: true }),
+    ...(overrides.cvId && { cvId: overrides.cvId }),
     ...(overrides.salaryShownOnly && { salaryShownOnly: true }),
   };
 }

@@ -12,7 +12,7 @@ export const APPLICATION_STATUS: Record<ApplicationStatus, { label: string; tone
   FAILED: { label: "Didn't go through", tone: "bg-destructive/10 text-destructive", hint: "Plato tried to apply and could not." },
   EXPIRED: { label: "Didn't go through", tone: "bg-muted text-muted-foreground", hint: "The employer closed this posting before Plato could apply." },
   SKIPPED: { label: "Didn't go through", tone: "bg-muted text-muted-foreground", hint: "Plato decided not to apply to this one." },
-  EXTENSION_ACTIVE: { label: "In your browser", tone: "bg-info-soft text-info", hint: "The Plato browser extension is working on this one with you. You press Submit." },
+  EXTENSION_ACTIVE: { label: "In your browser", tone: "bg-info-soft text-info", hint: "The Plato browser extension is filling this one in your browser and presses Submit when it's done." },
 }
 
 // Short, human names for why an application didn't go through.

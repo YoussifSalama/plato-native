@@ -11,10 +11,10 @@ const mono = Geist_Mono({ variable: "--font-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://platohiring.com"),
-  title: { default: "Plato · Your job hunt, on autopilot", template: "%s · Plato" },
-  description: "Plato searches 32 job sources, ranks every posting against your profile, and applies in your own browser. It asks you only for what it cannot know.",
+  title: { default: "Plato", template: "%s · Plato" },
+  description: "Plato for employers is coming. Job seekers: Plato searches, ranks and applies for you at jobs.platohiring.com.",
   icons: { icon: "/logo.png", apple: "/logo.png" },
-  openGraph: { title: "Plato · Your job hunt, on autopilot", description: "Search 32 sources, get every posting ranked against your profile, apply from your own browser.", url: "https://platohiring.com", siteName: "Plato", type: "website" },
+  openGraph: { title: "Plato", description: "Plato for employers is coming. Job seekers: jobs.platohiring.com.", url: "https://platohiring.com", siteName: "Plato", type: "website" },
 };
 
 // Browser chrome matches the night surfaces the page opens on.

@@ -72,9 +72,14 @@ function saveProfile(
   return request(apiClient.patch("/job-seeker/profile", profile))
 }
 
+// Where the person lives, on its own (onboarding); the full edit is the Profile page's saveProfile.
+function saveLocation(location: { city: string; country: string }) {
+  return request(apiClient.patch("/job-seeker/profile/location", location))
+}
+
 // The file as uploaded, for a preview in a new tab.
 function getDocumentFile(id: string): Promise<Blob> {
   return request(apiClient.get(`/job-seeker/documents/${id}/file`, { responseType: "blob" }))
 }
 
-export { messageOf, getDocumentsStatus, getDocumentFile, uploadDocument, listDocuments, deleteDocument, replaceDocument, analyzeProfile, getProfile, saveProfile }
+export { messageOf, getDocumentsStatus, getDocumentFile, uploadDocument, listDocuments, deleteDocument, replaceDocument, analyzeProfile, getProfile, saveProfile, saveLocation }

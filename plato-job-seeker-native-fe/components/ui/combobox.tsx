@@ -90,10 +90,10 @@ function ComboboxContent<Item>({
   const [scrollState, setScrollState] = React.useState({ up: false, down: false })
 
   function updateScrollState(el: HTMLDivElement) {
-    setScrollState({
-      up: el.scrollTop > 0,
-      down: el.scrollTop + el.clientHeight < el.scrollHeight - 1,
-    })
+    const up = el.scrollTop > 0
+    const down = el.scrollTop + el.clientHeight < el.scrollHeight - 1
+    // Same values keep the same object: the effect below runs after every render, so a new object each time looped.
+    setScrollState((prev) => (prev.up === up && prev.down === down ? prev : { up, down }))
   }
 
   React.useEffect(() => {
@@ -179,7 +179,7 @@ function ComboboxEmpty({ className, ...props }: ComboboxPrimitive.Empty.Props) {
   return (
     <ComboboxPrimitive.Empty
       data-slot="combobox-empty"
-      className={cn("px-2.5 py-2 text-sm text-muted-foreground", className)}
+      className={cn("px-2.5 py-2 text-sm text-muted-foreground empty:hidden", className)}
       {...props}
     />
   )

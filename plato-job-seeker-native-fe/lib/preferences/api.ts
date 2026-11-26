@@ -16,7 +16,8 @@ function getPreferences(): Promise<Preferences> {
   return request(apiClient.get("/job-seeker/preferences"))
 }
 
-function savePreferences(data: PreferencesEditPayload): Promise<Preferences> {
+// confirm: false saves without marking the preferences confirmed (Profile > Links); onboarding's Continue confirms.
+function savePreferences(data: PreferencesEditPayload & { confirm?: boolean }): Promise<Preferences> {
   return request(apiClient.patch("/job-seeker/preferences", data))
 }
 

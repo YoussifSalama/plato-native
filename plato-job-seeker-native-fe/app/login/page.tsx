@@ -3,7 +3,7 @@ import { AuthShell } from "@/components/auth/auth-shell"
 import { AuthForm } from "@/components/auth-form"
 
 export const metadata: Metadata = {
-  title: "Log in | Plato",
+  title: "Log in | Plato Job Seeker",
   description: "Log in to Plato, your AI job hunter.",
 }
 

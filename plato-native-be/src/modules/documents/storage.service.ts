@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -67,5 +68,29 @@ export class StorageService {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
+  }
+
+  /** Deletes every object under one owner's folder, e.g. "proofs/<24-hex id>/". Returns how many. */
+  async deletePrefix(prefix: string) {
+    // Never a bare or partial folder: a wrong prefix here would empty the bucket.
+    if (!/^[a-z-]+\/[a-f0-9]{24}\/$/.test(prefix))
+      throw new Error(`Refusing to delete prefix "${prefix}"`);
+    let deleted = 0;
+    let token: string | undefined;
+    do {
+      const page = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: token,
+        }),
+      );
+      const keys = (page.Contents ?? []).flatMap((o) => (o.Key ? [o.Key] : []));
+      // One by one: a seeker has a handful of files, and this is the call every other path uses.
+      for (const key of keys) await this.delete(key);
+      deleted += keys.length;
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (token);
+    return deleted;
   }
 }

@@ -11,6 +11,7 @@ import { FilterChip } from "@/components/filter-controls"
 import { Textarea } from "@/components/ui/textarea"
 import { Skeleton } from "@/components/ui/skeleton"
 import { InfoTip } from "@/components/info-tip"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { addAchievement, addProject, addSkillProof, getResumeFacts, removeResumeFact, type ResumeFacts } from "@/lib/resume-profile/api"
 
 // What Plato uses to write your resumes and applications. Everything here is
@@ -85,11 +86,23 @@ export function ResumeFactsPanel() {
       setBusy(false)
     }
   }
-  const remove = (kind: "projects" | "achievements" | "skills", id: string) => run(() => removeResumeFact(kind, id), () => undefined)
+  // Removing asks first; a skill saved again (any case) replaces the saved one, so that asks too.
+  const [ask, setAsk] = useState<{ title: string; body: string; label: string; go: () => void } | null>(null)
+  const remove = (kind: "projects" | "achievements" | "skills", id: string, name: string) =>
+    setAsk({ title: `Remove “${name}”?`, body: "Plato stops using it on your resumes and applications.", label: "Remove", go: () => void run(() => removeResumeFact(kind, id), () => undefined) })
+  function addSkill() {
+    const go = () => void run(() => addSkillProof(skill), () => setSkill({ skill: "", level: "WORKING", proof: "", url: "" }))
+    const same = facts?.skills.find((s) => s.skill.trim().toLowerCase() === skill.skill.trim().toLowerCase())
+    if (!same) return go()
+    setAsk({ title: `Replace your saved “${same.skill}”?`, body: `It is saved as ${LEVEL[same.level]} with its own proof. Saving again replaces both with this ${LEVEL[skill.level]} entry.`, label: "Replace", go })
+  }
 
   return (
     <div className="flex flex-col gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
+      <ConfirmDialog open={!!ask} title={ask?.title ?? ""} confirmLabel={ask?.label ?? "OK"} onCancel={() => setAsk(null)} onConfirm={() => (ask?.go(), setAsk(null))}>
+        {ask?.body}
+      </ConfirmDialog>
       {!facts && !error && <Skeleton className="h-48 rounded-2xl" />}
 
       {facts && (
@@ -97,7 +110,7 @@ export function ResumeFactsPanel() {
           <Section title="Projects" icon={FolderGit2} index={0} tour="profile-projects" hint="Real things you built. Especially useful early in your career.">
             <ul className="flex flex-col gap-2">
               {facts.projects.map((p) => (
-                <Row key={p.id} title={p.name} sub={[p.description, p.result && `Result: ${p.result}`].filter(Boolean).join("\n")} onRemove={() => void remove("projects", p.id)} />
+                <Row key={p.id} title={p.name} sub={[p.description, p.result && `Result: ${p.result}`].filter(Boolean).join("\n")} onRemove={() => remove("projects", p.id, p.name)} />
               ))}
             </ul>
             <form
@@ -111,19 +124,19 @@ export function ResumeFactsPanel() {
               }}
             >
               <Field id="p-name" label="Name">
-                <Input id="p-name" value={project.name} onChange={(e) => setProject({ ...project, name: e.target.value })} required />
+                <Input id="p-name" maxLength={120} value={project.name} onChange={(e) => setProject({ ...project, name: e.target.value })} required />
               </Field>
               <Field id="p-desc" label="What you built">
-                <Textarea id="p-desc" value={project.description} onChange={(e) => setProject({ ...project, description: e.target.value })} required className="min-h-20 text-sm" />
+                <Textarea id="p-desc" maxLength={1200} value={project.description} onChange={(e) => setProject({ ...project, description: e.target.value })} required className="min-h-20 text-sm" />
               </Field>
               <Field id="p-tech" label="Technologies (comma separated)">
-                <Input id="p-tech" value={project.technologies} onChange={(e) => setProject({ ...project, technologies: e.target.value })} />
+                <Input id="p-tech" maxLength={900} value={project.technologies} onChange={(e) => setProject({ ...project, technologies: e.target.value })} />
               </Field>
               <Field id="p-result" label="Result (only real numbers)">
-                <Input id="p-result" value={project.result} onChange={(e) => setProject({ ...project, result: e.target.value })} />
+                <Input id="p-result" maxLength={400} value={project.result} onChange={(e) => setProject({ ...project, result: e.target.value })} />
               </Field>
               <Field id="p-url" label="Link">
-                <Input id="p-url" type="url" value={project.url} onChange={(e) => setProject({ ...project, url: e.target.value })} placeholder="https://" />
+                <Input id="p-url" type="url" maxLength={300} value={project.url} onChange={(e) => setProject({ ...project, url: e.target.value })} placeholder="https://" />
               </Field>
               <Button type="submit" data-ai="profile.add-project" size="sm" disabled={busy} className={cn("w-fit", SOFT_BTN)}>
                 {busy && <Loader2 className="size-3.5 animate-spin" />}
@@ -135,7 +148,7 @@ export function ResumeFactsPanel() {
           <Section title="Results" icon={TrendingUp} index={1} tour="profile-results" hint="What changed because of your work. A real number makes a bullet much stronger.">
             <ul className="flex flex-col gap-2">
               {facts.achievements.map((a) => (
-                <Row key={a.id} title={a.metric ? `${a.text} (${a.metric})` : a.text} sub={a.company ?? a.project_name} onRemove={() => void remove("achievements", a.id)} />
+                <Row key={a.id} title={a.metric ? `${a.text} (${a.metric})` : a.text} sub={a.company ?? a.project_name} onRemove={() => remove("achievements", a.id, a.text.slice(0, 40))} />
               ))}
             </ul>
             <form
@@ -146,13 +159,13 @@ export function ResumeFactsPanel() {
               }}
             >
               <Field id="a-text" label="What happened">
-                <Textarea id="a-text" value={achievement.text} onChange={(e) => setAchievement({ ...achievement, text: e.target.value })} required className="min-h-16 text-sm" />
+                <Textarea id="a-text" maxLength={400} value={achievement.text} onChange={(e) => setAchievement({ ...achievement, text: e.target.value })} required className="min-h-16 text-sm" />
               </Field>
               <Field id="a-metric" label="The number, exactly (optional)">
-                <Input id="a-metric" value={achievement.metric} onChange={(e) => setAchievement({ ...achievement, metric: e.target.value })} placeholder="40%" />
+                <Input id="a-metric" maxLength={60} value={achievement.metric} onChange={(e) => setAchievement({ ...achievement, metric: e.target.value })} placeholder="40%" />
               </Field>
               <Field id="a-company" label="Employer (as in your CV, optional)">
-                <Input id="a-company" value={achievement.company} onChange={(e) => setAchievement({ ...achievement, company: e.target.value })} />
+                <Input id="a-company" maxLength={120} value={achievement.company} onChange={(e) => setAchievement({ ...achievement, company: e.target.value })} />
               </Field>
               <Button type="submit" data-ai="profile.add-result" size="sm" disabled={busy} className={cn("w-fit", SOFT_BTN)}>
                 {busy && <Loader2 className="size-3.5 animate-spin" />}
@@ -164,18 +177,18 @@ export function ResumeFactsPanel() {
           <Section title="Skills with proof" icon={BadgeCheck} index={2} tour="profile-skill-proof" hint="A skill with proof can go on a resume even if your CV never listed it.">
             <ul className="flex flex-col gap-2">
               {facts.skills.map((s) => (
-                <Row key={s.id} title={`${s.skill} · ${LEVEL[s.level]}`} sub={s.proof} onRemove={() => void remove("skills", s.id)} />
+                <Row key={s.id} title={`${s.skill} · ${LEVEL[s.level]}`} sub={s.proof} onRemove={() => remove("skills", s.id, s.skill)} />
               ))}
             </ul>
             <form
               className="flex flex-col gap-2"
               onSubmit={(e) => {
                 e.preventDefault()
-                void run(() => addSkillProof(skill), () => setSkill({ skill: "", level: "WORKING", proof: "", url: "" }))
+                addSkill()
               }}
             >
               <Field id="s-skill" label="Skill">
-                <Input id="s-skill" value={skill.skill} onChange={(e) => setSkill({ ...skill, skill: e.target.value })} required />
+                <Input id="s-skill" maxLength={60} value={skill.skill} onChange={(e) => setSkill({ ...skill, skill: e.target.value })} required />
               </Field>
               <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Level">
                 {(["LEARNING", "WORKING", "STRONG"] as const).map((l) => (
@@ -186,10 +199,10 @@ export function ResumeFactsPanel() {
                 <InfoTip text="Working and Strong count as proof, so Plato may put the skill on a tailored resume. Learning is shown only as currently learning and never counted as experience." label="What the skill levels mean" />
               </div>
               <Field id="s-proof" label="What you built or did with it">
-                <Textarea id="s-proof" value={skill.proof} onChange={(e) => setSkill({ ...skill, proof: e.target.value })} required className="min-h-16 text-sm" />
+                <Textarea id="s-proof" maxLength={600} value={skill.proof} onChange={(e) => setSkill({ ...skill, proof: e.target.value })} required className="min-h-16 text-sm" />
               </Field>
               <Field id="s-url" label="Link (optional)">
-                <Input id="s-url" type="url" value={skill.url} onChange={(e) => setSkill({ ...skill, url: e.target.value })} placeholder="https://" />
+                <Input id="s-url" type="url" maxLength={300} value={skill.url} onChange={(e) => setSkill({ ...skill, url: e.target.value })} placeholder="https://" />
               </Field>
               <Button type="submit" data-ai="profile.add-skill" size="sm" disabled={busy} className={cn("w-fit", SOFT_BTN)}>
                 {busy && <Loader2 className="size-3.5 animate-spin" />}

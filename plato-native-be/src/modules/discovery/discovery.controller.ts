@@ -243,8 +243,10 @@ export class DiscoveryController {
   }
 
   // "New search", on Start: whether the search fits the profile, and if not the closest search that does.
+  // Paid (discovery.fit) and only ever followed by a paid search: guarded. parse and plan-titles are free (tokensFor).
   @Post('discover/check')
   @HttpCode(200)
+  @UseGuards(TokensGuard)
   async checkSearch(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
     const parsed = z

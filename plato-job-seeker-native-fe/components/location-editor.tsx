@@ -21,11 +21,11 @@ function LocationEditor({
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">City</label>
-          <Input value={city} onChange={(e) => setCity(e.target.value)} className="h-8 text-sm" />
+          <Input value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} autoComplete="address-level2" className="h-8 text-sm" />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">Country</label>
-          <Input value={country} onChange={(e) => setCountry(e.target.value)} className="h-8 text-sm" />
+          <Input value={country} onChange={(e) => setCountry(e.target.value)} maxLength={100} autoComplete="country-name" className="h-8 text-sm" />
         </div>
       </div>
       <div className="flex gap-2">

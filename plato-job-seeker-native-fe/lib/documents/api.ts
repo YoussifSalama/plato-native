@@ -2,13 +2,22 @@ import { AxiosError } from "axios"
 import { apiClient } from "@/lib/api-client"
 import type { DocumentType, EvaluationStatuses, JobSeekerDocument, JobSeekerProfile, SectionKey } from "./schema"
 
+// The server's message: a string, or a list of validation issues (show the first,
+// naming the entry it is about: "Experience 2: Add the company").
+const ENTRY: Record<string, string> = { experiences: "Experience", educations: "Education", certifications: "Certification", languages: "Language" }
+function messageOf(m: unknown): string {
+  if (typeof m === "string") return m
+  const first = Array.isArray(m) ? (m[0] as { message?: string; path?: unknown[] } | undefined) : undefined
+  if (!first?.message) return "Request failed"
+  const [section, index] = first.path ?? []
+  return typeof section === "string" && ENTRY[section] && typeof index === "number" ? `${ENTRY[section]} ${index + 1}: ${first.message}` : first.message
+}
+
 async function request<T>(promise: Promise<{ data: T }>): Promise<T> {
   try {
     return (await promise).data
   } catch (error) {
-    if (error instanceof AxiosError) {
-      throw new Error(error.response?.data?.message ?? "Request failed")
-    }
+    if (error instanceof AxiosError) throw new Error(messageOf(error.response?.data?.message))
     throw error
   }
 }
@@ -28,10 +37,15 @@ function deleteDocument(id: string): Promise<{ removed: string }> {
   return request(apiClient.delete(`/job-seeker/documents/${id}`))
 }
 
-function replaceDocument(id: string, file: File): Promise<JobSeekerDocument & { remaining_replacements: number }> {
+function replaceDocument(id: string, file: File): Promise<JobSeekerDocument> {
   const formData = new FormData()
   formData.append("file", file)
   return request(apiClient.put(`/job-seeker/documents/${id}/replace`, formData))
+}
+
+// Whether documents were added or replaced since Plato last read the profile.
+function getDocumentsStatus(): Promise<{ needs_analysis: boolean }> {
+  return request(apiClient.get("/job-seeker/documents/status"))
 }
 
 function analyzeProfile(): Promise<{ profile: JobSeekerProfile; evaluation: EvaluationStatuses }> {
@@ -63,4 +77,4 @@ function getDocumentFile(id: string): Promise<Blob> {
   return request(apiClient.get(`/job-seeker/documents/${id}/file`, { responseType: "blob" }))
 }
 
-export { getDocumentFile, uploadDocument, listDocuments, deleteDocument, replaceDocument, analyzeProfile, getProfile, saveProfile }
+export { messageOf, getDocumentsStatus, getDocumentFile, uploadDocument, listDocuments, deleteDocument, replaceDocument, analyzeProfile, getProfile, saveProfile }

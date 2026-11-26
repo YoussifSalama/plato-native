@@ -38,11 +38,13 @@ export interface DocumentInput {
 
 export interface UpdateDocumentInput {
   status?: JobSeekerDocumentStatus;
-  extracted_text?: string;
-  processing_error?: string;
+  extracted_text?: string | null;
+  processing_error?: string | null;
   storage_key?: string;
   url?: string;
   name?: string;
+  created_at?: Date;
+  apply_json?: Prisma.InputJsonValue | null;
 }
 
 export interface PreferenceInput {

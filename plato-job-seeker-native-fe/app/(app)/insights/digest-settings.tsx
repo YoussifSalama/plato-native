@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import { BellRing, CalendarClock, Inbox, Mail, ShieldCheck } from "lucide-react"
 import { cn } from "cn"
@@ -9,6 +10,7 @@ import { PillTabs } from "@/components/pill-tabs"
 import { CARD } from "@/components/plato-ui"
 import { CountUp } from "@/components/count-up"
 import { InfoTip } from "@/components/info-tip"
+import { getMe, resendVerification } from "@/lib/auth/api"
 import { CADENCES, type AlertSettings, type Cadence, type InsightsOverview } from "@/lib/insights/api"
 import { lineReveal, nodeContent, reducedVariants } from "@/lib/motion-system"
 
@@ -25,6 +27,20 @@ const when = (iso: string | null) => {
 export function DigestSettings({ data, onChange }: { data: InsightsOverview | null; onChange: (patch: Partial<Omit<AlertSettings, "emailAvailable">>) => void }) {
   const reduced = !!useReducedMotion()
   const v = (x: typeof lineReveal) => (reduced ? reducedVariants(x) : x)
+  // Digest emails go only to a confirmed address: say so where the email switch is.
+  const [unverified, setUnverified] = useState(false)
+  const [resend, setResend] = useState<"idle" | "busy" | "sent" | "failed">("idle")
+  useEffect(() => {
+    getMe()
+      .then((u) => setUnverified(u.email_verified === false))
+      .catch(() => undefined)
+  }, [])
+  const sendLink = () => {
+    setResend("busy")
+    resendVerification()
+      .then((r) => setResend(r.sent ? "sent" : "failed"))
+      .catch(() => setResend("failed"))
+  }
   if (!data) return <SettingsSkeleton />
   const { settings, pending } = data
   const active = data.alerts.filter((a) => !a.paused).length
@@ -60,8 +76,18 @@ export function DigestSettings({ data, onChange }: { data: InsightsOverview | nu
           </motion.div>
           <motion.div variants={v(lineReveal)} data-tour="digest-channels" className="flex flex-wrap gap-2.5">
             <Channel icon={Inbox} label="In Plato" hint="In your notifications" checked={settings.in_app} onChange={(in_app) => onChange({ in_app })} />
-            <Channel icon={Mail} label="By email" hint={settings.emailAvailable ? "One email per digest" : "Coming soon: you'll get them in Plato for now"} checked={settings.email && settings.emailAvailable} disabled={!settings.emailAvailable} onChange={(email) => onChange({ email })} />
+            <Channel icon={Mail} label="By email" hint={!settings.emailAvailable ? "Coming soon: you'll get them in Plato for now" : unverified ? "Confirm your email first" : "One email per digest"} checked={settings.email && settings.emailAvailable} disabled={!settings.emailAvailable} onChange={(email) => onChange({ email })} />
           </motion.div>
+          {settings.emailAvailable && unverified && (
+            <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-text-secondary">
+              {resend === "sent" ? "A new confirmation link is on its way." : resend === "failed" ? "We couldn't send the link right now. Try again in a little while." : "Digest emails go only to a confirmed address."}
+              {resend !== "sent" && (
+                <button type="button" onClick={sendLink} disabled={resend === "busy"} className="font-semibold text-primary hover:underline disabled:opacity-60">
+                  Send the link again
+                </button>
+              )}
+            </p>
+          )}
         </div>
 
         <motion.div variants={v(lineReveal)} data-tour="digest-cadence" className="flex flex-col gap-2.5 rounded-xl border bg-card/90 p-4 shadow-[var(--shadow-lift)] backdrop-blur lg:w-80">

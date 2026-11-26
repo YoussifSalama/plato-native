@@ -54,8 +54,12 @@ describe('buildEstimates', () => {
 
 describe('CreditsEstimatesService.summary (what the API and the assistants get)', () => {
   let estimates: CreditsEstimatesService;
+  let prisma: {
+    creditAccount: { findUnique: jest.Mock };
+    creditLedger: object;
+  };
   beforeEach(() => {
-    const prisma = {
+    prisma = {
       creditAccount: {
         findUnique: jest.fn().mockResolvedValue({
           plan: 'free',
@@ -66,6 +70,7 @@ describe('CreditsEstimatesService.summary (what the API and the assistants get)'
         }),
       },
       creditLedger: {
+        findMany: jest.fn().mockResolvedValue([]),
         groupBy: jest.fn().mockResolvedValue([
           {
             feature: 'career.chat',
@@ -93,6 +98,17 @@ describe('CreditsEstimatesService.summary (what the API and the assistants get)'
     expect(
       s.estimates.find((e) => e.action === 'career_message'),
     ).toMatchObject({ about: 10 });
+  });
+
+  it('a balance below zero is told as it is, as /credits tells it', async () => {
+    prisma.creditAccount.findUnique.mockResolvedValueOnce({
+      plan: 'free',
+      balance: -311.1,
+      topup: 0,
+      period_start: new Date('2026-10-01T00:00:00Z'),
+      period_end: new Date('2099-11-01T00:00:00Z'),
+    });
+    expect((await estimates.summary('u1')).balance).toBe(-311);
   });
 
   it('holds nothing that reveals what Plato pays or how tokens are made', async () => {

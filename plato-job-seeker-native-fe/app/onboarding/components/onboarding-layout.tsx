@@ -7,6 +7,8 @@ import { cn } from "cn"
 import { PlatoMark } from "@/components/plato-orb"
 import { OnboardingAssistant } from "@/app/onboarding/components/onboarding-assistant"
 import { PageTour } from "@/components/page-tour"
+import { LogOut } from "lucide-react"
+import { logout } from "@/lib/auth/api"
 
 // Three steps, as in the business owner's screens 01-03.
 export const STEPS = [
@@ -44,6 +46,15 @@ function OnboardingLayout({ step, faqs, children }: { step: Step; faqs: string[]
               </span>
             ))}
           </span>
+          {/* Onboarding has no app shell: its own way out, so a half-set-up account can still log out. */}
+          <button
+            type="button"
+            onClick={() => void logout().finally(() => window.location.assign("/login"))}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <LogOut className="size-4" />
+            <span className="hidden sm:inline">Log out</span>
+          </button>
         </div>
       </header>
 

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 
 export interface Mail {
   to: string;
@@ -14,11 +14,19 @@ export interface Mail {
 // Email through SendGrid's v3 API. Without SENDGRID_API_KEY and MAIL_FROM it
 // sends nothing and says so: in-app notifications still work.
 @Injectable()
-export class MailService {
+export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
 
   get enabled() {
     return !!process.env.SENDGRID_API_KEY && !!process.env.MAIL_FROM;
+  }
+
+  // In production no mail means no reset links and no confirmations: say so loudly at boot (GET /health shows it too).
+  onModuleInit() {
+    if (process.env.NODE_ENV === 'production' && !this.enabled)
+      this.logger.error(
+        'Mail is OFF in production: set SENDGRID_API_KEY and MAIL_FROM. Password resets and email confirmations will not be sent.',
+      );
   }
 
   async send(mail: Mail): Promise<boolean> {

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react"
-import { FileText, Gift, MessageCircle, MessagesSquare, Mic, Plus, RefreshCw, Search, UserRound, type LucideIcon } from "lucide-react"
+import { ClipboardCheck, FileText, Gift, MessageCircle, MessagesSquare, Mic, MinusCircle, Plus, RefreshCw, Search, UserRound, type LucideIcon } from "lucide-react"
 import { formatTokens, type TokenMove } from "@/lib/credits/api"
 import { ease } from "@/lib/motion-system"
 
@@ -15,15 +15,14 @@ export const CATEGORIES: Category[] = [
   { key: "resume", label: "Resumes", icon: FileText },
   { key: "interview", label: "Mock interviews", icon: MessagesSquare },
   { key: "voice", label: "Voice interviews", icon: Mic },
+  { key: "practice", label: "Practice tests", icon: ClipboardCheck },
   { key: "profile", label: "Profile setup", icon: UserRound },
+  { key: "other", label: "Other", icon: MessageCircle },
 ]
-const OTHER: Category = { key: "other", label: "Other", icon: MessageCircle }
+const OTHER = CATEGORIES.at(-1)!
 
-export function categoryOf(feature: string | null): Category {
-  const f = feature ?? ""
-  const key = /^(chat\.orchestrator|discovery\.)/.test(f) ? "search" : /^career\.voice/.test(f) ? "voice" : /^career\./.test(f) ? "career" : /^resume\./.test(f) ? "resume" : /^interview\./.test(f) ? "interview" : /^(onboarding\.|chat\.onboarding)/.test(f) ? "profile" : "other"
-  return CATEGORIES.find((c) => c.key === key) ?? OTHER
-}
+// The server names each line's kind of work (the same keys as its spending totals).
+export const categoryOf = (key: string | null): Category => CATEGORIES.find((c) => c.key === key) ?? OTHER
 
 // A line of history: what it was and how it looks. Tokens coming in are the only coloured rows (green = added).
 const SPEND = "bg-muted text-text-secondary"
@@ -31,9 +30,10 @@ const GAIN = "bg-success-soft text-success"
 export function describeMove(m: TokenMove): { title: string; icon: LucideIcon; tone: string } {
   if (m.kind === "grant") return { title: m.label === "Monthly tokens" ? "Monthly tokens arrived" : m.label, icon: RefreshCw, tone: GAIN }
   if (m.kind === "topup") return { title: "Top-up added", icon: Plus, tone: GAIN }
-  if (m.kind === "adjust") return { title: m.amount >= 0 ? "A gift from the Plato team" : "Adjustment by Plato", icon: Gift, tone: m.amount >= 0 ? GAIN : SPEND }
-  const c = categoryOf(m.feature)
-  return { title: m.label, icon: c.icon, tone: SPEND }
+  if (m.kind === "adjust") return m.amount >= 0 ? { title: "A gift from the Plato team", icon: Gift, tone: GAIN } : { title: "Adjustment by Plato", icon: MinusCircle, tone: SPEND }
+  const c = categoryOf(m.category)
+  // A search's board runs arrive as one line: say how many it was.
+  return { title: m.count > 1 && m.feature === "discovery.apify" ? `${m.label} (${m.count} board runs)` : m.label, icon: c.icon, tone: SPEND }
 }
 
 // Counts up to a number on arrival (a motion value, so no re-render per frame); instant for reduced motion.

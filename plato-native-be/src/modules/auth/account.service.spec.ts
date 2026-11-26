@@ -2,6 +2,7 @@ import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 
 jest.mock('@nestjs/jwt', () => ({ JwtService: class {} }));
+jest.mock('@nestjs/config', () => ({ ConfigService: class {} }));
 
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountService } from './account.service';
@@ -22,6 +23,10 @@ function fakeDb() {
     },
   ];
   const tokens: Row[] = [];
+  const devices: Row[] = [
+    { id: 'd1', job_seeker_id: 's1', revoked_at: null },
+    { id: 'd2', job_seeker_id: 's2', revoked_at: null },
+  ];
   const hit = (r: Row, w: Row) =>
     Object.entries(w).every(([k, v]) => (r[k] ?? null) === v);
   const db = {
@@ -33,6 +38,17 @@ function fakeDb() {
           users.find((u) => hit(u, where))!,
           data,
         ),
+    },
+    jobSeeker: {
+      findUnique: async ({ where }: { where: Row }) =>
+        where.user_id === 'u1' ? { id: 's1' } : null,
+    },
+    extensionDevice: {
+      updateMany: async ({ where, data }: { where: Row; data: Row }) => {
+        const rows = devices.filter((d) => hit(d, where));
+        rows.forEach((d) => Object.assign(d, data));
+        return { count: rows.length };
+      },
     },
     authToken: {
       deleteMany: async ({ where }: { where: Row }) => {
@@ -50,7 +66,7 @@ function fakeDb() {
       },
     },
   };
-  return { db, users, tokens };
+  return { db, users, tokens, devices };
 }
 
 function setup() {
@@ -61,7 +77,7 @@ function setup() {
       async (m: { to: string; text: string }) => (sent.push(m), true),
     ),
   };
-  const svc = new AccountService(f.db as never, mail as never);
+  const svc = new AccountService(f.db as never, mail as never, {} as never);
   const linkToken = () => /token=([\w-]+)/.exec(sent.at(-1)!.text)![1];
   return { ...f, svc, mail, sent, linkToken };
 }
@@ -88,6 +104,14 @@ describe('password reset', () => {
     await expect(
       svc.resetPassword(token, 'another-pass'),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("a reset also signs out the linked browser extensions, and only this account's", async () => {
+    const { svc, devices, linkToken } = setup();
+    await svc.forgotPassword('mona@example.com');
+    await svc.resetPassword(linkToken(), 'new-password-1');
+    expect(devices[0].revoked_at).toBeInstanceOf(Date);
+    expect(devices[1].revoked_at).toBeNull();
   });
 
   it('an expired link, or a confirmation link used for a reset, is refused', async () => {
@@ -126,6 +150,42 @@ describe('email confirmation', () => {
     mail.send.mockClear();
     expect(await svc.sendVerification('u1')).toEqual({ sent: false });
     expect(mail.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('change password (signed in)', () => {
+  it('needs the current password; then sets the new one and ends other sessions and extensions', async () => {
+    const { svc, users, devices } = setup();
+    users[0].password_hash = await bcrypt.hash('old-password', 4);
+    await expect(
+      svc.changePassword('u1', 'wrong', 'new-password-1'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(users[0].sessions_valid_after).toBeNull();
+    await svc.changePassword('u1', 'old-password', 'new-password-1');
+    expect(
+      await bcrypt.compare('new-password-1', users[0].password_hash as string),
+    ).toBe(true);
+    expect(users[0].sessions_valid_after).toBeInstanceOf(Date);
+    expect(devices[0].revoked_at).toBeInstanceOf(Date);
+  });
+});
+
+describe('change email', () => {
+  it('the link goes to the new address and the email changes only when it is opened', async () => {
+    const { svc, users, sent, linkToken } = setup();
+    users[0].password_hash = await bcrypt.hash('pass-word-1', 4);
+    await expect(
+      svc.requestEmailChange('u1', 'new@example.com', 'nope'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await svc.requestEmailChange('u1', 'new@example.com', 'pass-word-1');
+    expect(sent.at(-1)!.to).toBe('new@example.com');
+    expect(users[0].email).toBe('mona@example.com');
+    expect(await svc.verifyEmail(linkToken())).toEqual({
+      ok: true,
+      email: 'new@example.com',
+    });
+    expect(users[0].email).toBe('new@example.com');
+    expect(users[0].email_verified_at).toBeInstanceOf(Date);
   });
 });
 

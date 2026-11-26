@@ -5,10 +5,15 @@ import {
   applyBoardsResult,
   applyLinkedInResult,
   initialProgress,
+  markTokenSkips,
   matchLabel,
   toMatchPercent,
 } from './discovery-run.helpers';
 import { mergeDiscoveryQuery } from './query-merge';
+import { DiscoveryService } from './discovery.service';
+
+// ESM-only packages this Jest setup does not load; startRun's guard needs none of them
+jest.mock('@nestjs/config', () => ({ ConfigService: class {} }));
 import { DiscoveryQuery, NormalizedJob } from './adapters/types';
 
 const base: DiscoveryQuery = {
@@ -105,5 +110,55 @@ describe('toMatchPercent / matchLabel', () => {
     expect(matchLabel(95)).toBe('Excellent match');
     expect(matchLabel(80)).toBe('Strong match');
     expect(matchLabel(40)).toBe('Match');
+  });
+});
+
+describe('runs the tokens did not cover', () => {
+  it('read "skipped: not enough tokens", not "0 found"; a source that found jobs keeps its count', () => {
+    let p = initialProgress([JobSource.INDEED, JobSource.GLASSDOOR]);
+    p = applyLinkedInResult(p, { status: 'fulfilled', value: [] });
+    p = applyBoardsResult(p, {
+      status: 'fulfilled',
+      value: { jobs: [job('INDEED')], failed: {} },
+    });
+    p = markTokenSkips(p, ['linkedin', 'indeed', 'glassdoor']);
+    expect(p.sources.linkedin).toEqual({
+      status: 'SKIPPED',
+      fetched: 0,
+      error: 'Skipped: not enough Plato tokens',
+    });
+    expect(p.sources.glassdoor.status).toBe('SKIPPED');
+    expect(p.sources.indeed).toEqual({ status: 'DONE', fetched: 1 });
+    expect(allSourcesFailed(p)).toBe(false);
+  });
+});
+
+describe('one running search per seeker', () => {
+  it('a second start while one runs is a 409 naming the running search, before any AI or write', async () => {
+    const findFirst = jest
+      .fn()
+      .mockResolvedValue({ id: 'run1', thread_id: 'th1' });
+    const svc = new (
+      DiscoveryService as unknown as new (...a: unknown[]) => DiscoveryService
+    )({ discoveryRun: { findFirst } });
+    const buildQuery = jest.spyOn(svc, 'buildQuery');
+    const err = (await svc
+      .startRun('s1', { titles: ['x'] }, 'th2')
+      .catch((e: unknown) => e)) as {
+      getStatus(): number;
+      getResponse(): unknown;
+    };
+    expect(err.getStatus()).toBe(409);
+    expect(err.getResponse()).toMatchObject({
+      code: 'search_running',
+      runId: 'run1',
+      threadId: 'th1',
+    });
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { job_seeker_id: 's1', status: 'RUNNING' },
+      }),
+    );
+    expect(buildQuery).not.toHaveBeenCalled();
   });
 });

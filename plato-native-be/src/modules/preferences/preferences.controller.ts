@@ -29,6 +29,9 @@ import { resolveCountry } from '../discovery/countries';
 import { checkSalary } from '../discovery/salary-sanity';
 import { metered } from '../usage/usage';
 
+// First-load suggestion runs in flight, by job seeker.
+const suggesting = new Map<string, Promise<unknown>>();
+
 @Controller('job-seeker/preferences')
 @UseGuards(JwtAuthGuard)
 export class PreferencesController {
@@ -51,38 +54,59 @@ export class PreferencesController {
     const jobSeekerId = await this.requireJobSeekerId(req.userId);
 
     const existing = await this.preferenceService.get(jobSeekerId);
-    if ('id' in existing) return existing;
+    // An empty suggestion saved before the CV was read is not kept forever.
+    const frozen =
+      'id' in existing &&
+      existing.source === 'AI_SUGGESTED' &&
+      !existing.roles.length;
+    if ('id' in existing && !frozen) return existing;
 
     // No preferences yet — generate a one-time suggestion from the
-    // already-confirmed structured profile (not raw documents).
+    // already-confirmed structured profile (not raw documents). Before Plato
+    // has read a CV there is nothing to suggest from: the defaults, unsaved,
+    // so the suggestion still runs once the CV is read.
     const profile = await this.profileService.getFullProfile(jobSeekerId);
-    const model =
-      this.configService.get<IEnvParams>('env')!.profileExtractionModel;
-    const agent = createPreferenceSuggestionAgent(model);
-    const result = metered(
-      'onboarding.preferences',
-      model,
-      await run(agent, JSON.stringify(profile)),
-    );
-    const suggestion = result.finalOutput;
-    if (!suggestion)
-      throw new BadRequestException(
-        'Could not generate preference suggestions',
-      );
+    if (
+      !profile?.experiences.length &&
+      !profile?.educations.length &&
+      !profile?.skills.length
+    )
+      return existing;
 
-    return this.preferenceService.upsert(jobSeekerId, {
-      roles: suggestion.roles,
-      preferred_job_types: suggestion.employment_types,
-      preferred_industries: suggestion.industries,
-      preferred_locations: suggestion.locations,
-      work_setup: suggestion.work_setup,
-      salary_min: suggestion.salary_min,
-      salary_max: suggestion.salary_max,
-      salary_currency: suggestion.salary_currency,
-      seniority: suggestion.seniority,
-      years_experience: suggestion.years_experience,
-      source: 'AI_SUGGESTED',
-    });
+    // Pages ask in parallel on first load: one AI run, one saved row.
+    const pending = suggesting.get(jobSeekerId);
+    if (pending) return pending;
+    const job = (async () => {
+      const model =
+        this.configService.get<IEnvParams>('env')!.profileExtractionModel;
+      const agent = createPreferenceSuggestionAgent(model);
+      const result = metered(
+        'onboarding.preferences',
+        model,
+        await run(agent, JSON.stringify(profile)),
+      );
+      const suggestion = result.finalOutput;
+      if (!suggestion)
+        throw new BadRequestException(
+          'Could not generate preference suggestions',
+        );
+
+      return this.preferenceService.upsert(jobSeekerId, {
+        roles: suggestion.roles,
+        preferred_job_types: suggestion.employment_types,
+        preferred_industries: suggestion.industries,
+        preferred_locations: suggestion.locations,
+        work_setup: suggestion.work_setup,
+        salary_min: suggestion.salary_min,
+        salary_max: suggestion.salary_max,
+        salary_currency: suggestion.salary_currency,
+        seniority: suggestion.seniority,
+        years_experience: suggestion.years_experience,
+        source: 'AI_SUGGESTED',
+      });
+    })().finally(() => suggesting.delete(jobSeekerId));
+    suggesting.set(jobSeekerId, job);
+    return job;
   }
 
   @Patch()

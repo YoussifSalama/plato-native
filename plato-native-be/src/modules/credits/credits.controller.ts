@@ -29,10 +29,19 @@ export class CreditsController {
     private readonly estimates: CreditsEstimatesService,
   ) {}
 
-  /** Balance, plan, refill date and the latest movements. */
+  /** Balance, plan, refill date, this period's spending and one page of history (`before` = the last page's nextBefore). */
   @Get()
-  get(@Req() req: AuthenticatedRequest, @Query('limit') limit = '20') {
-    return this.credits.overview(req.userId, Number(limit));
+  get(
+    @Req() req: AuthenticatedRequest,
+    @Query('limit') limit = '20',
+    @Query('before') before?: string,
+  ) {
+    const at = before ? new Date(before) : undefined;
+    return this.credits.overview(
+      req.userId,
+      Number(limit),
+      at && !isNaN(at.getTime()) ? at : undefined,
+    );
   }
 
   /** The plans and top-up packs on offer (public). */

@@ -12,7 +12,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ResumeProfileService } from '../resume/resume-profile.service';
 import { recordUsage } from '../usage/usage';
 import { voiceCost } from '../usage/pricing';
-import { toTokens, VOICE_USD_PER_MINUTE } from '../credits/credit-prices';
+import {
+  planOf,
+  toTokens,
+  VOICE_USD_PER_MINUTE,
+} from '../credits/credit-prices';
 import { CreditsService } from '../credits/credits.service';
 import { InsufficientTokensException } from '../credits/insufficient-tokens.exception';
 import {
@@ -74,6 +78,12 @@ export const voiceTranscriptSchema = z.object({
 // for the scorer, or the scorer failed (the transcript is saved either way).
 export type Unscored = 'empty' | 'short' | 'tokens' | 'failed';
 
+// When the browser marked the call connected (voice/connected); null before.
+const connectedAt = (h: { meta: unknown } | null) =>
+  (h?.meta as { connected_at?: number } | null)?.connected_at ?? null;
+// An unreported call's reservation is closed this long after its end (CreditsService.closeHold).
+const HOLD_GRACE_MS = 5 * 60_000;
+
 const LABEL = {
   practice: 'Practice interview',
   mock: 'Mock interview',
@@ -118,19 +128,51 @@ export class CareerVoiceService {
     req: z.infer<typeof voiceStartSchema>,
   ) {
     const { seeker } = await this.ownedThread(userId, threadId);
-    // The call is as long as the seeker's Plato tokens allow (up to the usual cap).
+    // A new call in this conversation supersedes one that never reported back (a retry):
+    // billed for its use if it connected, given back if it never did.
+    for (
+      let h = await this.credits.openHold(userId, 'career.voice', threadId);
+      h && (await this.credits.closeHold(userId, h));
+      h = await this.credits.openHold(userId, 'career.voice', threadId)
+    );
+    // The call is as long as the seeker's Plato tokens allow (up to the usual cap),
+    // reserved now and atomically: two calls at once never take the same tokens.
     const acc = await this.credits.account(userId);
     const perMinute = toTokens(VOICE_USD_PER_MINUTE);
     const minutes = Math.min(
       VOICE_MAX_MINUTES,
       Math.floor(acc.balance / perMinute),
     );
-    if (minutes < 1)
+    const holdId =
+      minutes >= 1 &&
+      (await this.credits.hold(
+        userId,
+        minutes * perMinute,
+        'career.voice',
+        { thread: threadId, minutes },
+        minutes * 60_000 + HOLD_GRACE_MS,
+      ));
+    if (!holdId)
       throw new InsufficientTokensException(
         acc.balance,
         acc.period_end,
         perMinute,
+        acc.unverified ? planOf('free').monthly : undefined,
       );
+    try {
+      return await this.openSession(seeker, req, minutes);
+    } catch (e) {
+      // our side failed (the key request, the network, the server): the call never ran, nothing is billed
+      await this.credits.release(userId, holdId);
+      throw e;
+    }
+  }
+
+  private async openSession(
+    seeker: { id: string; user: { full_name: string } },
+    req: z.infer<typeof voiceStartSchema>,
+    minutes: number,
+  ) {
     const profile = await this.profiles.load(seeker.id);
     const instructions = voiceInstructions(req.mode, {
       firstName: seeker.user.full_name.split(' ')[0],
@@ -172,18 +214,43 @@ export class CareerVoiceService {
       this.logger.warn(`Realtime key failed: ${res.status}`);
       throw new BadGatewayException('Could not start the voice interview.');
     }
-    // reserved now, settled when the transcript arrives; a call that never
-    // reports back keeps its reservation
-    await this.credits.hold(userId, minutes * perMinute, 'career.voice', {
-      thread: threadId,
-      minutes,
-    });
+    // settled when the transcript arrives; on cancel or after the call's time, billed
+    // only if the browser marked it connected (CreditsService.closeHold)
     return {
       clientSecret: body.value,
       model,
       instructions,
       maxSeconds: minutes * 60,
     };
+  }
+
+  /**
+   * The browser's WebRTC call is live: sent once when it connects, then about
+   * every 30 seconds. A call that is never reported is billed up to the last one.
+   */
+  async alive(userId: string, threadId: string) {
+    await this.ownedThread(userId, threadId);
+    const hold = await this.credits.openHold(userId, 'career.voice', threadId);
+    return { ok: !!hold && (await this.credits.markAlive(userId, hold.id)) };
+  }
+
+  /**
+   * The browser could not start the call (mic refused, connection failed) or left
+   * before it went live. A call that never connected (voice/connected) is given
+   * back in full; one that connected is billed like one that ended.
+   */
+  async cancel(userId: string, threadId: string) {
+    await this.ownedThread(userId, threadId);
+    const hold = await this.credits.openHold(userId, 'career.voice', threadId);
+    if (!hold) return { released: false };
+    if (!connectedAt(hold))
+      return { released: await this.credits.release(userId, hold.id) };
+    await this.settleVoice(userId, threadId, {
+      mode: 'mock',
+      seconds: 0,
+      turns: [],
+    });
+    return { released: false };
   }
 
   // The call's transcript becomes ordinary messages in the Career chat, so the
@@ -232,12 +299,13 @@ export class CareerVoiceService {
       data: {
         thread_id: threadId,
         role: ChatRole.ASSISTANT,
-        content: `Scorecard for this voice interview: ${scorecard.overall}/100. ${[
-          scorecard.strengths[0] && `Strength: ${scorecard.strengths[0]}`,
-          scorecard.gaps[0] && `To work on: ${scorecard.gaps[0]}`,
-        ]
-          .filter(Boolean)
-          .join('. ')}`.trim(),
+        content:
+          `Scorecard for this voice interview: ${scorecard.overall}/100. ${[
+            scorecard.strengths[0] && `Strength: ${scorecard.strengths[0]}`,
+            scorecard.gaps[0] && `To work on: ${scorecard.gaps[0]}`,
+          ]
+            .filter(Boolean)
+            .join('. ')}`.trim(),
         ui: {
           type: 'voice-scorecard',
           title: body.context?.title || LABEL[body.mode],
@@ -304,16 +372,17 @@ export class CareerVoiceService {
     const hold = await this.credits.openHold(userId, 'career.voice', threadId);
     const reservedSeconds =
       ((hold?.meta as { minutes?: number } | null)?.minutes ?? 0) * 60;
+    // from the moment the call connected, when the browser said so
     const seenSeconds = hold
       ? Math.min(
           reservedSeconds,
-          (Date.now() - hold.created_at.getTime()) / 1000,
+          (Date.now() - (connectedAt(hold) ?? hold.created_at.getTime())) /
+            1000,
         )
       : body.seconds;
     const charge = Math.ceil(seenSeconds / 60) * VOICE_USD_PER_MINUTE;
     const u = body.usage;
     const reported = u ? voiceCost(this.env.realtimeModel, u) : null;
-    if (hold) await this.credits.release(userId, hold.id);
     const heldTokens = hold ? Math.max(0, -hold.amount) : 0;
     recordUsage({
       feature: 'career.voice',
@@ -327,6 +396,8 @@ export class CareerVoiceService {
         server_seconds: Math.round(seenSeconds),
         reported_usd: reported,
         turns: body.turns.length,
+        // the charge settles the reservation in the same write (CreditsService.charge)
+        ...(hold && { hold: hold.id }),
         ...u,
       },
     });

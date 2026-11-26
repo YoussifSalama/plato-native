@@ -1,6 +1,7 @@
 "use client"
 
 import { useSyncExternalStore } from "react"
+import { getMe } from "@/lib/auth/api"
 
 // Results of the hub's practice modules, kept in this browser until the server stores them.
 // Mock interviews for a matched job are already saved on the server (lib/interviews/api.ts).
@@ -37,16 +38,38 @@ export type HubResult = {
 export type Draft = { text: string; startedAt: string; updatedAt: string }
 type State = { results: HubResult[]; drafts: Record<string, Draft> }
 
+// One key per account, so two people on one browser never see each other's results.
+// (Results saved before this, under the shared "plato.career-hub.v1", are left alone.)
 const KEY = "plato.career-hub.v1"
 const EVENT = "plato:career-hub"
 const EMPTY: State = { results: [], drafts: {} }
 
+let owner: string | null = null
+let ownerLoad: Promise<void> | null = null
+function loadOwner() {
+  ownerLoad ??= getMe()
+    .then((me) => {
+      owner = me.id
+      raw = null
+      cached = EMPTY
+      window.dispatchEvent(new Event(EVENT))
+    })
+    .catch(() => {
+      ownerLoad = null
+    })
+  return ownerLoad
+}
+
 let raw: string | null = null
 let cached: State = EMPTY
 function read(): State {
+  if (!owner) {
+    if (typeof window !== "undefined") void loadOwner()
+    return EMPTY
+  }
   let next: string | null = null
   try {
-    next = localStorage.getItem(KEY)
+    next = localStorage.getItem(`${KEY}:${owner}`)
   } catch {
     return cached
   }
@@ -61,15 +84,19 @@ function read(): State {
   return cached
 }
 function write(update: (s: State) => State) {
-  const next = update(read())
-  try {
-    localStorage.setItem(KEY, JSON.stringify(next))
-  } catch {
-    // Private mode or full storage: keep it for this page view at least.
-    raw = null
-    cached = next
+  const apply = () => {
+    const next = update(read())
+    try {
+      localStorage.setItem(`${KEY}:${owner}`, JSON.stringify(next))
+    } catch {
+      // Private mode or full storage: keep it for this page view at least.
+      raw = null
+      cached = next
+    }
+    window.dispatchEvent(new Event(EVENT))
   }
-  window.dispatchEvent(new Event(EVENT))
+  if (owner) apply()
+  else void loadOwner().then(() => owner && apply())
 }
 function subscribe(cb: () => void) {
   window.addEventListener(EVENT, cb)

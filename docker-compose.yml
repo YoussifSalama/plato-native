@@ -75,6 +75,7 @@ services:
         NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
         NEXT_PUBLIC_EXTENSION_STORE_URL: ${EXTENSION_STORE_URL:-}
         NEXT_PUBLIC_EXTENSION_IDS: ${EXTENSION_IDS:-}
+        NEXT_PUBLIC_SUPPORT_EMAIL: ${SUPPORT_EMAIL:-raefalwani06@gmail.com}
     restart: unless-stopped
     depends_on:
       - api

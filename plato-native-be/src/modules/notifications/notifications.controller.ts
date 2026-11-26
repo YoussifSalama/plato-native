@@ -40,6 +40,11 @@ export class NotificationsController {
   @Get()
   async list(@Req() req: AuthenticatedRequest) {
     const job_seeker_id = await this.requireJobSeekerId(req.userId);
+    // Digests in the feed only while "In Plato" is on in the alert settings (no row = the default, on).
+    const alertSettings = await this.prisma.alertSettings.findUnique({
+      where: { job_seeker_id },
+      select: { in_app: true },
+    });
     const [runs, applications, digests] = await Promise.all([
       this.prisma.discoveryRun.findMany({
         where: { job_seeker_id },
@@ -59,11 +64,13 @@ export class NotificationsController {
         orderBy: { updated_at: 'desc' },
         take: FEED_LIMIT,
       }),
-      this.prisma.alertDigest.findMany({
-        where: { job_seeker_id },
-        orderBy: { created_at: 'desc' },
-        take: FEED_LIMIT,
-      }),
+      alertSettings?.in_app === false
+        ? []
+        : this.prisma.alertDigest.findMany({
+            where: { job_seeker_id },
+            orderBy: { created_at: 'desc' },
+            take: FEED_LIMIT,
+          }),
     ]);
     return [
       ...runs.map(runNotification),

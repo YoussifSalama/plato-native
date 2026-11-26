@@ -36,4 +36,4 @@ export const getDigests = async (limit = 10) => (await apiClient.get<Digest[]>("
 export const getSuggestedCompanies = async () => (await apiClient.get<CompanySuggestion[]>("/job-seeker/insights/companies/suggested")).data
 export const searchCompanies = async (q: string) => (await apiClient.get<CompanySuggestion[]>("/job-seeker/insights/companies", { params: { q } })).data
 // The email's unsubscribe link: no login, the token is the proof.
-export const unsubscribe = async (token: string) => (await apiClient.post<{ ok: boolean }>("/insights/unsubscribe", { token })).data
+export const unsubscribe = async (token: string) => (await apiClient.post<{ ok: boolean; in_app?: boolean }>("/insights/unsubscribe", { token })).data

@@ -1,12 +1,14 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { Briefcase, Building2, Coins, GraduationCap, Home, PanelLeftClose, PanelLeftOpen, Puzzle, Send, Sparkles, User, type LucideIcon } from "lucide-react"
+import { usePathname } from "next/navigation"
+import { Briefcase, Building2, Coins, GraduationCap, Home, LogOut, PanelLeftClose, PanelLeftOpen, Puzzle, Send, Settings, Sparkles, User, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
-import { getMe, type AuthUser } from "@/lib/auth/api"
+import { AxiosError } from "axios"
+import { toLogin } from "@/lib/api-client"
+import { getMe, logout, type AuthUser } from "@/lib/auth/api"
 import { getApplyReadiness, getDiscoveryStats } from "@/lib/jobs/api"
 import { getExtensionProgress } from "@/lib/extension/api"
 import { getInsights } from "@/lib/insights/api"
@@ -34,6 +36,7 @@ const ACCOUNT: NavItem[] = [
   { href: "/profile", label: "Profile", icon: User },
   { href: "/tokens", label: "Plan & credits", icon: Coins },
   { href: "/extension", label: "Extension", icon: Puzzle },
+  { href: "/settings", label: "Settings", icon: Settings },
 ]
 
 // What the command bar suggests on each page, so the seeker sees Plato can act right here.
@@ -45,6 +48,7 @@ const PROMPTS: [string, string][] = [
   ["/profile", "Make my resume bullets stronger"],
   ["/tokens", "How many tokens does applying use?"],
   ["/extension", "Is my browser connected?"],
+  ["/settings", "How do I download my data?"],
 ]
 const promptFor = (path: string) => PROMPTS.find(([p]) => path.startsWith(p))?.[1] ?? "Find remote jobs that fit my CV"
 
@@ -67,10 +71,6 @@ function initials(fullName: string) {
     .map((p) => p[0]?.toUpperCase())
     .join("")
 }
-function titleCase(s: string) {
-  return s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase())
-}
-
 // The command bar opens the native Plato chat on this page. Pages with their own
 // assistant (a search thread) do not take "plato:ask", so the palette opens instead.
 export function openPlato(text = "") {
@@ -98,8 +98,8 @@ export function useProfileStrength() {
     Promise.allSettled([getApplyReadiness(), getExtensionProgress(), getInsights(), getPreferences(), listDocuments()]).then(([r, e, i, p, d]) => {
       const steps = [
         { ok: r.status === "fulfilled" && r.value.ready, short: r.status === "fulfilled" && r.value.missing[0] ? `Add ${r.value.missing[0].label.toLowerCase()}` : "Finish your details", label: r.status === "fulfilled" && r.value.missing[0] ? `Add ${r.value.missing[0].label.toLowerCase()} so Plato never stops to ask.` : "Finish your details.", href: "/profile?tab=answers" },
-        { ok: p.status === "fulfilled" && !!p.value.portfolio_url, short: "Add a portfolio link", label: "Add a portfolio link so Plato can paste it into forms.", href: "/onboarding?step=2" },
-        { ok: d.status === "fulfilled" && d.value.length > 1, short: "Add a second document", label: "Add a second document, like a certificate.", href: "/onboarding?step=1" },
+        { ok: p.status === "fulfilled" && !!p.value.portfolio_url, short: "Add a portfolio link", label: "Add a portfolio link so Plato can paste it into forms.", href: "/profile?tab=experience&edit=links" },
+        { ok: d.status === "fulfilled" && d.value.length > 1, short: "Add a second document", label: "Add a second document, like a certificate.", href: "/profile?tab=documents" },
         { ok: e.status === "fulfilled" && e.value.linked, short: "Link the extension", label: "Link the browser extension.", href: "/extension" },
         { ok: i.status === "fulfilled" && i.value.alerts.length > 0, short: "Follow a company", label: "Follow a company you'd like to work for.", href: "/following" },
       ]
@@ -112,7 +112,6 @@ export function useProfileStrength() {
 
 function Frame({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const router = useRouter()
   const { needsYou } = useNotifications()
   const [user, setUser] = useState<AuthUser | null>(null)
   const setup = useProfileStrength()
@@ -125,10 +124,11 @@ function Frame({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    // Only a dead session goes to login; a network blip or a 500 leaves you on the page.
     getMe()
       .then(setUser)
-      .catch(() => router.replace("/login"))
-  }, [router])
+      .catch((e) => e instanceof AxiosError && e.response?.status === 401 && toLogin())
+  }, [])
 
   // Collapsed = icon rail. Remembered per browser (a personal layout choice, not account data).
   const [saved, setSaved] = useState(false)
@@ -258,11 +258,7 @@ function Frame({ children }: { children: ReactNode }) {
               <TokensChip />
             </span>
             <NotificationBell />
-            {user && (
-              <Link href="/profile" title={titleCase(user.full_name)} aria-label="Your profile" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-white ring-2 ring-background transition-shadow hover:ring-primary-line">
-                {initials(user.full_name)}
-              </Link>
-            )}
+            <AccountMenu user={user} />
           </div>
           {/* Compact nav for < lg, where the sidebar is hidden. */}
           <nav aria-label="Main" className="no-scrollbar -mx-4 flex w-[calc(100%+2rem)] gap-1 overflow-x-auto px-4 sm:-mx-6 sm:w-[calc(100%+3rem)] sm:px-6 lg:hidden">
@@ -281,6 +277,74 @@ function Frame({ children }: { children: ReactNode }) {
         {user && user.email_verified === false && <VerifyEmailBanner email={user.email} />}
         {children}
       </div>
+    </div>
+  )
+}
+
+// The avatar opens a small menu: Profile, Settings, Log out. A menu, not a bare log-out icon
+// beside it, so a tap on a phone can't sign you out by mistake.
+function AccountMenu({ user }: { user: AuthUser | null }) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("pointerdown", close)
+    document.addEventListener("keydown", close)
+    return () => {
+      document.removeEventListener("pointerdown", close)
+      document.removeEventListener("keydown", close)
+    }
+  }, [open])
+  // A full page load after logout, so nothing of this account stays in memory. If the server
+  // didn't clear the session, say so and stay: navigating away would look signed out when it isn't.
+  const signOut = () => {
+    setBusy(true)
+    setError(null)
+    logout()
+      .then(() => window.location.assign("/login"))
+      .catch(() => {
+        setError("Couldn't log out. Check your connection and try again.")
+        setBusy(false)
+      })
+  }
+  const item = "flex h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="Your account" title={user ? user.full_name : "Your account"} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-white ring-2 ring-background transition-shadow hover:ring-primary-line">
+        {user ? initials(user.full_name) : <User className="size-4" />}
+      </button>
+      {open && (
+        <div role="menu" className="absolute top-full right-0 z-50 mt-2 flex w-60 flex-col gap-0.5 rounded-xl border bg-card p-1.5 shadow-float animate-in fade-in-0 zoom-in-95 duration-150">
+          {user && (
+            <div className="border-b border-divider px-3 pt-1.5 pb-2.5">
+              <p className="truncate text-sm font-semibold text-foreground">{user.full_name}</p>
+              <p className="truncate text-xs text-text-secondary">{user.email}</p>
+            </div>
+          )}
+          <Link role="menuitem" href="/profile" onClick={() => setOpen(false)} className={item}>
+            <User className="size-4 text-text-tertiary" />
+            Profile
+          </Link>
+          <Link role="menuitem" href="/settings" onClick={() => setOpen(false)} className={item}>
+            <Settings className="size-4 text-text-tertiary" />
+            Settings
+          </Link>
+          <button role="menuitem" type="button" onClick={signOut} disabled={busy} className={cn(item, "disabled:opacity-60")}>
+            <LogOut className="size-4 text-text-tertiary" />
+            {busy ? "Logging out…" : "Log out"}
+          </button>
+          {error && (
+            <p role="alert" className="px-3 pt-1 pb-1.5 text-xs text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { StatIcon, type Accent } from "@/components/plato-ui"
 import { forgotPassword, resetPassword, verifyEmail } from "@/lib/auth/api"
+import { passwordSchema } from "@/lib/auth/schema"
 import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
 import { spring } from "@/lib/motion-system"
 
@@ -127,10 +128,12 @@ export function ResetPasswordForm() {
   const [state, setState] = useState<"idle" | "busy" | "done">("idle")
   const [error, setError] = useState<string | null>(null)
   const mismatch = confirm.length > 0 && confirm !== password
+  // The same rule as sign-up and change password (8 characters, at most 72 bytes).
+  const tooLong = password.length >= 8 && !passwordSchema.safeParse(password).success
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (password.length < 8 || mismatch) return
+    if (!passwordSchema.safeParse(password).success || mismatch) return
     setError(null)
     setState("busy")
     try {
@@ -161,7 +164,8 @@ export function ResetPasswordForm() {
       <motion.div variants={fadeUpItem} className="flex flex-col gap-4">
         <Field>
           <FieldLabel htmlFor="password">New password</FieldLabel>
-          <Input id="password" type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="eg. ••••••••" />
+          <Input id="password" type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="eg. ••••••••" aria-invalid={tooLong} />
+          {tooLong && <p className="text-xs text-destructive">Too long: use at most 72 characters (fewer with accents or emoji).</p>}
         </Field>
         <Field data-invalid={mismatch}>
           <FieldLabel htmlFor="confirm">Type it again</FieldLabel>
@@ -178,7 +182,7 @@ export function ResetPasswordForm() {
         </FormError>
       )}
       <motion.div variants={fadeUpItem}>
-        <Button type="submit" disabled={state === "busy" || password.length < 8 || confirm !== password} className={CTA}>
+        <Button type="submit" disabled={state === "busy" || password.length < 8 || tooLong || confirm !== password} className={CTA}>
           {state === "busy" && <Loader2 className="size-4 animate-spin" />}
           Save new password
         </Button>
@@ -192,12 +196,14 @@ export function VerifyEmailCard() {
   const token = useSearchParams().get("token") ?? ""
   const [state, setState] = useState<"idle" | "busy" | "done">("idle")
   const [error, setError] = useState<string | null>(null)
+  // Set when the link was for a new address (Settings → Change email).
+  const [newEmail, setNewEmail] = useState<string | null>(null)
 
   const confirm = async () => {
     setError(null)
     setState("busy")
     try {
-      await verifyEmail(token)
+      setNewEmail((await verifyEmail(token)).email ?? null)
       setState("done")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
@@ -205,7 +211,12 @@ export function VerifyEmailCard() {
     }
   }
 
-  if (state === "done") return <Done title="Email confirmed" body="Thanks. Job alerts and account messages will now reach you by email." cta="Open Plato" href="/" />
+  if (state === "done")
+    return newEmail ? (
+      <Done title="Email changed" body={<>Your account now uses <span className="font-semibold text-foreground">{newEmail}</span>: log in with it, and it goes on your applications from now on.</>} cta="Open Plato" href="/" />
+    ) : (
+      <Done title="Email confirmed" body="Thanks. Job alerts and account messages will now reach you by email." cta="Open Plato" href="/" />
+    )
 
   return (
     <motion.div initial="hidden" animate="show" variants={staggerContainer} className="flex w-full flex-col gap-5">

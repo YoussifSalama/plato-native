@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
-import { CalendarClock, ChevronRight, Coins, Sparkles } from "lucide-react"
+import { CalendarClock, Check, ChevronRight, Coins, Loader2, MailCheck, Sparkles } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
-import { formatTokens, getTokenEstimates, getTokens, OUT_OF_TOKENS_EVENT, TOKENS_CHANGED_EVENT, type EstimateAction, type OutOfTokens, type TokenAccount, type TokenEstimate } from "@/lib/credits/api"
+import { apiClient } from "@/lib/api-client"
+import { resendVerification } from "@/lib/auth/api"
+import { formatTokens, getTokenEstimates, getTokens, isOutOfTokens, OUT_OF_TOKENS_EVENT, reportOutOfTokens, TOKENS_CHANGED_EVENT, type EstimateAction, type OutOfTokens, type TokenAccount, type TokenEstimate } from "@/lib/credits/api"
 
 // One shared copy of the balance for the sidebar, the tokens page and anything
 // that shows a cost. Refreshed after any write (charges land a moment after the
@@ -30,6 +32,11 @@ const refreshSoon = () => {
 function start() {
   if (started || typeof window === "undefined") return
   started = true
+  // The shared client opens the dialog for insufficient_tokens; a 402 for an unconfirmed email opens it too.
+  apiClient.interceptors.response.use(undefined, (e: { response?: { status?: number; data?: OutOfTokens } }) => {
+    if (e.response?.data?.code === "email_unverified" && isOutOfTokens(e.response.status, e.response.data)) reportOutOfTokens(e.response.data)
+    return Promise.reject(e)
+  })
   void refreshTokens()
   window.addEventListener(TOKENS_CHANGED_EVENT, refreshSoon)
   window.addEventListener(OUT_OF_TOKENS_EVENT, () => void refreshTokens())
@@ -48,12 +55,38 @@ export function useTokens() {
 
 export const resetLabel = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 
+// The free tokens wait for a confirmed email: send the link again.
+export function ResendConfirmation({ className }: { className?: string }) {
+  const [state, setState] = useState<"idle" | "busy" | "sent" | "failed">("idle")
+  const send = () => {
+    setState("busy")
+    resendVerification()
+      .then(() => setState("sent"))
+      .catch(() => setState("failed"))
+  }
+  if (state === "sent")
+    return (
+      <span className={cn("inline-flex items-center gap-1.5 text-sm text-success", className)}>
+        <Check className="size-4" /> Sent. Open the link in your inbox, then come back here.
+      </span>
+    )
+  return (
+    <span className={cn("inline-flex flex-wrap items-center gap-2", className)}>
+      <Button onClick={send} disabled={state === "busy"}>
+        {state === "busy" ? <Loader2 className="size-4 animate-spin" /> : <MailCheck className="size-4" />}
+        Resend confirmation email
+      </Button>
+      {state === "failed" && <span className="text-sm text-destructive">Could not send it. Try again in a minute.</span>}
+    </span>
+  )
+}
+
 // Sidebar: what is left this month, at a glance.
 export function TokensNav({ collapsed, itemClass, variant = "item" }: { collapsed: boolean; itemClass: string; variant?: "item" | "row" }) {
   const acc = useTokens()
   if (!acc) return null
-  const left = Math.max(0, acc.balance)
-  const pct = acc.monthly ? Math.min(100, (left / acc.monthly) * 100) : 0
+  const left = acc.balance // shown as it is, even below zero
+  const pct = acc.monthly ? Math.max(0, Math.min(100, (left / acc.monthly) * 100)) : 0
   const low = pct < 15
   // The sidebar status card's line: label, what is left, a hairline bar.
   if (variant === "row" && !collapsed)
@@ -110,12 +143,13 @@ export function OutOfTokensDialog() {
     if (!info && el.open) el.close()
   }, [info])
   const close = () => setInfo(null)
+  const unconfirmed = info?.code === "email_unverified"
   // Three honest ways forward, in the order most people take them.
-  const ways = info
+  const ways = info && !unconfirmed
     ? [
         { icon: CalendarClock, title: `Wait for your refill`, body: `Your monthly tokens come back on ${resetLabel(info.resetsAt)}, in ${days} day${days === 1 ? "" : "s"}.`, href: null },
         { icon: Coins, title: "Top up now", body: "One-time packs. Bought tokens never expire.", href: "/tokens#top-ups" },
-        { icon: Sparkles, title: "Move to a bigger plan", body: "More tokens every month, from the next minute.", href: "/tokens" },
+        { icon: Sparkles, title: "Move to a bigger plan", body: "More tokens every month. Until online payment opens, the Plato team sets it up with you by email.", href: "/tokens#plans" },
       ]
     : []
   return (
@@ -128,13 +162,19 @@ export function OutOfTokensDialog() {
               <Coins className="size-6" />
             </span>
             <div className="flex flex-col gap-1">
-              <h2 className="text-lg font-bold">You&apos;re out of tokens for this one</h2>
+              <h2 className="text-lg font-bold">{unconfirmed ? "Confirm your email first" : "You're out of tokens for this one"}</h2>
               <p className="text-sm leading-relaxed text-text-secondary">
-                {info.needed ? `It needs about ${formatTokens(info.needed)} tokens and you have ${formatTokens(Math.max(0, info.balance))} left.` : "This month's tokens are used up."} Browsing your jobs and applications stays free.
+                {unconfirmed
+                  ? `${info.message}. We sent you a link when you signed up; it unlocks them right away.`
+                  : info.needed
+                    ? `It needs about ${formatTokens(info.needed)} tokens and you have ${formatTokens(info.balance)}.`
+                    : "This month's tokens are used up."}{" "}
+                Browsing your jobs and applications stays free.
               </p>
             </div>
           </div>
-          <ul className="relative flex flex-col gap-2">
+          {unconfirmed && <ResendConfirmation className="relative" />}
+          <ul className={cn("relative flex flex-col gap-2", unconfirmed && "hidden")}>
             {ways.map(({ icon: Icon, title, body, href }) => {
               const inner = (
                 <>
@@ -207,9 +247,9 @@ export function TokensChip() {
   if (!acc) return null
   const low = acc.monthly > 0 && acc.balance / acc.monthly < 0.15
   return (
-    <Link href="/tokens" data-ai="nav.tokens-chip" title={`${formatTokens(Math.max(0, acc.balance))} Plato tokens left. Your monthly tokens refill on ${resetLabel(acc.resetsAt)}.`} className={cn("flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold tabular-nums transition-colors", low ? "border border-warning-line bg-warning-soft text-warning-ink" : "surface-panel text-foreground hover:border-primary-line")}>
+    <Link href="/tokens" data-ai="nav.tokens-chip" title={`${formatTokens(acc.balance)} Plato tokens left. Your monthly tokens refill on ${resetLabel(acc.resetsAt)}.`} className={cn("flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold tabular-nums transition-colors", low ? "border border-warning-line bg-warning-soft text-warning-ink" : "surface-panel text-foreground hover:border-primary-line")}>
       <Coins className="size-4 text-primary" strokeWidth={1.8} />
-      {formatTokens(Math.max(0, acc.balance))}
+      {formatTokens(acc.balance)}
     </Link>
   )
 }

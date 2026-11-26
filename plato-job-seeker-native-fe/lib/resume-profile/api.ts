@@ -1,5 +1,6 @@
 import { AxiosError } from "axios"
 import { apiClient } from "@/lib/api-client"
+import { messageOf } from "@/lib/documents/api"
 
 // The candidate facts every resume is built from (see the backend resume module).
 export type Project = { id: string; name: string; role: string | null; description: string; technologies: string[]; url: string | null; result: string | null }
@@ -12,8 +13,7 @@ async function request<T>(promise: Promise<{ data: T }>): Promise<T> {
     return (await promise).data
   } catch (error) {
     if (error instanceof AxiosError) {
-      const m = error.response?.data?.message
-      throw new Error(typeof m === "string" ? m : "Request failed")
+      throw new Error(messageOf(error.response?.data?.message))
     }
     throw error
   }

@@ -45,7 +45,9 @@ export class CreditsEstimatesService {
     ]);
     return {
       plan: planOf(acc.plan).label,
-      balance: Math.max(0, Math.floor(acc.balance)),
+      // as it is, even below zero, so the assistants and the app agree with /credits
+      balance: Math.trunc(acc.balance),
+      awaitingEmail: !!acc.unverified,
       // bought tokens left in the balance (spent last, never expire)
       boughtTokensLeft: Math.floor(
         Math.max(0, Math.min(acc.topup ?? 0, acc.balance)),

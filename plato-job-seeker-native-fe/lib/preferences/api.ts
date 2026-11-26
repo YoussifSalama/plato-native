@@ -1,14 +1,13 @@
 import { AxiosError } from "axios"
 import { apiClient } from "@/lib/api-client"
+import { messageOf } from "@/lib/documents/api"
 import type { PreferenceEstimate, Preferences, PreferencesEditPayload } from "./schema"
 
 async function request<T>(promise: Promise<{ data: T }>): Promise<T> {
   try {
     return (await promise).data
   } catch (error) {
-    if (error instanceof AxiosError) {
-      throw new Error(error.response?.data?.message ?? "Request failed")
-    }
+    if (error instanceof AxiosError) throw new Error(messageOf(error.response?.data?.message))
     throw error
   }
 }

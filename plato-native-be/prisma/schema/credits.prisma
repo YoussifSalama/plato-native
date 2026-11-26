@@ -15,6 +15,12 @@ model CreditAccount {
   topup        Float    @default(0)
   period_start DateTime
   period_end   DateTime
+  // A paid plan set by hand (no payments yet) lapses to Free at the first
+  // period end on or after this date, instead of refilling forever.
+  paid_until   DateTime?
+  // Opened before the email was confirmed: no monthly grant until it is (the
+  // grant lands on the first read after). Unset on every other account.
+  unverified   Boolean?
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
@@ -33,9 +39,10 @@ model CreditLedger {
   balance_after  Float
   feature        String?
   usage_event_id String?  @db.ObjectId
-  // A hold (tokens reserved before a call whose cost is known only after it,
-  // like a voice interview) is settled once: released back, then the real
-  // cost is charged as a consume.
+  // A hold (tokens reserved before a call whose cost is known only after it:
+  // a voice interview, a job-board run) is settled once: released back, and
+  // the real cost (never more than the hold) charged as a consume.
+  // meta.until (epoch ms): after it an unsettled hold is released.
   settled_at     DateTime?
   meta           Json?
   created_at     DateTime @default(now())

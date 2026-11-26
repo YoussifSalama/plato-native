@@ -237,7 +237,7 @@ function ApplicationsContent() {
           <p className="min-w-0 flex-1 text-foreground">
             <span className="font-semibold">Plato can&apos;t apply for you yet.</span> It never asks per job, so it needs these once: {readiness.missing.map((m) => m.label).join("; ")}.
           </p>
-          <Link href="/onboarding?step=2" className="inline-flex h-9 shrink-0 items-center rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-colors duration-200 hover:bg-primary-hover">
+          <Link href="/onboarding?step=2&return=/applications" className="inline-flex h-9 shrink-0 items-center rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-colors duration-200 hover:bg-primary-hover">
             Complete my details
           </Link>
         </div>

@@ -21,11 +21,16 @@ export function UnsubscribeCard() {
   const reduced = !!useReducedMotion()
   const token = useSearchParams().get("token") ?? ""
   const [state, setState] = useState<State>(token ? "ask" : "bad")
+  // Whether digests still show in Plato: said only when they do.
+  const [inApp, setInApp] = useState(true)
 
   const stop = () => {
     setState("busy")
     unsubscribe(token)
-      .then((r) => setState(r.ok ? "done" : "bad"))
+      .then((r) => {
+        setInApp(r.in_app !== false)
+        setState(r.ok ? "done" : "bad")
+      })
       .catch(() => setState("bad"))
   }
 
@@ -41,10 +46,12 @@ export function UnsubscribeCard() {
           </motion.span>
           <div className="flex flex-col gap-1.5">
             <h1 className="type-section-title text-[20px]">You won&apos;t get alert emails any more</h1>
-            <p className="type-body text-text-secondary">Your alerts still collect new jobs in Plato. You can turn emails back on from your job alerts page whenever you like.</p>
+            <p className="type-body text-text-secondary">
+              {inApp ? "Your alerts still collect new jobs in your Plato notifications. " : ""}You can turn emails back on from Alert settings on Following whenever you like.
+            </p>
           </div>
-          <Link href="/insights" className={buttonVariants({ className: CTA })}>
-            Open job alerts
+          <Link href="/following" className={buttonVariants({ className: CTA })}>
+            Open Following
             <ArrowRight className={ARROW} />
           </Link>
         </>
@@ -53,10 +60,10 @@ export function UnsubscribeCard() {
           <StatIcon icon={Link2Off} accent="amber" className={ICON} />
           <div className="flex flex-col gap-1.5">
             <h1 className="type-section-title text-[20px]">This link doesn&apos;t work</h1>
-            <p className="type-body text-text-secondary">It may be incomplete. Sign in and turn off alert emails from your job alerts page instead.</p>
+            <p className="type-body text-text-secondary">It may be incomplete. Sign in and turn off alert emails from Alert settings on Following instead.</p>
           </div>
-          <Link href="/insights" className="group/cta inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors duration-200 hover:text-primary-hover">
-            Go to job alerts
+          <Link href="/following" className="group/cta inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors duration-200 hover:text-primary-hover">
+            Go to Following
             <ArrowRight className="size-3.5 transition-transform duration-200 group-hover/cta:translate-x-0.5" />
           </Link>
         </>
@@ -65,7 +72,7 @@ export function UnsubscribeCard() {
           <StatIcon icon={BellOff} className={ICON} />
           <div className="flex flex-col gap-1.5">
             <h1 className="type-section-title text-[20px]">Stop job alert emails?</h1>
-            <p className="type-body text-text-secondary">You&apos;ll stop getting digest emails. New jobs keep showing in your Plato notifications.</p>
+            <p className="type-body text-text-secondary">You&apos;ll stop getting digest emails. Your alerts keep collecting new jobs in Plato.</p>
           </div>
           <Button onClick={stop} disabled={state === "busy"} className={CTA}>
             {state === "busy" && <Loader2 className="size-4 animate-spin" />}

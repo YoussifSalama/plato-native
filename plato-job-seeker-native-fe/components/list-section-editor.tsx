@@ -52,6 +52,7 @@ function ListSectionEditor<T extends Record<string, unknown>>({
                     <Textarea
                       value={(item[field.key] as string) ?? ""}
                       onChange={(e) => updateField(index, field.key, e.target.value)}
+                      maxLength={5000}
                       className="min-h-16 text-sm"
                     />
                   ) : (
@@ -59,6 +60,7 @@ function ListSectionEditor<T extends Record<string, unknown>>({
                       type={field.type === "date" ? "date" : "text"}
                       value={((item[field.key] as string) ?? "").slice(0, 10)}
                       onChange={(e) => updateField(index, field.key, e.target.value)}
+                      maxLength={200}
                       className="h-8 text-sm"
                     />
                   )}

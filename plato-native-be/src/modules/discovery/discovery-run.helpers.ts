@@ -71,7 +71,8 @@ export type FeedSource = (typeof FEED_SOURCES)[number];
 export const sourceKey = (s: JobSource) => s.toLowerCase() as SourceKey;
 
 export interface SourceProgress {
-  status: 'RUNNING' | 'DONE' | 'FAILED';
+  // SKIPPED: a paid source the seeker's tokens did not cover (error says so)
+  status: 'RUNNING' | 'DONE' | 'FAILED' | 'SKIPPED';
   fetched: number;
   error?: string;
 }
@@ -230,6 +231,18 @@ export function applyFeedsResult(
             ).value.jobs.filter((j) => j.source === feed).length,
           };
   }
+  return { ...p, sources };
+}
+
+export const TOKENS_SKIPPED = 'Skipped: not enough Plato tokens';
+
+// Paid sources the seeker's tokens did not cover read "skipped", not "0 found".
+// A source that ran and found something keeps its count.
+export function markTokenSkips(p: RunProgress, keys: SourceKey[]): RunProgress {
+  const sources = { ...p.sources };
+  for (const k of keys)
+    if (sources[k]?.status === 'DONE' && sources[k].fetched === 0)
+      sources[k] = { status: 'SKIPPED', fetched: 0, error: TOKENS_SKIPPED };
   return { ...p, sources };
 }
 

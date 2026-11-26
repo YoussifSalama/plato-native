@@ -9,40 +9,15 @@ import { motion } from "motion/react"
 import { ArrowRight, CircleAlert, Loader2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { RequiredMark } from "@/app/onboarding/components/required-mark"
 import { SuccessModal } from "@/components/success-modal"
 import { InfoTip } from "@/components/info-tip"
-import { getMe, login, signup } from "@/lib/auth/api"
+import { getMe, login, safeNext, signup } from "@/lib/auth/api"
 import { claimGuest } from "@/lib/jobs/guest"
 import { loginSchema, signupSchema, type LoginFormValues, type SignupFormValues } from "@/lib/auth/schema"
 import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
-
-function OAuthButtons() {
-  return (
-    <motion.div variants={fadeUpItem} className="flex flex-col gap-2">
-      {/* ponytail: OAuth is visual-only until real Google/LinkedIn auth is built */}
-      <Button type="button" variant="outline" className="h-11 justify-start gap-2.5 bg-card transition-colors duration-200" disabled>
-        <span className="flex size-7 items-center justify-center rounded-full bg-white text-md font-bold text-[#4285F4] ring-1 ring-black/10">
-          G
-        </span>
-        Continue with Google
-      </Button>
-    </motion.div>
-  )
-}
-
-function OrDivider() {
-  return (
-    <motion.div variants={fadeUpItem} className="flex items-center gap-3">
-      <Separator className="flex-1" />
-      <span className="text-xs text-muted-foreground">or</span>
-      <Separator className="flex-1" />
-    </motion.div>
-  )
-}
 
 function AuthFormShell({
   heading,
@@ -83,9 +58,6 @@ function AuthFormShell({
         </h1>
         <p className="type-body text-text-secondary">{subheading}</p>
       </motion.div>
-
-      <OAuthButtons />
-      <OrDivider />
 
       <motion.div variants={fadeUpItem}>
         <FieldGroup>{children}</FieldGroup>
@@ -270,8 +242,9 @@ function LoginForm() {
     try {
       await login(values)
       const me = await getMe()
-      // A search made before logging in (public /search) opens first.
-      router.push((await claimGuest()) ?? (me.onboarding_completed ? "/" : "/onboarding"))
+      // A search made before logging in (public /search) opens first, then the page they were sent here from.
+      const next = safeNext(new URLSearchParams(window.location.search).get("next"))
+      router.push((await claimGuest()) ?? (!me.onboarding_completed ? "/onboarding" : (next ?? "/")))
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Something went wrong")
       // Only on failure: on success the button stays busy until the next page takes over.

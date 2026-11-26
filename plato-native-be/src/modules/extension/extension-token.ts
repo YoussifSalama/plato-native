@@ -47,6 +47,10 @@ export class RateLimiter {
     return cur.n <= limit;
   }
 
+  reset(key: string) {
+    this.hits.delete(key);
+  }
+
   count(key: string, now = Date.now()) {
     const cur = this.hits.get(key);
     return cur && cur.reset > now ? cur.n : 0;

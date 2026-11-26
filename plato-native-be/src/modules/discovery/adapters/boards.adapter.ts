@@ -69,8 +69,8 @@ export const BOARDS: BoardDef[] = [
   nodesk,
 ];
 
-// Boards get half the remaining budget (LinkedIn takes the other half's
-// share); one actor run per board × country × title.
+// Boards get a third of the remaining budget (LinkedIn and the ATS actor take
+// the other two); one actor run per board × country × title.
 const MAX_TITLES = 3;
 const MAX_PER_RUN = 40;
 // Every Apify run pays a container start (5-10s, and money) whatever it returns:
@@ -189,7 +189,7 @@ export class BoardsAdapter implements DiscoveryAdapter {
       MAX_PER_RUN,
       Math.max(
         MIN_PER_RUN,
-        Math.ceil((query.budget ?? DEFAULT_BUDGET) / 2 / plan.length),
+        Math.ceil((query.budget ?? DEFAULT_BUDGET) / 3 / plan.length),
       ),
     );
     const settled = await Promise.allSettled(

@@ -7,6 +7,7 @@ import { AccountService } from './account.service';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { IEnvParams } from '../../types/config/env.types';
+import { StorageService } from '../documents/storage.service';
 
 const jwtModule = JwtModule.registerAsync({
   imports: [ConfigModule],
@@ -20,7 +21,9 @@ const jwtModule = JwtModule.registerAsync({
 @Module({
   imports: [UserModule, jwtModule],
   controllers: [AuthController],
-  providers: [AuthService, AccountService, JwtAuthGuard],
+  // StorageService: deleting an account deletes its files. Provided here, not imported:
+  // DocumentsModule imports this module.
+  providers: [AuthService, AccountService, JwtAuthGuard, StorageService],
   // Re-export JwtModule too: any module that imports AuthModule to use
   // JwtAuthGuard also needs JwtService in scope to instantiate it.
   exports: [JwtAuthGuard, jwtModule],

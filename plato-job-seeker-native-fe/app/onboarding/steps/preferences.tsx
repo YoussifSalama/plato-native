@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react"
-import { ArrowRight, Ban, Briefcase, Check, ChevronRight, CircleAlert, Clock, Heart, Laptop, ListChecks, Loader2, MapPin, TrendingUp, Wallet, X, type LucideIcon } from "lucide-react"
+import { ArrowRight, Ban, Briefcase, Building2, Check, ChevronRight, CircleAlert, Clock, Heart, Laptop, ListChecks, Loader2, MapPin, TrendingUp, Wallet, X, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { InfoTip } from "@/components/info-tip"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,7 @@ import { FilterChip } from "@/components/filter-controls"
 import { PreferencesSkeleton } from "@/components/onboarding-skeletons"
 import { createAlert, deleteAlert, getInsights, type JobAlert } from "@/lib/insights/api"
 import { getIntake, saveIntake, type IntakeItem } from "@/lib/jobs/api"
-import { AVAILABILITY, YEARS_EXPERIENCE } from "@/lib/preference-options"
+import { AVAILABILITY, EMPLOYMENT_STATUS, INDUSTRIES, YEARS_EXPERIENCE } from "@/lib/preference-options"
 import { estimatePreferences, getPreferences, savePreferences } from "@/lib/preferences/api"
 import type { PreferenceEstimate, Preferences } from "@/lib/preferences/schema"
 import { getProfile } from "@/lib/documents/api"
@@ -62,7 +62,8 @@ const AVOID_SUGGESTIONS = ["Commission-only pay", "Night shifts", "Travel over 5
 // things_to_avoid is one text field: the chips are stored as a "; " list.
 const splitAvoid = (s: string | null) => (s ?? "").split(/[;\n]/).map((x) => x.trim()).filter(Boolean)
 
-function PreferencesStep({ onContinue, onBack }: { onContinue: () => void; onBack?: () => void }) {
+// `editing`: opened from Profile after onboarding. Save and Cancel, then back there.
+function PreferencesStep({ onContinue, onBack, editing }: { onContinue: () => void; onBack?: () => void; editing?: boolean }) {
   const [p, setP] = useState<Preferences | null>(null)
   const [intake, setIntake] = useState<IntakeItem[]>([])
   const [facts, setFacts] = useState<Record<string, string>>({})
@@ -131,7 +132,7 @@ function PreferencesStep({ onContinue, onBack }: { onContinue: () => void; onBac
       <PreferencesSkeleton />
     )
   const set = (patch: Partial<Preferences>) => setP((cur) => (cur ? { ...cur, ...patch } : cur))
-  const toggle = (key: "preferred_job_types" | "work_setup", v: string) => set({ [key]: p[key].includes(v) ? p[key].filter((x) => x !== v) : [...p[key], v] })
+  const toggle = (key: "preferred_job_types" | "work_setup" | "preferred_industries", v: string) => set({ [key]: p[key].includes(v) ? p[key].filter((x) => x !== v) : [...p[key], v] })
   const country = home ?? "my country"
   const visa = !p.visa_sponsorship_required ? "no" : p.sponsorship_note ? "outside" : "yes"
   const relocate = RELOCATE.find(([, , on, note]) => on === p.willing_to_relocate && (note ?? null) === (p.relocation_note ?? null))?.[0] ?? (p.willing_to_relocate ? "anywhere" : "no")
@@ -195,13 +196,13 @@ function PreferencesStep({ onContinue, onBack }: { onContinue: () => void; onBac
     <div className="flex gap-3">
       {onBack && (
         <Button variant="outline" onClick={onBack} disabled={saving} className="h-12 rounded-xl bg-card px-6 text-[16px] transition-colors duration-200 hover:border-primary-line hover:text-primary">
-          Back
+          {editing ? "Cancel" : "Back"}
         </Button>
       )}
       <Button data-ai="onboarding.continue" onClick={() => void save()} disabled={saving} className="group/cta h-12 gap-2 rounded-xl px-7 text-[16px] shadow-md shadow-primary/25 transition-[background-color,box-shadow] duration-200 hover:shadow-lg hover:shadow-primary/35">
         {saving && <Loader2 className="size-4 animate-spin" />}
-        {saving ? "Saving…" : "Continue"}
-        {!saving && <ArrowRight className="size-4 transition-transform duration-200 group-hover/cta:translate-x-0.5" />}
+        {saving ? "Saving…" : editing ? "Save" : "Continue"}
+        {!saving && !editing && <ArrowRight className="size-4 transition-transform duration-200 group-hover/cta:translate-x-0.5" />}
       </Button>
     </div>
   )
@@ -258,6 +259,15 @@ function PreferencesStep({ onContinue, onBack }: { onContinue: () => void; onBac
             <Chips>
               {STYLES.map(([v, l]) => (
                 <FilterChip key={v} on={p.work_setup.includes(v)} onClick={() => toggle("work_setup", v)}>
+                  {l}
+                </FilterChip>
+              ))}
+            </Chips>
+          </Group>
+          <Group icon={Building2} title="Industries" hint="Optional. Plato adds them to every job search.">
+            <Chips>
+              {INDUSTRIES.map(({ value: v, label: l }) => (
+                <FilterChip key={v} on={p.preferred_industries.includes(v)} onClick={() => toggle("preferred_industries", v)}>
                   {l}
                 </FilterChip>
               ))}
@@ -323,6 +333,9 @@ function PreferencesStep({ onContinue, onBack }: { onContinue: () => void; onBac
             <div className="flex flex-col divide-y divide-divider">
               <Row label="Notice period" id="ans-notice">
                 <FormSelect id="ans-notice" value={p.availability ?? ""} onChange={(v) => set({ availability: v || null })} options={AVAILABILITY} optional />
+              </Row>
+              <Row label="Employment status" id="ans-employment">
+                <FormSelect id="ans-employment" value={p.employment_status ?? ""} onChange={(v) => set({ employment_status: v || null })} options={EMPLOYMENT_STATUS} optional />
               </Row>
               <Row label="Need visa sponsorship?" id="ans-visa">
                 <FormSelect id="ans-visa" value={visa} onChange={(v) => set(v === "no" ? { visa_sponsorship_required: false, sponsorship_note: null } : v === "outside" ? { visa_sponsorship_required: true, sponsorship_note: `Only for jobs outside ${country}` } : { visa_sponsorship_required: true, sponsorship_note: null })} options={[{ value: "no", label: "No" }, { value: "outside", label: `Only outside ${country}` }, { value: "yes", label: "Yes" }]} />

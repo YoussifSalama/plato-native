@@ -6,7 +6,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 
 // Native <dialog>: the browser gives focus trap, Esc and the backdrop.
 // `remember` adds a "don't ask again" box; its value is passed to onConfirm.
-function ConfirmDialog({ open, title, children, confirmLabel, remember, onConfirm, onCancel }: { open: boolean; title: string; children: ReactNode; confirmLabel: string; remember?: string; onConfirm: (remember: boolean) => void; onCancel: () => void }) {
+// `danger` paints the confirm button red (only for what can't be undone); `busy` holds it while the request runs.
+function ConfirmDialog({ open, title, children, confirmLabel, remember, danger, busy, onConfirm, onCancel }: { open: boolean; title: string; children: ReactNode; confirmLabel: string; remember?: string; danger?: boolean; busy?: boolean; onConfirm: (remember: boolean) => void; onCancel: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
   const [checked, setChecked] = useState(false)
   useEffect(() => {
@@ -31,7 +32,7 @@ function ConfirmDialog({ open, title, children, confirmLabel, remember, onConfir
             <Button variant="outline" onClick={onCancel}>
               Cancel
             </Button>
-            <Button onClick={() => onConfirm(checked)} autoFocus>
+            <Button variant={danger ? "destructive" : "default"} disabled={busy} onClick={() => onConfirm(checked)} autoFocus={!danger}>
               {confirmLabel}
             </Button>
           </div>

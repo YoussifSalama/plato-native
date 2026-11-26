@@ -68,7 +68,7 @@ export function buildGraph(shown: StepId[], progress: RunProgress, query: Discov
       const rowW = ADAPTER_W * inRow + ADAPTER_GAP * (inRow - 1)
       const x = (STAGE_W - rowW) / 2 + (i % perRow) * (ADAPTER_W + ADAPTER_GAP)
       const sp = sourceOf(progress, s.key)
-      const state: NodeState = !has("adapters") ? "waking" : !progress.sources[s.key] ? "done" : !has(`adapter:${s.key}`) ? "working" : sp.status === "DONE" ? "done" : "failed"
+      const state: NodeState = !has("adapters") ? "waking" : !progress.sources[s.key] ? "done" : !has(`adapter:${s.key}`) ? "working" : sp.status === "DONE" ? "done" : sp.status === "SKIPPED" ? "skipped" : "failed"
       const id = `adapter:${s.key}`
       nodes.push({ id, type: "adapter", position: { x, y: y + row * (ADAPTER_H + ADAPTER_GAP) }, data: { source: s.key, label: s.label, state, fetched: sp.fetched, error: sp.error }, draggable: false })
       edges.push({ id: `stage->${id}`, source: "stage", target: id, type: "journey", data: { kind: "fan", active: state === "working" } })

@@ -1,6 +1,8 @@
 enum AuthTokenKind {
     RESET_PASSWORD
     VERIFY_EMAIL
+    // A new address for the account: the swap happens when the link sent to it is opened.
+    CHANGE_EMAIL
 }
 
 // One-time links sent by email. Only a hash of the secret is stored, so a
@@ -13,6 +15,8 @@ model AuthToken {
   expires_at DateTime
   // Written as an explicit null on create: Mongo's null filter does not match a missing field.
   used_at    DateTime?
+  // CHANGE_EMAIL: the address the link was sent to.
+  email      String?
 
   created_at DateTime @default(now())
 

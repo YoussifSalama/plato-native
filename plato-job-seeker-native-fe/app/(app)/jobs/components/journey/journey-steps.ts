@@ -99,6 +99,12 @@ export function deriveSteps(progress: RunProgress, query: DiscoveryRun["query"])
       })
     else if (sp.status === "DONE" && sp.fetched > 0)
       steps.push({ id: `adapter:${s.key}`, voice: `${s.label} came back with ${plural(sp.fetched, "posting")}.`, detail: running })
+    else if (sp.status === "SKIPPED")
+      steps.push({
+        id: `adapter:${s.key}`,
+        voice: `I skipped ${s.label}: your Plato tokens didn't cover it this time.`,
+        detail: `It comes back when your tokens refill, or with a bigger plan. ${running}`,
+      })
     else if (sp.status === "DONE")
       steps.push({
         id: `adapter:${s.key}`,

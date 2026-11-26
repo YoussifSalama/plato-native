@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -37,14 +38,19 @@ import {
   fitsSearch,
   initialProgress,
   isFresh,
+  markTokenSkips,
   matchLabel,
   MAX_POSTING_AGE_DAYS,
   postedCutoff,
   remainingBudget,
   RUN_TARGET,
   RunProgress,
+  sourceKey,
+  SourceKey,
   toMatchPercent,
 } from './discovery-run.helpers';
+import { searchRun, SearchRunContext } from './apify.service';
+import { BOARDS } from './adapters/boards.adapter';
 import { indexFilter, LocalIndexAdapter } from './adapters/local-index.adapter';
 import { PublicBoardsAdapter } from './adapters/public-boards.adapter';
 import {
@@ -131,6 +137,13 @@ export function sortOrder(
       return [{ match_score: 'desc' }, { discovered_at: 'desc' }];
   }
 }
+
+// The source card an Apify actor fills (the ATS actor shares its cards with free endpoints: never skipped).
+const LINKEDIN_ACTOR = 'curious_coder~linkedin-jobs-scraper';
+const actorSources = (actor: string): SourceKey[] =>
+  actor === LINKEDIN_ACTOR
+    ? ['linkedin']
+    : BOARDS.filter((b) => b.actorId === actor).map((b) => sourceKey(b.source));
 
 @Injectable()
 export class DiscoveryService implements OnModuleInit {
@@ -280,9 +293,9 @@ export class DiscoveryService implements OnModuleInit {
     };
   }
 
-  // One search at a time per thread. The lock covers the window between the
-  // RUNNING check and the row insert, which parallel tool calls otherwise race.
-  // ponytail: in-memory lock — fine for one API instance.
+  // A thread's running search is reused; startRun allows one per seeker. The lock
+  // (thread and seeker ids) covers the window between the RUNNING check and the row insert.
+  // ponytail: in-memory lock — fine for one API instance; the DB check holds across instances.
   private readonly starting = new Set<string>();
 
   async startRunForThread(
@@ -308,6 +321,38 @@ export class DiscoveryService implements OnModuleInit {
   // background and the client polls getRun().
   // ponytail: in-process fire-and-forget — move to BullMQ if we ever run >1 instance.
   async startRun(
+    jobSeekerId: string,
+    overrides?: DiscoveryQueryOverrides,
+    threadId?: string,
+  ) {
+    // One search at a time per seeker: two at once would plan against the same tokens.
+    // The DB check covers every instance; the lock covers this one's window until the row exists.
+    const running =
+      this.starting.has(jobSeekerId) ||
+      (await this.prisma.discoveryRun.findFirst({
+        where: { job_seeker_id: jobSeekerId, status: 'RUNNING' },
+        select: { id: true, thread_id: true },
+      }));
+    if (running)
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'search_running',
+        message:
+          'A search is already running. Wait for it to finish, then start the next one.',
+        ...(typeof running === 'object' && {
+          runId: running.id,
+          threadId: running.thread_id,
+        }),
+      });
+    this.starting.add(jobSeekerId);
+    try {
+      return await this.createRun(jobSeekerId, overrides, threadId);
+    } finally {
+      this.starting.delete(jobSeekerId);
+    }
+  }
+
+  private async createRun(
     jobSeekerId: string,
     overrides?: DiscoveryQueryOverrides,
     threadId?: string,
@@ -385,7 +430,7 @@ export class DiscoveryService implements OnModuleInit {
       await this.narrate(
         threadId,
         budget === 0
-          ? 'You are out of Plato tokens for this month, so I searched the free sources only. The paid job boards come back when your tokens refill.'
+          ? 'Your Plato tokens are too low for the paid job boards, so I searched the free sources only. The paid boards come back when your tokens refill or you top up.'
           : 'Your remaining Plato tokens cover part of a full job-board search, so I searched fewer paid boards this time.',
       );
     }
@@ -452,93 +497,114 @@ export class DiscoveryService implements OnModuleInit {
         await publish(applyIndexResult(progress, indexResult));
         const indexJobs =
           indexResult.status === 'fulfilled' ? indexResult.value : [];
+        const wanted = remainingBudget(
+          indexJobs.length,
+          Math.round(RUN_TARGET * marketScale(query)),
+        );
         const budget = await this.affordableBudget(
           jobSeekerId,
-          remainingBudget(
-            indexJobs.length,
-            Math.round(RUN_TARGET * marketScale(query)),
-          ),
+          wanted,
           threadId,
         );
         const remoteQuery: DiscoveryQuery = { ...query, budget };
+        // Every paid run reserves its cost first (ApifyService); this names them and collects the ones skipped.
+        const paid: SearchRunContext = {
+          runId,
+          label: `${(query.requestedTitles ?? query.titles).slice(0, 2).join(', ')} search`,
+          ran: new Set(),
+          skipped: new Set(),
+        };
 
-        const [ats, linkedin, boards, feeds] = await Promise.allSettled([
-          // ATS jobs: free public endpoints + the Apify actor, as one phase.
+        const [ats, linkedin, boards, feeds] = await searchRun.run(paid, () =>
           Promise.allSettled([
-            this.publicBoards.discover(remoteQuery),
-            this.atsAdapter.discover(remoteQuery),
-          ])
-            .then((parts) => {
-              if (parts.every((r) => r.status === 'rejected'))
-                throw (parts[0] as PromiseRejectedResult).reason;
-              for (const r of parts)
-                if (r.status === 'rejected')
-                  this.logger.warn(`ATS source failed: ${String(r.reason)}`);
-              return parts.flatMap((r) =>
-                r.status === 'fulfilled' ? r.value : [],
-              );
-            })
-            .then(
+            // ATS jobs: free public endpoints + the Apify actor, as one phase.
+            Promise.allSettled([
+              this.publicBoards.discover(remoteQuery),
+              this.atsAdapter.discover(remoteQuery),
+            ])
+              .then((parts) => {
+                if (parts.every((r) => r.status === 'rejected'))
+                  throw (parts[0] as PromiseRejectedResult).reason;
+                for (const r of parts)
+                  if (r.status === 'rejected')
+                    this.logger.warn(`ATS source failed: ${String(r.reason)}`);
+                return parts.flatMap((r) =>
+                  r.status === 'fulfilled' ? r.value : [],
+                );
+              })
+              .then(
+                async (v) => {
+                  await publish(
+                    applyAtsResult(progress, { status: 'fulfilled', value: v }),
+                  );
+                  return v;
+                },
+                async (reason: unknown) => {
+                  await publish(
+                    applyAtsResult(progress, { status: 'rejected', reason }),
+                  );
+                  throw reason;
+                },
+              ),
+            this.linkedinAdapter.discover(remoteQuery).then(
               async (v) => {
                 await publish(
-                  applyAtsResult(progress, { status: 'fulfilled', value: v }),
+                  applyLinkedInResult(progress, {
+                    status: 'fulfilled',
+                    value: v,
+                  }),
                 );
                 return v;
               },
               async (reason: unknown) => {
                 await publish(
-                  applyAtsResult(progress, { status: 'rejected', reason }),
+                  applyLinkedInResult(progress, { status: 'rejected', reason }),
                 );
                 throw reason;
               },
             ),
-          this.linkedinAdapter.discover(remoteQuery).then(
-            async (v) => {
-              await publish(
-                applyLinkedInResult(progress, {
-                  status: 'fulfilled',
-                  value: v,
-                }),
-              );
-              return v;
-            },
-            async (reason: unknown) => {
-              await publish(
-                applyLinkedInResult(progress, { status: 'rejected', reason }),
-              );
-              throw reason;
-            },
-          ),
-          this.boardsAdapter.discoverDetailed(remoteQuery).then(
-            async (v) => {
-              await publish(
-                applyBoardsResult(progress, { status: 'fulfilled', value: v }),
-              );
-              return v.jobs;
-            },
-            async (reason: unknown) => {
-              await publish(
-                applyBoardsResult(progress, { status: 'rejected', reason }),
-              );
-              throw reason;
-            },
-          ),
-          // Free official feeds (Remotive, Jobicy, Remote OK, Himalayas, Jooble, Adzuna).
-          this.feedsAdapter.discoverDetailed(remoteQuery).then(
-            async (v) => {
-              await publish(
-                applyFeedsResult(progress, { status: 'fulfilled', value: v }),
-              );
-              return v.jobs;
-            },
-            async (reason: unknown) => {
-              await publish(
-                applyFeedsResult(progress, { status: 'rejected', reason }),
-              );
-              throw reason;
-            },
-          ),
-        ]);
+            this.boardsAdapter.discoverDetailed(remoteQuery).then(
+              async (v) => {
+                await publish(
+                  applyBoardsResult(progress, {
+                    status: 'fulfilled',
+                    value: v,
+                  }),
+                );
+                return v.jobs;
+              },
+              async (reason: unknown) => {
+                await publish(
+                  applyBoardsResult(progress, { status: 'rejected', reason }),
+                );
+                throw reason;
+              },
+            ),
+            // Free official feeds (Remotive, Jobicy, Remote OK, Himalayas, Jooble, Adzuna).
+            this.feedsAdapter.discoverDetailed(remoteQuery).then(
+              async (v) => {
+                await publish(
+                  applyFeedsResult(progress, { status: 'fulfilled', value: v }),
+                );
+                return v.jobs;
+              },
+              async (reason: unknown) => {
+                await publish(
+                  applyFeedsResult(progress, { status: 'rejected', reason }),
+                );
+                throw reason;
+              },
+            ),
+          ]),
+        );
+        // Paid sources the tokens did not cover: all of them when the budget was cut to 0, else the
+        // actors whose every run was skipped.
+        const unpaid =
+          budget === 0 && wanted > 0
+            ? [LINKEDIN_ACTOR, ...BOARDS.map((b) => b.actorId)]
+            : [...paid.skipped].filter((a) => !paid.ran.has(a));
+        if (unpaid.length)
+          await publish(markTokenSkips(progress, unpaid.flatMap(actorSources)));
         jobs = [
           ...indexJobs,
           ...[ats, linkedin, boards, feeds].flatMap((r) =>

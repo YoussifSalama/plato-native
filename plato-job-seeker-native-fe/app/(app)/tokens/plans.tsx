@@ -3,13 +3,13 @@
 import { useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import { AxiosError } from "axios"
-import { Check, Coins, Infinity as Forever, Layers, Loader2, Sparkles, Zap } from "lucide-react"
+import { Check, Coins, Infinity as Forever, Layers, Loader2, Mail, Sparkles, Zap } from "lucide-react"
 import { cn } from "cn"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlatoMark } from "@/components/plato-orb"
 import { SectionHeader } from "@/components/plato-ui"
-import { formatTokens, startCheckout, type TokenEstimate, type TokenPrices } from "@/lib/credits/api"
+import { formatTokens, startCheckout, SUPPORT_EMAIL, type TokenEstimate, type TokenPrices } from "@/lib/credits/api"
 import { InfoTip } from "@/components/info-tip"
 import { spring } from "@/lib/motion-system"
 import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
@@ -35,8 +35,11 @@ function perMonth(tokens: number, estimates: TokenEstimate[] | null) {
   ].filter((x) => x.n !== null && x.n > 0)
 }
 
-// The checkout is not open yet: say so kindly, keep what they picked in view.
+// The checkout is not open yet: say so kindly, keep what they picked in view, and give a real way to get it
+// (the server has recorded the request for the team either way).
 type Picked = { what: string; detail: string }
+const mailto = (p: Picked) =>
+  `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Plato: ${p.what}`)}&body=${encodeURIComponent(`Hi Plato team,\n\nI'd like ${p.what} (${p.detail}). Please set it up for me.\n\nThanks`)}`
 function PaymentSoonDialog({ picked, onClose }: { picked: Picked | null; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -54,11 +57,24 @@ function PaymentSoonDialog({ picked, onClose }: { picked: Picked | null; onClose
           <div className="relative flex flex-col gap-2">
             <h2 className="text-lg font-bold">Online checkout opens soon</h2>
             <p className="text-sm leading-relaxed text-text-secondary">
-              Thanks for choosing <span className="font-semibold text-foreground">{picked.what}</span> ({picked.detail}). We&apos;re finishing secure payments right now. Until they open, the Plato team can set this up for you by hand, and nothing is charged here.
+              Thanks for choosing <span className="font-semibold text-foreground">{picked.what}</span> ({picked.detail}). Online payment isn&apos;t open yet, so nothing is charged here. We&apos;ve noted your request{" "}
+              {SUPPORT_EMAIL ? (
+                <>
+                  and the Plato team sets it up with you by email. Write to us at <span className="font-medium text-foreground">{SUPPORT_EMAIL}</span>.
+                </>
+              ) : (
+                "and the Plato team will email you at the address on your account to set it up."
+              )}
             </p>
           </div>
-          <Button onClick={onClose} className="relative w-full" autoFocus>
-            Got it
+          {SUPPORT_EMAIL && (
+            <a href={mailto(picked)} className={cn(buttonVariants(), "relative w-full")}>
+              <Mail className="size-4" />
+              Email the Plato team
+            </a>
+          )}
+          <Button variant={SUPPORT_EMAIL ? "outline" : "default"} onClick={onClose} className="relative w-full" autoFocus={!SUPPORT_EMAIL}>
+            {SUPPORT_EMAIL ? "Not now" : "Got it"}
           </Button>
         </div>
       )}
@@ -97,7 +113,7 @@ export function Plans({ plans, current, estimates }: { plans: TokenPrices["plans
     <section id="plans" className="flex scroll-mt-6 flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <SectionHeader title="Plans" icon={Layers} accent="cobalt" />
-        <p className="text-sm text-text-secondary">Every plan refills each month. Switching takes effect right away, with a fresh month of tokens.</p>
+        <p className="text-sm text-text-secondary">Every plan refills each month. Online payment opens soon; until then the Plato team sets up a plan with you by email, and it starts with a fresh month of tokens.</p>
       </div>
       <motion.div variants={staggerContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px" }} className="grid gap-4 lg:grid-cols-3 lg:items-stretch">
         {ORDER.filter((k) => plans[k]).map((k) => {

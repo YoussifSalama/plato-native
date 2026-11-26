@@ -8,6 +8,7 @@ jest.mock('./preferences-suggestion.agent', () => ({
 
 import { BadRequestException } from '@nestjs/common';
 import { PreferencesController } from './preferences.controller';
+import { preferenceEditSchema } from './preferences.schema';
 
 describe('PreferencesController.estimate (onboarding: "Plato sees about N open jobs")', () => {
   function setup(count = 310) {
@@ -65,5 +66,109 @@ describe('PreferencesController.estimate (onboarding: "Plato sees about N open j
     await expect(
       setup().ctrl.estimate(req, { roles: 'x' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('PreferencesController.getPreferences (first load)', () => {
+  const { run } = jest.requireMock('@openai/agents') as { run: jest.Mock };
+  function setup(experiences: object[]) {
+    const prefs = {
+      get: jest.fn(() => ({ job_seeker_id: 's', roles: [] })),
+      upsert: jest.fn(() => ({ id: 'p', roles: ['ERP Consultant'] })),
+    };
+    const ctrl = new PreferencesController(
+      { getByUserId: jest.fn(() => ({ id: 's' })) } as never,
+      prefs as never,
+      {
+        getFullProfile: jest.fn(() => ({
+          experiences,
+          educations: [],
+          skills: [],
+        })),
+      } as never,
+      { get: () => ({ profileExtractionModel: 'm' }) } as never,
+      {} as never,
+    );
+    return { ctrl, prefs };
+  }
+  const req = { userId: 'u' } as never;
+  beforeEach(() => run.mockReset());
+
+  it('no CV read yet: the defaults, no AI run, nothing saved', async () => {
+    const { ctrl, prefs } = setup([]);
+    expect(await ctrl.getPreferences(req)).toEqual({
+      job_seeker_id: 's',
+      roles: [],
+    });
+    expect(run).not.toHaveBeenCalled();
+    expect(prefs.upsert).not.toHaveBeenCalled();
+  });
+
+  it('an empty suggestion saved before the CV was read is made again', async () => {
+    run.mockResolvedValue({
+      finalOutput: { roles: ['ERP'] },
+      rawResponses: [],
+    });
+    const { ctrl, prefs } = setup([{ title: 'ERP' }]);
+    prefs.get.mockResolvedValueOnce({
+      id: 'old',
+      source: 'AI_SUGGESTED',
+      roles: [],
+    } as never);
+    await ctrl.getPreferences(req);
+    expect(prefs.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('three parallel first loads: one AI run, one saved row', async () => {
+    run.mockResolvedValue({
+      finalOutput: { roles: ['ERP Consultant'] },
+      rawResponses: [],
+    });
+    const { ctrl, prefs } = setup([{ title: 'ERP Consultant' }]);
+    await Promise.all([1, 2, 3].map(() => ctrl.getPreferences(req)));
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(prefs.upsert).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('preferenceEditSchema: what the extension may paste into forms', () => {
+  const base = {
+    roles: ['ERP Consultant'],
+    preferred_locations: ['Cairo'],
+    work_setup: ['remote'],
+    preferred_job_types: ['full_time'],
+    preferred_industries: [],
+    salary_min: 1000,
+    salary_max: 2000,
+    salary_currency: 'USD',
+    things_to_avoid: null,
+    seniority: null,
+    years_experience: null,
+    availability: null,
+    employment_status: null,
+    willing_to_relocate: false,
+    visa_sponsorship_required: false,
+    linkedin_url: 'linkedin.com/in/x',
+    github_url: '',
+    portfolio_url: null,
+  };
+  it('a bare link gets https://, an empty one clears', () => {
+    const r = preferenceEditSchema.parse(base);
+    expect(r.linkedin_url).toBe('https://linkedin.com/in/x');
+    expect(r.github_url).toBeNull();
+  });
+  it('refuses other schemes, unknown enums and a minimum above the expected salary', () => {
+    for (const bad of [
+      { linkedin_url: 'javascript:alert(1)' },
+      { portfolio_url: 'ftp://x.com/a' },
+      { work_setup: ['moon'] },
+      { salary_currency: 'XXX' },
+      { salary_min: 3000 },
+      { salary_min: -1 },
+      { roles: ['x'.repeat(121)] },
+    ])
+      expect(preferenceEditSchema.safeParse({ ...base, ...bad }).success).toBe(
+        false,
+      );
   });
 });

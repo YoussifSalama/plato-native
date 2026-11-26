@@ -146,6 +146,18 @@ export class CareerController {
     return this.voice.start(req.userId, id, parsed.data);
   }
 
+  // The WebRTC call is live: once on connect, then every ~30s (what an unreported call is billed up to).
+  @Post('threads/:id/voice/connected')
+  voiceConnected(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.voice.alive(req.userId, id);
+  }
+
+  // The call never went live (mic refused, connection failed, page left): its reservation back.
+  @Post('threads/:id/voice/cancel')
+  voiceCancel(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.voice.cancel(req.userId, id);
+  }
+
   // The finished call's transcript, saved into the chat.
   @Post('threads/:id/voice/transcript')
   voiceTranscript(

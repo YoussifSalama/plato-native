@@ -17,6 +17,14 @@ import { getProfile } from "@/lib/documents/api"
 import { z } from "zod"
 import { saveVoiceTranscript, startVoiceSession, type VoiceMode, type VoiceScorecard, type VoiceUnscored, type VoiceUsage } from "@/lib/career/api"
 import { useLeaveGuard } from "@/lib/use-leave-guard"
+import { apiClient } from "@/lib/api-client"
+
+// A call that never connected gives its reserved tokens back (one that connected is billed like a call).
+const cancelVoice = (threadId: string) =>
+  apiClient
+    .post(`/job-seeker/career/threads/${threadId}/voice/cancel`)
+    .then(reportTokensChanged)
+    .catch(() => undefined)
 
 type Turn = { role: "user" | "assistant"; text: string }
 // Only what we call on the realtime session; the library is loaded when a call starts.
@@ -160,8 +168,18 @@ export function useVoiceCall() {
   useMicLevel(phase === "live" && !muted, level)
   useLeaveGuard(phase === "connecting" || phase === "live" || phase === "ending", "Your voice interview is still on. Leaving now ends the call. Leave anyway?")
 
-  // Leaving the page hangs up (the microphone must never stay open).
-  useEffect(() => () => session.current?.close(), [])
+  // Leaving the page hangs up (the microphone must never stay open): a live call is saved and billed
+  // as it ended, one still connecting gives its reservation back.
+  useEffect(
+    () => () => {
+      if (phaseRef.current === "live") void endRef.current()
+      else if (phaseRef.current === "connecting" && call.current) {
+        session.current?.close()
+        void cancelVoice(call.current.threadId)
+      }
+    },
+    [],
+  )
 
   async function start(threadId: string, req: VoiceStart) {
     setError(null)
@@ -239,6 +257,7 @@ export function useVoiceCall() {
     } catch (e) {
       session.current?.close()
       session.current = null
+      void cancelVoice(threadId)
       setError(e instanceof Error ? e.message : "Could not start the call. Check microphone permission.")
       setPhase("idle")
       return false
@@ -277,6 +296,17 @@ export function useVoiceCall() {
       setElapsed(s)
       if (s >= maxSeconds.current) void endRef.current()
     }, 1000)
+    return () => clearInterval(id)
+  }, [phase])
+
+  // Tells the server the call is live, once now and then every 30s: a call the tab never reports
+  // (closed mid-call) is billed up to the last ping; one that never connected is not billed.
+  useEffect(() => {
+    const threadId = call.current?.threadId
+    if (phase !== "live" || !threadId) return
+    const ping = () => void apiClient.post(`/job-seeker/career/threads/${threadId}/voice/connected`).catch(() => undefined)
+    ping()
+    const id = setInterval(ping, 30_000)
     return () => clearInterval(id)
   }, [phase])
 

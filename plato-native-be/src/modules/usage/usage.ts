@@ -17,6 +17,8 @@ import { llmCost } from './pricing';
 // ponytail: background work with no request (apply worker) logs user_id null; pass it explicitly there if per-user numbers are needed.
 const als = new AsyncLocalStorage<string>();
 const logger = new Logger('Usage');
+/** The seeker this request (or the background work it started) is metered to. */
+export const meteredUser = () => als.getStore();
 
 export function recordUsage(row: {
   feature: string;

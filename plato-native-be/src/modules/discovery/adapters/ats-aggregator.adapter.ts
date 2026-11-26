@@ -114,11 +114,11 @@ export class AtsAggregatorAdapter implements DiscoveryAdapter {
     const wantsRemote = workArrangements.has('Remote OK');
 
     if (query.budget === 0) return [];
-    // The other half of the remaining budget comes from the ATS actor.
+    // A third of the remaining budget comes from the ATS actor (LinkedIn and the boards take the others).
     const limit =
       query.budget === undefined
         ? MAX_RESULTS
-        : Math.min(MAX_RESULTS, Math.max(10, Math.ceil(query.budget / 2)));
+        : Math.min(MAX_RESULTS, Math.max(10, Math.ceil(query.budget / 3)));
 
     // Query 1: jobs where the seeker lives (any arrangement they accept).
     const local: Record<string, unknown> = { ...base, limit };

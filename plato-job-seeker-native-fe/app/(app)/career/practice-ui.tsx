@@ -14,8 +14,9 @@ import { CARD, StatIcon, type Accent } from "@/components/plato-ui"
 export const SOFT = "inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary-soft px-3 py-1.5 text-sm font-semibold text-primary transition-colors duration-200 hover:bg-primary hover:text-primary-foreground"
 export const SOLID = "inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-colors duration-200 hover:bg-primary-hover"
 
-// Categories have a fixed colour across Career (Interviews cobalt, Skills amber, …).
-export const CAT_ACCENT = { interview: "cobalt", skills: "amber", aptitude: "azure", language: "teal", resume: "green" } as const satisfies Record<string, Accent>
+// Categories have a fixed colour across Career (Interviews and Skills brand cobalt, …).
+// Amber means "needs attention" in this app, so no category wears it.
+export const CAT_ACCENT = { interview: "cobalt", skills: "cobalt", aptitude: "azure", language: "teal", resume: "green" } as const satisfies Record<string, Accent>
 
 // Cards in a grid fade up one after another (CSS, reduced-motion aware).
 export const enter = (i: number): { className: string; style: CSSProperties } => ({

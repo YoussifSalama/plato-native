@@ -61,8 +61,17 @@ export const VOICE_USD_PER_MINUTE = Number(
   process.env.CREDITS_VOICE_USD_PER_MINUTE ?? 0.1,
 );
 
-// Auto apply is not charged in tokens (out of scope for this system).
+// Auto apply is not charged in tokens (out of scope for this system). Nor are the
+// sub-token AI steps that keep a form working with an empty balance: reading the
+// search sentence, planning its titles, the first preference suggestion, a quiz
+// attempt's summary (a 402 there would lose the form or the attempt).
 const EXEMPT = /^(extension|apply)\./;
+const FREE = new Set([
+  'discovery.sentence',
+  'discovery.titles',
+  'onboarding.preferences',
+  'quiz.summary',
+]);
 
 // Apify boards: a fixed price per platform, so the cost of a search is known
 // before it runs. USD per result + per run start (the actors' own pay-per-result
@@ -136,9 +145,10 @@ export const APIFY_PRICES: Record<
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
-// A deep search never spends more than the balance: it asks for at most as many
-// board results as the dearest board's price allows, after a reserve for the
-// boards' start fees. A small balance gets a smaller search, not a refusal.
+// A deep search plans at most as many board results as the dearest board's price
+// allows, after a reserve for the boards' start fees: a small balance gets a
+// smaller search, not a refusal. The guarantee is per run (ApifyService): each one
+// reserves its worst case first and is skipped when that does not fit.
 const DEAREST_RESULT = Math.max(
   ...Object.values(APIFY_PRICES).map((p) => p.perResult),
 );
@@ -151,6 +161,15 @@ export function affordableResults(balance: number, wanted: number): number {
 }
 export const toTokens = (usd: number) => round(usd / USD_PER_TOKEN);
 
+/** The most one run of an actor can cost in tokens, asking for `limit` results. */
+export function runCeiling(actorId: string, limit: number) {
+  const p = APIFY_PRICES[actorId];
+  // an actor without a fixed price is charged what Apify reports: reserve the dearest board's rate
+  return toTokens(
+    p ? p.perRun + p.perResult * limit : 0.01 + DEAREST_RESULT * limit,
+  );
+}
+
 export interface MeteredRow {
   feature: string;
   model?: string | null;
@@ -161,7 +180,7 @@ export interface MeteredRow {
 
 /** Plato tokens one usage event costs the seeker (0 = free). */
 export function tokensFor(r: MeteredRow): number {
-  if (EXEMPT.test(r.feature)) return 0;
+  if (EXEMPT.test(r.feature) || FREE.has(r.feature)) return 0;
   if (r.feature === 'discovery.apify') {
     const results = (r.meta as { results?: unknown } | null)?.results;
     // a failed run (no results read) or an empty one costs the seeker nothing; we still paid Apify (usage_events)
@@ -196,4 +215,26 @@ export const FEATURE_LABELS: Record<string, string> = {
   'interview.followup': 'Mock interview',
   'interview.coach': 'Mock interview coaching',
   'interview.score': 'Mock interview feedback',
+  'discovery.sentence': 'Reading your search',
+  'discovery.fit': 'Checking a search against your profile',
+  'discovery.fantastic': 'Searching job boards',
+  'quiz.understand': 'Building a practice quiz',
+  'quiz.plan': 'Building a practice quiz',
+  'quiz.section': 'Building a practice quiz',
+  'quiz.summary': 'Practice quiz summary',
+  'assessments.report': 'Candidate report',
+  'guest.preferences': 'Setting your preferences',
 };
+
+// The kind of work a feature is, for the spending breakdown (the app has the icons).
+export function categoryOf(feature: string | null) {
+  const f = feature ?? '';
+  if (/^(chat\.orchestrator|discovery\.)/.test(f)) return 'search';
+  if (/^career\.voice/.test(f)) return 'voice';
+  if (/^career\./.test(f)) return 'career';
+  if (/^resume\./.test(f)) return 'resume';
+  if (/^interview\./.test(f)) return 'interview';
+  if (/^(quiz|assessments)\./.test(f)) return 'practice';
+  if (/^(onboarding\.|chat\.onboarding|guest\.)/.test(f)) return 'profile';
+  return 'other';
+}

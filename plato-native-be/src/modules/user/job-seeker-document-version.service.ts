@@ -37,6 +37,13 @@ export class JobSeekerDocumentVersionService {
       where: { id: job_seeker_id },
       data: { current_document_version_id: created.id },
     });
+    // Supporting documents (a certificate, an ID, a cover letter…) belong to
+    // the seeker, not to one CV: they move into the new batch, so the list and
+    // the next read of the profile keep them.
+    await this.prisma.jobSeekerDocument.updateMany({
+      where: { job_seeker_id, type: { not: 'CV_RESUME' } },
+      data: { document_version_id: created.id },
+    });
     return created;
   }
 

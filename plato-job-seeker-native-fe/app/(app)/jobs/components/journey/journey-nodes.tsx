@@ -3,14 +3,15 @@
 import { type ComponentType, type ReactNode } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
-import { AlertTriangle, CheckCircle2, Filter, Layers, Search, Sparkles, Trophy } from "lucide-react"
+import { AlertTriangle, CheckCircle2, CircleMinus, Filter, Layers, Search, Sparkles, Trophy } from "lucide-react"
 import { cn } from "cn"
 import { clipReveal, lineReveal, nodeContent, nodeEnter, reducedVariants, spring } from "@/lib/motion-system"
 import type { JobSourceName, SourceKey } from "@/lib/jobs/api"
 import { SourceTile } from "@/components/source-tile"
 import { PlatoMark } from "@/components/plato-orb"
 
-export type NodeState = "waking" | "working" | "done" | "failed"
+// skipped: a paid source the seeker's tokens did not cover (amber, not an error)
+export type NodeState = "waking" | "working" | "done" | "failed" | "skipped"
 
 export type StageData = {
   kind: "ai" | "stage" | "merge" | "filter" | "rank" | "done" | "failed"
@@ -45,6 +46,7 @@ const ICONS: Record<StageData["kind"], ComponentType<{ className?: string }>> = 
 function StatusDot({ state }: { state: NodeState }) {
   if (state === "done") return <CheckCircle2 className="size-4 text-success" />
   if (state === "failed") return <AlertTriangle className="size-4 text-destructive" />
+  if (state === "skipped") return <CircleMinus className="size-4 text-warning-ink" />
   return (
     <span className="relative flex size-3.5 items-center justify-center">
       <span className={cn("absolute inset-0 rounded-full bg-primary/40", state === "working" && "animate-ping")} />
@@ -186,8 +188,8 @@ function AdapterNodeView({ data }: NodeProps<AdapterNode>) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.25 }}
-              className={cn("truncate text-xs tabular-nums", state === "done" ? "text-success" : state === "failed" ? "text-destructive" : "text-muted-foreground")}
-              title={state === "failed" ? data.error : undefined}
+              className={cn("truncate text-xs tabular-nums", state === "done" ? "text-success" : state === "failed" ? "text-destructive" : state === "skipped" ? "text-warning-ink" : "text-muted-foreground")}
+              title={state === "failed" || state === "skipped" ? data.error : undefined}
             >
               {state === "waking" ? "Standing by" : state === "working" ? "Retrieving…" : state === "done" ? `${data.fetched} postings` : (data.error ?? "No response")}
             </motion.p>

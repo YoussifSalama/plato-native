@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { createHash } from 'crypto';
 import { compactCv, CV_JSON_VERSION, CV_PROMPT, CV_SCHEMA, grounded, withName, type CvJson } from './cv-facts';
 import { errorCode, resultContent } from './v3-results';
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
@@ -287,8 +288,10 @@ export class V3SessionService {
     });
     const text = doc?.extracted_text?.trim();
     if (!doc || !text) return null;
-    const cached = doc.apply_json as { v?: number; json?: CvJson } | null;
-    if (cached?.v === CV_JSON_VERSION && cached.json) return withName(cached.json);
+    // Keyed on the text it was made from: a replaced CV never reuses the old one's facts.
+    const hash = createHash('sha256').update(text).digest('hex');
+    const cached = doc.apply_json as { v?: number; json?: CvJson; hash?: string } | null;
+    if (cached?.v === CV_JSON_VERSION && cached.hash === hash && cached.json) return withName(cached.json);
     const model = MODEL();
     const r = await this.client.messages.create({
       model,
@@ -302,7 +305,7 @@ export class V3SessionService {
     const out = r.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text;
     if (r.stop_reason !== 'end_turn' || !out) throw new Error(`CV JSON not made (${r.stop_reason})`);
     const json = grounded(JSON.parse(out) as CvJson, text);
-    await this.prisma.jobSeekerDocument.update({ where: { id: doc.id }, data: { apply_json: { v: CV_JSON_VERSION, json } as object } });
+    await this.prisma.jobSeekerDocument.update({ where: { id: doc.id }, data: { apply_json: { v: CV_JSON_VERSION, json, hash } as object } });
     this.log.log(`CV JSON made for document ${doc.id} (${out.length} chars)`);
     return withName(json);
   }

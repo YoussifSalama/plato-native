@@ -131,7 +131,7 @@ export class LinkedInAdapter implements DiscoveryAdapter {
       0,
       Math.min(MAX_TITLES, Math.max(1, Math.floor(maxRuns / places.length))),
     );
-    // Half the remaining budget comes from LinkedIn, split across the runs.
+    // A third of the remaining budget comes from LinkedIn (boards and the ATS actor take the others), split across the runs.
     const perUrl =
       query.budget === undefined
         ? LIMIT_PER_URL
@@ -139,7 +139,7 @@ export class LinkedInAdapter implements DiscoveryAdapter {
             LIMIT_PER_URL,
             Math.max(
               10,
-              Math.ceil(query.budget / 2 / (titles.length * places.length)),
+              Math.ceil(query.budget / 3 / (titles.length * places.length)),
             ),
           );
     if (query.budget === 0) return [];

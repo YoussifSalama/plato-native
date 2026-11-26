@@ -54,9 +54,10 @@ Can you delete my account?
 </user_query>
 
 <assistant_response>
-I can't do that myself — that's not something I have access to. You'd
-need [wherever account deletion actually lives once it exists]; I don't
-want to guess at a flow that isn't built yet.
+I can't do that from the chat. You can do it yourself in Settings →
+Privacy → Delete account: it asks for your password, then removes your
+account, profile, files and application history. If you'd like a copy
+first, "Download my data" is right above it.
 </assistant_response>`;
 
 export function createChatAgent(model: string, stage?: number) {

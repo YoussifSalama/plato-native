@@ -18,7 +18,8 @@ import type { Preferences } from "@/lib/preferences/schema"
 import { getProfile } from "@/lib/documents/api"
 import { createAlert } from "@/lib/insights/api"
 import { SearchProgressCard, useRunProgress } from "../components/search-progress-card"
-import { formatTokens, getTokenEstimates } from "@/lib/credits/api"
+import { formatTokens, getTokenEstimates, reportOutOfTokens } from "@/lib/credits/api"
+import { useTokens } from "@/components/plato-tokens"
 
 // New search (owner design, 2026-11-13): one sentence fills the details, every detail stays editable, the preview
 // updates as the seeker edits, Start runs the search. Replaces searching by chat. Pay, level and visa are saved to
@@ -258,8 +259,13 @@ export default function NewSearchPage() {
   const [tokens, setTokens] = useState<{
     cost: number
     balance: number
+    refillsOn: string
+    awaitingEmail: boolean
   } | null>(null)
   const [starting, setStarting] = useState(false)
+  // The live balance (refreshed after charges, on focus, every minute) wins over the one read on load.
+  const live = useTokens()
+  if (tokens && live && (live.balance !== tokens.balance || live.awaitingEmail !== tokens.awaitingEmail)) setTokens({ ...tokens, balance: live.balance, awaitingEmail: live.awaitingEmail, refillsOn: live.resetsAt })
   const [error, setError] = useState<string | null>(null)
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }))
 
@@ -298,6 +304,8 @@ export default function NewSearchPage() {
         setTokens({
           cost: e.estimates.find((x) => x.action === "deep_search")?.about ?? 0,
           balance: e.balance,
+          refillsOn: e.refillsOn,
+          awaitingEmail: !!e.awaitingEmail,
         }),
       )
       .catch(() => undefined)
@@ -410,6 +418,15 @@ export default function NewSearchPage() {
   // Start: first, does this search fit the profile? A search it can't land spends tokens on results the seeker can't
   // use, so they are told, with Plato's closer search one press away. The check failing never blocks the search.
   async function start() {
+    // No tokens: say so before anything runs (the fit check, saved preferences, a new thread).
+    if (tokens && tokens.balance <= 0)
+      return reportOutOfTokens({
+        code: tokens.awaitingEmail ? "email_unverified" : "insufficient_tokens",
+        message: tokens.awaitingEmail ? "Confirm your email to get your free tokens" : "You have run out of Plato tokens for this month.",
+        balance: tokens.balance,
+        resetsAt: tokens.refillsOn,
+        needed: tokens.cost || undefined,
+      })
     if (approvedKey.current !== key) {
       setStarting(true)
       setError(null)
@@ -855,6 +872,14 @@ export default function NewSearchPage() {
             {starting ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
             {running ? "Searching…" : "Start search"}
           </Button>
+          {!error && tokens && tokens.cost > 0 && tokens.balance < tokens.cost && (
+            <p role="status" className="flex basis-full items-start justify-end gap-1.5 text-right text-sm text-warning-ink">
+              <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-warning" />
+              {tokens.balance <= 0
+                ? "You have no tokens left, so a new search can't start until your refill or a top-up."
+                : `Your ${formatTokens(tokens.balance)} tokens cover a smaller search: Plato searches fewer paid job boards. Jobs it already knows are free.`}
+            </p>
+          )}
         </div>
       </footer>
       <MisfitDialog fit={misfit} tokens={tokens?.cost ?? null} onFix={applyFix} onProceed={() => void run()} onClose={() => setMisfit(null)} />

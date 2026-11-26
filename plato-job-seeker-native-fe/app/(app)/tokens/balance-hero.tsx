@@ -6,7 +6,7 @@ import { cn } from "cn"
 import { buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CARD } from "@/components/plato-ui"
-import { resetLabel } from "@/components/plato-tokens"
+import { ResendConfirmation, resetLabel } from "@/components/plato-tokens"
 import { formatTokens, type EstimateAction, type TokenAccount, type TokenEstimate } from "@/lib/credits/api"
 import { ease } from "@/lib/motion-system"
 import { InfoTip } from "@/components/info-tip"
@@ -26,6 +26,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
 export function BalanceHero({ acc, estimates }: { acc: TokenAccount | null; estimates: TokenEstimate[] | null }) {
   const reduced = !!useReducedMotion()
   if (!acc) return <HeroSkeleton />
+  // shown as it is; below zero only when a charge landed after the balance ran out
   const left = Math.max(0, acc.balance)
   const bought = Math.min(acc.topup, left)
   const monthlyLeft = left - bought
@@ -67,7 +68,7 @@ export function BalanceHero({ acc, estimates }: { acc: TokenAccount | null; esti
             </span>
             <p className="flex flex-wrap items-baseline gap-x-2">
               <span data-ai="tokens.balance">
-                <CountUp value={left} className="text-[40px] leading-none font-semibold tracking-tight text-foreground tabular-nums" />
+                <CountUp value={acc.balance} className="text-[40px] leading-none font-semibold tracking-tight text-foreground tabular-nums" />
               </span>
               <span className="text-[15px] text-text-secondary">tokens left</span>
             </p>
@@ -79,8 +80,15 @@ export function BalanceHero({ acc, estimates }: { acc: TokenAccount | null; esti
             </div>
             <span className="type-meta flex items-center gap-1.5 text-text-secondary tabular-nums">
               {(low || empty) && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-warning" />}
-              {empty ? `This month's tokens are used up. Browsing jobs and applications stays free.` : `${formatTokens(monthlyLeft)} of ${formatTokens(acc.monthly)} monthly tokens left${low ? ", running low" : ""}`}
+              {acc.awaitingEmail
+                ? `Confirm your email to get your ${formatTokens(acc.monthly)} free tokens.`
+                : acc.balance < 0
+                  ? `Below zero: a charge landed after your tokens ran out. Your balance starts fresh at your refill.`
+                  : empty
+                    ? `This month's tokens are used up. Browsing jobs and applications stays free.`
+                    : `${formatTokens(monthlyLeft)} of ${formatTokens(acc.monthly)} monthly tokens left${low ? ", running low" : ""}`}
             </span>
+            {acc.awaitingEmail && <ResendConfirmation className="pt-1" />}
           </div>
 
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">

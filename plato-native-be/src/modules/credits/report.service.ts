@@ -15,7 +15,7 @@ export class CreditsReportService {
   async report(days: number) {
     const n = Math.min(days || 30, 365);
     const since = new Date(Date.now() - n * 86_400_000);
-    const [usage, consumed] = await Promise.all([
+    const [usage, consumed, requests] = await Promise.all([
       this.prisma.usageEvent.findMany({
         where: { created_at: { gte: since } },
         select: { feature: true, user_id: true, cost_usd: true },
@@ -25,6 +25,13 @@ export class CreditsReportService {
         where: { kind: 'consume', created_at: { gte: since } },
         select: { feature: true, user_id: true, amount: true },
         take: 50000,
+      }),
+      // plan and top-up requests made while payments are closed: set them up by hand
+      this.prisma.usageEvent.findMany({
+        where: { feature: 'credits.request', created_at: { gte: since } },
+        select: { user_id: true, meta: true, created_at: true },
+        orderBy: { created_at: 'desc' },
+        take: 200,
       }),
     ]);
     const byFeature = new Map<string, Line>();
@@ -64,7 +71,14 @@ export class CreditsReportService {
       .slice(0, 50);
     const [users, accounts] = await Promise.all([
       this.prisma.user.findMany({
-        where: { id: { in: topUsers.map(([id]) => id) } },
+        where: {
+          id: {
+            in: [
+              ...topUsers.map(([id]) => id),
+              ...requests.flatMap((r) => (r.user_id ? [r.user_id] : [])),
+            ],
+          },
+        },
         select: { id: true, email: true },
       }),
       this.prisma.creditAccount.findMany({
@@ -79,6 +93,12 @@ export class CreditsReportService {
       usdPerToken: USD_PER_TOKEN,
       plans: PLANS,
       unattributedCostUsd: round(unattributedUsd),
+      requests: requests.map((r) => ({
+        userId: r.user_id,
+        email: r.user_id ? (email.get(r.user_id) ?? null) : null,
+        item: r.meta,
+        at: r.created_at,
+      })),
       features: [...byFeature.entries()]
         .map(([feature, l]) => ({ feature, ...line(l) }))
         .sort((a, b) => b.costUsd - a.costUsd),

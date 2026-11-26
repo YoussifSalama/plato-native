@@ -40,6 +40,8 @@ async function sessionsValidAfter(userId: string): Promise<number | null> {
 
 export interface AuthenticatedRequest extends Request {
   userId: string;
+  // The session's issue time (seconds), for the sliding refresh in /auth/me.
+  tokenIssuedAt?: number;
 }
 
 @Injectable()
@@ -64,6 +66,7 @@ export class JwtAuthGuard implements CanActivate {
     if (after === null || (after && (payload.iat ?? 0) * 1000 < after))
       throw new UnauthorizedException('Invalid or expired session');
     request.userId = payload.sub;
+    request.tokenIssuedAt = payload.iat;
     return true;
   }
 }

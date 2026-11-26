@@ -20,8 +20,12 @@ const credits = {
   account: jest.fn().mockResolvedValue({ balance: 500 }),
   openHold: jest.fn(),
   release: jest.fn().mockResolvedValue(true),
+  closeHold: jest.fn().mockResolvedValue(false),
+  markAlive: jest.fn().mockResolvedValue(true),
 };
 const releaseHold = credits.release;
+const holdTokens = jest.fn();
+Object.assign(credits, { hold: holdTokens });
 
 let prisma: {
   careerMessage: { createMany: jest.Mock; create: jest.Mock };
@@ -60,7 +64,7 @@ function service(
 }
 const charged = () => {
   const calls = (recordUsage as jest.Mock).mock.calls as [
-    { cost_usd: number; meta: { server_seconds: number } },
+    { cost_usd: number; meta: { server_seconds: number; hold?: string } },
   ][];
   return calls[calls.length - 1][0];
 };
@@ -94,7 +98,8 @@ describe('voice interview settlement', () => {
       turns,
       usage: { ...bigUsage, audioInputTokens: 1000, audioOutputTokens: 1000 },
     });
-    expect(releaseHold).toHaveBeenCalledWith('u1', 'h1');
+    // the charge settles the reservation (CreditsService.charge), in one write
+    expect(charged().meta).toMatchObject({ hold: 'h1' });
     expect(charged().cost_usd).toBeCloseTo(0.5, 5); // 4.5 minutes -> 5 started minutes x $0.10
   });
 
@@ -163,7 +168,8 @@ describe('voice interview settlement', () => {
       turns: [],
     });
     expect(r).toEqual({ saved: 0, scorecard: null, unscored: 'empty' });
-    expect(releaseHold).toHaveBeenCalledWith('u1', 'h1');
+    // the charge settles the reservation (CreditsService.charge), in one write
+    expect(charged().meta).toMatchObject({ hold: 'h1' });
     expect(recordUsage).toHaveBeenCalledTimes(1);
   });
 
@@ -180,7 +186,7 @@ describe('voice interview settlement', () => {
       seconds: 60,
       turns,
     });
-    expect(releaseHold).not.toHaveBeenCalled();
+    expect(charged().meta).not.toHaveProperty('hold');
   });
 });
 
@@ -219,13 +225,16 @@ describe('voice interview scorecard', () => {
     });
     expect(r).toEqual({ saved: 2, scorecard: card, unscored: null });
     // the call is settled (released + charged) before the scorer runs
-    expect(releaseHold).toHaveBeenCalledWith('u1', 'h1');
-    expect(
-      (releaseHold as jest.Mock).mock.invocationCallOrder[0],
-    ).toBeLessThan((voiceScorecardFor as jest.Mock).mock.invocationCallOrder[0]);
+    expect(charged().meta).toMatchObject({ hold: 'h1' });
+    expect((recordUsage as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
+      (voiceScorecardFor as jest.Mock).mock.invocationCallOrder[0],
+    );
     expect(voiceScorecardFor).toHaveBeenCalledWith(
       'm',
-      expect.objectContaining({ title: 'General interview', focus: 'Behavioral' }),
+      expect.objectContaining({
+        title: 'General interview',
+        focus: 'Behavioral',
+      }),
       talk,
     );
     // the voice minutes are the only charge recorded here: the scorer meters itself (career.voice.score)
@@ -233,7 +242,10 @@ describe('voice interview scorecard', () => {
     expect(prisma.careerMessage.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         thread_id: 't1',
-        ui: expect.objectContaining({ type: 'voice-scorecard', scorecard: card }),
+        ui: expect.objectContaining({
+          type: 'voice-scorecard',
+          scorecard: card,
+        }),
       }),
     });
   });
@@ -283,7 +295,124 @@ describe('voice interview scorecard', () => {
     });
     expect(r).toMatchObject({ saved: 2, scorecard: null, unscored: 'failed' });
     expect(prisma.careerMessage.createMany).toHaveBeenCalled();
-    expect(releaseHold).toHaveBeenCalledWith('u1', 'h1');
+    // the charge settles the reservation (CreditsService.charge), in one write
+    expect(charged().meta).toMatchObject({ hold: 'h1' });
     expect(recordUsage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('voice interview reservation', () => {
+  it('two calls at once: the second is refused when the first took the tokens, before any key is asked for', async () => {
+    const svc = service([]);
+    holdTokens.mockResolvedValue(null); // the atomic hold lost the race
+    const fetchSpy = jest.spyOn(global, 'fetch');
+    await expect(svc.start('u1', 't1', { mode: 'mock' })).rejects.toMatchObject(
+      { status: 402 },
+    );
+    expect(holdTokens).toHaveBeenCalledWith(
+      'u1',
+      500, // 5 minutes x 100 tokens from a 500 balance
+      'career.voice',
+      { thread: 't1', minutes: 5 },
+      5 * 60_000 + 5 * 60_000, // released if never reported: the call's time plus grace
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('a retry in the same conversation closes the reservation of the call that never reported (billed only if it connected)', async () => {
+    const holds = [
+      {
+        id: 'old',
+        created_at: minutesAgo(3),
+        meta: { thread: 't1', minutes: 5 },
+      },
+    ];
+    const svc = service(holds);
+    credits.closeHold.mockImplementation((_u: string, h: { id: string }) => {
+      holds.splice(
+        holds.findIndex((x) => x.id === h.id),
+        1,
+      );
+      return Promise.resolve(true);
+    });
+    holdTokens.mockResolvedValue(null);
+    await svc.start('u1', 't1', { mode: 'mock' }).catch(() => undefined);
+    expect(credits.closeHold).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({ id: 'old' }),
+    );
+    credits.closeHold.mockResolvedValue(false);
+  });
+
+  it('our side fails (the key request is refused, the network or the server errors): the reservation goes back, nothing billed', async () => {
+    const svc = service([]);
+    holdTokens.mockResolvedValue('h1');
+    const profiles = {
+      load: jest
+        .fn()
+        .mockResolvedValue({ skills: [], experiences: [], projects: [] }),
+    };
+    Object.assign(svc, { profiles });
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+      .mockRejectedValueOnce(new Error('ECONNRESET'));
+    await expect(svc.start('u1', 't1', { mode: 'mock' })).rejects.toMatchObject(
+      { status: 502 },
+    );
+    await expect(svc.start('u1', 't1', { mode: 'mock' })).rejects.toThrow(
+      'ECONNRESET',
+    );
+    profiles.load.mockRejectedValueOnce(new Error('db down'));
+    await expect(svc.start('u1', 't1', { mode: 'mock' })).rejects.toThrow(
+      'db down',
+    );
+    expect(releaseHold).toHaveBeenCalledTimes(3);
+    expect(releaseHold).toHaveBeenCalledWith('u1', 'h1');
+    expect(recordUsage).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('the heartbeat marks the open reservation of this conversation', async () => {
+    const svc = service([
+      {
+        id: 'h1',
+        created_at: minutesAgo(1),
+        meta: { thread: 't1', minutes: 5 },
+      },
+    ]);
+    expect(await svc.alive('u1', 't1')).toEqual({ ok: true });
+    expect(credits.markAlive).toHaveBeenCalledWith('u1', 'h1');
+    expect(await svc.alive('u1', 't9')).toEqual({ ok: false });
+  });
+
+  it('cancel: a call that never connected gets its tokens back, however late; one that connected is billed from connecting', async () => {
+    let svc = service([
+      {
+        id: 'h1',
+        created_at: minutesAgo(3.5),
+        meta: { thread: 't1', minutes: 5 },
+      },
+    ]);
+    expect(await svc.cancel('u1', 't1')).toEqual({ released: true });
+    expect(releaseHold).toHaveBeenCalledWith('u1', 'h1');
+    expect(recordUsage).not.toHaveBeenCalled();
+    jest.clearAllMocks();
+    svc = service([
+      {
+        id: 'h2',
+        created_at: minutesAgo(3.5),
+        meta: {
+          thread: 't1',
+          minutes: 5,
+          connected_at: minutesAgo(2.5).getTime(),
+        },
+      },
+    ]);
+    expect(await svc.cancel('u1', 't1')).toEqual({ released: false });
+    expect(releaseHold).not.toHaveBeenCalled();
+    expect(charged().cost_usd).toBeCloseTo(0.3, 5); // 2.5 min connected -> 3 started minutes
+    expect(charged().meta).toMatchObject({ hold: 'h2' });
   });
 });

@@ -8,14 +8,12 @@ import { PillTabs } from "@/components/pill-tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CARD, EmptyState, SectionHeader } from "@/components/plato-ui"
 import { CountUp } from "@/components/count-up"
-import { formatTokens, type TokenMove } from "@/lib/credits/api"
+import { formatTokens, type TokenAccount, type TokenMove } from "@/lib/credits/api"
 import { timeAgo } from "@/lib/jobs/links"
 import { ease, spring } from "@/lib/motion-system"
 import { InfoTip } from "@/components/info-tip"
-import { CATEGORIES, categoryOf, dayLabel, describeMove } from "./token-ui"
+import { CATEGORIES, dayLabel, describeMove } from "./token-ui"
 
-// Holds and their releases are bookkeeping for a voice call: the call's own charge is the line people care about.
-const visible = (m: TokenMove) => m.kind !== "hold" && m.kind !== "release"
 const FILTERS = [
   { key: "all", label: "All" },
   { key: "spent", label: "Spent" },
@@ -24,17 +22,13 @@ const FILTERS = [
 type FilterKey = (typeof FILTERS)[number]["key"]
 const amount = (n: number) => (Math.abs(n) < 1 ? Math.abs(n).toFixed(1) : formatTokens(Math.abs(n)))
 
-// This month's spending by kind of work: ranked rows, one thin cobalt bar each, biggest first.
-export function SpendingBreakdown({ history, periodStart }: { history: TokenMove[] | null; periodStart: string | null }) {
+// This month's spending by kind of work (summed on the server over the whole period): ranked rows, one thin cobalt bar each, biggest first.
+export function SpendingBreakdown({ spent }: { spent: TokenAccount["spent"] | null }) {
   const reduced = !!useReducedMotion()
   const parts = useMemo(() => {
-    if (!history || !periodStart) return null
-    const since = new Date(periodStart).getTime()
-    const sums = new Map<string, number>()
-    for (const m of history) if (m.kind === "consume" && new Date(m.at).getTime() >= since) sums.set(categoryOf(m.feature).key, (sums.get(categoryOf(m.feature).key) ?? 0) - m.amount)
-    const total = [...sums.values()].reduce((a, b) => a + b, 0)
-    return { total, rows: CATEGORIES.map((c) => ({ ...c, value: sums.get(c.key) ?? 0 })).filter((c) => c.value > 0).sort((a, b) => b.value - a.value) }
-  }, [history, periodStart])
+    if (!spent) return null
+    return { total: spent.total, rows: CATEGORIES.map((c) => ({ ...c, value: spent.byCategory[c.key] ?? 0 })).filter((c) => c.value > 0).sort((a, b) => b.value - a.value) }
+  }, [spent])
   const top = parts?.rows[0]?.value ?? 1
 
   return (
@@ -105,12 +99,13 @@ export function SpendingBreakdown({ history, periodStart }: { history: TokenMove
   )
 }
 
-// Every movement, newest first, grouped by day.
-export function History({ history }: { history: TokenMove[] | null }) {
+// Every movement, newest first, grouped by day; older pages load from the server on "Show more".
+export function History({ history, onMore }: { history: TokenMove[] | null; onMore: (() => Promise<void>) | null }) {
   const reduced = !!useReducedMotion()
   const [filter, setFilter] = useState<FilterKey>("all")
   const [limit, setLimit] = useState(12)
-  const all = (history ?? []).filter(visible)
+  const [loading, setLoading] = useState(false)
+  const all = history ?? []
   const counts = { all: all.length, spent: all.filter((m) => m.amount < 0).length, added: all.filter((m) => m.amount > 0).length }
   const tabs = FILTERS.map((f) => ({ ...f, count: history ? counts[f.key] : undefined }))
   const moves = all.filter((m) => (filter === "all" ? true : filter === "spent" ? m.amount < 0 : m.amount > 0))
@@ -128,7 +123,7 @@ export function History({ history }: { history: TokenMove[] | null }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="flex items-center gap-1.5">
           <SectionHeader title="History" icon={ReceiptText} accent="cobalt" />
-          <InfoTip text="Every charge, refill and top-up, newest first. A voice call first reserves tokens, then returns them and charges what the call really used; only that charge is listed." label="What the history shows" />
+          <InfoTip text="Every charge, refill and top-up, newest first. A search's board runs are one line. A voice call or a search in progress first reserves tokens (listed as Reserved); when it ends, only what it really used is charged." label="What the history shows" />
         </span>
         <PillTabs id="history-filter" tabs={tabs} value={filter} onChange={(k) => (setFilter(k), setLimit(12))} label="Filter history" dataAi="tokens.history" />
       </div>
@@ -184,7 +179,7 @@ export function History({ history }: { history: TokenMove[] | null }) {
                           {gain ? "+" : "−"}
                           {amount(m.amount)}
                         </span>
-                        <span className="type-meta hidden w-28 text-right text-text-tertiary tabular-nums sm:block">{formatTokens(Math.max(0, m.balanceAfter))}</span>
+                        <span className="type-meta hidden w-28 text-right text-text-tertiary tabular-nums sm:block">{formatTokens(m.balanceAfter)}</span>
                       </motion.li>
                     )
                   })}
@@ -192,8 +187,19 @@ export function History({ history }: { history: TokenMove[] | null }) {
               </motion.div>
             ))}
           </AnimatePresence>
-          {moves.length > limit && (
-            <button type="button" onClick={() => setLimit((l) => l + 20)} className="mx-auto flex items-center gap-1.5 rounded-full border bg-card px-4 py-1.5 text-sm font-medium text-text-secondary transition-colors duration-200 hover:border-primary-line hover:bg-primary-tint hover:text-primary">
+          {(moves.length > limit || onMore) && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                setLimit((l) => l + 20)
+                if (moves.length <= limit + 20 && onMore) {
+                  setLoading(true)
+                  void onMore().finally(() => setLoading(false))
+                }
+              }}
+              className="mx-auto flex items-center gap-1.5 rounded-full border bg-card px-4 py-1.5 text-sm font-medium text-text-secondary transition-colors duration-200 hover:border-primary-line hover:bg-primary-tint hover:text-primary disabled:opacity-60"
+            >
               Show more
               <ChevronDown className="size-4" />
             </button>

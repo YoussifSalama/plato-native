@@ -1,6 +1,11 @@
 import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { affordableResults, tokensFor, toTokens } from './credit-prices';
+import {
+  affordableResults,
+  runCeiling,
+  tokensFor,
+  toTokens,
+} from './credit-prices';
 import { CreditsService } from './credits.service';
 import { InsufficientTokensException } from './insufficient-tokens.exception';
 
@@ -65,21 +70,47 @@ describe('tokensFor (1,000 Plato tokens = $1 of cost)', () => {
   });
 });
 
-// A tiny in-memory stand-in for the two collections, injected into the service.
-let svc: CreditsService;
-function fakeDb() {
-  const accounts: Record<
-    string,
-    {
-      user_id: string;
-      plan: string;
-      balance: number;
-      period_start: Date;
-      period_end: Date;
+// A tiny in-memory stand-in for the collections, injected into the service. A
+// transaction runs its callback on the same store (each call is synchronous, so
+// a conditional update is atomic, as Mongo's is).
+type Row = Record<string, unknown>;
+const matches = (row: Row, where: Row) =>
+  Object.entries(where).every(([k, v]) => {
+    if (v instanceof Date)
+      return (row[k] as Date | undefined)?.getTime() === v.getTime();
+    if (v && typeof v === 'object') {
+      const o = v as { gte?: number | Date; lte?: Date };
+      if (o.gte !== undefined) return (row[k] as number) >= (o.gte as number);
+      if (o.lte !== undefined) return (row[k] as Date) <= o.lte;
     }
-  > = {};
-  const ledger: Record<string, unknown>[] = [];
+    return (row[k] ?? null) === v;
+  });
+// plain values are set; { increment, decrement } move a number
+const apply = (row: Row, data: Row) => {
+  for (const [k, v] of Object.entries(data)) {
+    if (v && typeof v === 'object' && ('increment' in v || 'decrement' in v)) {
+      const o = v as { increment?: number; decrement?: number };
+      const d = (o.increment ?? 0) - (o.decrement ?? 0);
+      row[k] = Math.round((((row[k] as number) ?? 0) + d) * 1000) / 1000;
+    } else row[k] = v;
+  }
+};
+let svc: CreditsService;
+function fakeDb(verified = true) {
+  const accounts: Record<string, Row & { balance: number }> = {};
+  const ledger: Row[] = [];
+  const users: Record<string, Row> = {};
+  const userOf = (id: string) =>
+    (users[id] ??= { id, email_verified_at: verified ? new Date() : null });
+  let t = 0;
   const db = {
+    user: {
+      findUnique: jest.fn(({ where }: { where: { id: string } }) =>
+        Promise.resolve({ ...userOf(where.id) }),
+      ),
+    },
+    usageEvent: { create: jest.fn(() => Promise.resolve({ id: 'ev' })) },
+    $transaction: jest.fn(),
     creditAccount: {
       findUnique: jest.fn(({ where }: { where: { user_id: string } }) =>
         Promise.resolve(
@@ -89,88 +120,83 @@ function fakeDb() {
       findUniqueOrThrow: jest.fn(({ where }: { where: { user_id: string } }) =>
         Promise.resolve({ ...accounts[where.user_id] }),
       ),
-      create: jest.fn(({ data }: { data: (typeof accounts)[string] }) => {
-        if (accounts[data.user_id])
-          return Promise.reject(
-            new Prisma.PrismaClientKnownRequestError('dup', {
-              code: 'P2002',
-              clientVersion: 'x',
-            }),
-          );
-        accounts[data.user_id] = { ...data };
-        return Promise.resolve({ ...data });
-      }),
-      updateMany: jest.fn(
-        ({
-          where,
-          data,
-        }: {
-          where: { user_id: string; period_end: Date };
-          data: Partial<(typeof accounts)[string]>;
-        }) => {
-          const a = accounts[where.user_id];
-          if (!a || a.period_end.getTime() !== where.period_end.getTime())
-            return Promise.resolve({ count: 0 });
-          Object.assign(a, data);
-          return Promise.resolve({ count: 1 });
+      create: jest.fn(
+        ({ data }: { data: Row & { user_id: string; balance: number } }) => {
+          if (accounts[data.user_id])
+            return Promise.reject(
+              new Prisma.PrismaClientKnownRequestError('dup', {
+                code: 'P2002',
+                clientVersion: 'x',
+              }),
+            );
+          accounts[data.user_id] = { topup: 0, ...data };
+          return Promise.resolve({ ...accounts[data.user_id] });
         },
       ),
+      updateMany: jest.fn(({ where, data }: { where: Row; data: Row }) => {
+        const a = accounts[where.user_id as string];
+        if (!a || !matches(a, where)) return Promise.resolve({ count: 0 });
+        apply(a, data);
+        return Promise.resolve({ count: 1 });
+      }),
       update: jest.fn(
-        ({
-          where,
-          data,
-        }: {
-          where: { user_id: string };
-          data: Record<string, unknown>;
-        }) => {
-          const a = accounts[where.user_id] as Record<string, unknown>;
-          // plain values are set; { increment, decrement } move a number
-          for (const [k, v] of Object.entries(data)) {
-            if (v && typeof v === 'object' && !(v instanceof Date)) {
-              const o = v as { increment?: number; decrement?: number };
-              const d = (o.increment ?? 0) - (o.decrement ?? 0);
-              a[k] = Math.round((((a[k] as number) ?? 0) + d) * 1000) / 1000;
-            } else a[k] = v;
-          }
+        ({ where, data }: { where: { user_id: string }; data: Row }) => {
+          const a = accounts[where.user_id];
+          apply(a, data);
           return Promise.resolve({ ...a });
         },
       ),
     },
     creditLedger: {
-      create: jest.fn(({ data }: { data: Record<string, unknown> }) => {
-        const row = { id: `l${ledger.length + 1}`, ...data };
+      create: jest.fn(({ data }: { data: Row }) => {
+        // distinct, increasing times, like rows written one after another
+        const row = {
+          id: `l${ledger.length + 1}`,
+          settled_at: null,
+          created_at: new Date(Date.now() + ++t),
+          ...data,
+        };
         ledger.push(row);
         return Promise.resolve(row);
       }),
-      findFirst: jest.fn(
-        ({ where }: { where: { id: string; user_id: string; kind: string } }) =>
-          Promise.resolve(
-            ledger.find(
-              (l) =>
-                l.id === where.id &&
-                l.user_id === where.user_id &&
-                l.kind === where.kind,
-            ) ?? null,
-          ),
+      findFirst: jest.fn(({ where }: { where: Row }) =>
+        Promise.resolve(ledger.find((l) => matches(l, where)) ?? null),
       ),
-      updateMany: jest.fn(
-        ({
-          where,
-          data,
-        }: {
-          where: { id: string };
-          data: { settled_at: Date };
-        }) => {
-          const l = ledger.find((x) => x.id === where.id);
-          if (!l || l.settled_at !== null) return Promise.resolve({ count: 0 });
-          l.settled_at = data.settled_at;
-          return Promise.resolve({ count: 1 });
-        },
+      findMany: jest.fn(({ where, take }: { where: Row; take?: number }) =>
+        Promise.resolve(
+          ledger
+            .filter((l) => matches(l, where))
+            .reverse()
+            .slice(0, take ?? Infinity),
+        ),
       ),
+      groupBy: jest.fn(({ where }: { where: Row }) => {
+        const sums = new Map<string, number>();
+        for (const l of ledger.filter((x) => matches(x, where)))
+          sums.set(
+            l.feature as string,
+            (sums.get(l.feature as string) ?? 0) + (l.amount as number),
+          );
+        return Promise.resolve(
+          [...sums].map(([feature, amount]) => ({
+            feature,
+            _sum: { amount },
+          })),
+        );
+      }),
+      updateMany: jest.fn(({ where, data }: { where: Row; data: Row }) => {
+        const l = ledger.find((x) => matches(x, where));
+        if (!l) return Promise.resolve({ count: 0 });
+        apply(l, data);
+        return Promise.resolve({ count: 1 });
+      }),
     },
   };
+  db.$transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) =>
+    fn(db),
+  );
   svc = new CreditsService(db as never);
-  return { accounts, ledger, db };
+  return { accounts, ledger, db, users };
 }
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
@@ -223,7 +249,8 @@ describe('CreditsService.account', () => {
     );
     expect(resets).toHaveLength(1);
     expect(resets[0]).toMatchObject({
-      amount: 1000,
+      amount: 960,
+      balance_after: 1000,
       meta: { previous_balance: 40 },
     });
   });
@@ -297,10 +324,13 @@ describe('CreditsService.hold / release', () => {
   it('a hold takes tokens now; releasing gives them back exactly once', async () => {
     const { accounts, ledger } = fakeDb();
     await svc.account('u1');
-    const id = await svc.hold('u1', 300, 'career.voice', {
-      thread: 't1',
-      minutes: 3,
-    });
+    const id = (await svc.hold(
+      'u1',
+      300,
+      'career.voice',
+      { thread: 't1', minutes: 3 },
+      60_000,
+    ))!;
     expect(accounts.u1.balance).toBe(700);
     expect(await svc.release('u1', id)).toBe(true);
     expect(await svc.release('u1', id)).toBe(false);
@@ -311,12 +341,236 @@ describe('CreditsService.hold / release', () => {
   it("another seeker cannot release someone's hold", async () => {
     const { accounts } = fakeDb();
     await svc.account('u1');
-    const id = await svc.hold('u1', 300, 'career.voice', {
-      thread: 't1',
-      minutes: 3,
-    });
+    const id = (await svc.hold(
+      'u1',
+      300,
+      'career.voice',
+      { thread: 't1', minutes: 3 },
+      60_000,
+    ))!;
     expect(await svc.release('u2', id)).toBe(false);
     expect(accounts.u1.balance).toBe(700);
+  });
+});
+
+describe('a search never spends more than the balance', () => {
+  // Each Apify run reserves its worst case before it starts and is skipped when that
+  // does not fit; its charge then settles the reservation to the real cost.
+  const board = 'automation-lab~glassdoor-jobs-scraper'; // 0.01 start + 0.005 a result
+  const runOnce = async (results: number) => {
+    const id = await svc.hold(
+      'u1',
+      runCeiling(board, 40),
+      'discovery.apify',
+      { actor: board },
+      60_000,
+    );
+    if (!id) return false;
+    await svc.charge('u1', {
+      feature: 'discovery.apify',
+      model: board,
+      meta: { results, hold: id, run: 'r1' },
+    });
+    return true;
+  };
+
+  it('two searches at once with 228 tokens: runs past what the balance covers are skipped, the balance never goes below 0', async () => {
+    const { accounts } = fakeDb();
+    await svc.account('u1');
+    accounts.u1.balance = 228;
+    expect(runCeiling(board, 40)).toBe(210);
+    // two searches x 8 runs, all at once, each run finding its full 40 results
+    const ran = await Promise.all(
+      Array.from({ length: 16 }, () => runOnce(40)),
+    );
+    expect(ran.filter(Boolean)).toHaveLength(1);
+    expect(accounts.u1.balance).toBe(18);
+  });
+
+  it('a run is charged its real results, never more than it reserved; the reservation nets out of the ledger', async () => {
+    const { accounts, ledger } = fakeDb();
+    await svc.account('u1');
+    await runOnce(4); // 10 + 4 x 5 = 30 tokens
+    expect(accounts.u1.balance).toBe(970);
+    await runOnce(400); // an actor that ignores its limit: capped at the 210 reserved
+    expect(accounts.u1.balance).toBe(760);
+    expect(ledger.map((l) => l.kind)).toEqual([
+      'grant',
+      'hold',
+      'release',
+      'consume',
+      'hold',
+      'release',
+      'consume',
+    ]);
+    const sum = ledger.reduce((n, l) => n + (l.amount as number), 0);
+    expect(sum).toBe(760);
+  });
+
+  it('a run that failed (no results) gives its whole reservation back', async () => {
+    const { accounts } = fakeDb();
+    await svc.account('u1');
+    const id = await svc.hold('u1', 210, 'discovery.apify', {}, 60_000);
+    await svc.charge('u1', {
+      feature: 'discovery.apify',
+      model: board,
+      meta: { hold: id },
+    });
+    expect(accounts.u1.balance).toBe(1000);
+  });
+
+  it('a reservation nobody settled is given back after its time, on the next read', async () => {
+    const { accounts } = fakeDb();
+    await svc.account('u1');
+    await svc.hold('u1', 500, 'career.voice', { thread: 't1' }, 60_000);
+    expect((await svc.account('u1')).balance).toBe(500);
+    const later = new Date(Date.now() + 2 * 60_000);
+    expect((await svc.account('u1', later)).balance).toBe(1000);
+    expect(accounts.u1.balance).toBe(1000);
+  });
+});
+
+describe('an unreported voice call (the tab was closed)', () => {
+  // 10 minutes reserved at 100 tokens a minute, closed 15 minutes after the start
+  const call = async () => {
+    const t0 = Date.now();
+    const id = (await svc.hold(
+      'u1',
+      1000,
+      'career.voice',
+      { thread: 't1', minutes: 10 },
+      15 * 60_000,
+    ))!;
+    return { t0, id, after: new Date(t0 + 16 * 60_000) };
+  };
+
+  it('one that connected is billed from connecting to its last heartbeat, per started minute', async () => {
+    const { accounts, ledger } = fakeDb();
+    await svc.account('u1');
+    const { t0, id, after } = await call();
+    expect(await svc.markAlive('u1', id, t0 + 1_000)).toBe(true); // connected
+    expect(await svc.markAlive('u1', id, t0 + 252_000)).toBe(true); // last heartbeat, then the tab closed
+    expect((await svc.account('u1', after)).balance).toBe(500); // 4.2 min -> 5 started minutes
+    expect(accounts.u1.balance).toBe(500);
+    expect(ledger.at(-1)).toMatchObject({
+      kind: 'consume',
+      amount: -500,
+      feature: 'career.voice',
+      meta: { thread: 't1', hold: id, minutes: 5, unreported: true },
+    });
+  });
+
+  it('never more than reserved, and never billed twice when two closes race', async () => {
+    const { accounts, ledger } = fakeDb();
+    await svc.account('u1');
+    const { t0, id, after } = await call();
+    await svc.markAlive('u1', id, t0);
+    await svc.markAlive('u1', id, t0 + 14 * 60_000);
+    const hold = { ...ledger.find((l) => l.id === id)! };
+    await svc.account('u1', after);
+    expect(accounts.u1.balance).toBe(0); // capped at the 10 minutes reserved
+    // a stale copy of the hold closed again (a retry racing the expiry): nothing more
+    expect(await svc.closeHold('u1', hold as never, after.getTime())).toBe(
+      false,
+    );
+    expect(accounts.u1.balance).toBe(0);
+  });
+
+  it('one that never connected (the key or the server failed, the mic was refused) is given back in full', async () => {
+    const { accounts, ledger } = fakeDb();
+    await svc.account('u1');
+    const { after } = await call();
+    expect((await svc.account('u1', after)).balance).toBe(1000);
+    expect(accounts.u1.balance).toBe(1000);
+    expect(ledger.some((l) => l.kind === 'consume')).toBe(false);
+  });
+
+  it('a heartbeat after the call was settled or its time is over changes nothing', async () => {
+    fakeDb();
+    await svc.account('u1');
+    const { t0, id } = await call();
+    expect(await svc.markAlive('u1', id, t0 + 16 * 60_000)).toBe(false);
+    await svc.release('u1', id);
+    expect(await svc.markAlive('u1', id, t0 + 1_000)).toBe(false);
+  });
+});
+
+describe('the free grant waits for a confirmed email', () => {
+  it('an unverified account gets no grant and a 402 email_unverified; once confirmed, the next read grants it once', async () => {
+    const { accounts, ledger, users } = fakeDb(false);
+    expect((await svc.account('u1')).balance).toBe(0);
+    const err = (await svc.require('u1').catch((e: unknown) => e)) as {
+      getResponse(): unknown;
+    };
+    expect(err).toBeInstanceOf(InsufficientTokensException);
+    expect(err.getResponse()).toMatchObject({
+      code: 'email_unverified',
+      message: 'Confirm your email to get your 1,000 free tokens',
+    });
+    users.u1.email_verified_at = new Date();
+    await Promise.all([svc.account('u1'), svc.account('u1')]);
+    expect(accounts.u1).toMatchObject({ balance: 1000, unverified: false });
+    expect(ledger.filter((l) => l.kind === 'grant')).toHaveLength(1);
+    await expect(svc.require('u1')).resolves.toBeTruthy();
+  });
+});
+
+describe('CreditsService.overview', () => {
+  it('one line per search, named; settled reservations and crumbs under 0.05 left out; totals by kind of work', async () => {
+    const { accounts } = fakeDb();
+    await svc.account('u1');
+    for (let i = 0; i < 95; i++)
+      await svc.charge('u1', {
+        feature: 'discovery.apify',
+        model: 'cirkit~talent-com-jobs-scraper',
+        meta: { results: 3, run: 'r1', thread: 'Data analyst search' },
+      });
+    await svc.charge('u1', { feature: 'career.chat', cost_usd: 0.00002 });
+    await svc.charge('u1', { feature: 'quiz.section', cost_usd: 0.01 });
+    const voice = await svc.hold(
+      'u1',
+      100,
+      'career.voice',
+      { thread: 't1' },
+      60_000,
+    );
+    const settled = await svc.hold(
+      'u1',
+      50,
+      'career.voice',
+      { thread: 't2' },
+      60_000,
+    );
+    await svc.release('u1', settled!);
+    const o = await svc.overview('u1', 20);
+    expect(o.history.map((m) => [m.label, m.amount, m.count])).toEqual([
+      ['Reserved for a voice call', -100, 1],
+      ['Building a practice quiz', -10, 1],
+      ['Searching job boards · Data analyst search', -199.5, 95],
+      ['Monthly tokens', 1000, 1],
+    ]);
+    expect(o.history[0].id).toBe(voice);
+    expect(o.spent).toEqual({
+      total: 209.5,
+      byCategory: { search: 199.5, practice: 10 },
+    });
+    expect(o.balance).toBe(Math.round(accounts.u1.balance * 10) / 10);
+    expect(o.nextBefore).toBeNull();
+  });
+
+  it('pages back without counting a line twice', async () => {
+    fakeDb();
+    await svc.account('u1');
+    for (const f of ['resume.write', 'interview.plan', 'career.chat'])
+      await svc.charge('u1', { feature: f, cost_usd: 0.002 });
+    const first = await svc.overview('u1', 2);
+    expect(first.history.map((m) => m.feature)).toEqual([
+      'career.chat',
+      'interview.plan',
+    ]);
+    const next = await svc.overview('u1', 2, first.nextBefore!);
+    expect(next.history.map((m) => m.kind)).toEqual(['consume', 'grant']);
+    expect(next.history[0].feature).toBe('resume.write');
   });
 });
 
@@ -343,7 +597,7 @@ describe('plans and admin adjustments', () => {
     });
     expect(ledger.at(-1)).toMatchObject({
       kind: 'grant',
-      amount: 7000,
+      amount: 6988, // balance after minus the balance before
       meta: { reason: 'plan_change', from_plan: 'free', previous_balance: 12 },
     });
     await expect(svc.setPlan('u1', 'platinum')).rejects.toThrow('Unknown plan');
@@ -352,9 +606,31 @@ describe('plans and admin adjustments', () => {
   it('the monthly reset refills to the plan the seeker is on', async () => {
     const { accounts } = fakeDb();
     await svc.account('u1', day('2026-09-01'));
-    await svc.setPlan('u1', 'max', day('2026-09-01'));
+    await svc.setPlan('u1', 'max', day('2026-09-01'), 2);
     accounts.u1.balance = 3;
     expect((await svc.account('u1', day('2026-10-02'))).balance).toBe(25000);
+  });
+
+  it('a plan set by hand lapses to Free when its paid months are over, instead of refilling forever', async () => {
+    const { accounts, ledger } = fakeDb();
+    await svc.account('u1', day('2026-01-31'));
+    await svc.setPlan('u1', 'pro', day('2026-01-31'));
+    // Jan 31 + 1 month is Feb 28, not Mar 3
+    expect(accounts.u1).toMatchObject({
+      period_end: day('2026-02-28'),
+      paid_until: day('2026-02-28'),
+    });
+    accounts.u1.balance = 6000;
+    const acc = await svc.account('u1', day('2026-03-01'));
+    expect(acc).toMatchObject({
+      plan: 'free',
+      balance: 1000,
+      paid_until: null,
+    });
+    expect(ledger.at(-1)).toMatchObject({
+      amount: -5000, // what the balance really moved
+      meta: { reason: 'plan_lapsed', from_plan: 'pro' },
+    });
   });
 
   it('an adjustment moves the balance and is in the ledger with its reason', async () => {
@@ -435,7 +711,10 @@ describe('CreditsService.checkout', () => {
           period_end: new Date('2099-01-01T00:00:00Z'),
         }),
       },
+      creditLedger: { findMany: jest.fn().mockResolvedValue([]) },
+      usageEvent: { create: requested },
     } as never);
+  const requested = jest.fn().mockResolvedValue({});
   beforeEach(() => delete process.env.PAYMENTS_PROVIDER);
 
   it('refuses the plan the seeker already has, and an unknown pack', async () => {
@@ -457,6 +736,13 @@ describe('CreditsService.checkout', () => {
       };
       expect(err.getStatus()).toBe(503);
       expect(err.getResponse()).toMatchObject({ code: 'payments_unavailable' });
+      // recorded, so the admin report lists it and the team can set it up by hand
+      const [[last]] = requested.mock.calls.slice(-1) as [[{ data: object }]];
+      expect(last.data).toMatchObject({
+        feature: 'credits.request',
+        user_id: 'u1',
+        meta: item,
+      });
     }
   });
 });

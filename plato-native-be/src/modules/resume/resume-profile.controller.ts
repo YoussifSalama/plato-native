@@ -15,6 +15,10 @@ import { z } from 'zod';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { ResumeProfileService } from './resume-profile.service';
+import { webUrl } from '../preferences/preferences.schema';
+
+// http(s) only: these links go onto resumes and employers' forms.
+const link = webUrl.optional().transform((v) => v ?? null);
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 const optional = (max: number) =>
@@ -30,7 +34,7 @@ const projectSchema = z.object({
   role: optional(120),
   description: text(1200),
   technologies: z.array(text(40)).max(20).default([]),
-  url: optional(300),
+  url: link,
   result: optional(400),
 });
 const achievementSchema = z.object({
@@ -43,7 +47,7 @@ const skillSchema = z.object({
   skill: text(60),
   level: z.enum(['LEARNING', 'WORKING', 'STRONG']),
   proof: text(600),
-  url: optional(300),
+  url: link,
 });
 const settingsSchema = z.object({
   nationality: optional(60),

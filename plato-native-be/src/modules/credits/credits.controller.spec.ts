@@ -34,8 +34,16 @@ describe('CreditsController (thin: validate, then hand to the service)', () => {
     expect(credits.checkout).not.toHaveBeenCalled();
   });
 
-  it('the history limit is passed through as a number', async () => {
+  it('the history limit is passed through as a number, and a valid page cursor as a date', async () => {
     await c.get(req, '50');
-    expect(credits.overview).toHaveBeenCalledWith('u1', 50);
+    expect(credits.overview).toHaveBeenCalledWith('u1', 50, undefined);
+    await c.get(req, '20', '2026-11-01T10:00:00.000Z');
+    expect(credits.overview).toHaveBeenLastCalledWith(
+      'u1',
+      20,
+      new Date('2026-11-01T10:00:00.000Z'),
+    );
+    await c.get(req, '20', 'nonsense');
+    expect(credits.overview).toHaveBeenLastCalledWith('u1', 20, undefined);
   });
 });

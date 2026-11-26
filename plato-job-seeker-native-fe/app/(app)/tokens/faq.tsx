@@ -10,7 +10,7 @@ import { CARD, SectionHeader } from "@/components/plato-ui"
 // The questions people actually ask about tokens, answered plainly.
 const QUESTIONS = [
   { q: "Why does a search cost more than a chat message?", a: "Tokens follow the work behind each action. A chat reply is a few seconds of thinking. A new search can read thousands of postings across job boards to find the ones that fit you, so it takes more. When Plato already knows matching jobs, a search costs much less." },
-  { q: "What happens when I run out?", a: "Nothing breaks. Your jobs, applications and profile stay free to browse, searches keep using the free job sources, and voice calls get shorter instead of stopping. Your tokens refill on your monthly date, or you can top up any time." },
+  { q: "What happens when I run out?", a: "Nothing breaks: your jobs, applications and profile stay free to browse, and applying is always free. With a low balance a new search covers fewer paid job boards and a voice call is shorter. With none left, searches, AI replies and voice calls wait until your tokens refill on your monthly date, or until you top up." },
   { q: "Do unused tokens carry over?", a: "Monthly tokens refresh each month, so use them freely. Tokens you buy as a top-up are different: they never expire and are only used once your monthly tokens are gone." },
   { q: "Can I see what I'll spend before I do something?", a: "Yes. Plato shows an estimate next to paid actions, like a tailored resume or a voice interview, and you can ask Plato AI in any chat how far your balance goes." },
 ]

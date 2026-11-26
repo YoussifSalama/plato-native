@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { PlatoMark } from "@/components/plato-orb"
 import { SectionHeader, StatIcon } from "@/components/plato-ui"
 import { BuildProfileSkeleton } from "@/components/onboarding-skeletons"
-import { analyzeProfile, getProfile, listDocuments, replaceDocument, uploadDocument } from "@/lib/documents/api"
-import type { DocumentType, JobSeekerDocument, JobSeekerProfile } from "@/lib/documents/schema"
+import { analyzeProfile, getDocumentsStatus, getProfile, listDocuments, replaceDocument, uploadDocument } from "@/lib/documents/api"
+import { acceptFor, type DocumentType, type JobSeekerDocument, type JobSeekerProfile } from "@/lib/documents/schema"
 
 // Step 1, screen 01: the CV (required) on the left, everything else an application might
 // ask for on the right. Each tile is its own document type; supporting documents join the
@@ -29,8 +29,6 @@ const TILES: Tile[] = [
 const prefix = (t: Tile) => `${t.title} · `
 const legacy = (d: JobSeekerDocument) => TILES.find((x) => x.type !== "OTHER" && d.type === "OTHER" && d.name?.startsWith(prefix(x)))
 const tileDocs = (t: Tile, docs: JobSeekerDocument[]) => docs.filter((d) => d.type === t.type || !!t.also?.includes(d.type) || legacy(d)?.key === t.key).filter((d) => t.type !== "OTHER" || !legacy(d))
-// What the profile analysis learns from; adding one after Plato read the CV means reading again.
-const EVIDENCE: DocumentType[] = ["CERTIFICATE", "DEGREE", "LICENSE"]
 
 // "Senior SCM & ERP Consultant, about 7 years, based in Cairo. Strongest areas: …"
 function cvSummary(p: JobSeekerProfile) {
@@ -56,8 +54,6 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
   const tileInput = useRef<HTMLInputElement>(null)
   const [tileFor, setTileFor] = useState<Tile | null>(null)
   const analyzedFor = useRef<string | null>(null)
-  // Documents Plato had when it last read the profile.
-  const [readDocs, setReadDocs] = useState<Set<string> | null>(null)
 
   useEffect(() => {
     listDocuments()
@@ -88,17 +84,15 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
     }
     analyzedFor.current = cv.id
     setReading(true)
-    const ids = new Set((docs ?? []).map((d) => d.id))
     analyzeProfile()
-      .then((r) => (setProfile(r.profile), setReadDocs(ids)))
+      .then((r) => setProfile(r.profile))
       .catch((e) => setError(e instanceof Error ? e.message : "Plato could not read the CV"))
       .finally(() => setReading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- docs are read for the snapshot only
   }, [cv, cvReady, profile, profileLoaded])
 
-  // New certificates, degrees or licenses since the last read: read again, then go on.
+  // Documents added since Plato last read the profile (the server decides): read again, then go on.
   async function next() {
-    const fresh = readDocs && (docs ?? []).some((d) => EVIDENCE.includes(d.type) && d.status === "READY" && !readDocs.has(d.id))
+    const fresh = await getDocumentsStatus().then((r) => r.needs_analysis, () => false)
     if (!fresh) return onContinue()
     setReading(true)
     setError(null)
@@ -116,7 +110,8 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
     setBusy("cv")
     setError(null)
     try {
-      const doc = cv ? await replaceDocument(cv.id, file) : await uploadDocument(file, "CV_RESUME")
+      // No replacements left: a new CV starts a new batch, which Plato reads from scratch.
+      const doc = cv && cv.remaining_replacements !== 0 ? await replaceDocument(cv.id, file) : await uploadDocument(file, "CV_RESUME")
       analyzedFor.current = "new"
       setDocs((prev) => [...(prev ?? []).filter((d) => d.id !== doc.id && d.type !== "CV_RESUME"), doc])
     } catch (e) {
@@ -144,8 +139,8 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
 
   return (
     <div data-tour-state="onboarding.documents" className="mx-auto grid w-full max-w-[1300px] grid-cols-1 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12">
-      <input ref={cvInput} type="file" accept=".pdf,.doc,.docx" hidden onChange={(e) => (e.target.files?.[0] && void uploadCv(e.target.files[0]), (e.target.value = ""))} />
-      <input ref={tileInput} type="file" hidden onChange={(e) => (e.target.files?.[0] && tileFor && void uploadTile(tileFor, e.target.files[0]), (e.target.value = ""))} />
+      <input ref={cvInput} type="file" accept=".pdf,.docx" hidden onChange={(e) => (e.target.files?.[0] && void uploadCv(e.target.files[0]), (e.target.value = ""))} />
+      <input ref={tileInput} type="file" accept={acceptFor("OTHER")} hidden onChange={(e) => (e.target.files?.[0] && tileFor && void uploadTile(tileFor, e.target.files[0]), (e.target.value = ""))} />
 
       {/* Left: the pitch, the CV and what Plato read in it. */}
       <section className="flex flex-col gap-5 lg:pt-16">
@@ -182,7 +177,7 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
           <button type="button" data-tour="onboarding-cv" onClick={() => cvInput.current?.click()} disabled={busy === "cv"} className="group/up flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary-line bg-primary-tint px-6 py-8 text-center transition-colors duration-200 hover:border-primary hover:bg-primary-soft">
             <span className="flex size-12 items-center justify-center rounded-xl bg-card text-primary shadow-card transition-transform duration-200 group-hover/up:-translate-y-0.5">{busy === "cv" ? <Loader2 className="size-6 animate-spin" /> : <Upload className="size-6" />}</span>
             <b>Upload your CV</b>
-            <span className="text-sm text-text-secondary">PDF or Word, up to 10 MB</span>
+            <span className="text-sm text-text-secondary">PDF or Word (.docx), up to 10 MB</span>
           </button>
         )}
 
@@ -243,7 +238,7 @@ function BuildProfileStep({ onContinue }: { onContinue: () => void }) {
                   <b className="block text-[16px] leading-tight">{t.title}</b>
                   <span className="block text-[13.5px] leading-snug text-text-secondary">{t.hint}</span>
                 </span>
-                <button type="button" disabled={busy === t.key} onClick={() => (setTileFor(t), tileInput.current?.click())} className={cn("flex h-10 shrink-0 items-center gap-1 rounded-xl px-3.5 text-[15px] font-semibold transition-colors duration-200", has ? "border bg-card text-success-ink hover:border-primary-line hover:text-primary" : "bg-primary-soft text-primary hover:bg-primary hover:text-primary-foreground")}>
+                <button type="button" disabled={busy === t.key} onClick={() => (setTileFor(t), tileInput.current && ((tileInput.current.accept = acceptFor(t.type)), tileInput.current.click()))} className={cn("flex h-10 shrink-0 items-center gap-1 rounded-xl px-3.5 text-[15px] font-semibold transition-colors duration-200", has ? "border bg-card text-success-ink hover:border-primary-line hover:text-primary" : "bg-primary-soft text-primary hover:bg-primary hover:text-primary-foreground")}>
                   {busy === t.key ? <Loader2 className="size-4 animate-spin" /> : has ? "Added" : "+ Add"}
                 </button>
               </div>

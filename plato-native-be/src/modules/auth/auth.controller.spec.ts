@@ -28,31 +28,36 @@ describe('AuthController rate limits', () => {
       (e: HttpException) => e.getStatus(),
     );
 
-  it('one account: the 11th login attempt in 15 minutes is refused before the password is checked, from any address', async () => {
+  it('one account from one address: the 11th try in 15 minutes is refused before the password is checked', async () => {
     const body = { email: 'Mona@Example.com', password: 'wrong-pass' };
     for (let i = 0; i < 10; i++)
-      expect(await status(ctrl.login(req(`10.0.0.${i}`), body, res))).toBe(401);
+      expect(await status(ctrl.login(req('10.0.0.1'), body, res))).toBe(401);
     auth.login.mockClear();
     expect(
       await status(
         ctrl.login(
-          req('10.0.1.1'),
+          req('10.0.0.1'),
           { ...body, email: 'mona@example.com' },
           res,
         ),
       ),
     ).toBe(429);
     expect(auth.login).not.toHaveBeenCalled();
-    // Another account is unaffected.
-    expect(
-      await status(
-        ctrl.login(
-          req('10.0.1.1'),
-          { email: 'sara@example.com', password: 'x' },
-          res,
-        ),
-      ),
-    ).toBe(401);
+    // The owner, from their own address, is not locked out by a stranger knowing the email.
+    expect(await status(ctrl.login(req('10.0.0.2'), body, res))).toBe(401);
+  });
+
+  it('a successful login clears the count for that account and address', async () => {
+    const body = { email: 'lina@example.com', password: 'p' };
+    for (let i = 0; i < 9; i++)
+      await status(ctrl.login(req('10.0.2.1'), body, res));
+    auth.login.mockResolvedValueOnce({
+      token: 't',
+      user: { id: 'u' },
+    } as never);
+    expect(await status(ctrl.login(req('10.0.2.1'), body, res))).toBe(200);
+    for (let i = 0; i < 10; i++)
+      expect(await status(ctrl.login(req('10.0.2.1'), body, res))).toBe(401);
   });
 
   it('one address: sign-ups are capped', async () => {

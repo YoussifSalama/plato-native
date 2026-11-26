@@ -6,6 +6,7 @@ import { JobSeekerDocumentService } from './job-seeker-document.service';
 import { JobSeekerDocumentVersionService } from './job-seeker-document-version.service';
 import { JobSeekerPreferenceService } from './job-seeker-preference.service';
 import { JobSeekerProfileService } from './job-seeker-profile.service';
+import { StorageService } from '../documents/storage.service';
 
 @Module({
   providers: [
@@ -16,6 +17,9 @@ import { JobSeekerProfileService } from './job-seeker-profile.service';
     JobSeekerDocumentVersionService,
     JobSeekerPreferenceService,
     JobSeekerProfileService,
+    // Erasing retired CVs deletes their files. Provided here, not imported:
+    // DocumentsModule imports this module.
+    StorageService,
   ],
   exports: [
     UserService,

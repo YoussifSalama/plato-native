@@ -3,18 +3,19 @@
 import { Suspense, useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowRight, Briefcase, Check, Compass, FileText, FolderOpen, MessageSquareText, Puzzle, Upload, type LucideIcon } from "lucide-react"
+import { ArrowRight, Compass, FileText, Loader2, MessageSquareText, RefreshCw, Upload, UserPen } from "lucide-react"
 import { motion } from "motion/react"
 import { cn } from "cn"
-import { PAGE } from "@/components/page-header"
+import { PAGE, PageHeader } from "@/components/page-header"
 import { Skeleton } from "@/components/ui/skeleton"
-import { CARD, EmptyState, MatchRing, PlatoNote, SectionHeader, StatIcon, StatusPill } from "@/components/plato-ui"
+import { CARD, EmptyState, MatchRing, PlatoNote, StatIcon, StatusPill } from "@/components/plato-ui"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
 import { useProfileStrength } from "@/components/app-shell"
 import { getMe, type AuthUser } from "@/lib/auth/api"
 import { getCareerResume, getResumeScore, listCareerResumes, type ResumeScore } from "@/lib/career/api"
 import { getSkillGap, type SkillGap } from "@/lib/skills/api"
-import { getDocumentFile, getProfile, listDocuments } from "@/lib/documents/api"
+import { analyzeProfile, getDocumentsStatus, getProfile, listDocuments } from "@/lib/documents/api"
 import type { JobSeekerDocument, JobSeekerProfile } from "@/lib/documents/schema"
 import { getExtensionProgress } from "@/lib/extension/api"
 import { getApplyReadiness, getIntake, type ApplyReadiness, type IntakeItem } from "@/lib/jobs/api"
@@ -22,11 +23,14 @@ import { getPreferences } from "@/lib/preferences/api"
 import type { Preferences } from "@/lib/preferences/schema"
 import { formatPreferenceSummary } from "@/lib/preference-format"
 import { ResumeFactsPanel } from "./resume-facts"
+import { Card, ProfileSections, ROW } from "./profile-editor"
+import { DocumentsTab, openFile } from "./documents-tab"
 import { PillTabs } from "@/components/pill-tabs"
 import { InfoTip } from "@/components/info-tip"
 
 // Profile (screen 12): everything Plato knows and uses on every application, in one place.
-// The onboarding answers are edited here; the command bar changes anything in plain words.
+// Edited here, card by card; the job preferences open the onboarding form in edit mode and
+// come back. Name and contact live in Settings. The command bar changes anything in plain words.
 const TABS = [
   { key: "resumes", label: "Resumes" },
   { key: "experience", label: "Experience & skills" },
@@ -37,7 +41,6 @@ const TABS = [
 type Tab = (typeof TABS)[number]["key"]
 type Resume = Awaited<ReturnType<typeof listCareerResumes>>[number]
 
-const titleCase = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase())
 const initials = (s: string) =>
   s
     .split(" ")
@@ -47,8 +50,11 @@ const initials = (s: string) =>
     .join("")
 // Repeated row actions: the soft primary. The one main action per view stays solid.
 const SOFT = "inline-flex items-center gap-1.5 rounded-lg bg-primary-soft px-3 py-1.5 text-[13px] font-semibold text-primary transition-colors duration-200 hover:bg-primary hover:text-primary-foreground"
-const ROW = "transition-colors duration-200 hover:bg-muted/60"
-const DOC_LABEL: Record<JobSeekerDocument["type"], string> = { CV_RESUME: "Resume / CV", CERTIFICATE: "Certificate", LICENSE: "License", DEGREE: "Degree", OTHER: "Other document", COVER_LETTER: "Cover letter", PORTFOLIO: "Portfolio", WORK_PERMIT: "Work visa or permit", ID_DOCUMENT: "Passport or ID", REFERENCE_LETTER: "Reference letter" }
+// Where each fix lives: the card on this page, Settings, or the preferences form (back here after).
+const EDIT_LOCATION = "/profile?tab=experience&edit=location"
+const EDIT_LINKS = "/profile?tab=experience&edit=links"
+const editPrefs = (tab: Tab) => `/onboarding?step=2&return=${encodeURIComponent(`/profile?tab=${tab}`)}`
+const FIX: Record<string, string> = { resume: "/profile?tab=documents", phone: "/settings", location: EDIT_LOCATION }
 
 function ProfileContent() {
   const router = useRouter()
@@ -64,6 +70,28 @@ function ProfileContent() {
   const [gaps, setGaps] = useState<SkillGap[] | null>(null)
   const [hasPortfolio, setHasPortfolio] = useState(false)
   const [checked, setChecked] = useState(false)
+  // Documents added or replaced since Plato last read the profile (the server decides).
+  const [stale, setStale] = useState(false)
+  const [asking, setAsking] = useState(false)
+  const [reading, setReading] = useState(false)
+  const [readError, setReadError] = useState<string | null>(null)
+  const refreshStatus = () =>
+    void getDocumentsStatus()
+      .then((r) => setStale(r.needs_analysis))
+      .catch(() => undefined)
+  async function readAgain() {
+    setAsking(false)
+    setReading(true)
+    setReadError(null)
+    try {
+      setProfile((await analyzeProfile()).profile)
+      setStale(false)
+    } catch (e) {
+      setReadError(e instanceof Error ? e.message : "Plato could not read your documents")
+    } finally {
+      setReading(false)
+    }
+  }
 
   useEffect(() => {
     getMe().then(setUser).catch(() => undefined)
@@ -81,6 +109,7 @@ function ProfileContent() {
     getExtensionProgress()
       .then((p) => setLinked(p.linked))
       .catch(() => setLinked(null))
+    refreshStatus()
   }, [])
 
   const current = profile?.experiences?.[0]
@@ -112,23 +141,49 @@ function ProfileContent() {
     ...(gap
       ? [{ title: `Add “${gap.skill}” to your resume`, body: `It appears in ${gap.missingIn} of your matches. Only if you have done it.`, action: <Link href={career(`I have experience with ${gap.skill}. Help me show it on my resume`)}>Preview change</Link> }]
       : []),
-    ...(prefs && !prefs.portfolio_url ? [{ title: "Add your portfolio link", body: hasPortfolio ? "You uploaded a portfolio file. A link lets Plato paste it into forms that only accept URLs." : "A link lets Plato paste it into forms that only accept URLs.", action: <Link href="/onboarding?step=2">Add link</Link> }] : []),
-    ...(readiness?.missing ?? []).map((m) => ({ title: `Add ${m.label.toLowerCase()}`, body: m.why, action: <Link href="/onboarding?step=2">Add it</Link> })),
-    ...(readiness?.recommended ?? []).slice(0, 2).map((r) => ({ title: r.question, body: "Answer once, never again: Plato puts it on every form that asks.", action: <Link href="/onboarding?step=2">Answer</Link> })),
+    ...(prefs && !prefs.portfolio_url ? [{ title: "Add your portfolio link", body: hasPortfolio ? "You uploaded a portfolio file. A link lets Plato paste it into forms that only accept URLs." : "A link lets Plato paste it into forms that only accept URLs.", action: <Link href={EDIT_LINKS}>Add link</Link> }] : []),
+    ...(readiness?.missing ?? []).map((m) => ({ title: `Add ${m.label.toLowerCase()}`, body: m.why, action: <Link href={FIX[m.key] ?? editPrefs("answers")}>Add it</Link> })),
+    ...(readiness?.recommended ?? []).slice(0, 2).map((r) => ({ title: r.question, body: "Answer once, never again: Plato puts it on every form that asks.", action: <Link href={editPrefs("answers")}>Answer</Link> })),
   ].slice(0, 3)
   // Wait for the checks that feed the suggestions before counting them.
   const suggesting = checked && gaps !== null
 
   return (
     <div className={PAGE}>
+      <PageHeader
+        title="Profile"
+        description="Everything Plato knows about you and puts on every application. Change anything here."
+        actions={
+          <>
+            {stale && (
+              <button type="button" data-ai="profile.read-again" disabled={reading} onClick={() => setAsking(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-colors duration-200 hover:bg-primary-hover disabled:opacity-60">
+                {reading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                Update my profile from new documents
+              </button>
+            )}
+            <Link href="/settings" data-ai="profile.edit-contact" className="inline-flex h-9 items-center gap-1.5 rounded-lg border bg-card px-3.5 text-sm font-semibold transition-colors duration-200 hover:border-primary-line hover:text-primary">
+              <UserPen className="size-4" />
+              Name and contact
+            </Link>
+          </>
+        }
+      />
+      {readError && (
+        <p role="alert" className="text-sm text-destructive">
+          {readError}
+        </p>
+      )}
+      <ConfirmDialog open={asking} title="Update your profile from your documents?" confirmLabel="Update my profile" onCancel={() => setAsking(false)} onConfirm={() => void readAgain()}>
+        Plato reads your CV and the documents you added since, then rewrites your experience, education, certifications, languages and skills from them. Edits you made to those sections here are replaced. Verified certificates stay.
+      </ConfirmDialog>
       {/* Who you are to Plato, and how ready it is to apply for you. */}
-      <section data-tour="page-header" className={cn(CARD, "relative isolate flex flex-wrap items-center gap-4 overflow-hidden px-5 py-4 sm:px-6 sm:py-5")}>
+      <section className={cn(CARD, "relative isolate flex flex-wrap items-center gap-4 overflow-hidden px-5 py-4 sm:px-6 sm:py-5")}>
         {/* The soft brand glow every page hero shares (cobalt top-left, azure bottom-right). */}
         <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_120%_at_0%_0%,color-mix(in_oklch,var(--primary)_9%,transparent),transparent_60%),radial-gradient(50%_90%_at_100%_100%,color-mix(in_oklch,var(--azure)_10%,transparent),transparent_65%)]" />
         <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary text-xl font-bold text-primary-foreground ring-4 ring-primary-soft">{user ? initials(user.full_name).slice(0, 1) : ""}</span>
         <div className="min-w-[220px] flex-1">
-          <h1 className="type-page-title text-foreground">{user ? titleCase(user.full_name) : <Skeleton className="h-7 w-48" />}</h1>
-          <div className="text-text-secondary">{profile === undefined ? <Skeleton className="mt-1 h-4 w-40" /> : current ? [current.title, years && !/not set/i.test(years) ? years : current.company].filter(Boolean).join(" · ") : "Your CV details appear here once Plato reads it."}</div>
+          <h2 className="type-section-title text-foreground">{user ? user.full_name : <Skeleton className="h-7 w-48" />}</h2>
+          <div className="text-text-secondary">{profile === undefined ? <Skeleton className="mt-1 h-4 w-40" /> : current ? [current.title, years && !/not set/i.test(years) ? years : current.company].filter(Boolean).join(" · ") : profile === null ? "Plato could not load your CV details." : "Your CV details appear here once Plato reads it."}</div>
           <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {location && <span>{location}</span>}
             {user && <span className="text-text-secondary">{user.email}</span>}
@@ -138,7 +193,7 @@ function ProfileContent() {
               </a>
             ))}
             {prefs && !prefs.portfolio_url && (
-              <Link href="/onboarding?step=2" className="font-semibold text-primary hover:underline">
+              <Link href={EDIT_LINKS} className="font-semibold text-primary hover:underline">
                 + Add portfolio
               </Link>
             )}
@@ -154,7 +209,7 @@ function ProfileContent() {
           ) : (
             <span>
               <b className="flex items-center gap-1.5">
-                {strength.next ? "Almost there" : "Ready to apply"}
+                {!strength.next ? "Ready to apply" : pct >= 60 ? "Almost there" : "Getting started"}
                 <InfoTip text="Profile strength: how many of five checks are done so Plato can apply without stopping to ask. Your application details, a portfolio link, a second document, a linked browser and a followed company." label="What profile strength means" />
               </b>
               {strength.next ? (
@@ -172,38 +227,18 @@ function ProfileContent() {
 
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section data-tour-state={`profile.${tab}`} className="flex min-w-0 flex-col gap-4">
-          <PillTabs id="profile-tabs" tabs={TABS} value={tab} onChange={(k) => router.replace(k === "resumes" ? "/profile" : `/profile?tab=${k}`, { scroll: false })} label="Profile" dataAi="profile.tab" />
+          {/* On a phone the strip scrolls sideways; the fading edge says there is more. */}
+          <PillTabs id="profile-tabs" tabs={TABS} value={tab} onChange={(k) => router.replace(k === "resumes" ? "/profile" : `/profile?tab=${k}`, { scroll: false })} label="Profile" dataAi="profile.tab" className="[mask-image:linear-gradient(to_right,black_80%,transparent)] md:[mask-image:none]" />
 
           {tab === "resumes" && <ResumesTab role={prefs?.roles?.[0] ?? null} />}
           {tab === "experience" && (
             <div className="flex flex-col gap-4">
-              {!!profile?.experiences?.length && (
-                <Card title="From your CV" icon={Briefcase} tour="profile-cv" action={<Link href="/onboarding?step=1" data-tour="profile-replace-cv">Replace CV</Link>}>
-                  <motion.ul variants={staggerContainer} initial="hidden" animate="show" className="-mx-2 flex flex-col divide-y divide-divider">
-                    {profile.experiences.map((x) => (
-                      <motion.li key={x.id} variants={fadeUpItem} className={cn("rounded-lg px-2 py-2.5", ROW)}>
-                        <b>{x.title}</b> <span className="text-text-secondary">· {x.company}</span>
-                        <p className="type-meta text-text-tertiary">{[x.start_date?.slice(0, 4), x.end_date?.slice(0, 4) ?? "now"].filter(Boolean).join(" – ")}</p>
-                        {x.description && <p className="mt-1 line-clamp-2 text-sm text-text-secondary">{x.description}</p>}
-                      </motion.li>
-                    ))}
-                  </motion.ul>
-                  {!!profile.skills?.length && (
-                    <div className="flex flex-wrap gap-1.5 pt-2">
-                      {profile.skills.map((s) => (
-                        <span key={s} className="rounded-md bg-muted px-2 py-0.5 text-[12.5px] font-medium text-text-secondary">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              )}
+              {profile === undefined ? <Skeleton className="h-48 rounded-2xl" /> : profile ? <ProfileSections key={params.get("edit") ?? ""} profile={profile} onProfile={setProfile} prefs={prefs} onPrefs={setPrefs} initialEdit={params.get("edit")} /> : <PlatoNote variant="inline">Plato could not load your profile. Refresh to try again.</PlatoNote>}
               <ResumeFactsPanel />
             </div>
           )}
           {tab === "looking" && (
-            <Card title="What I'm looking for" icon={Compass} tour="profile-looking" action={<Link href="/onboarding?step=2" data-tour="profile-looking-edit">Edit</Link>}>
+            <Card title="What I'm looking for" icon={Compass} tour="profile-looking" action={<Link href={editPrefs("looking")} data-tour="profile-looking-edit">Edit</Link>}>
               {prefs ? (
                 <dl className="flex flex-col divide-y divide-divider">
                   {Object.entries({ Roles: "roles", Locations: "locations", "Work setup": "work_setup", "Job type": "employment_type", Experience: "experience", "Expected salary": "salary", Industries: "industries", "Things to avoid": "things_to_avoid" } as const).map(([label, k]) => (
@@ -219,7 +254,7 @@ function ProfileContent() {
             </Card>
           )}
           {tab === "answers" && <AnswersTab prefs={prefs} />}
-          {tab === "documents" && <DocumentsTab linked={linked} />}
+          {tab === "documents" && <DocumentsTab linked={linked} onChanged={refreshStatus} />}
         </section>
 
         <aside data-tour="profile-suggests" className="flex flex-col gap-3 rounded-2xl border border-primary-line bg-primary-tint/80 p-4">
@@ -243,18 +278,6 @@ function ProfileContent() {
   )
 }
 
-function Card({ title, icon, action, children, tour }: { title: string; icon: LucideIcon; action?: ReactNode; children: ReactNode; tour?: string }) {
-  return (
-    <section data-tour={tour} className={cn(CARD, "flex flex-col gap-4 p-5 animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-both duration-500")}>
-      <div className="flex items-center justify-between gap-3">
-        <SectionHeader title={title} icon={icon} accent="cobalt" />
-        {action && <span className="flex shrink-0 rounded-lg border bg-card text-[13px] font-semibold transition-colors duration-200 hover:border-primary-line hover:bg-primary-tint [&>*]:px-3 [&>*]:py-1.5">{action}</span>}
-      </div>
-      {children}
-    </section>
-  )
-}
-
 // Screen 12: the master resume (the CV they uploaded, the base for everything) and the
 // versions Plato tailored from it, newest first.
 function ResumesTab({ role }: { role: string | null }) {
@@ -273,8 +296,16 @@ function ResumesTab({ role }: { role: string | null }) {
       .then((d) => setCv(d.find((x) => x.type === "CV_RESUME") ?? null))
       .catch(() => setCv(null))
   }, [])
+  const [fileError, setFileError] = useState<string | null>(null)
   async function open(get: () => Promise<Blob>, download?: string) {
-    const url = URL.createObjectURL(await get())
+    setFileError(null)
+    let blob: Blob
+    try {
+      blob = await get()
+    } catch {
+      return setFileError("Could not open that file. Try again.")
+    }
+    const url = URL.createObjectURL(blob)
     if (!download) return void window.open(url, "_blank", "noopener")
     const a = Object.assign(document.createElement("a"), { href: url, download })
     a.click()
@@ -282,7 +313,12 @@ function ResumesTab({ role }: { role: string | null }) {
   }
   const shown = all ? resumes : resumes?.slice(0, 4)
   return (
-    <Card title="Resumes" icon={FileText} tour="profile-resumes" action={<Link href="/onboarding?step=1" data-tour="profile-upload" className="flex items-center gap-1.5"><Upload className="size-4" />Upload</Link>}>
+    <Card title="Resumes" icon={FileText} tour="profile-resumes" action={<Link href="/profile?tab=documents" data-tour="profile-upload" className="flex items-center gap-1.5"><Upload className="size-4" />{cv ? "Replace CV" : "Upload CV"}</Link>}>
+      {fileError && (
+        <p role="alert" className="text-sm text-destructive">
+          {fileError}
+        </p>
+      )}
       {cv === undefined && <Skeleton className="h-16 rounded-xl" />}
       {cv && (
         <div data-tour="profile-master" className="flex flex-wrap items-center gap-3 rounded-xl border border-l-[3px] border-primary-line border-l-primary bg-primary-tint/60 px-4 py-3">
@@ -291,7 +327,7 @@ function ResumesTab({ role }: { role: string | null }) {
             <b className="block truncate" title={cv.name ?? undefined}>Master resume{role ? ` · ${role}` : cv.name ? ` · ${cv.name}` : ""}</b>
             <span className="type-meta text-text-secondary">{[cv.updated_at && `Updated ${shortDate(cv.updated_at)}`, "used as the base for every tailored version"].filter(Boolean).join(" · ")}</span>
           </span>
-          <span className="ml-auto flex items-center gap-3">
+          <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2">
             {score && (
               <Link href={`/career?prompt=${encodeURIComponent("Score my resume and help me fix the top issues")}`} title={score.topFixes.join(" ")} className={cn("rounded-full px-2.5 py-1 text-[12.5px] font-bold tabular-nums", score.score >= 75 ? "bg-success-soft text-success-ink" : score.score >= 60 ? "bg-warning-soft text-warning-ink" : "bg-danger-soft text-destructive")}>
                 {score.score}/100
@@ -299,8 +335,11 @@ function ResumesTab({ role }: { role: string | null }) {
             )}
             {score && <InfoTip text="Your master resume scored out of 100 by fixed rules, not AI: contact and sections, numbers in your bullets, action verbs, length, headline and summary, and skills backed by experience. 75 or more is good; under 60 needs work." label="How the resume score works" className="-ml-2" />}
             <StatusPill tone="primary">Master</StatusPill>
-            <button type="button" onClick={() => void open(() => getDocumentFile(cv.id))} className={SOFT}>
+            <button type="button" onClick={() => void openFile(cv.id).catch(() => setFileError("Could not open your CV. Try again."))} className={SOFT}>
               Preview
+            </button>
+            <button type="button" onClick={() => void openFile(cv.id, cv.name ?? "CV").catch(() => setFileError("Could not download your CV. Try again."))} className={SOFT}>
+              Download
             </button>
           </span>
         </div>
@@ -367,7 +406,7 @@ function AnswersTab({ prefs }: { prefs: Preferences | null }) {
   }, [])
   const summary = prefs ? formatPreferenceSummary(prefs) : null
   return (
-    <Card title="Application answers" icon={MessageSquareText} tour="profile-answers" action={<Link href="/onboarding?step=2" data-tour="profile-answers-edit">Edit</Link>}>
+    <Card title="Application answers" icon={MessageSquareText} tour="profile-answers" action={<Link href={editPrefs("answers")} data-tour="profile-answers-edit">Edit</Link>}>
       <p className="-mt-2 flex items-center gap-1.5 text-sm text-text-secondary">
         Plato puts these on every form that asks. You answered once.
         <InfoTip text="Answers left empty are asked the first time a form needs them, then saved here. Optional personal ones, like gender, are never guessed and show only as “Saved (private)”." label="How application answers are used" />
@@ -396,60 +435,6 @@ function AnswersTab({ prefs }: { prefs: Preferences | null }) {
       </dl>
       {intake === null && <Skeleton className="h-24 rounded-xl" />}
     </Card>
-  )
-}
-
-function DocumentsTab({ linked }: { linked: boolean | null }) {
-  const [docs, setDocs] = useState<JobSeekerDocument[] | null>(null)
-  useEffect(() => {
-    listDocuments()
-      .then(setDocs)
-      .catch(() => setDocs([]))
-  }, [])
-  return (
-    <div className="flex flex-col gap-4">
-      <Card title="Documents" icon={FolderOpen} tour="profile-documents" action={<Link href="/onboarding?step=1" data-tour="profile-add-documents">Add documents</Link>}>
-        {docs === null && <Skeleton className="h-24 rounded-xl" />}
-        {docs?.length === 0 && (
-          <EmptyState
-            icon={FolderOpen}
-            title="No documents yet"
-            hint="Add your CV and Plato fills in the rest."
-            action={
-              <Link href="/onboarding?step=1" className={SOFT}>
-                Add your CV
-              </Link>
-            }
-          />
-        )}
-        <motion.ul variants={staggerContainer} initial="hidden" animate="show" className="-mx-2 flex flex-col divide-y divide-divider">
-          {docs?.map((d) => (
-            <motion.li key={d.id} variants={fadeUpItem} className={cn("flex items-center gap-3 rounded-lg px-2 py-2.5", ROW)}>
-              <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-[10px]", d.status === "READY" ? "bg-success-soft text-success" : "bg-primary-soft text-primary")}>{d.status === "READY" ? <Check className="size-4" /> : <FileText className="size-4" />}</span>
-              <span className="min-w-0 flex-1">
-                <b className="block truncate">{d.name ?? DOC_LABEL[d.type]}</b>
-                <span className="type-meta text-text-secondary">{DOC_LABEL[d.type]}</span>
-              </span>
-              {d.status === "FAILED" && <StatusPill tone="danger">Could not read</StatusPill>}
-            </motion.li>
-          ))}
-        </motion.ul>
-      </Card>
-      <section data-tour="profile-extension" className={cn(CARD, "flex flex-wrap items-center gap-3 p-5 animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-both duration-500")} style={{ animationDelay: "70ms" }}>
-        <StatIcon icon={Puzzle} accent="cobalt" className="size-10" />
-        <span className="min-w-0 flex-1">
-          <b className="type-card-title block">Plato Apply in Chrome</b>
-          <span className="flex items-center gap-1.5 text-sm text-text-secondary">
-            {linked !== null && <span className={cn("size-1.5 rounded-full", linked ? "bg-success" : "bg-text-tertiary")} />}
-            {linked === null ? "Checking…" : linked ? "Linked to your account" : "Not linked yet"}
-          </span>
-        </span>
-        <Link href="/extension" className={cn(SOFT, "group")}>
-          {linked ? "Manage browsers" : "Link a browser"}
-          <ArrowRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
-        </Link>
-      </section>
-    </div>
   )
 }
 

@@ -5,6 +5,15 @@ const apiClient = axios.create({
   withCredentials: true,
 })
 
+// The dead cookie goes first: the route guard (proxy.ts) sends anyone holding one away from /login.
+let leaving = false
+export function toLogin() {
+  if (leaving) return
+  leaving = true
+  const next = encodeURIComponent(window.location.pathname + window.location.search)
+  void apiClient.post("/auth/logout").catch(() => undefined).finally(() => window.location.assign(`/login?next=${next}`))
+}
+
 // Paid actions: a 402 opens the "out of tokens" dialog wherever it came from,
 // and any write may have spent tokens, so the balance refreshes (charges land a
 // moment after the reply). Events, not imports: lib/credits imports this file.
@@ -17,9 +26,9 @@ if (typeof window !== "undefined") {
     (error) => {
       const res = error?.response
       if (res?.status === 402 && res.data?.code === "insufficient_tokens") window.dispatchEvent(new CustomEvent("plato:out-of-tokens", { detail: res.data }))
-      // Dead session (expired, or the account is gone): back to login. Auth calls
+      // Dead session (expired, or the account is gone): back to login, then back here. Auth calls
       // own their 401s (a wrong password is a 401 too).
-      if (res?.status === 401 && !String(error.config?.url ?? "").includes("/auth/") && window.location.pathname !== "/login") window.location.assign("/login")
+      if (res?.status === 401 && !String(error.config?.url ?? "").includes("/auth/") && window.location.pathname !== "/login") toLogin()
       return Promise.reject(error)
     },
   )

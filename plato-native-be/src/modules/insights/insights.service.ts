@@ -504,7 +504,13 @@ export class InsightsService {
       where: { unsubscribe_token: token },
       data: { email: false },
     });
-    return { ok: r.count > 0 };
+    if (!r.count) return { ok: false };
+    // The page then says "they keep showing in Plato" only when they do.
+    const s = await this.prisma.alertSettings.findUnique({
+      where: { unsubscribe_token: token },
+      select: { in_app: true },
+    });
+    return { ok: true, in_app: s?.in_app ?? true };
   }
 
   private async owned(userId: string, alertId: string) {

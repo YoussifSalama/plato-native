@@ -64,6 +64,7 @@ jobs:
           push: true
           build-args: |
             NEXT_PUBLIC_API_URL=https://${{ vars.API_DOMAIN || 'api.platohiring.com' }}
+            NEXT_PUBLIC_SUPPORT_EMAIL=${{ vars.SUPPORT_EMAIL || 'raefalwani06@gmail.com' }}
           tags: |
             ${{ env.WEB_LOWER }}:${{ github.sha }}
             ${{ steps.names.outputs.web }}
@@ -97,6 +98,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             "set -e; cd /opt/plato; test -f .env || { echo 'missing /opt/plato/.env'; exit 1; };
+             grep -Eq '^SENDGRID_API_KEY=.+' .env && grep -Eq '^MAIL_FROM=.+' .env || { echo 'SENDGRID_API_KEY and MAIL_FROM must be set in /opt/plato/.env: without mail nobody can confirm an email or get free tokens'; exit 1; };
              echo '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin;
              export API_IMAGE='$API_TAG' WEB_IMAGE='$WEB_TAG';
              docker compose pull api web;
@@ -109,3 +111,6 @@ jobs:
           curl -fsS -o /dev/null -w 'web %{http_code}\n' "https://${{ vars.WEB_DOMAIN || 'platohiring.com' }}/"
           code=$(curl -s -o /dev/null -w '%{http_code}' "https://${{ vars.API_DOMAIN || 'api.platohiring.com' }}/extension/v1/me")
           echo "api $code"; test "$code" = "403" -o "$code" = "401"
+          health=$(curl -fsS "https://${{ vars.API_DOMAIN || 'api.platohiring.com' }}/health")
+          echo "health $health"; echo "$health" | grep -q '"mail":"on"'
+

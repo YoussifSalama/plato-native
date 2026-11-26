@@ -9,7 +9,8 @@ export type JobSeekerDocument = {
   name: string | null
   status: DocumentStatus
   processing_error: string | null
-  storage_key: string
+  // Replacements left for this document's batch (only a successful one counts).
+  remaining_replacements?: number
   created_at?: string
   updated_at?: string
 }
@@ -79,3 +80,7 @@ export type JobSeekerProfile = {
   languages: Language[]
   profile_evaluation: ProfileEvaluation | null
 }
+
+// What the server takes (backend documents.controller.ts): a photo or scan only for IDs, visas, licences and portfolios.
+const IMAGE_OK: DocumentType[] = ["ID_DOCUMENT", "WORK_PERMIT", "LICENSE", "PORTFOLIO"]
+export const acceptFor = (t: DocumentType) => (IMAGE_OK.includes(t) ? ".pdf,.docx,.jpg,.jpeg,.png" : ".pdf,.docx")

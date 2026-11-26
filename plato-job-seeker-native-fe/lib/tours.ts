@@ -590,7 +590,7 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
         { target: '[data-tour="page-header"]', title: "One balance", body: "Searches, resumes and interviews use tokens. Applying is always free." },
         { target: '[data-ai="tokens.balance"]', title: "Where you stand", body: "What is left this month, and what that is enough for." },
         { target: '[data-tour="tokens-spending"]', title: "Where your tokens went", body: "This month's spending by the kind of work Plato did." },
-        { target: "#plans", title: "Plans", body: "More tokens every month. Switching takes effect right away." },
+        { target: "#plans", title: "Plans", body: "More tokens every month. Ask the Plato team to switch you; it applies as soon as they do." },
         { target: "#top-ups", title: "Top-ups", body: "One-time packs that never expire." },
         { target: '[data-tour="tokens-history"]', title: "History", body: "Every charge, refill and top-up. Filter by spent or added." },
         { target: '[data-tour="tokens-faq"]', title: "Questions", body: "Short answers about tokens, plans and refills." },
@@ -607,7 +607,7 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
       name: "Profile: experience & skills",
       steps: [
         { target: '[role="tablist"][aria-label="Profile"]', title: "Experience & skills", body: "What Plato read from your CV, plus what you add here. Resumes only use what is true." },
-        { target: '[data-tour="profile-cv"]', title: "From your CV", body: "Your jobs and skills as Plato read them. Replace CV uploads a new one." },
+        { target: '[data-tour="profile-cv"]', title: "Your experience", body: "Your jobs as Plato read them from your CV. Edit changes them right here; so do the cards for education, languages and skills." },
         { target: '[data-tour="profile-projects"]', title: "Projects", body: "Real things you built. Especially useful early in your career." },
         { target: '[data-ai="profile.add-project"]', title: "Add a project", body: "Fill in the name and what you built, then press Add project." },
         { target: '[data-tour="profile-results"]', title: "Results", body: "What changed because of your work. A real number makes a bullet much stronger." },

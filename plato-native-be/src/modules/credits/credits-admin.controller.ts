@@ -21,6 +21,8 @@ const adjustSchema = z.object({
 });
 const planSchema = z.object({
   plan: z.enum(Object.keys(PLANS) as [string, ...string[]]),
+  // months paid for: the plan lapses to Free after them
+  months: z.number().int().min(1).max(24).default(1),
 });
 const topupSchema = z.object({
   pack: z.enum(Object.keys(TOPUPS) as [string, ...string[]]),
@@ -74,7 +76,7 @@ export class CreditsAdminController {
     );
   }
 
-  /** Move a seeker to a plan (until payments do it): a fresh period with the plan's grant. */
+  /** Move a seeker to a plan (until payments do it): a fresh period with the plan's grant, paid for `months`. */
   @Post(':user/plan')
   async plan(
     @Headers('x-admin-key') key: string | undefined,
@@ -87,6 +89,8 @@ export class CreditsAdminController {
     return this.credits.setPlan(
       await this.credits.resolveUser(ref),
       p.data.plan,
+      new Date(),
+      p.data.months,
     );
   }
 

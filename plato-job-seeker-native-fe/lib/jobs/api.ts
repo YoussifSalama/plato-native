@@ -74,7 +74,7 @@ export const attributionLabel = (s: JobSourceName) => (OWN_PAGE.includes(s) ? nu
 export type JobEligibility = { status: "open" | "restricted" | "relocation" | "unknown"; note: string }
 
 export type SourceKey = "index" | Lowercase<JobSourceName>
-export type SourceProgress = { status: "RUNNING" | "DONE" | "FAILED"; fetched: number; error?: string }
+export type SourceProgress = { status: "RUNNING" | "DONE" | "FAILED" | "SKIPPED"; fetched: number; error?: string }
 export type RunStage = "crawling" | "merging" | "filtering" | "ranking" | "done" | "failed"
 export type RunProgress = {
   stage: RunStage

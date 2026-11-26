@@ -7,14 +7,14 @@
    Dark "night" surfaces carry the hero and the pinned story; light paper carries the product tour. */
 .lp {
   /* brand, from the logo */
-  --brand: #005ba7; --brand-2: #0a6fc2; --brand-hover: #004c8c; --brand-deep: #003a6e; --azure: #00a1e2;
-  --brand-soft: #e8f2fc; --brand-tint: #f5f9fe; --brand-line: #c9e0f5;
-  --brand-grad: linear-gradient(135deg, #005ba7 0%, #0a7fd0 55%, #00a1e2 100%);
+  --brand: #0b3f7a; --brand-2: #0b4f96; --brand-hover: #08305e; --brand-deep: #062a52; --azure: #00a1e2;
+  --brand-soft: #e8eef7; --brand-tint: #f4f7fb; --brand-line: #c6d5ea;
+  --brand-grad: linear-gradient(135deg, #08264c 0%, #0b4f96 55%, #1a7fd0 100%);
   /* neutrals */
   --ink: #0e1b2c; --ink-2: #4a5a70; --ink-3: #7a889c; --mist: #a3b0c2;
   --paper: #f5f8fc; --card: #ffffff; --line: #e2e8f0; --divider: #eef2f7;
   /* status */
-  --green: #1c9a4b; --green-soft: #e3f9ea; --blue: #0a6fc2; --blue-soft: #e8f2fc; --amber: #d97706; --amber-soft: #fef3c7; --red: #d92d20; --rose: #db2777; --teal: #0d9488;
+  --green: #1c9a4b; --green-soft: #e3f9ea; --blue: #0b4f96; --blue-soft: #e8eef7; --amber: #d97706; --amber-soft: #fef3c7; --red: #d92d20; --rose: #db2777; --teal: #0d9488;
   /* night */
   --night: #050b16; --night-2: #0a1424; --night-card: #0e1b30; --night-line: rgba(255, 255, 255, 0.09); --night-ink-2: rgba(255, 255, 255, 0.72); --night-ink-3: rgba(255, 255, 255, 0.48);
   --glow: #3fb4ee; --glow-2: #a9dcf7; --cyan: #7fe3ff;
@@ -41,7 +41,7 @@ html:has(.lp) { scroll-behavior: smooth; }
 .lp .btn.sm { height: 40px; padding: 0 16px; border-radius: 12px; font-size: 14.5px; }
 .lp .btn.lg { height: 60px; padding: 0 30px; font-size: 17px; border-radius: 18px; }
 .lp .btn.white { background: #fff; color: var(--ink); }
-.lp .btn.brand { background: var(--brand); color: #fff; box-shadow: 0 12px 30px rgba(0, 91, 167, .35); }
+.lp .btn.brand { background: var(--brand); color: #fff; box-shadow: 0 12px 30px rgba(11, 63, 122, .35); }
 .lp .btn.brand:hover { background: var(--brand-hover); }
 .lp .btn.ghost-dark { color: #fff; border-color: var(--night-line); background: rgba(255,255,255,.03); }
 .lp .btn.ghost-dark:hover { background: rgba(255,255,255,.07); }

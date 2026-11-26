@@ -403,7 +403,7 @@ function ApplicationsContent() {
         </div>
         {/* Same bottom bar as Jobs: what this view is, and the pages. */}
         {shown.length > 0 && (
-          <div data-tour="applications-pager" className="sticky bottom-[92px] z-10 mr-12 flex flex-wrap items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-[0_18px_40px_-20px_rgb(0_58_110/0.35)] sm:bottom-4 sm:mr-0">
+          <div data-tour="applications-pager" className="sticky bottom-[92px] z-10 mr-12 flex flex-wrap items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-[0_18px_40px_-20px_rgb(8_38_76/0.35)] sm:bottom-4 sm:mr-0">
             <span className="text-[13px] text-text-secondary">{needs.length ? `${needs.length} need you. Plato sends the rest on its own.` : "Plato sends these on its own and keeps you posted."}</span>
             <span className="ml-auto flex items-center gap-2 text-[13px] text-text-tertiary tabular-nums">
               {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + pageRows.length} of {shown.length}

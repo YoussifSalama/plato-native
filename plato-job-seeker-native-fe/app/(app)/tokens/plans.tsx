@@ -49,7 +49,7 @@ function PaymentSoonDialog({ picked, onClose }: { picked: Picked | null; onClose
     if (!picked && el.open) el.close()
   }, [picked])
   return (
-    <dialog ref={ref} data-ai-skip onCancel={(e) => (e.preventDefault(), onClose())} onClick={(e) => e.target === ref.current && onClose()} className="m-auto w-[min(460px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-card p-0 text-foreground shadow-[0_28px_70px_-28px_rgba(0,91,167,0.45)] backdrop:bg-foreground/30 backdrop:backdrop-blur-sm">
+    <dialog ref={ref} data-ai-skip onCancel={(e) => (e.preventDefault(), onClose())} onClick={(e) => e.target === ref.current && onClose()} className="m-auto w-[min(460px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-card p-0 text-foreground shadow-[0_28px_70px_-28px_rgba(11,63,122,0.45)] backdrop:bg-foreground/30 backdrop:backdrop-blur-sm">
       {picked && (
         <div className="relative flex flex-col items-center gap-4 px-7 pt-8 pb-6 text-center">
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-32 glow-top" />
@@ -231,7 +231,7 @@ export function TopUps({ packs, monthlyPricePer1k }: { packs: TokenPrices["topup
               onClick={() => void go(key, { pack: key }, { what: `${formatTokens(p.tokens)} tokens`, detail: `$${p.priceUsd}, one time, never expire` })}
               data-ai={`tokens.topup.${key}`}
               aria-label={`Buy ${formatTokens(p.tokens)} tokens for $${p.priceUsd}`}
-              className="group relative flex items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-card transition-[box-shadow,border-color] duration-200 hover:border-primary-line hover:shadow-[0_18px_44px_-28px_rgba(0,91,167,0.45)] disabled:opacity-60"
+              className="group relative flex items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-card transition-[box-shadow,border-color] duration-200 hover:border-primary-line hover:shadow-[0_18px_44px_-28px_rgba(11,63,122,0.45)] disabled:opacity-60"
             >
               <span className="relative flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
                 {busy === key ? <Loader2 className="size-5 animate-spin" /> : <Coins className="size-5 transition-transform duration-200 group-hover:-rotate-12" />}

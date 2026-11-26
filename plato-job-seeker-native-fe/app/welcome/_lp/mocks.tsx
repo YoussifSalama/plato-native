@@ -12,7 +12,7 @@ function Win({ url, dark, children }: { url: string; dark?: boolean; children: R
 }
 
 const JOBS = [
-  { a: "N", c: "#005ba7", t: "Frontend Engineer", m: "Northwind · Lever · Remote, Europe", p: 92, l: "Excellent match" },
+  { a: "N", c: "#0b3f7a", t: "Frontend Engineer", m: "Northwind · Lever · Remote, Europe", p: 92, l: "Excellent match" },
   { a: "C", c: "#1c9a4b", t: "Full Stack Developer", m: "Contoso · Greenhouse · Cairo", p: 88, l: "Strong match" },
   { a: "F", c: "#0d9488", t: "Product Engineer", m: "Fabrikam · LinkedIn · Berlin, hybrid", p: 76, l: "Strong match" },
   { a: "L", c: "#d97706", t: "React Developer", m: "Litware · Workable · Dubai", p: 71, l: "Match" },

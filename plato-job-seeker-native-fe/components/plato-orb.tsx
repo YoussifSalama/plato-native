@@ -20,7 +20,7 @@ function PlatoMark({ size = 40, live = false, className }: { size?: number; live
           transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
         />
       )}
-      <span className="relative flex size-full items-center justify-center bg-brand-gradient shadow-[0_6px_16px_-6px_rgba(0,91,167,0.55)]" style={{ borderRadius: radius }}>
+      <span className="relative flex size-full items-center justify-center bg-brand-gradient shadow-[0_6px_16px_-6px_rgba(11,63,122,0.55)]" style={{ borderRadius: radius }}>
         <Image src="/logo-white.png" alt="" width={glyph} height={glyph} className="pointer-events-none select-none" style={{ width: glyph, height: glyph }} />
       </span>
     </span>

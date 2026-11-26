@@ -8,7 +8,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         // Solid cobalt with a hairline top highlight: weight from colour, not from a glow.
-        default: "bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_1px_2px_rgb(0_58_110/0.25)] hover:bg-primary-hover",
+        default: "bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_1px_2px_rgb(8_38_76/0.25)] hover:bg-primary-hover",
         outline:
           "border-border bg-card text-foreground shadow-[0_1px_2px_rgb(14_27_44/0.04)] hover:border-primary-line hover:bg-primary-tint hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:

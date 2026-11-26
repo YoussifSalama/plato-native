@@ -25,6 +25,8 @@ export const callResultSchema = z.object({
     })
     .optional(),
   error: z.string().max(600).optional(),
+  // the executor really pressed a gated control (Submit, or one that leaves the form) after Submit was allowed
+  submit_pressed: z.boolean().optional(),
 });
 export type CallResult = z.infer<typeof callResultSchema>;
 
@@ -37,6 +39,8 @@ export const turnRequestSchema = z.object({
   text: z.string().max(4000).optional(),
   // seeker_answer: the structured answers behind `text` (one per question the brain asked), when the panel's form collected them
   answers: z.array(z.object({ id: z.string().min(1).max(40), label: z.string().min(1).max(300), value: z.string().max(2000) })).max(20).optional(),
+  // submit: the seeker approved the review list the panel showed them. Required while that review holds Submit.
+  approved: z.boolean().optional(),
   // the page as the extension's classifier sees it now (plato-extension src/dom/page-state.ts): a hint for the brain, and the log
   page: z.object({ kind: z.enum(PAGE_KINDS), url: z.string().max(4096), fields: z.number().int().min(0).max(10_000) }).optional(),
 });
@@ -62,8 +66,31 @@ export const askQuestionSchema = z.object({
 export type AskQuestion = z.infer<typeof askQuestionSchema>;
 export const askSchema = z.object({ questions: z.array(askQuestionSchema).min(1).max(8) });
 
+export const REVIEW_SOURCES = ['cv', 'answer', 'profile', 'job', 'rule', 'guess'] as const;
+export type ReviewSource = (typeof REVIEW_SOURCES)[number];
+export type SensitiveCategory = 'pay' | 'work_auth' | 'sponsorship' | 'legal' | 'demographic';
+/** One field the model filled, as the backend checked it (review.ts): the model's label alone is never trusted. */
+export interface ReviewField {
+  label: string;
+  value: string;
+  source: ReviewSource;
+  evidence?: string;
+  verified: boolean; // the backend found the value in the claimed source
+  status: 'ok' | 'unverified' | 'guess';
+  sensitive: boolean;
+  category?: SensitiveCategory;
+}
+export interface Review {
+  fields: ReviewField[];
+  complete: boolean; // false when the model never sent a valid list
+  hold: boolean; // the extension must stop before Submit
+  holdReason?: 'review_mode' | 'sensitive' | 'no_list';
+}
+/** The Review as kept on the item (detail.review) and the application (evidence.review). */
+export type StoredReview = Review & { summary?: string; at?: string; approvedBy?: 'user' | 'auto'; approvedAt?: string };
+
 export type Outcome =
-  | { kind: 'submit_ready'; summary: string }
+  | { kind: 'submit_ready'; summary: string; review: Review }
   | { kind: 'ask'; question: string; questions: AskQuestion[] } // question: the one-line summary; questions: what the panel draws
   | { kind: 'captcha'; text: string }
   | { kind: 'closed'; reason: string }
@@ -74,6 +101,9 @@ export type Outcome =
   | { kind: 'unconfirmed'; text: string }
   | { kind: 'error'; message: string; fatal?: boolean; code?: string }; // fatal: the request itself is wrong (a 4xx other than 429), retrying cannot help; code: errorCode(), in the server log and the seeker's stop
 
+/** parseOutcome's result: a SUBMIT_READY becomes an Outcome once the backend has checked its field list (review.ts). */
+export type ParsedOutcome = Exclude<Outcome, { kind: 'submit_ready' }> | { kind: 'submit_ready'; summary: string };
+
 export type TurnResponse =
   | { version: 1; turn: number; calls: BrowserCall[]; submit_allowed: boolean }
   | { version: 1; turn: number; outcome: Outcome };
@@ -83,12 +113,13 @@ const SITE = { ACCOUNT_REQUIRED: 'ACCOUNT_SIGNUP', LOGIN_REQUIRED: 'LOGIN', VERI
 
 /** The model's final text, mapped to an outcome the state machine understands. The keyword may follow a sentence
  * of its own ("All fields hold a value.\nSUBMIT_READY …"): the LAST line that starts with one is the answer. */
-export function parseOutcome(text: string): Outcome {
+export function parseOutcome(text: string): ParsedOutcome {
   const lines = text.trim().split('\n');
   const at = lines.findLastIndex((l) => KEYWORD.test(l.trim()));
   const t = (at >= 0 ? lines.slice(at).join('\n') : text).trim();
   const m = (re: RegExp) => re.exec(t)?.[1]?.trim() ?? '';
-  if (/^SUBMIT_READY\b/i.test(t)) return { kind: 'submit_ready', summary: m(/^SUBMIT_READY[:\s\-—–]*([\s\S]*)$/i).slice(0, 400) };
+  // the field list (a ```json block or a bare object) follows the summary; it is read by review.ts, not shown here
+  if (/^SUBMIT_READY\b/i.test(t)) return { kind: 'submit_ready', summary: m(/^SUBMIT_READY[:\s\-—–]*([^`{]*)/i).replace(/\s+/g, ' ').trim().slice(0, 400) };
   if (/^CONFIRMED\b/i.test(t)) return { kind: 'confirmed', quote: m(/^CONFIRMED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
   if (/^REFUSED\b/i.test(t)) return { kind: 'refused', quote: m(/^REFUSED[:\s\-—–]*([\s\S]*)$/i).slice(0, 300) };
   if (/^UNCONFIRMED\b/i.test(t)) return { kind: 'unconfirmed', text: t.slice(0, 300) };

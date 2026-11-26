@@ -359,3 +359,25 @@ select { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--fg); p
 .connect .meta { margin-top: 10px; }
 .foot { margin-top: auto; padding: 12px 0 2px; text-align: center; font-size: 12px; color: var(--muted); }
 
+
+/* the check before Submit (panel/review-card.ts): brand card; amber only on the answers to look at */
+.qcard.review { border-color: var(--p-line); }
+.qcard.review .rv-sub { font-size: 12.5px; color: var(--fg2); line-height: 1.45; }
+.rv-list { list-style: none; display: grid; gap: 6px; margin: 10px 0 0; padding: 0; }
+.rv { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); min-width: 0; }
+.rv.warn { border-color: var(--warn-line); background: #fffdf8; }
+.rv.edited { border-color: var(--p); box-shadow: 0 0 0 2px var(--p-soft); }
+.rv-hd { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+.rv-hd label { flex: 1 1 120px; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
+.rv-src, .rv-sens { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+.rv-src { background: var(--p-soft); color: var(--p); }
+.rv-src.guess, .rv-src.unverified { background: var(--warn-soft); color: var(--warn-fg); }
+.rv-sens { background: var(--fill); color: var(--fg2); }
+.rv-sens .ico { width: 11px; height: 11px; stroke-width: 2.4; }
+.rv input, .rv textarea { width: 100%; min-width: 0; box-sizing: border-box; margin: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--fg); font: inherit; font-size: 13px; }
+.rv textarea { resize: vertical; min-height: 56px; }
+.rv input:focus, .rv textarea:focus { outline: 0; border-color: var(--p); box-shadow: 0 0 0 3px var(--p-soft); }
+.rv-why { font-size: 12px; font-weight: 600; color: var(--warn-fg); }
+.rv-ev { font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+.rv-hint { margin-top: 8px; font-size: 12px; color: var(--fg2); }
+.rv-hint:empty { display: none; }

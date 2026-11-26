@@ -17,6 +17,7 @@ export interface CallResult {
   image?: { media_type: 'image/png' | 'image/jpeg'; data: string };
   state?: { tabs: { tab_id: string; title: string; url: string; active?: boolean }[] };
   error?: string;
+  submit_pressed?: boolean; // this call pressed a gated control (Submit, or a step once armed, or Enter in a form field) after the backend allowed it: the backend's submitPressed
 }
 // A question the brain cannot answer from the profile, shaped so the panel draws the right control (panel/ask-form.ts).
 export interface AskQuestion {
@@ -41,10 +42,30 @@ export interface TurnRequest {
   results?: CallResult[];
   text?: string;
   answers?: SeekerAnswer[]; // seeker_answer: the structured answers behind `text`
+  approved?: boolean; // submit: the seeker approved the review list the panel showed (the backend refuses a held submit without it: 409 review_needed)
   page?: { kind: PageKind; url: string; fields: number }; // the page as the classifier sees it now (dom/page-state.ts), for the brain and the log
 }
+// SUBMIT_READY's list of every field the model filled, verified and classified by the backend (the source of truth;
+// the extension never decides `hold`). Shown to the seeker before Submit, stored with the application.
+export type SubmitMode = 'auto' | 'review';
+export interface ReviewField {
+  label: string;
+  value: string;
+  source: 'cv' | 'answer' | 'profile' | 'job' | 'rule' | 'guess';
+  evidence?: string;
+  verified: boolean; // the backend found the value in the claimed source
+  status: 'ok' | 'unverified' | 'guess';
+  sensitive: boolean;
+  category?: 'pay' | 'work_auth' | 'sponsorship' | 'legal' | 'demographic';
+}
+export interface Review {
+  fields: ReviewField[];
+  complete: boolean; // false: the model never sent a valid list
+  hold: boolean; // stop before Submit for the seeker
+  holdReason?: 'review_mode' | 'sensitive' | 'no_list';
+}
 export type Outcome =
-  | { kind: 'submit_ready'; summary: string }
+  | { kind: 'submit_ready'; summary: string; review?: Review } // review: absent from an older backend
   | { kind: 'ask'; question: string; questions?: AskQuestion[] } // question: the one-line summary; questions: what the panel draws (absent from an older backend)
   | { kind: 'captcha'; text: string }
   | { kind: 'closed'; reason: string }

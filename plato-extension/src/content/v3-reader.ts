@@ -34,9 +34,17 @@ export type V3Op =
   | { op: 'set_file'; ref: string; name: string; mime: string; data: string } // base64 bytes into the file input at/near the ref
   | { op: 'changed' } // text fields whose value the PAGE changed since the model last read them (a resume parse, a script), and the active ref
   | { op: 'typed' } // the executor typed or pressed keys: the active field's value is ours now
+  | { op: 'focus' } // what an Enter would act on (the Submit gate on keys)
   | { op: 'info' }
   | { op: 'state' };
-export const V3_OPS = new Set(['read_page', 'find', 'page_text', 'form_input', 'resolve', 'ready', 'describe', 'set_file', 'changed', 'typed', 'info', 'state']);
+export const V3_OPS = new Set(['read_page', 'find', 'page_text', 'form_input', 'resolve', 'ready', 'describe', 'set_file', 'changed', 'typed', 'focus', 'info', 'state']);
+// The focused element, for the Submit gate on keys. line: a single-line box inside a form, where Enter submits the form
+// (combo: a type-ahead or list box, where Enter picks an option). control: a focused button or link, which Enter presses.
+export interface FocusInfo {
+  line: boolean;
+  combo: boolean;
+  control?: ElementInfo;
+}
 export const REFUSE_PASSWORD = 'Refused: that is a password box. Never type or choose a password: type {{PLATO_NEW_PASSWORD}} (a new account) or {{PLATO_PASSWORD}} (sign in) when your rules allow it; otherwise answer ACCOUNT_REQUIRED (an account to make) or LOGIN_REQUIRED (an account to sign in to).';
 export interface Changed {
   active: string | null;
@@ -324,7 +332,7 @@ const STEP_TEXT = /^(apply|apply now|apply for this job|start application|review
 export function describeElement(el: Element): ElementInfo {
   const c = el as Ctl;
   const text = txt(inner(el) || valueOf(el) || el.getAttribute('aria-label') || '').slice(0, 80);
-  const submitType = (el.tagName === 'BUTTON' && c.type === 'submit' && !!el.closest('form')) || (el.tagName === 'INPUT' && c.type === 'submit');
+  const submitType = (el.tagName === 'BUTTON' && c.type === 'submit' && !!(c.form || el.closest('form'))) || (el.tagName === 'INPUT' && (c.type === 'submit' || c.type === 'image'));
   const step = STEP_TEXT.test(text);
   const isSubmit = !step && (SUBMIT_TEXT.test(text) || (submitType && !text));
   return { tag: el.tagName, type: c.type || '', text, role: el.getAttribute('role') || '', isSubmit, ...(!isSubmit && (step || submitType) && { isStep: true }) };
@@ -334,6 +342,22 @@ export function describeAt(doc: Document, q: { ref?: string; x?: number; y?: num
   if (el && el.nodeType !== 1) el = null; // a text node: nothing a press is gated on
   el = el?.closest('button, a, input, [role=button], [role=link]') ?? el;
   return el ? describeElement(el) : null;
+}
+const NOT_LINE = /^(checkbox|radio|file|button|submit|reset|image|hidden|range|color)$/i;
+export function focusInfo(doc: Document): FocusInfo | null {
+  let a = doc.activeElement;
+  while (a?.shadowRoot?.activeElement) a = a.shadowRoot.activeElement;
+  if (!a || a === doc.body || a === doc.documentElement) return null;
+  if (a.matches('button, a[href], input[type=submit], input[type=button], input[type=image], [role=button], [role=link]')) return { line: false, combo: false, control: describeElement(a) };
+  const c = a as Ctl;
+  const line = a.tagName === 'INPUT' && !NOT_LINE.test(c.type) && !!(c.form || a.closest('form'));
+  const listbox = (ids: string | null) => (ids ?? '').split(/\s+/).some((id) => {
+    const l = id ? (a.getRootNode() as Document | ShadowRoot).getElementById?.(id) ?? doc.getElementById(id) : null;
+    return !!l && vis(l, doc);
+  });
+  const ac = a.getAttribute('aria-autocomplete');
+  const combo = roleOf(a) === 'combobox' || !!a.closest('[role=combobox]') || (!!ac && ac !== 'none') || a.getAttribute('aria-expanded') === 'true' || a.hasAttribute('list') || listbox(a.getAttribute('aria-controls')) || listbox(a.getAttribute('aria-owns'));
+  return { line, combo };
 }
 const isFile = (e: Element | null | undefined): e is Ctl => !!e && e.tagName === 'INPUT' && (e as Ctl).type === 'file';
 /**
@@ -396,6 +420,8 @@ export function handle(doc: Document, m: V3Op): unknown {
       return changed(doc);
     case 'typed':
       return typed(doc);
+    case 'focus':
+      return focusInfo(doc);
     case 'info':
       return pageInfo(doc);
     case 'state':

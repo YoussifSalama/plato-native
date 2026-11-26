@@ -7,7 +7,9 @@ import { PrismaService } from '../prisma/prisma.service';
 export const SPEED_TABS = { careful: 2, smart: 4, fast: 8 } as const; // jobs open at once
 export const settingsPatchSchema = z
   .object({
-    autoSubmit: z.boolean(), // kept so old saved settings still parse; always read as true
+    autoSubmit: z.boolean(), // kept so old saved settings still parse; always submitMode === 'auto'; a patch's own value is ignored
+    // Asked before every batch, the last answer preselected: 'auto' = "Apply for me", 'review' = "Check with me before each Submit"
+    submitMode: z.enum(['auto', 'review']),
     coverLetter: z.boolean(), // answer "cover letter" questions; off = leave them empty
     speed: z.enum(['careful', 'smart', 'fast']),
     customMessage: z.string().trim().max(600), // the seeker's own note, worked into cover letters / messages
@@ -17,12 +19,13 @@ export const settingsPatchSchema = z
   .partial()
   .strict();
 export type ExtensionSettings = Required<z.infer<typeof settingsPatchSchema>>;
-export const DEFAULT_SETTINGS: ExtensionSettings = { autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: true }; // createAccounts on by default (owner, 2026-11-23): Plato makes the job-site account itself
+export const DEFAULT_SETTINGS: ExtensionSettings = { autoSubmit: false, submitMode: 'review', coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: true }; // createAccounts on by default (owner, 2026-11-23): Plato makes the job-site account itself
 
 export const readSettings = (raw: unknown): ExtensionSettings => {
   const p = settingsPatchSchema.safeParse(raw ?? {});
-  // autoSubmit is no longer a choice (owner, 2026-10-21): an old saved "off" reads as on
-  return { ...DEFAULT_SETTINGS, ...(p.success ? p.data : {}), autoSubmit: true };
+  const s = { ...DEFAULT_SETTINGS, ...(p.success ? p.data : {}) };
+  // every saved settings object holds autoSubmit: true (it was forced on until 2026-11-26): only submitMode decides
+  return { ...s, autoSubmit: s.submitMode === 'auto' };
 };
 
 @Injectable()
@@ -46,7 +49,8 @@ export class ExtensionSettingsService {
 
   async put(jobSeekerId: string, patch: z.infer<typeof settingsPatchSchema>) {
     const seeker = await this.prisma.jobSeeker.findUniqueOrThrow({ where: { id: jobSeekerId }, select: { extension_settings: true } });
-    const next = { ...readSettings(seeker.extension_settings), ...patch };
+    const merged = { ...readSettings(seeker.extension_settings), ...patch };
+    const next = { ...merged, autoSubmit: merged.submitMode === 'auto' };
     await this.prisma.jobSeeker.update({ where: { id: jobSeekerId }, data: { extension_settings: next } });
     // off: the references go now; each browser wipes its own passwords the next time the extension reads its settings
     if (patch.createAccounts === false) await this.prisma.extensionSiteAccount.deleteMany({ where: { job_seeker_id: jobSeekerId } });

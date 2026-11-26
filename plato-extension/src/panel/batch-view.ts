@@ -4,6 +4,7 @@ import type { Registry } from '../providers/registry';
 import { icon } from './icons';
 import { avatar, banner, btn, h, type Actions, type PanelState } from './view';
 import { renderAskForm } from './ask-form';
+import { renderReviewCard } from './review-card';
 import { ALREADY_APPLIED, askFallback, type StopKind } from '../v3/run';
 
 // The Batch view: one batch, its progress, each job's outcome, and what the person has to do. Nothing here is a
@@ -130,6 +131,12 @@ function row(doc: Document, r: Row, s: PanelState, a: Actions, registry: Registr
         note('This application asks for a resume. Which one should Plato upload?');
         act('Use my profile resume', () => a.batch.resumeChoice(item, 'profile'), 'btn primary sm');
         act('Make one for this job', () => a.batch.resumeChoice(item, 'tailored'));
+      } else if (item.state === 'AWAITING_SUBMIT' && sess?.step === 'armed' && s.reviews?.[item.id]) {
+        // stopped before Submit with the list of what was filled: the seeker fixes or approves
+        el.append(renderReviewCard(doc, item.id, s.reviews[item.id]!, { busy: s.busy, onFix: (changes) => a.batch.fixReview(item, changes), onSubmit: () => a.batch.submitNow(item), onOpen: () => a.batch.watch(item) }));
+        act('Check the page', () => a.batch.checkPage(item), 'btn ghost sm');
+        act('I submitted it', () => a.batch.attest(item), 'btn ghost sm');
+        act('I am not sure', () => a.batch.notSure(item), 'btn ghost sm');
       } else if (item.state === 'AWAITING_SUBMIT') {
         note(sess?.message === 'submit_failed' ? 'Plato tried to submit and could not. Press Submit on the job page yourself, then come back here.' : 'The form is complete. Press Submit on the job page yourself, then come back here.', 'warn');
         if (sess) act('Submit for me', () => a.batch.submitNow(item), 'btn primary sm');

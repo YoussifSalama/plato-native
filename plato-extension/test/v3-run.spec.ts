@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BrowserCall, CallResult, Outcome, TurnRequest, TurnResponse } from '../src/v3/contract';
+import type { BrowserCall, CallResult, Outcome, Review, TurnRequest, TurnResponse } from '../src/v3/contract';
 import type { PageState } from '../src/dom/page-state';
 import { CAPTCHA_WHY, LOOP_WHY, NO_SOLVE, SITE_WHY, TOO_MANY_WHY, newCode, onPage, runV3, type V3RunDeps } from '../src/v3/run';
 
@@ -46,6 +46,11 @@ function harness(script: Step[], o: { autoSubmit?: boolean; fail?: (c: BrowserCa
   return { run, reqs, execd, log, armed: () => armed, armedBeforeReady: () => armedBeforeReady };
 }
 
+// The backend's verified list (the extension never decides `hold`).
+const field = { label: 'Expected salary (USD)', value: '3000', source: 'answer', verified: true, status: 'ok', sensitive: true, category: 'pay' } as const;
+const go: Review = { fields: [field], complete: true, hold: false };
+const held: Review = { fields: [field], complete: true, hold: true, holdReason: 'review_mode' };
+
 describe('runV3: the loop over the backend brain', () => {
   it('executes the calls of a turn in order, stops at the first failure, answers the rest "not executed", posts every result', async () => {
     const h = harness([{ calls: [call('read_page', {}, 'a'), call('left_click', { target: { type: 'ref', ref: 'ref_1' } }, 'b'), call('type', { text: 'x' }, 'c')] }, { outcome: { kind: 'blocked', reason: 'stop' } }], { fail: (c) => c.call_id === 'b' });
@@ -71,32 +76,54 @@ describe('runV3: the loop over the backend brain', () => {
 
   it('auto-submit: arms FIRST, then sends the submit event once; the press runs with submit allowed; CONFIRMED counts only with its quote on the page', async () => {
     const h = harness(
-      [{ outcome: { kind: 'submit_ready', summary: 'ok' } }, { calls: [call('left_click', { target: { type: 'ref', ref: 'ref_9' } }, 'p')], submit_allowed: true }, { outcome: { kind: 'confirmed', quote: 'Thank you for applying' } }],
+      [{ outcome: { kind: 'submit_ready', summary: 'ok', review: go } }, { calls: [call('left_click', { target: { type: 'ref', ref: 'ref_9' } }, 'p')], submit_allowed: true }, { outcome: { kind: 'confirmed', quote: 'Thank you for applying' } }],
       { autoSubmit: true, pageText: 'Engineer\nThank you for applying! We will be in touch.' },
     );
     expect(await h.run()).toEqual({ kind: 'confirmed', marker: 'page:Thank you for applying' });
     expect(h.reqs.map((r) => r.event)).toEqual(['start', 'submit', 'results']);
+    expect(h.reqs[1]!.approved).toBeUndefined(); // auto mode, no hold: Plato's own submit, never a claimed approval
     expect(h.armed()).toBe(1);
     expect(h.execd[0]).toMatchObject({ call: { call_id: 'p' }, allowed: true });
   });
 
   it('CONFIRMED whose quote is not on the page is "unconfirmed": never a claimed success, never a resend', async () => {
-    const h = harness([{ outcome: { kind: 'submit_ready', summary: 'ok' } }, { outcome: { kind: 'confirmed', quote: 'Application submitted successfully' } }], { autoSubmit: true, pageText: 'Engineer form still here' });
+    const h = harness([{ outcome: { kind: 'submit_ready', summary: 'ok', review: go } }, { outcome: { kind: 'confirmed', quote: 'Application submitted successfully' } }], { autoSubmit: true, pageText: 'Engineer form still here' });
     expect(await h.run()).toEqual({ kind: 'unconfirmed' });
     expect(h.log.at(-1)).toMatch(/not on the page/);
   });
 
   it('a second SUBMIT_READY after the press is "unconfirmed" (no second submit event)', async () => {
-    const h = harness([{ outcome: { kind: 'submit_ready', summary: 'ok' } }, { outcome: { kind: 'submit_ready', summary: 'again' } }], { autoSubmit: true });
+    const h = harness([{ outcome: { kind: 'submit_ready', summary: 'ok', review: go } }, { outcome: { kind: 'submit_ready', summary: 'again' } }], { autoSubmit: true });
     expect(await h.run()).toEqual({ kind: 'unconfirmed' });
     expect(h.reqs.map((r) => r.event)).toEqual(['start', 'submit']);
     expect(h.armed()).toBe(1);
   });
 
+  it('review before Submit: a held review stops armed with the list, even with auto-submit on; no submit event', async () => {
+    const h = harness([{ outcome: { kind: 'submit_ready', summary: 'ok', review: held } }], { autoSubmit: true });
+    expect(await h.run()).toEqual({ kind: 'ready', review: held });
+    expect(h.armed()).toBe(1);
+    expect(h.reqs.map((r) => r.event)).toEqual(['start']);
+  });
+
+  it('no review from the backend (an older one) is a hold: armed, never pressed without the seeker', async () => {
+    const h = harness([{ outcome: { kind: 'submit_ready', summary: 'ok' } }], { autoSubmit: true });
+    expect(await h.run()).toEqual({ kind: 'ready' });
+    expect(h.reqs.map((r) => r.event)).toEqual(['start']);
+  });
+
+  it('the seeker’s edits on the review: the answer turn continues, the fresh list comes back for another look', async () => {
+    const fresh: Review = { ...held, fields: [{ ...field, value: '3500' }] };
+    const h = harness([{ calls: [call('form_input', { target: { type: 'ref', ref: 'ref_3' }, value: '3500' }, 'f')] }, { outcome: { kind: 'submit_ready', summary: 'fixed', review: fresh } }], { autoSubmit: true });
+    const answers = [{ id: 'review-0', label: 'Expected salary (USD)', value: '3500' }];
+    expect(await h.run({ event: 'seeker_answer', text: 'Change these fields before submitting: Expected salary (USD): 3500', answers })).toEqual({ kind: 'ready', review: fresh });
+    expect(h.reqs[0]).toMatchObject({ event: 'seeker_answer', answers });
+  });
+
   it('a run that begins at Submit (armed item, "Submit for me"): no arm, no refill; a SUBMIT_READY after it is "unconfirmed", never a second press', async () => {
     const h = harness([{ calls: [call('left_click', { target: { type: 'ref', ref: 'ref_9' } }, 's')], submit_allowed: true }, { outcome: { kind: 'submit_ready', summary: 'still here' } }], { autoSubmit: true });
-    const r = await h.run({ event: 'submit' });
-    expect(h.reqs[0]).toMatchObject({ event: 'submit' });
+    const r = await h.run({ event: 'submit', approved: true });
+    expect(h.reqs[0]).toMatchObject({ event: 'submit', approved: true }); // the seeker approved the list: the backend lifts the hold
     expect(h.execd.map((e) => [e.call.call_id, e.allowed])).toEqual([['s', true]]);
     expect(h.armed()).toBe(0);
     expect(r).toEqual({ kind: 'unconfirmed' });

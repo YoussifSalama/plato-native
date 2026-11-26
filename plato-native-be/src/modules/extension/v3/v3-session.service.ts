@@ -10,7 +10,10 @@ import { CandidateService } from '../candidate.service';
 import type { ExtensionPrincipal } from '../extension.service';
 import { profileSummary } from '../profile-summary';
 import { readSettings } from '../settings';
-import { applyPageOf, parseOutcome, type BrowserCall, type CallResult, type Outcome, type TurnRequest, type TurnResponse } from './v3-contract';
+import { INTAKE } from '../../apply/intake';
+import type { AnswerValue } from '../../apply/apply.types';
+import { buildReview, parseFieldList, profileEntries, REASK, saidEntries, type Entry, type ReviewContext } from './review';
+import { applyPageOf, parseOutcome, type BrowserCall, type CallResult, type Outcome, type StoredReview, type TurnRequest, type TurnResponse } from './v3-contract';
 
 // Engine v3: one Claude conversation per application, driven by the browser use tool. The backend is the brain:
 // it builds the prompt from the seeker's profile, asks Claude for the next browser actions, checks them, and hands
@@ -43,6 +46,12 @@ interface Session {
   createAccounts: boolean; // the seeker allows job-site accounts: the password placeholders may be typed
   submitAllowed: boolean; // the item is armed: the next submit press may run, once
   submitPressed: boolean;
+  batchId: string;
+  sources: Omit<ReviewContext, 'answers' | 'resumeUploaded'> & { saved: Entry[] }; // what the prompt gave the model, to check its field list against
+  said: Entry[]; // what the seeker told the model in this conversation
+  resumeUploaded: boolean;
+  listAsked: boolean; // a SUBMIT_READY came without a valid field list and the model was asked once more
+  review?: StoredReview; // the latest SUBMIT_READY's checked list
   page?: string; // the last page kind the extension reported, for the log
   startedAt: number;
   lastAt: number;
@@ -70,18 +79,24 @@ How to work:
 - Start with read_page (filter "interactive") to get refs; read the tree before any screenshot. Take a screenshot only when the tree does not explain the page.
 - Fill EVERY field the seeker's data supports, required or not (links, summary, salary, availability). Use form_input for selects, checkboxes and radios; use left_click then type for text fields; for a type-ahead (combobox "Start typing…", location, school), click it, type the value, then find the matching option in the list and click it.
 - After filling, call read_page again and check every required field shows value="…" and no error; a combobox that shows no value was NOT picked: click it, type, and click the option in the list. Fix what did not stick before you stop. A field marked error="X is required" that now shows a value is fine.
-- Dates: use today's date when asked for an availability/start date, in the format the label asks (mm/dd/yyyy if it says so). Choice questions: always pick the option the seeker's data supports.
-- A question about the JOB's location ("Which location are you applying for?", office choice): pick the posting's location (the first listed when several); it is the job's fact, not the seeker's.
+- Dates: use today's date when asked for an availability/start date, in the format the label asks (mm/dd/yyyy if it says so); its source is "rule". Choice questions: always pick the option the seeker's data supports.
+- A question about the JOB's location ("Which location are you applying for?", office choice): pick the posting's location (the first listed when several); it is the job's fact, not the seeker's (source "rule").
 - Screening questions (years of experience, "have you done X", seniority, skills): answer the way the seeker would about themselves, from your understanding of the whole CV, not only its literal words. Years: count them from the experience dates (start to end, today for a current role), not from a phrase like "9+ years" written when the CV was made. Work or skill: it counts when the roles, their bullets or the skills show it, in any wording (designing cloud solutions for enterprise clients IS architecting cloud solutions). When the CV clearly supports Yes or clearly No, answer it; never pick an answer the CV does not support. When it does not settle the question (a years threshold the dates do not clearly reach, work the CV never touches), do not guess: collect it for the ASK, with what the CV does show in "why".
 - A REQUIRED checkbox that is a consent or acknowledgement for this application (privacy notice, data processing, terms of applying) must be checked: the seeker asked you to apply. Optional marketing/newsletter boxes stay unchecked.
 - Fill the form the way the seeker would fill their own: a person never stops to ask themselves something they already know. A field that asks for a fact the seeker's data has, worded or shaped differently, is that fact: first / middle / last name = the CV's "name" first / middle / last, else the PROFILE's First name / Middle name / Last name lines, exactly (a form with no middle-name field leaves the middle name out; never put it into the last name); preferred / known-as / display first or last name = the same again; confirm or re-enter email = Email; mobile / contact number = Phone; city or country alone = that part of Location. Ask only for facts the seeker's data truly lacks, never because a label is worded differently from it.
 - The profile's "Seeker's answer for forms" lines are the seeker's own answers: use them wherever a form asks the same thing, in any wording.
 - Never invent a fact. For work authorization, residence in a specific state/country, background, licences, demographics and anything not in the seeker's data: pick "prefer not to say"/"decline" if offered, otherwise leave it and ask.
-- Upload the resume with file_upload using document_ids: ["resume"] on the resume field; if the form asks for a cover letter and the settings allow it, write a short one from the CV.
+- A value no source gives is a guess: if you ever fill one (a "How did you hear about us?", a pick the seeker's data does not settle), its source is "guess" and it is listed like every other field. Never leave a filled field out of the list, and never give a guess another source.
+- Upload the resume with file_upload using document_ids: ["resume"] on the resume field (listed with its file name as the value, source "cv"); if the form asks for a cover letter and the settings allow it, write a short one from the CV (source "rule").
 - A form of several pages (a progress list such as "My progress", "Step 2 of 9", a Next / Continue / Save & continue at the end of each page) is filled page by page: fill the page, press its own Next / Continue / Save control yourself, and go on. Only the LAST page has the control that sends the application (Submit / Send / Submit application); SUBMIT_READY is only ever answered there.
-- You cannot press Submit until the seeker allows it. When every required field holds a correct value and only Submit remains, stop and answer exactly: SUBMIT_READY followed by a one-line summary.
+- You cannot press Submit until the seeker allows it. When every required field holds a correct value and only Submit remains, stop and answer SUBMIT_READY with a one-line summary, then the list of EVERY field you typed, selected, checked or uploaded in this application (every page, not only this one), in exactly this shape:
+SUBMIT_READY <one-line summary>
+\`\`\`json
+{"fields":[{"label":"Expected salary (USD)","value":"3000","source":"answer","evidence":"Answered before: \\"Expected salary\\": 3000"},{"label":"Resume","value":"Resume.pdf","source":"cv"}]}
+\`\`\`
+  label: the form's own label. value: exactly what the field holds now (the file name for an upload). source: where the value came from: "cv" (the CV), "answer" (the seeker's own answers: the "Seeker's answer for forms" and "Answered before" lines, or what they told you in this conversation), "profile" (another PROFILE line), "job" (the job post), "rule" (a fill these rules make you do yourself: the postal code, the availability date, the job's location, a cover letter you wrote), "guess" (none of them). evidence (optional): a short quote copied exactly from that source, holding the value (for a number, the number itself) or, for a Yes / No or a value you worked out, the words it rests on. Fields the page filled itself and you left alone are not listed. Plato checks every value against its source and shows the list to the seeker.
 - The way to the form can take several pages: a board listing, its "Apply" (or "Apply on company site" / "Continue"), the company's own job page with ITS own "Apply" / "Apply now", maybe a choice like "Apply manually" or "Apply with resume", then the form. Walk it like a person: after each press, read the page you are on (read_page; the URL and title are in the tab state), work out what it is, and press the control that moves the application forward. Pages that would open in a new tab open in this same tab, so the next page is always here. Reach other sites only through the pages' own links, never by typing a URL.
-- Postal / zip code: from the seeker's data when it states one. If none does and the box is REQUIRED, never ask: fill it yourself (owner 2026-11-24): 00000 in a country without postal codes (United Arab Emirates, Qatar, Hong Kong); otherwise the general postal code of the seeker's city in that country's format (Cairo: 11511). An optional box stays empty.
+- Postal / zip code: from the seeker's data when it states one. If none does and the box is REQUIRED, never ask: fill it yourself (owner 2026-11-24): 00000 in a country without postal codes (United Arab Emirates, Qatar, Hong Kong); otherwise the general postal code of the seeker's city in that country's format (Cairo: 11511); its source is "rule". An optional box stays empty.
 - When Save / Next / Continue is refused because a required field is empty and no source has its value, do not press it again: ask for that value at once (ASK), together with any other missing ones.
 - Never answer BLOCKED because a press "did nothing" until you have read the page again after it: the page may have changed, loaded below, or moved to another site. A dialog asking to share your profile or confirm leaving the board: continue through it.
 - A step that asks ONLY for the seeker's email to start the application or to create the applicant account ("Enter your email to apply", "Continue with email", "Create account" with an email box and no password box) is part of applying, not a sign-in: type Email, press its Continue / Create account / Start control, and read the next page. If the next page asks for a code sent to the seeker or says to check their inbox, stop and answer VERIFY_EMAIL <what the site sent, one line>.
@@ -99,6 +114,7 @@ ASK: <one line for the seeker: which form questions you cannot answer and why>
 \`\`\`
   Types: boolean (Yes/No); choice (one of options; add "other": true when a free answer is also fine); multi (several of options); text (a short value); textarea (a sentence or more). Copy the form's own options into "options" when it has them. Each label is a complete question answerable without seeing the page. At most 8 questions, each with a short "why".
 - After you are told Submit is allowed: press the Submit control ONCE, wait, read the page, and answer exactly one of: CONFIRMED <quote the page's confirmation text> / REFUSED <quote the page's refusal> / CAPTCHA / UNCONFIRMED <what you see>. Never press it twice.
+- When the seeker asks to change fields before Submit ("Change these fields before submitting: …"), put their values into exactly those fields, check them, and answer SUBMIT_READY again with the whole fresh list; their values have source "answer". After SUBMIT_READY only the fields on the page you are on can be changed: Plato refuses Back, Next, Continue and every other step from here. For a field on an earlier page, do not navigate: change what is on this page, then answer ASK (to say which earlier-page field cannot be changed from here and what the seeker can do, such as change it in the job's tab themselves) or BLOCKED.
 - Keep going without asking for confirmation, and take the steps the application needs: there is no step limit. Every 5 minutes of work Plato asks you whether it is still moving (TIME).`;
 
 const TIME_CHECK = `TIME: 5 more minutes of this application have passed. Decide honestly from where it stands now:
@@ -132,16 +148,28 @@ export class V3SessionService {
     let s = this.sessions.get(itemId);
     if (req.event === 'start' || !s) {
       if (req.event !== 'start') throw new ConflictException('session_lost'); // backend restarted: the extension starts over
-      s = await this.open(p, itemId, item.job_id);
+      s = await this.open(p, itemId, item.job_id, item.batch_id);
     }
     const user: Anthropic.Beta.BetaContentBlockParam[] = [];
     if (req.page) s.page = req.page.kind;
     if (req.event !== 'results') s.window = Date.now(); // the seeker acted: their time is not the model's
     if (req.event === 'results') user.push(...this.resultsToBlocks(s, req.results ?? []));
-    else if (req.event === 'seeker_answer') user.push({ type: 'text', text: `The seeker answered your questions:\n${req.text ?? ''}\nUse these answers exactly where the form asks them; do not ask them again. Continue the application.` });
+    else if (req.event === 'seeker_answer') {
+      s.said.push(...saidEntries(req.text, req.answers));
+      const each = req.answers?.length ? `Their answers, one per question:\n${req.answers.map((a) => `- ${a.label}: ${a.value}`).join('\n')}\n` : '';
+      user.push({ type: 'text', text: `The seeker answered your questions:\n${req.text ?? ''}\n${each}Use these answers exactly where the form asks them; do not ask them again. Continue the application.` });
+    }
     else if (req.event === 'solved') user.push({ type: 'text', text: 'The seeker solved the human check on the page. Read the page again and continue.' });
     else if (req.event === 'continue') user.push({ type: 'text', text: 'The seeker did what the site needed (made the account, signed in or confirmed the email) or looked at the page, and pressed Continue. Read the page again and continue the application from where it is now.' });
     else if (req.event === 'submit') {
+      // Submit only after a SUBMIT_READY, and a held review only with the seeker's own approval of the list they saw
+      const r = s.review;
+      if (!r) throw new ConflictException('submit_not_ready');
+      if (r.hold && !req.approved) throw new ConflictException('review_needed');
+      if (!r.approvedBy) {
+        s.review = { ...r, approvedBy: req.approved ? 'user' : 'auto', approvedAt: new Date().toISOString() };
+        await this.batches.saveReview(itemId, s.review);
+      }
       s.submitAllowed = true;
       user.push({ type: 'text', text: 'The seeker allows Submit now. Press the Submit control ONCE, wait for the page, read it, and answer CONFIRMED <quote> / REFUSED <quote> / CAPTCHA / UNCONFIRMED <what you see>.' });
     } else if (req.event === 'check') user.push({ type: 'text', text: 'Read the page again now and answer exactly one of: CONFIRMED <quote> / REFUSED <quote> / CAPTCHA / UNCONFIRMED <what you see>. Do not press anything.' });
@@ -204,7 +232,18 @@ export class V3SessionService {
         }
       }
       if (!uses.length) {
-        const outcome = parseOutcome(texts);
+        const parsed = parseOutcome(texts);
+        let outcome: Outcome;
+        if (parsed.kind === 'submit_ready') {
+          const list = parseFieldList(texts);
+          if (!list && !s.listAsked) {
+            s.listAsked = true;
+            s.messages.push({ role: 'user', content: [{ type: 'text', text: REASK }] });
+            continue;
+          }
+          s.listAsked = false;
+          outcome = { ...parsed, review: await this.review(s, list) };
+        } else outcome = parsed;
         this.log.log(`item ${s.itemId} turn ${s.turns} [${s.page ?? '-'}]: ${outcome.kind}${outcome.kind === 'site' ? ` ${outcome.page}` : ''}`);
         // An extension older than the page classifier (store 0.1.9 and before) sends no `page` and has no "site" stop:
         // it gets the same stop as BLOCKED, which it knows.
@@ -271,7 +310,9 @@ export class V3SessionService {
         const h = new URL(at).hostname;
         if (!s.hosts.some((x) => h === x || h.endsWith(`.${x}`))) s.hosts.push(h, registrable(h));
       }
-      if (call.name === 'left_click' && s.submitAllowed && r?.ok && /submit/i.test(r.text ?? '')) s.submitPressed = true;
+      // the executor's own word that a gated control was pressed (a click, or Enter in the form), never the result's text
+      if (s.submitAllowed && r?.ok && r.submit_pressed) s.submitPressed = true;
+      if (call.name === 'file_upload' && r?.ok) s.resumeUploaded = true; // refuse() lets only the staged resume through
       out.push({ type: 'tool_result', tool_use_id: id, content, ...(isError && { is_error: true }), ...({ toolset_name: 'browser' } as object) });
     }
     s.pending = new Map();
@@ -279,8 +320,26 @@ export class V3SessionService {
     return [...out, ...carry];
   }
 
-  /** The seeker's newest CV as JSON (cv-facts.ts): made once per upload and kept on the document; null = none. */
-  private async cvFacts(jobSeekerId: string): Promise<CvJson | null> {
+  /** The SUBMIT_READY list checked against the sources, held per the Submit mode, and kept. */
+  private async review(s: Session, list: ReturnType<typeof parseFieldList>) {
+    // 'review' if either the batch or the seeker's current setting says so (owner 2026-11-26): a batch made on the web
+    // ("Apply now", the queue) carries no mode, and a seeker who switched back to review mid-batch is never auto-sent
+    const batch = await this.batches.submitModeOf(s.batchId);
+    const setting = readSettings((await this.prisma.jobSeeker.findUnique({ where: { id: s.jobSeekerId }, select: { extension_settings: true } }))?.extension_settings).submitMode;
+    const mode = batch === 'review' || setting === 'review' ? 'review' : 'auto';
+    const { saved, ...rest } = s.sources;
+    const review = buildReview(list, { ...rest, answers: [...saved, ...s.said], resumeUploaded: s.resumeUploaded }, mode);
+    this.log.log(`item ${s.itemId}: review ${list ? `${review.fields.length} fields` : 'no list'}, ${review.fields.filter((f) => f.status !== 'ok').length} not ok, hold ${review.holdReason ?? 'none'} (${mode})`);
+    // once Submit is allowed the list the seeker approved stays the one on record
+    if (!s.submitAllowed) {
+      s.review = { ...review, at: new Date().toISOString() };
+      await this.batches.saveReview(s.itemId, s.review);
+    }
+    return review;
+  }
+
+  /** The seeker's newest CV as JSON (cv-facts.ts) with the text it was made from: the JSON is made once per upload and kept on the document; null = none. */
+  private async cvFacts(jobSeekerId: string): Promise<{ json: CvJson; text: string } | null> {
     const doc = await this.prisma.jobSeekerDocument.findFirst({
       where: { job_seeker_id: jobSeekerId, type: 'CV_RESUME', status: 'READY' },
       orderBy: { created_at: 'desc' },
@@ -291,7 +350,7 @@ export class V3SessionService {
     // Keyed on the text it was made from: a replaced CV never reuses the old one's facts.
     const hash = createHash('sha256').update(text).digest('hex');
     const cached = doc.apply_json as { v?: number; json?: CvJson; hash?: string } | null;
-    if (cached?.v === CV_JSON_VERSION && cached.hash === hash && cached.json) return withName(cached.json);
+    if (cached?.v === CV_JSON_VERSION && cached.hash === hash && cached.json) return { json: withName(cached.json), text };
     const model = MODEL();
     const r = await this.client.messages.create({
       model,
@@ -307,10 +366,10 @@ export class V3SessionService {
     const json = grounded(JSON.parse(out) as CvJson, text);
     await this.prisma.jobSeekerDocument.update({ where: { id: doc.id }, data: { apply_json: { v: CV_JSON_VERSION, json, hash } as object } });
     this.log.log(`CV JSON made for document ${doc.id} (${out.length} chars)`);
-    return withName(json);
+    return { json: withName(json), text };
   }
 
-  private async open(p: ExtensionPrincipal, itemId: string, jobId: string): Promise<Session> {
+  private async open(p: ExtensionPrincipal, itemId: string, jobId: string, batchId: string): Promise<Session> {
     const job = await this.prisma.job.findUniqueOrThrow({ where: { id: jobId }, select: { title: true, company: true, description: true, location: true, url: true, apply_url: true } });
     const candidate = await this.candidates.load(p.jobSeekerId);
     const settings = readSettings((await this.prisma.jobSeeker.findUnique({ where: { id: p.jobSeekerId }, select: { extension_settings: true } }))?.extension_settings);
@@ -318,7 +377,8 @@ export class V3SessionService {
     const host = new URL(url).hostname;
     const hosts = [host, registrable(host), ...(job.url ? [new URL(job.url).hostname] : [])];
     const today = new Date().toISOString().slice(0, 10);
-    const cvJson = await this.cvFacts(p.jobSeekerId).catch((e) => (this.log.warn(`item ${itemId}: CV JSON not available (${e instanceof Error ? e.message : String(e)}); the profile alone is used`), null));
+    const facts = await this.cvFacts(p.jobSeekerId).catch((e) => (this.log.warn(`item ${itemId}: CV JSON not available (${e instanceof Error ? e.message : String(e)}); the profile alone is used`), null));
+    const cvJson = facts?.json;
     const cv = cvJson && compactCv(cvJson);
     // the CV's contact wins over the account's: the rules say "Email" / "Phone", and the account's went on Amazon (2026-11-24)
     const n = cvJson?.name as { full?: string; first?: string; middle?: string; last?: string } | undefined;
@@ -329,6 +389,8 @@ export class V3SessionService {
       ...(c?.phones?.[0] && { phone: c.phones[0] }),
       ...(n?.full && { fullName: n.full, firstName: n.first ?? '', middleName: n.middle || undefined, lastName: n.last ?? '' }), // the CV's whole name, never mixed with the account's
     };
+    const profile = profileSummary(seeker, 4500, !cv);
+    const description = (job.description ?? '').slice(0, 2500);
     const system = `GOAL: you are applying to ${job.title} at ${job.company}. Every action serves that application; nothing else.
 
 ${settings.createAccounts ? RULES.replace(PASSWORD_OFF, PASSWORD_ON) : RULES}
@@ -336,7 +398,7 @@ ${settings.createAccounts ? RULES.replace(PASSWORD_OFF, PASSWORD_ON) : RULES}
 SETTINGS: cover letters ${settings.coverLetter ? 'allowed' : 'not allowed (leave cover-letter fields empty)'}. ${settings.customMessage ? `The seeker's own note to work into any message: "${settings.customMessage}".` : ''} Today is ${today}.
 
 JOB: ${job.title} at ${job.company}${job.location ? ` (${job.location})` : ''}. Apply page: ${url}
-${(job.description ?? '').slice(0, 2500)}
+${description}
 
 ${cv ? `SOURCES, in this order:
 1. CV: the seeker's resume as JSON, the main source and the basis of the application. Every fact it states comes from it: name (its "name" first / middle / last), email, phone, address, job titles, dates, education, skills. PROFILE's Name, Email and Phone lines already hold the CV's values.
@@ -348,8 +410,20 @@ CV (JSON)
 ${cv}
 
 ` : ''}PROFILE
-${profileSummary(seeker, 4500, !cv)}`;
-    const s: Session = { itemId, jobSeekerId: p.jobSeekerId, model: MODEL(), system, messages: [], turns: 0, window: Date.now(), timeAsked: false, hosts, pending: new Map(), createAccounts: settings.createAccounts, submitAllowed: false, submitPressed: false, startedAt: Date.now(), lastAt: Date.now() };
+${profile}`;
+    const text = (v: AnswerValue) => (Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v));
+    const sources: Session['sources'] = {
+      cv: `${facts?.text ?? ''}\n${cv ?? ''}`,
+      profile: profileEntries(profile),
+      job: `${job.title}\n${job.company}\n${job.location ?? ''}\n${description}`,
+      today,
+      coverLetter: settings.coverLetter,
+      saved: [
+        ...Object.entries(candidate.answerBank ?? {}).map(([q, v]) => ({ key: q, value: text(v) })),
+        ...Object.entries(candidate.facts ?? {}).map(([k, v]) => ({ key: `${k.replace(/_/g, ' ')} ${INTAKE.find((q) => q.key === k)?.question ?? ''}`, value: text(v) })),
+      ],
+    };
+    const s: Session = { itemId, jobSeekerId: p.jobSeekerId, model: MODEL(), system, messages: [], turns: 0, window: Date.now(), timeAsked: false, hosts, pending: new Map(), createAccounts: settings.createAccounts, submitAllowed: false, submitPressed: false, batchId, sources, said: [], resumeUploaded: false, listAsked: false, startedAt: Date.now(), lastAt: Date.now() };
     this.sessions.set(itemId, s);
     this.log.log(`item ${itemId}: session opened (${s.model}, host ${host})`);
     return s;

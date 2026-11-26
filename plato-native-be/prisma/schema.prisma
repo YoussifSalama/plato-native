@@ -802,6 +802,9 @@ model ApplyBatch {
   // Where the jobs were picked: the search, so the extension can say "2 jobs from your AI Engineer search".
   search_id     String?  @db.ObjectId
   label         String?
+  // "auto" = Submit without stopping unless a sensitive answer is unverified; "review" = stop before every Submit.
+  // Unset (a batch made on the web). Submit is held when this OR the seeker's current setting is "review".
+  submit_mode   String?
 
   @@index([job_seeker_id])
   @@map("apply_batches")

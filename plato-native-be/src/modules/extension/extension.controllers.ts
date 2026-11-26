@@ -138,6 +138,7 @@ export class ExtensionWebController {
       undefined,
       parsed.data.resumes,
       parsed.data.reapply,
+      parsed.data.submitMode,
     );
   }
 
@@ -164,6 +165,8 @@ const consentSchema = z
     tabs: z.number().int().min(1).max(10),
     // The seeker let Plato press Submit for them (per run, recorded for audit).
     auto_submit: z.boolean().optional(),
+    // the run's answer to "Apply for me" / "Check with me before each Submit" (auto_submit = submit_mode === 'auto')
+    submit_mode: z.enum(['auto', 'review']).optional(),
   })
   .refine((c) => c.decision === 'allow' || !!c.reason, {
     message: 'A reason is required when declining',
@@ -176,6 +179,8 @@ const batchSchema = z.object({
   resumes: z.record(z.string(), z.enum(['profile', 'tailored'])).optional(),
   // The seeker confirmed "apply again" for jobs Plato already marked as sent.
   reapply: z.boolean().optional(),
+  // "Apply for me" (auto) or "Check with me before each Submit" (review); unset = the seeker's setting decides
+  submitMode: z.enum(['auto', 'review']).optional(),
 });
 
 export const transitionSchema = z.object({
@@ -279,7 +284,7 @@ export class ExtensionApiController {
   createBatch(@Req() req: ExtensionRequest, @Body() body: unknown) {
     const p = batchSchema.safeParse(body);
     if (!p.success) throw new BadRequestException('Invalid request');
-    return this.batches.createBatch(req.extension.jobSeekerId, p.data.jobIds, p.data.searchId, undefined, p.data.reapply);
+    return this.batches.createBatch(req.extension.jobSeekerId, p.data.jobIds, p.data.searchId, undefined, p.data.reapply, p.data.submitMode);
   }
 
   // Audit log of the tab-opening consent, a decline carries the seeker's reason.

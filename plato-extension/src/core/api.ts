@@ -1,5 +1,5 @@
 import type { Decision } from './types';
-import type { TurnRequest, TurnResponse } from '../v3/contract';
+import type { SubmitMode, TurnRequest, TurnResponse } from '../v3/contract';
 import type { AnswerQuestion, ApiItem, Candidate, ConsentBody, JobFilters, JobsPage, OrchestratorEvent, OrchestratorRequest, PolicyMap, RunSettings, SearchCard, TransitionBody } from './types';
 
 export class ApiError extends Error {
@@ -75,7 +75,7 @@ export function createApi(cfg: ApiConfig) {
       const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString();
       return call<JobsPage>('GET', `/extension/v1/searches/${encodeURIComponent(id)}/jobs${qs ? `?${qs}` : ''}`);
     },
-    createBatch: (jobIds: string[], searchId?: string, reapply?: boolean) => call<{ batch_id: string | null; items: ApiItem[]; rejected: { job_id: string; reason: string }[] }>('POST', '/extension/v1/apply-batches', { jobIds, ...(searchId && { searchId }), ...(reapply && { reapply }) }),
+    createBatch: (jobIds: string[], searchId?: string, reapply?: boolean, submitMode?: SubmitMode) => call<{ batch_id: string | null; items: ApiItem[]; rejected: { job_id: string; reason: string }[] }>('POST', '/extension/v1/apply-batches', { jobIds, ...(searchId && { searchId }), ...(reapply && { reapply }), ...(submitMode && { submitMode }) }),
     orchestrate: (body: OrchestratorRequest) => call<{ reply: string; events: OrchestratorEvent[] }>('POST', '/extension/v1/orchestrator', body),
     decide: (itemId: string, body: unknown) => call<Decision>('POST', `/extension/v1/items/${encodeURIComponent(itemId)}/decide`, body),
     // engine v3: one model turn (the backend holds the conversation and the key)
@@ -88,7 +88,7 @@ export function createApi(cfg: ApiConfig) {
     answers: (itemId: string, body: { questions: AnswerQuestion[] }) => call<{ answers: { id: string; value: string | null }[]; aiFailed?: boolean }>('POST', `/extension/v1/items/${encodeURIComponent(itemId)}/answers`, body),
     verifyMapping: (provider: string, formKey: string, version: number) => call<{ verified: boolean }>('POST', `/extension/v1/mappings/${encodeURIComponent(provider)}/${encodeURIComponent(formKey)}/verify`, { version }),
     settings: () => call<RunSettings>('GET', '/extension/v1/settings'),
-    saveSettings: (patch: Partial<Pick<RunSettings, 'autoSubmit' | 'coverLetter' | 'speed' | 'customMessage' | 'resumeMode'>>) => call<RunSettings>('POST', '/extension/v1/settings', patch),
+    saveSettings: (patch: Partial<Pick<RunSettings, 'autoSubmit' | 'coverLetter' | 'speed' | 'customMessage' | 'resumeMode' | 'submitMode'>>) => call<RunSettings>('POST', '/extension/v1/settings', patch),
     siteAccount: (body: { ref: string; host: string; browser: string }) => call<{ ok: true }>('POST', '/extension/v1/site-accounts', body), // a reference only: the password stays in core/vault.ts
     queue: () => call<{ id: string; company: string; title: string; match: number }[]>('GET', '/extension/v1/queue'),
     dropFromQueue: (itemIds: string[]) => call<{ dropped: number }>('POST', '/extension/v1/queue/drop', { itemIds }),

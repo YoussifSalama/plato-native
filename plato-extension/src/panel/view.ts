@@ -1,4 +1,4 @@
-import type { AskQuestion, SeekerAnswer } from '../v3/contract';
+import type { AskQuestion, Review, SeekerAnswer, SubmitMode } from '../v3/contract';
 import type { StopKind } from '../v3/run';
 import type { ReconcileAction } from '../core/reconcile';
 import type { ReviewState } from '../core/form-review';
@@ -30,6 +30,7 @@ export interface JobsState {
   site?: string | null; // client-side: only the loaded jobs applied through this site (LINKEDIN, LEVER, …); null = every site
   picked: PickKey[];
   resumeMode: 'profile' | 'tailored';
+  submitMode: SubmitMode; // the sheet's choice: Apply for me, or Check with me before each Submit (saved when it changes)
 }
 export interface Toast {
   id: number;
@@ -44,6 +45,7 @@ export interface PanelState {
   items: ApiItem[];
   policy?: PolicyMap; // server policy; undefined = unknown = everything blocked
   sessions: Record<string, { step: SessionStep; message?: string; detail?: string; stop?: StopKind; ask?: AskQuestion[]; code?: string }>; // stop/ask: why a v3 run stopped and the questions to draw; code: the error code the seeker can copy
+  reviews?: Record<string, Review>; // item id -> the backend's list of what was filled, for a job stopped before Submit
   progress: Record<string, string>; // item id -> the last journal line (what Plato is doing on that page)
   cards: Record<string, ReconcileAction>;
   formReviews?: Record<string, ReviewState>; // engine v2 bookkeeping; not drawn
@@ -61,7 +63,7 @@ export interface PanelState {
   run: BatchRun | null; // the batch this panel is applying to (or the last finished one)
   rows: Row[]; // the batch's rows, from the server list and this panel's sessions
   eta?: { ms: number; basis: number } | 'first' | null; // the runner's estimate for the rows
-  autoSubmitPreview?: boolean; // what the sheet promises: Plato presses Submit (production), or the person does (test builds)
+  autoSubmitPreview?: boolean; // this build may press Submit (production); off: a test build where the person always does
   log?: { at: string; level: 'info' | 'warn' | 'error'; text: string }[];
   showLog?: boolean;
 }
@@ -76,6 +78,7 @@ export interface JobsActions {
   dropItem(id: string): void; // remove a queued job (server CANCELLED)
   sheet(open: boolean): void;
   resumeMode(mode: 'profile' | 'tailored'): void;
+  submitMode(mode: SubmitMode): void;
   start(): void; // the one way a batch begins
 }
 export interface BatchActions {
@@ -86,6 +89,7 @@ export interface BatchActions {
   answerJob(item: ApiItem, text: string, answers?: SeekerAnswer[]): void; // the answers to Plato's questions (the form's lines, and the structured answers behind them); the job continues
   retry(item: ApiItem): void; // "I did it, continue": run again from where it stopped
   submitNow(item: ApiItem): void; // the seeker's explicit go-ahead: Plato presses Submit on this job
+  fixReview(item: ApiItem, changes: { label: string; value: string }[]): void; // values the seeker changed on the review list: Plato puts them on the form and lists again
   checkPage(item: ApiItem): void;
   attest(item: ApiItem): void;
   notSure(item: ApiItem): void;

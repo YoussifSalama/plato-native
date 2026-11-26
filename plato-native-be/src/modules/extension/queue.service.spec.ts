@@ -20,10 +20,15 @@ describe('queue narrowing', () => {
 
 describe('settings', () => {
   it('fills defaults and ignores junk', () => {
-    expect(readSettings(null)).toEqual({ autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: true });
-    expect(readSettings({ speed: 'fast', evil: 1 })).toEqual({ autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: true }); // strict: unknown keys reject the whole object
+    expect(readSettings(null)).toEqual({ autoSubmit: false, submitMode: 'review', coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: true });
+    expect(readSettings({ speed: 'fast', evil: 1 })).toEqual({ autoSubmit: false, submitMode: 'review', coverLetter: true, speed: 'smart', customMessage: '', resumeMode: 'profile', createAccounts: true }); // strict: unknown keys reject the whole object
     expect(readSettings({ speed: 'fast' }).speed).toBe('fast');
     expect(SPEED_TABS.smart).toBe(4);
     expect(readSettings({ createAccounts: false }).createAccounts).toBe(false); // job-site accounts: on unless the seeker turned them off
+  });
+  it('submitMode decides autoSubmit; an old saved autoSubmit: true never means auto', () => {
+    expect(readSettings({ autoSubmit: true })).toMatchObject({ submitMode: 'review', autoSubmit: false });
+    expect(readSettings({ autoSubmit: true, submitMode: 'auto' })).toMatchObject({ submitMode: 'auto', autoSubmit: true });
+    expect(readSettings({ autoSubmit: false, submitMode: 'auto' }).autoSubmit).toBe(true);
   });
 });

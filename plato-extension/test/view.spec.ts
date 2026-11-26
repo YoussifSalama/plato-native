@@ -17,9 +17,9 @@ const job = (i: number, over: Partial<SearchJob> = {}): SearchJob => ({ id: `j${
 type Mocked = Actions & { jobs: Record<string, ReturnType<typeof vi.fn>>; batch: Record<string, ReturnType<typeof vi.fn>> } & Record<string, unknown>;
 const actions = (): Mocked => {
   const fns = (keys: string[]) => Object.fromEntries(keys.map((k) => [k, vi.fn()]));
-  return { ...fns(['pair', 'unlink', 'refresh', 'view', 'menu', 'toggleLog', 'chat', 'answer']), jobs: fns(['pickSearch', 'picker', 'filter', 'more', 'toggle', 'selectVisible', 'site', 'dropItem', 'sheet', 'resumeMode', 'start']), batch: fns(['stop', 'cancelJob', 'release', 'resume', 'answerJob', 'retry', 'submitNow', 'checkPage', 'attest', 'notSure', 'notSubmitted', 'resumeChoice', 'watch', 'ticket', 'newBatch', 'retryFailed']) } as unknown as Mocked;
+  return { ...fns(['pair', 'unlink', 'refresh', 'view', 'menu', 'toggleLog', 'chat', 'answer']), jobs: fns(['pickSearch', 'picker', 'filter', 'more', 'toggle', 'selectVisible', 'site', 'dropItem', 'sheet', 'resumeMode', 'submitMode', 'start']), batch: fns(['stop', 'cancelJob', 'release', 'resume', 'answerJob', 'retry', 'submitNow', 'fixReview', 'checkPage', 'attest', 'notSure', 'notSubmitted', 'resumeChoice', 'watch', 'ticket', 'newBatch', 'retryFailed']) } as unknown as Mocked;
 };
-const base = (): PanelState => ({ status: 'ready', toasts: [], items: [], sessions: {}, progress: {}, cards: {}, pendingOutbox: 0, policy: { fx: 'FILL_ONLY' }, view: 'jobs', jobs: { searches: [], pickerOpen: false, jobs: [], jobsTotal: 0, known: {}, loading: false, q: '', sort: 'best', remote: false, fromPlato: false, picked: [], resumeMode: 'profile' }, run: null, rows: [] });
+const base = (): PanelState => ({ status: 'ready', toasts: [], items: [], sessions: {}, progress: {}, cards: {}, pendingOutbox: 0, policy: { fx: 'FILL_ONLY' }, view: 'jobs', jobs: { searches: [], pickerOpen: false, jobs: [], jobsTotal: 0, known: {}, loading: false, q: '', sort: 'best', remote: false, fromPlato: false, picked: [], resumeMode: 'profile', submitMode: 'review' }, run: null, rows: [] });
 const draw = (s: Partial<PanelState>, a = actions()) => {
   const root = document.createElement('main');
   render(document, root, { ...base(), ...s }, a, registry);
@@ -186,6 +186,65 @@ describe('panel view', () => {
     const armed = root.querySelector('[data-item="a"]')!;
     expect(armed.textContent).toContain('Press Submit on the job page yourself');
     expect([...armed.querySelectorAll('button')].map((x) => x.textContent!.trim())).toEqual(['Submit for me', 'Open the tab', 'Check the page', 'I submitted it', 'I am not sure']);
+  });
+
+  it('the sheet asks how to submit: the saved choice is preselected, a press saves the other, the line says what it means', () => {
+    const jobs = { ...base().jobs, known: { j1: job(1) }, picked: ['job:j1'] as PanelState['jobs']['picked'] };
+    const review = draw({ jobs, sheet: true, autoSubmitPreview: true });
+    const mode = review.root.querySelector('#submit-mode')!;
+    expect([...mode.querySelectorAll('button')].map((b) => [b.textContent, b.getAttribute('aria-checked')])).toEqual([['Apply for me', 'false'], ['Check with me before each Submit', 'true']]);
+    expect(review.root.textContent).toContain('Each job stops before Submit');
+    (mode.querySelector('button') as HTMLButtonElement).click();
+    expect(review.a.jobs.submitMode).toHaveBeenCalledWith('auto');
+    const auto = draw({ jobs: { ...jobs, submitMode: 'auto' }, sheet: true, autoSubmitPreview: true });
+    expect(auto.root.textContent).toContain('Plato fills and submits.');
+    expect(auto.root.querySelector('#submit-mode [aria-checked="true"]')!.textContent).toBe('Apply for me');
+    // a build that never presses Submit (fixtures, --submit=off) has no choice to offer
+    const off = draw({ jobs, sheet: true, autoSubmitPreview: false });
+    expect(off.root.querySelector('#submit-mode')).toBeNull();
+    expect(off.root.textContent).toContain('you press Submit');
+  });
+
+  it('batch view: a job held before Submit shows every answer with its source, the ones to look at first; edits go to Fix, approval submits', () => {
+    const items = [item('AWAITING_SUBMIT', { id: 'a' })];
+    const fields = [
+      { label: 'First name', value: 'Sara', source: 'cv', verified: true, status: 'ok', sensitive: false },
+      { label: 'Expected salary (USD)', value: '3000', source: 'guess', verified: false, status: 'guess', sensitive: true, category: 'pay' },
+      { label: 'Authorized to work in Egypt?', value: 'Yes', source: 'profile', verified: false, status: 'unverified', sensitive: true, category: 'work_auth' },
+    ] as const;
+    const reviews = { a: { fields: [...fields], complete: true, hold: true, holdReason: 'review_mode' as const } };
+    const { root, a } = draw({ ...batch(items, { a: { step: 'armed' } }), items, reviews });
+    const card = root.querySelector('#review-a')!;
+    const rows = [...card.querySelectorAll('.rv')];
+    expect(rows.map((r) => r.querySelector('label')!.textContent)).toEqual(['Expected salary (USD)', 'Authorized to work in Egypt?', 'First name']);
+    expect(rows.map((r) => r.classList.contains('warn'))).toEqual([true, true, false]);
+    expect(rows.map((r) => r.querySelector('.rv-src')!.textContent)).toEqual(['Guessed', 'Profile · not verified', 'From your CV']);
+    expect(rows[0]!.querySelector('.rv-sens')!.textContent).toBe('Pay');
+    expect(rows[0]!.querySelector('.rv-why')!.textContent).toContain('guessed');
+    expect(card.querySelector('.qt')!.textContent).toBe('Check 2 answers before Plato submits');
+    expect(card.querySelector('#review-pages-a')!.textContent).toContain('open the tab and fix it there by hand');
+    expect(root.querySelector('[data-item="a"]')!.textContent).not.toContain('Press Submit on the job page yourself');
+    const fix = card.querySelector('#review-fix-a') as HTMLButtonElement;
+    const ok = card.querySelector('#review-ok-a') as HTMLButtonElement;
+    expect(fix.disabled).toBe(true);
+    ok.click();
+    expect(a.batch.submitNow).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+    // an edit: Fix is the action now, approval waits until the change is on the form
+    const again = draw({ ...batch(items, { a: { step: 'armed' } }), items, reviews });
+    const box = again.root.querySelector('#review-a .rv input') as HTMLInputElement;
+    box.value = '3500';
+    box.dispatchEvent(new Event('input'));
+    expect((again.root.querySelector('#review-ok-a') as HTMLButtonElement).disabled).toBe(true);
+    (again.root.querySelector('#review-fix-a') as HTMLButtonElement).click();
+    expect(again.a.batch.fixReview).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), [{ label: 'Expected salary (USD)', value: '3500' }]);
+    expect([...again.root.querySelectorAll('[data-item="a"] button')].map((x) => x.textContent!.trim())).toEqual(['Looks right, submit', 'Fix this', 'Open the tab', 'Check the page', 'I submitted it', 'I am not sure']);
+  });
+
+  it('batch view: a review without a list says so and sends the seeker to the tab first', () => {
+    const items = [item('AWAITING_SUBMIT', { id: 'a' })];
+    const { root } = draw({ ...batch(items, { a: { step: 'armed' } }), items, reviews: { a: { fields: [], complete: false, hold: true, holdReason: 'no_list' } } });
+    expect(root.querySelector('#review-a .qt')!.textContent).toBe('Plato could not list what it filled');
+    expect(root.querySelector('#review-ok-a')!.textContent).toBe('I checked the tab, submit');
   });
 
   it('batch view: the estimate appears only after the first finished job, and says what it is based on', () => {

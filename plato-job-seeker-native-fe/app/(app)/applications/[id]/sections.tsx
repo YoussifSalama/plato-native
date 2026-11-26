@@ -3,14 +3,14 @@
 import { reasonText } from "@/lib/jobs/application-status"
 import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
-import { ArrowRight, Briefcase, Camera, Download, ExternalLink, ImageOff, Info, Loader2, Maximize2, MessageSquareText, PackageCheck, Route, type LucideIcon } from "lucide-react"
+import { ArrowRight, Briefcase, Camera, Download, ExternalLink, ImageOff, Info, Loader2, Maximize2, MessageSquareText, PackageCheck, Route, ShieldAlert, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { CARD, EmptyState, MetaChip, SectionHeader, type Tone } from "@/components/plato-ui"
 import { CountUp } from "@/components/count-up"
 import { Button } from "@/components/ui/button"
 import { OutcomePicker } from "@/components/outcome-picker"
 import { InfoTip } from "@/components/info-tip"
-import { getApplicationResume, getApplicationScreenshot, SOURCE_LABEL, type AnswerValue, type ApplicationDetail, type ApplicationOutcome, type ApplyItemStep } from "@/lib/jobs/api"
+import { getApplicationResume, getApplicationScreenshot, SOURCE_LABEL, type AnswerValue, type ApplicationDetail, type ApplicationOutcome, type ApplyItemStep, type FieldReview, type ReviewSource } from "@/lib/jobs/api"
 import { failureLabel, isVerifySubmission } from "@/lib/jobs/application-status"
 import { threadHref } from "@/lib/jobs/links"
 
@@ -392,7 +392,62 @@ function Resume({ app }: { app: ApplicationDetail }) {
   )
 }
 
+const SOURCE_CHIP: Record<ReviewSource, string> = { cv: "From your CV", answer: "Saved answer", profile: "Profile", job: "From the job", rule: "Plato's rule", guess: "Guessed" }
+// Amber only where the seeker should look: a guess, or a value Plato could not find in the source the AI named.
+const Flag = ({ children }: { children: ReactNode }) => <span className="inline-flex items-center rounded-md bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning-ink">{children}</span>
+
+function ReviewAnswers({ review }: { review: FieldReview }) {
+  const attention = review.fields.filter((f) => f.status !== "ok").length
+  const who = review.approvedBy === "user" ? "You approved this before Submit" : review.approvedBy === "auto" ? "Sent automatically" : null
+  return (
+    <>
+      {(who || attention > 0) && (
+        <p className="type-meta text-text-secondary">
+          {who}
+          {who && review.approvedAt && <span className="text-text-tertiary"> · {dayTime(review.approvedAt)}</span>}
+          {who && attention > 0 && " · "}
+          {attention > 0 && <span className="text-warning-ink">{attention === 1 ? "1 answer" : `${attention} answers`} guessed or not verified</span>}
+        </p>
+      )}
+      {!review.complete && <p className="type-meta text-warning-ink">Plato&apos;s AI did not list the fields it filled, so this form was checked on the page itself before Submit.</p>}
+      {review.fields.length > 0 && (
+        <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+          {review.fields.map((f, i) => (
+            <div key={`${f.label}-${i}`} className="flex min-w-0 flex-col gap-1">
+              <dt className="type-meta break-words text-text-tertiary">{f.label}</dt>
+              <dd className="line-clamp-6 text-sm break-words whitespace-pre-line text-foreground">{f.value || <span className="text-text-tertiary">Left empty</span>}</dd>
+              <dd className="flex flex-wrap items-center gap-1.5">
+                {f.status === "guess" ? <Flag>Guessed</Flag> : <MetaChip>{SOURCE_CHIP[f.source]}</MetaChip>}
+                {f.status === "unverified" && <Flag>Not verified</Flag>}
+                {f.sensitive && (
+                  <MetaChip className="gap-1">
+                    <ShieldAlert aria-hidden className="size-3" />
+                    Sensitive
+                  </MetaChip>
+                )}
+              </dd>
+              {f.evidence && <dd className="type-meta line-clamp-2 break-words text-text-tertiary">Based on: {f.evidence}</dd>}
+            </div>
+          ))}
+        </dl>
+      )}
+    </>
+  )
+}
+
 function Answers({ app }: { app: ApplicationDetail }) {
+  const review = app.evidence?.review
+  if (review)
+    return (
+      <Sub
+        title="Answers filled in"
+        tour="application-answers"
+        tip={{ label: "Where each answer came from", text: "Before Submit, Plato checks every value its AI typed against the source it claims: your CV, your saved answers, your profile or the job post. Guessed or unverified answers are marked so you can check them." }}
+        aside={review.fields.length > 0 && <span className="type-meta text-text-tertiary tabular-nums"><CountUp value={review.fields.length} /></span>}
+      >
+        <ReviewAnswers review={review} />
+      </Sub>
+    )
   const rows = answerRows(app)
   const waiting = rows.filter((r) => r.value === null).length
   return (

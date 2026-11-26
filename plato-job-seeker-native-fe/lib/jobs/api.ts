@@ -234,7 +234,7 @@ export type JobApplication = {
   events?: ApplyEvent[] | null
   // What Plato sent (or would send, in a dry run), in the employer's own wording.
   // Extension applications: source "extension", how the send was confirmed, and the page text it saw (marker).
-  evidence: { dryRun?: boolean; manual?: boolean; failed?: boolean; diagnosis?: string; repairs?: number; indicators?: string[]; confirmation?: string; screenshotKey?: string | null; sent?: { label: string; value: AnswerValue }[]; at?: string; source?: "extension"; confirmed_by?: "page_marker" | "user_attestation"; marker?: string | null; proofUrl?: string | null; proofCapturedAt?: string | null } | null
+  evidence: { dryRun?: boolean; manual?: boolean; failed?: boolean; diagnosis?: string; repairs?: number; indicators?: string[]; confirmation?: string; screenshotKey?: string | null; sent?: { label: string; value: AnswerValue }[]; at?: string; source?: "extension"; confirmed_by?: "page_marker" | "user_attestation"; marker?: string | null; proofUrl?: string | null; proofCapturedAt?: string | null; review?: FieldReview } | null
   thread_id: string | null
   created_at: string
   updated_at: string
@@ -398,6 +398,18 @@ export type ApplyBatchItemView = {
   created_at: string
   updated_at: string
 }
+// What the extension typed into the form, each value checked by the backend against the source the AI claimed
+// (plato-native-be v3/review.ts), and who let Submit go.
+export type ReviewSource = "cv" | "answer" | "profile" | "job" | "rule" | "guess"
+export type FieldReview = {
+  fields: { label: string; value: string; source: ReviewSource; evidence?: string; verified: boolean; status: "ok" | "unverified" | "guess"; sensitive: boolean; category?: "pay" | "work_auth" | "sponsorship" | "legal" | "demographic" }[]
+  complete: boolean
+  hold: boolean
+  holdReason?: "review_mode" | "sensitive" | "no_list"
+  approvedBy?: "user" | "auto"
+  approvedAt?: string
+}
+
 export type ApplicationDetail = JobApplication & {
   // Who applied: the browser extension, or Plato's own worker (LEGACY / unset on older rows).
   engine?: "EXTENSION" | "LEGACY" | null

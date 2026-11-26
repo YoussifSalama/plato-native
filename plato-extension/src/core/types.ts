@@ -1,3 +1,4 @@
+import type { SubmitMode } from '../v3/contract';
 export const ITEM_STATES = [
   'PENDING',
   'CLAIMED',
@@ -99,6 +100,7 @@ export interface ConsentBody {
   jobs: number;
   tabs: number;
   auto_submit?: boolean; // the seeker let Plato press Submit for this run
+  submit_mode?: SubmitMode; // the seeker's choice on the sheet: 'auto' (Apply for me) or 'review' (check before each Submit)
 }
 
 // What the apply orchestrator agent asks the panel to do (mirrors the backend).
@@ -184,4 +186,5 @@ export interface RunSettings {
   resume: string | null;
   resumeMode: 'profile' | 'tailored'; // what goes into resume upload fields
   createAccounts?: boolean; // the seeker allows job-site accounts (set on the Plato website only); absent on old backends = off
+  submitMode?: SubmitMode; // the last choice on the batch sheet; absent (never chose, old backend) = 'review'
 }

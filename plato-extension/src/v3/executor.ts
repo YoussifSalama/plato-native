@@ -4,9 +4,12 @@
 // Pure over its deps so the flows are tested without a browser.
 //
 // Code-enforced, whatever the model asks:
-//   - the Submit gate: a press on the Submit control runs only when the backend allowed it, and only once;
-//   - nothing else is gated: every other press, key and step of a multi-page form is the brain's own call (the page
-//     guard that cancelled form submits was removed 2026-11-24: it stopped Amazon's Continue / Save & continue);
+//   - the Submit gate: a press on the Submit control runs only when the backend allowed it, and only once. Until then
+//     an Enter in a single-line box of a form (it submits the form; a type-ahead's Enter picks an option) is refused,
+//     and once the item is armed (SUBMIT_READY: the seeker may be checking the list) so is every step or submit-type
+//     button: a last page whose button says only "Continue" must not send the form past the review;
+//   - before the item is armed, steps of a multi-page form are the brain's own call (the page guard that cancelled
+//     form submits was removed 2026-11-24: it stopped Amazon's Continue / Save & continue);
 //   - file_upload takes only the staged resume (document id "resume");
 //   - tabs: one tab, the job's; nothing opens or closes.
 //
@@ -16,7 +19,7 @@
 // typing for suggestion lists. Nothing here is made to look human to bot detection: no random mouse paths,
 // no fingerprint changes, and a human check still stops the run for the seeker.
 import type { BrowserCall, CallResult } from './contract';
-import { REFUSE_PASSWORD, type Changed, type ElementInfo, type PageInfo, type Point, type Readiness, type V3Op } from '../content/v3-reader';
+import { REFUSE_PASSWORD, type Changed, type ElementInfo, type FocusInfo, type PageInfo, type Point, type Readiness, type V3Op } from '../content/v3-reader';
 
 export interface ExecDeps {
   send<T>(msg: V3Op): Promise<T>; // the content script of the job's tab
@@ -29,6 +32,7 @@ export interface ExecDeps {
   tabInfo?(): Promise<{ url: string; title: string } | null>; // Chrome's own view of the tab, when the page reader is not on the page
   password?(kind: 'new' | 'saved', host: string): Promise<string | null>; // core/vault.ts, only with the seeker's "create accounts" setting on; null = none
   quick?: boolean; // the test build moves fast; real builds at a human pace
+  armed?: () => boolean; // the item is armed for Submit (AWAITING_SUBMIT): no step or submit-type press until allowed
 }
 type Target = { type: 'ref'; ref: string } | { type: 'coordinate'; x: number; y: number };
 const TAB = 'tab_1';
@@ -39,6 +43,9 @@ export const SAVED_PASSWORD = '{{PLATO_PASSWORD}}';
 export const REFUSE_PLACEHOLDER = 'Refused: a password placeholder goes only into a password box. Click the password box first, then type it.';
 export const REFUSE_SUBMIT = 'Not pressed: this control sends the application, and Plato sends it only after you answer SUBMIT_READY. If this is the last page and every required field holds a correct value, answer SUBMIT_READY; otherwise keep going.';
 export const REFUSE_AGAIN = 'Refused: Submit was already pressed once. Read the page and report what it says.';
+export const REFUSE_ARMED = 'Not pressed: you answered SUBMIT_READY, so this form waits for the seeker before anything sends or leaves it. To change a field, edit it on this page; then answer SUBMIT_READY again with the full list.';
+export const REFUSE_ENTER = 'Not pressed: Enter in this box would submit the form, and Plato sends it only after you answer SUBMIT_READY. Press the form’s own button (Next, Continue) instead, or answer SUBMIT_READY when the form is complete.';
+export const REFUSE_ONE_KEY = 'Refused: this key submits the form. Press it alone, once (no other keys, no repeat).';
 // Typing appends. A field the page filled after the model's last read (a resume parse, a script) would end up doubled.
 export const REFUSE_FILLED = (label: string, value: string) => `Refused: "${label}" already holds "${value}", filled by the page after your last read. Typing would append to it. Read the page again; to replace a value use form_input.`;
 const KEYS: Record<string, { key: string; code: string; vk: number; text?: string }> = {
@@ -129,6 +136,11 @@ export function createExecutor(d: ExecDeps) {
     }
   };
 
+  // The Submit gate for a press on a control. gated: a press that may send the form (the Submit; once armed, a step or
+  // submit-type button too). gate: why the press is refused now, or null.
+  const gated = (el: ElementInfo | null) => !!el && (el.isSubmit || (!!el.isStep && !!d.armed?.()));
+  const gate = (el: ElementInfo | null, allowed: boolean) => (!gated(el) ? null : !allowed ? (el!.isSubmit ? REFUSE_SUBMIT : REFUSE_ARMED) : pressed ? REFUSE_AGAIN : null);
+
   // Actions a person would look at the page before doing: a short reading pause first.
   const LOOK_FIRST = new Set(['left_click', 'double_click', 'type', 'key', 'form_input', 'file_upload', 'scroll', 'hover']);
 
@@ -151,12 +163,12 @@ export function createExecutor(d: ExecDeps) {
       case 'double_click': {
         const el = await describe(t);
         const count = name === 'double_click' ? 2 : 1;
-        if (el?.isSubmit) {
-          if (!allowed) return { ok: false, error: REFUSE_SUBMIT };
-          if (pressed) return { ok: false, error: REFUSE_AGAIN };
+        const stop = gate(el, allowed);
+        if (stop) return { ok: false, error: stop };
+        if (gated(el)) {
           pressed = true; // recorded BEFORE the press: a failure after this is still one press
           await click(await point(t), count);
-          return { ok: true, text: `Clicked "${el.text}" (Submit)`, state: await state() };
+          return { ok: true, text: `Clicked "${el!.text}" (Submit)`, state: await state(), submit_pressed: true };
         }
         // everything else is the brain's call: a step of a multi-page form, a checkbox, a menu (no gate, 2026-11-24)
         await click(await point(t), count);
@@ -198,11 +210,30 @@ export function createExecutor(d: ExecDeps) {
       }
       case 'key': {
         const chords = String(input.text ?? '').split(/\s+/).filter(Boolean);
-        for (let r = 0; r < Number(input.repeat ?? 1); r++) for (const c of chords) await chord(c);
+        const repeat = Number(input.repeat ?? 1);
+        // Enter (or a space on a button) acts on what has focus: the same gate as a press on it
+        const sends = chords.filter((c) => /^(enter|return|space)$/i.test(c.split('+').pop() ?? ''));
+        let send = false;
+        if (sends.length) {
+          const f = await d.send<FocusInfo | null>({ op: 'focus' }).catch(() => null);
+          const enter = sends.some((c) => !/space$/i.test(c));
+          if (f?.control) {
+            const stop = gate(f.control, allowed);
+            if (stop) return { ok: false, error: stop };
+            send = gated(f.control);
+          } else if (enter && f?.line && !f.combo) {
+            if (!allowed) return { ok: false, error: REFUSE_ENTER };
+            if (pressed) return { ok: false, error: REFUSE_AGAIN };
+            send = true;
+          }
+          if (send && (chords.length > 1 || repeat > 1)) return { ok: false, error: REFUSE_ONE_KEY };
+          if (send) pressed = true;
+        }
+        for (let r = 0; r < repeat; r++) for (const c of chords) await chord(c);
         await d.send({ op: 'typed' }).catch(() => undefined); // a Backspace or a shortcut changed the value: ours
         await human(150, 300);
         await d.settle();
-        return { ok: true, text: 'Pressed', state: await state() };
+        return { ok: true, text: send ? 'Pressed (Submit)' : 'Pressed', state: await state(), ...(send && { submit_pressed: true }) };
       }
       case 'scroll': {
         const p = await point(t);

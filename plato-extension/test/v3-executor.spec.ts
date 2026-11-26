@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { REFUSE_PASSWORD, type Changed, type V3Op } from '../src/content/v3-reader';
-import { createExecutor, NEW_PASSWORD, REFUSE_PLACEHOLDER, SAVED_PASSWORD, REFUSE_AGAIN, REFUSE_FILLED, REFUSE_SUBMIT, MAX_SIDE, type ExecDeps } from '../src/v3/executor';
+import { REFUSE_PASSWORD, type Changed, type FocusInfo, type V3Op } from '../src/content/v3-reader';
+import { createExecutor, NEW_PASSWORD, REFUSE_PLACEHOLDER, SAVED_PASSWORD, REFUSE_AGAIN, REFUSE_ARMED, REFUSE_ENTER, REFUSE_FILLED, REFUSE_ONE_KEY, REFUSE_SUBMIT, MAX_SIDE, type ExecDeps } from '../src/v3/executor';
 
 // A fake tab: the content script answers refs by a small table; chrome.debugger calls are recorded.
-function tab(o: { submitRef?: string; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } }; changed?: Changed; password?: ExecDeps['password']; viewport?: number[] } = {}) {
+function tab(o: { submitRef?: string; focus?: FocusInfo | null; armed?: boolean; shotFailsFirst?: boolean; resume?: boolean; formInput?: { ok: boolean; message: string; clickPoint?: { x: number; y: number } }; changed?: Changed; password?: ExecDeps['password']; viewport?: number[] } = {}) {
   const cdp: { method: string; params: Record<string, unknown> }[] = [];
   const ops: V3Op[] = [];
   const nav: string[] = [];
@@ -24,6 +24,7 @@ function tab(o: { submitRef?: string; shotFailsFirst?: boolean; resume?: boolean
         case 'changed': return (o.changed ?? { active: null, password: false, fields: [] }) as T;
         case 'typed': return { ok: true } as T;
         case 'state': return { captcha: false } as T;
+        case 'focus': return (o.focus ?? null) as T;
       }
     },
     cdp: async (method, params = {}) => {
@@ -43,6 +44,7 @@ function tab(o: { submitRef?: string; shotFailsFirst?: boolean; resume?: boolean
     sleep: async () => undefined,
     quick: true,
     password: o.password,
+    armed: () => !!o.armed,
   };
   const ex = createExecutor(deps);
   const run = (name: string, input: Record<string, unknown> = {}, allowed = false) => ex.exec({ call_id: `c-${name}`, name, input }, allowed);
@@ -87,6 +89,68 @@ describe('executor: the Submit gate (code, not prompt)', () => {
     expect(await t.run('left_click', ref('ref_s'), true)).toMatchObject({ ok: false, error: REFUSE_AGAIN });
     expect(await t.run('left_click', ref('ref_2'), true)).toMatchObject({ ok: true });
     expect(await t.run('key', { text: 'Tab' }, true)).toMatchObject({ ok: true });
+  });
+});
+
+describe('executor: the Submit gate on keys and on steps once armed (review before Submit)', () => {
+  const keys = (t: ReturnType<typeof tab>) => t.cdp.filter((c) => c.method === 'Input.dispatchKeyEvent');
+  const textBox: FocusInfo = { line: true, combo: false };
+  it('Enter in a single-line box of a form is refused until Submit is allowed; nothing reaches the page', async () => {
+    const t = tab({ focus: textBox });
+    expect(await t.run('key', { text: 'Enter' }, false)).toEqual({ call_id: 'c-key', ok: false, error: REFUSE_ENTER });
+    expect(await t.run('key', { text: 'Return' }, false)).toMatchObject({ ok: false, error: REFUSE_ENTER });
+    expect(keys(t)).toEqual([]);
+    expect(t.ex.submitPressed()).toBe(false);
+  });
+  it('Enter in a combobox / type-ahead picks an option: allowed', async () => {
+    const t = tab({ focus: { line: true, combo: true } });
+    expect(await t.run('key', { text: 'Enter' }, false)).toMatchObject({ ok: true, text: 'Pressed' });
+    expect(keys(t).length).toBe(2);
+    expect(t.ex.submitPressed()).toBe(false);
+  });
+  it('Enter outside a form box (nothing focused, a textarea) and other keys are not gated', async () => {
+    const t = tab({ focus: { line: false, combo: false } });
+    expect(await t.run('key', { text: 'Enter' }, false)).toMatchObject({ ok: true });
+    expect(await t.run('key', { text: 'Tab' }, false)).toMatchObject({ ok: true });
+  });
+  it('Enter on a focused Submit button is the Submit press: refused until allowed', async () => {
+    const t = tab({ focus: { line: false, combo: false, control: { tag: 'BUTTON', type: 'submit', text: 'Submit application', role: '', isSubmit: true } } });
+    expect(await t.run('key', { text: 'Enter' }, false)).toMatchObject({ ok: false, error: REFUSE_SUBMIT });
+    expect(await t.run('key', { text: 'space' }, false)).toMatchObject({ ok: false, error: REFUSE_SUBMIT });
+    expect(keys(t)).toEqual([]);
+  });
+  it('after permission, Enter in the form box is the one press, reported as such; a second is refused; it must be alone', async () => {
+    const t = tab({ focus: textBox, armed: true });
+    expect(await t.run('key', { text: 'Enter Enter' }, true)).toMatchObject({ ok: false, error: REFUSE_ONE_KEY });
+    expect(await t.run('key', { text: 'Enter' }, true)).toMatchObject({ ok: true, text: 'Pressed (Submit)', submit_pressed: true });
+    expect(t.ex.submitPressed()).toBe(true);
+    expect(await t.run('key', { text: 'Enter' }, true)).toMatchObject({ ok: false, error: REFUSE_AGAIN });
+  });
+  it('armed (SUBMIT_READY sent) and not allowed: a step (Continue) or submit-type button is refused; ordinary presses still work', async () => {
+    const t = tab({ armed: true });
+    expect(await t.run('left_click', ref('ref_step'), false)).toMatchObject({ ok: false, error: REFUSE_ARMED });
+    expect(await t.run('double_click', ref('ref_step'), false)).toMatchObject({ ok: false, error: REFUSE_ARMED });
+    expect(t.clicks()).toEqual([]);
+    expect(await t.run('left_click', ref('ref_2'), false)).toMatchObject({ ok: true }); // "Next" of type=button: not a step of the form
+    expect(t.ex.submitPressed()).toBe(false);
+  });
+  it('not armed: the same step is the brain’s own call (multi-page forms move on)', async () => {
+    const t = tab({ armed: false });
+    expect(await t.run('left_click', ref('ref_step'), false)).toMatchObject({ ok: true });
+    expect(t.ex.submitPressed()).toBe(false);
+  });
+  it('after permission: the Submit press goes through once and is reported to the backend; a step pressed then counts as that press', async () => {
+    const t = tab({ submitRef: 'ref_s', armed: true });
+    expect(await t.run('left_click', ref('ref_s'), true)).toMatchObject({ ok: true, text: 'Clicked "Submit application" (Submit)', submit_pressed: true });
+    expect(t.clicks().length).toBe(1);
+    const u = tab({ armed: true });
+    expect(await u.run('left_click', ref('ref_step'), true)).toMatchObject({ ok: true, text: 'Clicked "Save & continue" (Submit)', submit_pressed: true });
+    expect(await u.run('left_click', ref('ref_step'), true)).toMatchObject({ ok: false, error: REFUSE_AGAIN });
+    expect(u.clicks().length).toBe(1);
+  });
+  it('an ordinary press never carries the report', async () => {
+    const t = tab({ armed: true });
+    expect((await t.run('left_click', ref('ref_2'), true)).submit_pressed).toBeUndefined();
   });
 });
 

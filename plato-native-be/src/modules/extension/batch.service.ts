@@ -25,6 +25,7 @@ import { limiter } from './extension-auth.guard';
 import { roleKey } from '../apply/eligibility';
 import { ExtensionPrincipal } from './extension.service';
 import { extensionProvider, policyFor, ProviderPolicy } from './provider-policy';
+import type { StoredReview } from './v3/v3-contract';
 
 const OBJECT_ID = /^[0-9a-f]{24}$/;
 const MAX_BATCH = 50;
@@ -90,7 +91,7 @@ export class ExtensionBatchService {
 
   // `resumes`: the seeker already chose per job on the web's review screen (their own
   // CV, or the resume Plato made and they approved), so the extension won't ask again.
-  async createBatch(jobSeekerId: string, jobIds: string[], searchId?: string, resumes?: Record<string, 'profile' | 'tailored'>, reapply?: boolean) {
+  async createBatch(jobSeekerId: string, jobIds: string[], searchId?: string, resumes?: Record<string, 'profile' | 'tailored'>, reapply?: boolean, submitMode?: 'auto' | 'review') {
     const ids = [...new Set(jobIds)];
     if (
       !ids.length ||
@@ -146,7 +147,7 @@ export class ExtensionBatchService {
       : null;
     const q = (run?.query ?? {}) as { requestedTitles?: string[]; titles?: string[] };
     const batch = await this.prisma.applyBatch.create({
-      data: { job_seeker_id: jobSeekerId, ...(run && { search_id: run.id, label: q.requestedTitles?.[0] ?? q.titles?.[0] ?? null }) },
+      data: { job_seeker_id: jobSeekerId, ...(submitMode && { submit_mode: submitMode }), ...(run && { search_id: run.id, label: q.requestedTitles?.[0] ?? q.titles?.[0] ?? null }) },
     });
     const items: any[] = [];
     for (const a of accepted)
@@ -463,6 +464,18 @@ export class ExtensionBatchService {
     return item;
   }
 
+  /** The batch's own Submit mode; null = none chosen at creation (the web made it). v3 holds when this or the setting says review. */
+  async submitModeOf(batchId: string): Promise<'auto' | 'review' | null> {
+    const b = await this.prisma.applyBatch.findUnique({ where: { id: batchId }, select: { submit_mode: true } });
+    return b?.submit_mode === 'auto' || b?.submit_mode === 'review' ? b.submit_mode : null;
+  }
+
+  /** The latest review before Submit (v3 SUBMIT_READY), kept on the item; copied to the application on a confirmed submit. */
+  async saveReview(itemId: string, review: StoredReview) {
+    const item = await this.prisma.applyBatchItem.findUnique({ where: { id: itemId }, select: { detail: true } });
+    await this.prisma.applyBatchItem.update({ where: { id: itemId }, data: { detail: { ...det(item?.detail), review } as object } });
+  }
+
   // ---- web (cookie): release before anything could have been sent --------
 
   async release(jobSeekerId: string, itemId: string) {
@@ -663,6 +676,7 @@ export class ExtensionBatchService {
       const prior = (await this.prisma.jobApplication.findFirst({ where, select: { evidence: true } }))
         ?.evidence as Detail | null | undefined;
       const { screenshotKey, ...kept } = prior ?? {};
+      delete kept.review; // an earlier attempt's list never shows against this one; this item's own goes back below
       await this.prisma.jobApplication.updateMany({
         where,
         data: {
@@ -678,6 +692,8 @@ export class ExtensionBatchService {
               to === 'SUBMITTED_CONFIRMED' ? 'page_marker' : 'user_attestation',
             marker: last.marker ?? null,
             at: new Date().toISOString(),
+            // what was typed into the form, with its checked sources, and who let it go
+            ...(det(item.detail).review && { review: det(item.detail).review }),
           },
         },
       });

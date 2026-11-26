@@ -3,18 +3,19 @@
 // until the brain reports an outcome. Pure and injected (no chrome.* here).
 //
 // What the model says is never taken on faith:
-//   - SUBMIT_READY arms the item on the server FIRST; only then (auto-submit on) does the brain get to press Submit, once;
+//   - SUBMIT_READY arms the item on the server FIRST; only then, and only when the backend's review says no hold, does
+//     the brain get to press Submit, once (a held job stops for the seeker with the list of what was filled);
 //   - CONFIRMED counts only when the quoted text is really on the page; otherwise it is "unconfirmed" (VERIFY, never a resend);
 //   - a human check seen by the page itself stops the run, whatever the model said;
 //   - before the brain acts on a page, the page's own structure is classified (dom/page-state.ts): an account to make or
 //     a sign-in (with the seeker's "create accounts" setting off) or an email code stops the run before anything is typed;
 //   - 3 action turns in a row that change nothing on the page (same kind, URL, fields and values) stop it too.
 import type { PageState } from '../dom/page-state';
-import type { AskQuestion, BrowserCall, CallResult, TurnRequest, TurnResponse } from './contract';
+import type { AskQuestion, BrowserCall, CallResult, Review, TurnRequest, TurnResponse } from './contract';
 
 export type V3Result =
   | { kind: 'confirmed'; marker: string }
-  | { kind: 'ready' } // armed; the person presses Submit (auto-submit is off)
+  | { kind: 'ready'; review?: Review } // armed; the seeker checks the review and approves Submit (or presses it)
   | { kind: 'unconfirmed' } // Submit pressed, nothing proved it: VERIFY, never resend
   | { kind: 'skip'; reason: 'closed' | 'already_applied'; why: string }
   | { kind: 'needs-user'; why: string; resume?: 'seeker_answer' | 'solved' | 'continue'; stop?: StopKind; ask?: AskQuestion[]; code?: string; raw?: string; reason?: StopReason; states?: string[] }; // resume: the event that continues this conversation; stop: what kind of stop, so the panel draws the right card; code: the server's error code; raw: the error behind it (for us, never shown)
@@ -53,7 +54,7 @@ export interface V3RunDeps {
   createAccounts?: boolean; // the seeker's setting: Plato may make and sign in to job-site accounts
   arm(): Promise<void>; // record "about to submit" on the server; throws if not acknowledged
   pressed?: () => boolean; // the executor really pressed Submit in this run (executor.submitPressed)
-  autoSubmit: boolean;
+  autoSubmit: boolean; // this build may press Submit at all (off: a --submit=off live-test build, the fixtures setting)
   jot(line: string): void;
   sleep(ms: number): Promise<void>;
 }
@@ -131,7 +132,8 @@ async function loop(d: V3RunDeps, first: TurnRequest, seen: string[]): Promise<V
         case 'submit_ready': {
           if (submitted) return { kind: 'unconfirmed' }; // pressed once already; the page did not say what happened
           await d.arm(); // recorded on the server BEFORE anyone is told the form is ready
-          if (!d.autoSubmit) return { kind: 'ready' };
+          // no review (an older backend) is a hold too: Submit without a stop needs the backend's explicit hold: false
+          if (!d.autoSubmit || o.review?.hold !== false) return { kind: 'ready', ...(o.review && { review: o.review }) };
           submitted = true;
           req = { event: 'submit' }; // the gate lifts for exactly one press
           continue;

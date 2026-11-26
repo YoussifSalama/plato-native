@@ -172,6 +172,14 @@ export function renderSheet(doc: Document, s: PanelState, a: Actions): Node[] {
   const choice = (mode: 'profile' | 'tailored', text: string) =>
     h(doc, 'button', { type: 'button', text, onclick: () => a.jobs.resumeMode(mode), attrs: { role: 'radio', 'aria-checked': String(s.jobs.resumeMode === mode) } });
   const resume = h(doc, 'div', { class: 'seg seg-in', id: 'resume-mode', attrs: { role: 'radiogroup', 'aria-label': 'Resume to upload' } }, choice('profile', 'My profile resume'), choice('tailored', 'One built per job'));
+  const mode = s.jobs.submitMode;
+  const modeBtn = (m: typeof mode, text: string) =>
+    h(doc, 'button', { type: 'button', text, onclick: () => a.jobs.submitMode(m), attrs: { role: 'radio', 'aria-checked': String(mode === m) } });
+  const submitMode = h(doc, 'div', { class: 'seg seg-in', id: 'submit-mode', attrs: { role: 'radiogroup', 'aria-label': 'Before Submit' } }, modeBtn('auto', 'Apply for me'), modeBtn('review', 'Check with me before each Submit'));
+  // what the choice means; a test build that never presses Submit says so instead
+  const submitFact = !s.autoSubmitPreview ? fact('sparkle', 'Plato fills the form.', 'It stops when the form is complete; you press Submit.')
+    : mode === 'auto' ? fact('sparkle', 'Plato fills and submits.', 'It presses Submit once per job and records the page’s own confirmation. It still stops for you when a pay, visa or legal answer is not backed by your profile.')
+    : fact('sparkle', 'Plato fills, then checks with you.', 'Each job stops before Submit with every answer and where it came from. You fix any of them, or approve.');
   const sheet = h(doc, 'div', { class: 'sheet', id: 'sheet', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'sheet-title' } },
     h(doc, 'div', { class: 'grab' }),
     h(doc, 'div', { class: 'sh' }, h(doc, 'h2', { id: 'sheet-title', text: 'Start this batch?' }), h(doc, 'p', { text: 'Plato applies to these jobs together, one batch, in your browser.' })),
@@ -182,8 +190,9 @@ export function renderSheet(doc: Document, s: PanelState, a: Actions): Node[] {
       n < MAX_BATCH_JOBS ? btn(doc, '+ Add more jobs', () => a.jobs.sheet(false), 'btn ghost sm') : null,
       h(doc, 'div', { class: 'facts' },
         fact('layers', 'One batch at a time.', `These ${n} run together, up to ${tabs} open tab${tabs === 1 ? '' : 's'} at once. Another batch can start once this one finishes.`),
-        fact('sparkle', s.autoSubmitPreview ? 'Plato fills and submits.' : 'Plato fills the form.', s.autoSubmitPreview ? 'It presses Submit once per job and records the page’s own confirmation.' : 'It stops when the form is complete; you press Submit.'),
+        submitFact,
         fact('hand', 'You step in only when asked.', 'A sign-in, a human check, or a fact only you know.')),
+      s.autoSubmitPreview ? h(doc, 'div', { class: 'setrow stack' }, h(doc, 'div', { class: 'hd' }, icon(doc, 'check'), h(doc, 'span', { class: 'l' }, 'Before Submit', h(doc, 'small', { text: 'Plato remembers your choice.' }))), submitMode) : null,
       h(doc, 'div', { class: 'setrow stack' }, h(doc, 'div', { class: 'hd' }, icon(doc, 'file'), h(doc, 'span', { class: 'l' }, 'Resume to upload', h(doc, 'small', { text: 'Uploaded first on every form.' }))), resume)),
     h(doc, 'div', { class: 'sf' },
       btn(doc, `Start batch · ${n} job${n === 1 ? '' : 's'}`, a.jobs.start, 'btn primary block', { disabled: !n || s.busy, id: 'start-batch' }),

@@ -213,6 +213,31 @@ describe('transitions', () => {
     expect(capped[HISTORY_CAP - 1].at).toBe('new');
   });
 
+  it('the review before Submit survives the transitions and goes onto the application', async () => {
+    const { prisma, svc } = setup();
+    const job = await addJob(prisma);
+    const b = await svc.createBatch('seeker1', [job.id], undefined, undefined, undefined, 'auto');
+    expect(await svc.submitModeOf(b.batch_id!)).toBe('auto');
+    const c = await svc.claim(A, b.items[0].id);
+    await drive(svc, A, c, upToReview);
+    const review = { fields: [{ label: 'Email', value: 'a@b.c', source: 'cv', verified: true, status: 'ok', sensitive: false }], complete: true, hold: false, approvedBy: 'auto', approvedAt: 'now' } as any;
+    await svc.saveReview(c.id, review);
+    await svc.transition(A, c.id, { attempt_id: c.attempt_id, seq: 4, to: 'AWAITING_SUBMIT' });
+    await svc.transition(A, c.id, { attempt_id: c.attempt_id, seq: 5, to: 'SUBMITTED_CONFIRMED', detail: { marker: 'Thanks' } });
+    expect(app(prisma).evidence).toMatchObject({ confirmed_by: 'page_marker', review });
+    const plain = await svc.createBatch('seeker1', [(await addJob(prisma, 2)).id]);
+    expect(await svc.submitModeOf(plain.batch_id!)).toBeNull(); // made without a mode: the seeker's setting decides
+  });
+
+  it('a new attempt without a review drops the earlier attempt\'s list from the application', async () => {
+    const { prisma, svc } = setup();
+    const c = await svc.claim(A, (await item(prisma, svc)).id);
+    app(prisma).evidence = { review: { fields: [{ label: 'Old', value: 'x' }] }, proofCapturedAt: 't', screenshotKey: 'k' };
+    await drive(svc, A, c, [...armed, ['SUBMITTED_CONFIRMED', { marker: 'Thanks' }]]);
+    expect(app(prisma).evidence.review).toBeUndefined();
+    expect(app(prisma).evidence).toMatchObject({ screenshotKey: 'k', confirmed_by: 'page_marker' });
+  });
+
   it('attestation is recorded separately from machine confirmation', async () => {
     const { prisma, svc } = setup();
     const c = await svc.claim(A, (await item(prisma, svc)).id);

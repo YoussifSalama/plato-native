@@ -13,6 +13,11 @@ describe('browser notifications: what the seeker hears outside the panel', () =>
     expect(noticeText({ kind: 'cancelled', itemId: 'a', meta, note: 'x' })).toBeNull();
     expect(noticeText({ kind: 'gone', itemId: 'a', meta, note: 'x' })).toBeNull();
   });
+  it('a job held before Submit: "Check the answers before Plato submits"; urgent only when the seeker chose Apply for me', () => {
+    expect(noticeText({ kind: 'review', itemId: 'a', meta, reason: 'review_mode' })).toEqual({ title: 'Check the answers before Plato submits', message: 'Backend Engineer at Acme: The form is filled. Look over what Plato entered, then submit.', urgent: false });
+    expect(noticeText({ kind: 'review', itemId: 'a', meta, reason: 'sensitive' })).toMatchObject({ title: 'Check the answers before Plato submits', urgent: true });
+    expect(noticeText({ kind: 'review', itemId: 'a', meta, reason: 'no_list' })?.message).toContain('could not list');
+  });
   it('the batch record calls it for every first outcome and when the batch finishes', () => {
     const heard: Notice[] = [];
     const r = createBatchRunner({ get: async () => null, set: async () => undefined, notify: (n) => heard.push(n) });

@@ -64,7 +64,7 @@ describe('rows and settle: the batch seen through the server list and what this 
     const r = createBatchRunner(mem().store, clock);
     r.start(pick(['p', 'c', 'n', 'a', 'v', 'e', 'i', 'g']), 'x', true);
     const items = [item('p', 'PENDING'), item('c', 'FILLING'), item('n', 'NEEDS_USER'), item('a', 'AWAITING_SUBMIT'), item('v', 'VERIFY'), item('e', 'CLAIMED', { mine: false }), item('i', 'REVIEW')];
-    const rows = r.rows(items, live({ c: { step: 'review' }, n: { step: 'needs-user' }, a: { step: 'armed' } }));
+    const rows = r.rows(items, live({ c: { step: 'review' }, n: { step: 'needs-user' }, a: { step: 'review' } })); // a: armed, Plato pressing Submit
     expect(Object.fromEntries(rows.map((x) => [x.itemId, x.status]))).toEqual({ p: 'queued', c: 'running', n: 'needs', a: 'running', v: 'verify', e: 'elsewhere', i: 'interrupted', g: 'gone' });
   });
   it('a VERIFY item armed by another (since unlinked) browser is "verify", not "elsewhere": it never holds the batch open', () => {
@@ -73,6 +73,11 @@ describe('rows and settle: the batch seen through the server list and what this 
     const rows = r.settle([item('v', 'VERIFY', { mine: false })], quiet);
     expect(rows.map((x) => x.status)).toEqual(['verify']);
     expect(r.isActive()).toBe(false);
+  });
+  it('an armed item that stopped for the seeker (a review before Submit) is "needs you", whatever the build', () => {
+    const r = createBatchRunner(mem().store, clock);
+    r.start(pick(['a']), 'x', true);
+    expect(r.rows([item('a', 'AWAITING_SUBMIT')], live({ a: { step: 'armed' } })).map((x) => x.status)).toEqual(['needs']);
   });
   it('an armed item is "needs you" when the person presses Submit (auto-submit off) or when Plato could not press it', () => {
     const r = createBatchRunner(mem().store, clock);

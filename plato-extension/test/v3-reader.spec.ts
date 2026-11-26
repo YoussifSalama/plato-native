@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { describeAt, describeElement, find, formInput, handle, readPage, ready, resolve } from '../src/content/v3-reader';
+import { describeAt, describeElement, find, focusInfo, formInput, handle, readPage, ready, resolve } from '../src/content/v3-reader';
 
 // A synthetic application form (not a copy of any site): labels, a select that reveals a field, a file input,
 // a required consent box, an off-screen honeypot, a step button and the Submit control.
@@ -76,6 +76,33 @@ describe('form_input: values the way the contract describes', () => {
   it('a stale ref is named so the model reads the page again', () => {
     expect(formInput(document, 'ref_99999', 'x').message).toBe('Unknown or stale ref: ref_99999. Call read_page again for current refs.');
     expect(resolve('ref_99999')).toBeNull();
+  });
+});
+
+describe('the Submit gate on keys: what an Enter would act on', () => {
+  it('a text box of a form is a line (Enter submits it); a type-ahead is a combo; a textarea or a box outside a form is not', () => {
+    document.body.insertAdjacentHTML('beforeend', '<form><input id="city" role="combobox" aria-expanded="true" /><input id="ac" aria-autocomplete="list" /><input id="dl" list="opts" /><textarea id="ta"></textarea></form><input id="loose" />');
+    $('fn').focus();
+    expect(focusInfo(document)).toEqual({ line: true, combo: false });
+    $('city').focus();
+    expect(focusInfo(document)).toMatchObject({ line: true, combo: true });
+    $('ac').focus();
+    expect(focusInfo(document)?.combo).toBe(true);
+    $('dl').focus();
+    expect(focusInfo(document)?.combo).toBe(true);
+    $('ta').focus();
+    expect(focusInfo(document)?.line).toBe(false);
+    $('loose').focus();
+    expect(focusInfo(document)?.line).toBe(false);
+    ($('loose') as HTMLInputElement).blur();
+    expect(focusInfo(document)).toBeNull();
+  });
+  it('a focused button is described like a press on it; a submit button tied to the form by its form attribute is a step', () => {
+    $('submit').focus();
+    expect(focusInfo(document)).toMatchObject({ control: { isSubmit: true } });
+    document.body.insertAdjacentHTML('beforeend', '<button type="submit" form="f" id="outside">Save</button>');
+    expect(describeElement($('outside'))).toMatchObject({ isSubmit: false, isStep: true });
+    expect(handle(document, { op: 'focus' })).toMatchObject({ control: { isSubmit: true } });
   });
 });
 

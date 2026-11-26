@@ -21,7 +21,7 @@ const actions = () => {
 const draw = (session: PanelState['sessions'][string]) => {
   const a = actions();
   const root = document.createElement('main');
-  const s: PanelState = { status: 'ready', toasts: [], items: [item], sessions: { i1: session }, progress: {}, cards: {}, pendingOutbox: 0, policy: { fx: 'FILL_ONLY' }, view: 'batch', jobs: { searches: [], pickerOpen: false, jobs: [], jobsTotal: 0, known: {}, loading: false, q: '', sort: 'best', remote: false, fromPlato: false, picked: [], resumeMode: 'profile' }, run, rows: [row] } as PanelState;
+  const s: PanelState = { status: 'ready', toasts: [], items: [item], sessions: { i1: session }, progress: {}, cards: {}, pendingOutbox: 0, policy: { fx: 'FILL_ONLY' }, view: 'batch', jobs: { searches: [], pickerOpen: false, jobs: [], jobsTotal: 0, known: {}, loading: false, q: '', sort: 'best', remote: false, fromPlato: false, picked: [], resumeMode: 'profile', submitMode: 'review' }, run, rows: [row] } as PanelState;
   render(document, root, s, a, registry);
   const card = root.querySelector('.qcard')!;
   return { root, a, card, text: card?.textContent ?? '', buttons: [...card.querySelectorAll('button')].map((b) => b.textContent!.trim()) };

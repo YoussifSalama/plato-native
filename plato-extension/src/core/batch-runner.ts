@@ -89,7 +89,7 @@ export function createBatchRunner(store: RunStore, now: () => number = () => Dat
     if (item.state === 'PENDING') return { status: 'queued', item };
     if (!sess) return { status: 'interrupted', item }; // open on the server, not in this panel: a reload or a lost tab
     if (item.state === 'NEEDS_USER' || sess.step === 'needs-user') return { status: 'needs', item };
-    if (item.state === 'AWAITING_SUBMIT') return { status: autoSubmit && sess.message !== 'submit_failed' ? 'running' : 'needs', item }; // the person presses Submit, or Plato could not
+    if (item.state === 'AWAITING_SUBMIT') return { status: autoSubmit && sess.step !== 'armed' && sess.message !== 'submit_failed' ? 'running' : 'needs', item }; // Plato is pressing Submit (or fixing a field); 'armed': it stopped for the seeker (a review, or auto-submit off), or could not press it
     return { status: 'running', item };
   }
 

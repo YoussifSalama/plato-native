@@ -12,7 +12,7 @@ import type { PageState } from '../dom/page-state';
 import { createExecutor } from '../v3/executor';
 import { SAME_TAB_SOURCE } from '../v3/same-tab';
 import { ALREADY_APPLIED, newCode, runV3, type StopKind, type V3Result } from '../v3/run';
-import type { AskQuestion, SeekerAnswer } from '../v3/contract';
+import type { AskQuestion, Review, SeekerAnswer } from '../v3/contract';
 import type { TurnRequest } from '../v3/contract';
 import { runAiApply, type EaResult } from './ai-apply';
 import { createTrusted } from './trusted';
@@ -20,6 +20,7 @@ import type { Snapshot } from '../dom/snapshot';
 import { hash } from '../dom/inspect';
 import { FORM_FILE, FORM_OPTIONS, PAGE_SETTLE, PAGE_STATE, SNAP_PRESS, SNAP_TAKE } from '../core/messages';
 import { startFormReview } from './form-review-hook';
+import { clearReviewDraft } from './review-card';
 import { createTokenStore } from '../core/token-store';
 import { newPassword, savedPassword, wipeVault } from '../core/vault';
 import type { ApiItem, Decision, Evidence, PolicyMap, SearchJob } from '../core/types';
@@ -38,8 +39,8 @@ let policy: PolicyMap | undefined;
 const root = document.getElementById('root')!;
 const state: PanelState = {
   status: 'loading', toasts: [], items: [], sessions: {}, progress: {}, cards: {}, formReviews: {}, pendingOutbox: 0, assistant: { messages: [], thinking: false },
-  view: 'jobs', jobs: { searches: [], pickerOpen: false, jobs: [], jobsTotal: 0, known: {}, loading: false, q: '', sort: 'best', remote: false, fromPlato: false, picked: [], resumeMode: 'profile' },
-  run: null, rows: [],
+  view: 'jobs', jobs: { searches: [], pickerOpen: false, jobs: [], jobsTotal: 0, known: {}, loading: false, q: '', sort: 'best', remote: false, fromPlato: false, picked: [], resumeMode: 'profile', submitMode: 'review' },
+  run: null, rows: [], reviews: {},
 };
 const reviews = new Map<string, FormReview>();
 // The batch: one at a time, up to MAX_BATCH_JOBS, guarded in core/batch-runner.ts. Its record lives in session storage
@@ -113,6 +114,14 @@ async function shootTab(tabId: number): Promise<ProofShot | null> {
   return { data, url: tab.url };
 }
 
+// The list a job stopped on before Submit: panel state, and session storage so a reloaded panel still has it.
+const reviewKey = (id: string) => `review:${id}`;
+function keepReview(id: string, review: Review | undefined) {
+  clearReviewDraft(id); // a new list (or none): the old edits do not apply
+  if (review) state.reviews![id] = review;
+  else delete state.reviews![id];
+  void (review ? chrome.storage.session.set({ [reviewKey(id)]: review }) : chrome.storage.session.remove(reviewKey(id))).catch(() => undefined);
+}
 // tab ids survive a panel reload for the browser session only
 const tabKey = (id: string) => `tab:${id}`;
 const rememberTab = (id: string, tabId: number) => chrome.storage.session.set({ [tabKey(id)]: tabId });
@@ -194,8 +203,10 @@ async function probeFor(item: ApiItem): Promise<Evidence> {
 const tabLimit = () => Math.min(state.settings?.tabs ?? MAX_TABS, MAX_TABS);
 // Jobs Plato is working on now. A job waiting for the seeker (needs you, or "please check") keeps its tab open but
 // not a slot: otherwise N stuck jobs froze the queue for good.
-const busyTabs = () => Object.entries(state.sessions).filter(([id, x]) => x.step !== 'needs-user' && state.items.find((i) => i.id === id)?.state !== 'VERIFY').length;
-const autoSubmitDefault = () => (__FLAVOR__ === 'fixtures' ? !!state.settings?.autoSubmit : __AUTO_SUBMIT__); // production always presses Submit (owner rule 2026-10-21); the test build keeps the setting
+const busyTabs = () => Object.entries(state.sessions).filter(([id, x]) => x.step !== 'needs-user' && x.step !== 'armed' && state.items.find((i) => i.id === id)?.state !== 'VERIFY').length;
+// This build may press Submit at all: production yes (each job then follows the batch's mode and the backend's review);
+// a --submit=off live-test build never; the test build follows its fixture setting.
+const autoSubmitDefault = () => (__FLAVOR__ === 'fixtures' ? !!state.settings?.autoSubmit : __AUTO_SUBMIT__);
 const metaOf = (i: ApiItem): JobMeta => ({ jobId: i.job_id, title: i.job?.title ?? 'Job', company: i.job?.company ?? '', provider: i.provider });
 
 let preselected = false;
@@ -222,7 +233,10 @@ async function refresh() {
     if (!state.settings) state.settings = await api.settings().catch(() => null);
     if (state.settings && !state.settings.createAccounts) await wipeVault().catch(() => undefined); // the seeker turned job-site accounts off: their passwords go from this browser
     state.autoSubmitPreview = autoSubmitDefault();
-    if (state.settings && !preselected) state.jobs.resumeMode = state.settings.resumeMode;
+    if (state.settings && !preselected) {
+      state.jobs.resumeMode = state.settings.resumeMode;
+      state.jobs.submitMode = state.settings.submitMode ?? 'review';
+    }
     // the batch record is gone (browser restart) but jobs are open on the server: they are the batch
     if (!runner.current()) {
       const open = state.items.filter((i) => i.state !== 'PENDING');
@@ -249,7 +263,7 @@ async function refresh() {
     if (Date.now() - errorAt > 12_000) state.error = undefined; // a fresh failure stays on screen long enough to read
     if (runner.isActive()) setTimeout(() => void runQueue(), 0);
     void resumeOrphans(); // a reloaded panel picks its open jobs back up by itself
-    if (!Object.values(state.sessions).some((x) => x.message === 'submit_failed')) void chrome.action.setBadgeText({ text: '' });
+    if (!Object.values(state.sessions).some((x) => x.message === 'submit_failed' || x.step === 'armed')) void chrome.action.setBadgeText({ text: '' });
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return fail(e);
     state.status = state.status === 'loading' ? 'ready' : state.status;
@@ -339,6 +353,7 @@ const whyEmpty = (r: { reason?: string; proposed?: unknown }, itemId: string) =>
 
 // What a finished run means for the job, the same for every site. Terminal outcomes are recorded on the batch.
 async function finishRun(item: ApiItem, s: Session, result: EaResult | V3Result) {
+  if (result.kind !== 'ready') keepReview(item.id, undefined);
   // every stop gets a code the seeker can copy and send us (the server's own, for an AI failure)
   const code = result.kind === 'needs-user' ? ('code' in result && result.code) || newCode() : '';
   jot(item.id, result.kind === 'needs-user' ? `Stopped for the seeker [${code}]: ${result.why}` : result.kind === 'confirmed' ? `Submitted: the page confirms (${result.marker}).` : result.kind === 'ready' ? 'Complete: waiting for the seeker to press Submit.' : result.kind === 'skip' ? `Skipped: ${result.why}` : 'Submit pressed, no confirmation on the page.');
@@ -352,7 +367,16 @@ async function finishRun(item: ApiItem, s: Session, result: EaResult | V3Result)
     reviews.delete(item.id);
     delete state.formReviews![item.id];
     runner.record(item.id, 'submitted', `The page confirmed it: “${result.marker.replace(/^page:/, '')}”.`);
-  } else if (result.kind === 'ready') setStep(item, 'armed');
+  } else if (result.kind === 'ready') {
+    setStep(item, 'armed');
+    const review = 'review' in result ? result.review : undefined;
+    keepReview(item.id, review);
+    if (review) {
+      notify({ kind: 'review', itemId: item.id, meta: { title: item.job?.title ?? 'A job', company: item.job?.company ?? '' }, reason: review.holdReason });
+      void chrome.action.setBadgeText({ text: '!' });
+      void chrome.action.setBadgeBackgroundColor({ color: '#d97706' });
+    }
+  }
   else if (result.kind === 'skip') {
     await orch.skip(s, result.reason, result.why); // SKIPPED with the true reason, not "needs you"
     delete state.sessions[item.id];
@@ -923,6 +947,7 @@ async function runV3Item(item: ApiItem) {
         return t?.url ? { url: t.url, title: t.title ?? '' } : null;
       },
       quick: __FLAVOR__ === 'fixtures',
+      armed: () => s.item.state === 'AWAITING_SUBMIT',
       // job-site accounts: only with the seeker's setting on; the password is made and kept in this browser (core/vault.ts)
       password: async (kind, host) => {
         if (!state.settings?.createAccounts) return null;
@@ -940,7 +965,7 @@ async function runV3Item(item: ApiItem) {
     v3Next.delete(item.id);
     const answers = v3Answers.get(item.id);
     v3Answers.delete(item.id);
-    const first: TurnRequest = next === 'seeker_answer' ? { event: 'seeker_answer', text: (notes.get(item.id)?.at(-1) ?? '').slice(0, 4000), ...(answers?.length && { answers }) } : next === 'solved' || next === 'continue' ? { event: next } : auto && s.item.state === 'AWAITING_SUBMIT' ? { event: 'submit' } : { event: 'start' }; // an armed item + "Submit for me": continue the same conversation at Submit, no refill (session_lost falls back to start below)
+    const first: TurnRequest = next === 'seeker_answer' ? { event: 'seeker_answer', text: (notes.get(item.id)?.at(-1) ?? '').slice(0, 4000), ...(answers?.length && { answers }) } : next === 'solved' || next === 'continue' ? { event: next } : submitOverride.has(item.id) && s.item.state === 'AWAITING_SUBMIT' ? { event: 'submit', approved: true } : { event: 'start' }; // an armed item + the seeker's go-ahead ("Looks right, submit", "Submit for me"): continue the same conversation at Submit, no refill; any other rerun of an armed item reads the form and lists it again
     if (first.event === 'start') {
       // What is this page? A confirmation already on it ("Application submitted", "Applied 3w ago") ends the job here:
       // no brain turn, no refill, no navigate away. ponytail: the page-state.ts regex is the classifier; the brain's CLOSED covers the rest
@@ -959,7 +984,7 @@ async function runV3Item(item: ApiItem) {
             return await timed(item.id, `v3:turn:${req.event}`, api.v3Turn(item.id, req));
           } catch (e) {
             // the backend lost the conversation (restart): start over from the page as it is
-            if (e instanceof ApiError && e.status === 409 && /session_lost/.test(e.message) && req.event !== 'start' && !executor.submitPressed()) return api.v3Turn(item.id, { event: 'start' }); // after a press, starting over would navigate off the confirmation: runV3 checks the page instead
+            if (e instanceof ApiError && e.status === 409 && /session_lost/.test(e.message) && req.event !== 'start' && req.event !== 'submit' && !executor.submitPressed()) return api.v3Turn(item.id, { event: 'start' }); // after a press, starting over would navigate off the confirmation (runV3 checks the page instead); a lost approval stops with NOT_LISTED
             throw e;
           }
         },
@@ -1001,6 +1026,14 @@ async function runV3Item(item: ApiItem) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     log('error', `apply loop (v3): ${msg}`);
+    // The backend refused the Submit (nothing was pressed): the list is still held for the seeker, or the conversation
+    // has no SUBMIT_READY any more (a backend restart). Back to the list, or a stop whose Try again reads the form again.
+    if (e instanceof ApiError && e.status === 409 && /review_needed|submit_not_ready|session_lost/.test(msg)) {
+      submitOverride.delete(item.id);
+      const held = /review_needed/.test(msg) ? state.reviews?.[item.id] : undefined;
+      jot(item.id, `Plato's server refused Submit (${msg}); nothing was pressed.`);
+      return void (await finishRun(item, s, held ? { kind: 'ready', review: held } : { kind: 'needs-user', why: NOT_LISTED, stop: 'error', reason: 'server-error' }));
+    }
     await finishRun(item, s, e instanceof NeedsSiteAccess ? { kind: 'needs-user', why: `${msg} Press Try again and choose Allow.`, stop: 'blocked' } : e instanceof DebuggerLost ? { kind: 'needs-user', why: `${msg} Press Try again once the page has finished loading.`, stop: 'blocked' } : lostResult(e));
   } finally {
     chrome.tabs.onUpdated.removeListener(onLoaded);
@@ -1009,6 +1042,7 @@ async function runV3Item(item: ApiItem) {
   }
 }
 
+const NOT_LISTED = 'Plato did not submit: its server no longer has the checked list of answers for this form. Try again reads the form again and shows the list before Submit.';
 const jobUrlOf = new Map<string, string>();
 
 // ---- resume: jobs this device holds but this panel instance forgot (panel closed / extension reloaded) ----
@@ -1151,7 +1185,9 @@ async function startBatch() {
   const settings = state.settings ?? (await api.settings().catch(() => null));
   state.settings = settings;
   if (settings && j.resumeMode !== settings.resumeMode) state.settings = await api.saveSettings({ resumeMode: j.resumeMode }).catch(() => settings); // the choice on the sheet is the seeker's preference from now on
-  const created = jobIds.length ? await api.createBatch(jobIds, j.searchId, jobIds.some((id) => j.known[id]?.applied)) : null; // the sheet warned about the ones sent before
+  const mode = j.submitMode;
+  if (state.settings && mode !== (state.settings.submitMode ?? 'review')) state.settings = await api.saveSettings({ submitMode: mode }).catch(() => state.settings); // saved on change already; this covers a failed save
+  const created = jobIds.length ? await api.createBatch(jobIds, j.searchId, jobIds.some((id) => j.known[id]?.applied), mode) : null; // the sheet warned about the ones sent before
   const fresh = created?.items ?? [];
   const queued = state.items.filter((i) => itemIds.includes(i.id) && i.state === 'PENDING');
   const all = [...fresh, ...queued];
@@ -1160,8 +1196,8 @@ async function startBatch() {
   const auto = autoSubmitDefault();
   runner.start(all.map((i) => ({ itemId: i.id, meta: metaOf(i) })), label, auto); // the guard: one batch, up to the cap
   state.autoSubmit = auto;
-  await api.consent({ decision: 'allow', jobs: all.length, tabs: Math.min(all.length, tabLimit()), auto_submit: auto }).catch(() => undefined); // the audit log of the go-ahead
-  log('info', `Batch started: ${all.length} job(s) (${fresh.length} new, ${queued.length} queued), ${tabLimit()} at a time.`);
+  await api.consent({ decision: 'allow', jobs: all.length, tabs: Math.min(all.length, tabLimit()), auto_submit: auto && mode === 'auto', submit_mode: mode }).catch(() => undefined); // the audit log of the go-ahead
+  log('info', `Batch started: ${all.length} job(s) (${fresh.length} new, ${queued.length} queued), ${tabLimit()} at a time, ${mode === 'auto' ? 'Apply for me' : 'check before each Submit'}.`);
   tried.clear();
   j.picked = [];
   state.sheet = false;
@@ -1437,6 +1473,13 @@ const actions: Actions = {
       }),
     sheet: (open) => void guard(async () => void ((state.sheet = open), open && !state.settings && (state.settings = await api.settings().catch(() => null)))),
     resumeMode: (mode) => ((state.jobs.resumeMode = mode), draw()),
+    // the seeker's choice is remembered at once (preselected next time, and what the web's Apply now uses)
+    submitMode: (mode) => {
+      if (state.jobs.submitMode === mode) return;
+      state.jobs.submitMode = mode;
+      draw();
+      void api.saveSettings({ submitMode: mode }).then((r) => void (state.settings = r), (e) => log('warn', `submit mode not saved: ${e instanceof Error ? e.message : String(e)}`));
+    },
     start: () => {
       // Any-site access, asked inside the click (Chrome shows the prompt only for a user gesture); no prompt once granted.
       const ask = __FLAVOR__ === 'fixtures' ? Promise.resolve(false) : chrome.permissions.request(ANY_SITE).catch(() => false);
@@ -1503,6 +1546,19 @@ const actions: Actions = {
         log('info', `Submit for me pressed for “${item.job?.title ?? item.id}”.`);
         setStep(item, 'preparing');
         void runAi(item).then(() => refresh());
+      }),
+    // values changed on the review list: Plato puts them on the form, then lists again (the next SUBMIT_READY)
+    fixReview: (item, changes) =>
+      void guard(async () => {
+        if (!orch.session(item.id)) return void toast('This job is not open in this panel. Release it and start it again.', 'err');
+        const text = `Change these fields before submitting: ${changes.map((c) => `${c.label}: ${c.value}`).join('; ')}`.slice(0, 4000);
+        note(item.id, text);
+        v3Answers.set(item.id, changes.map((c, i) => ({ id: `review-${i}`, label: c.label.slice(0, 300), value: c.value.slice(0, 1000) })));
+        v3Next.set(item.id, 'seeker_answer');
+        void api.remember(changes.map((c) => ({ question: c.label.slice(0, 300), value: c.value.slice(0, 1000) }))).catch(() => undefined); // kept for later forms
+        jot(item.id, `The seeker changed on the review: ${changes.map((c) => c.label).join(', ').slice(0, 160)}`);
+        keepReview(item.id, undefined);
+        await rerun(item);
       }),
     checkPage: (item) =>
       void guard(async () => {
@@ -1648,6 +1704,8 @@ async function applyNow() {
   if (!picked.length) return void (toast('None of the jobs from Plato can be started here.', 'err'), draw());
   state.jobs.picked = picked.map((i) => `item:${i.id}` as PickKey);
   state.view = 'jobs';
+  state.settings = (await api.settings().catch(() => null)) ?? state.settings; // the mode may have been changed on the web
+  state.jobs.submitMode = state.settings?.submitMode ?? 'review'; // no sheet here: the saved choice
   log('info', `Apply now from Plato: ${picked.length} job(s).`);
   const granted = __FLAVOR__ === 'fixtures' || (await chrome.permissions.contains(ANY_SITE).catch(() => false));
   if (granted) return void guard(startBatch);
@@ -1706,6 +1764,8 @@ async function boot() {
   setInterval(() => void holdsPanelLock(), 3000); // keep the lock while this panel is open
   const run = await runner.restore();
   state.run = run;
+  const saved: Record<string, unknown> = await chrome.storage.session.get(null).catch(() => ({}));
+  for (const [k, v] of Object.entries(saved)) if (k.startsWith('review:')) state.reviews![k.slice(7)] = v as Review;
   state.autoSubmit = run?.autoSubmit ?? false;
   if (run?.status === 'finished') finishedToasted = run.id;
   if (run?.status === 'running') state.view = 'batch';

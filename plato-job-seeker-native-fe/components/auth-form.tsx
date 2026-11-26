@@ -16,6 +16,7 @@ import { RequiredMark } from "@/app/onboarding/components/required-mark"
 import { SuccessModal } from "@/components/success-modal"
 import { InfoTip } from "@/components/info-tip"
 import { getMe, login, signup } from "@/lib/auth/api"
+import { claimGuest } from "@/lib/jobs/guest"
 import { loginSchema, signupSchema, type LoginFormValues, type SignupFormValues } from "@/lib/auth/schema"
 import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
 
@@ -151,17 +152,20 @@ function SignupForm() {
     },
   })
 
+  // Where to go after the welcome: the search made before signing up (public /search), else onboarding.
+  const [next, setNext] = useState("/onboarding")
   useEffect(() => {
     if (!success) return
-    const timeout = setTimeout(() => router.push("/onboarding"), 1400)
+    const timeout = setTimeout(() => router.push(next), 1400)
     return () => clearTimeout(timeout)
-  }, [success, router])
+  }, [success, router, next])
 
   async function onSubmit(values: SignupFormValues) {
     setFormError(null)
     setIsSubmitting(true)
     try {
       await signup(values)
+      setNext((await claimGuest()) ?? "/onboarding")
       setSuccess(true)
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Something went wrong")
@@ -242,7 +246,7 @@ function SignupForm() {
         </Field>
       </AuthFormShell>
 
-      <SuccessModal open={success} title="Welcome to Plato!" description="Your account is ready. Next: tell Plato what you're looking for…" />
+      <SuccessModal open={success} title="Welcome to Plato!" description={next === "/onboarding" ? "Your account is ready. Next: tell Plato what you're looking for…" : "Your account is ready. Opening your search, with your CV already on it…"} />
     </>
   )
 }
@@ -266,7 +270,8 @@ function LoginForm() {
     try {
       await login(values)
       const me = await getMe()
-      router.push(me.onboarding_completed ? "/" : "/onboarding")
+      // A search made before logging in (public /search) opens first.
+      router.push((await claimGuest()) ?? (me.onboarding_completed ? "/" : "/onboarding"))
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Something went wrong")
       // Only on failure: on success the button stays busy until the next page takes over.

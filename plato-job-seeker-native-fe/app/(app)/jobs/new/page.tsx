@@ -490,8 +490,10 @@ export default function NewSearchPage() {
         titles: d.roles,
         ...(sentence.trim() && { sentence: sentence.trim() }),
         ...(d.countries.length && { countries: d.countries }),
-        ...(d.work.length && { remoteTypes: d.work }),
-        ...(d.employment.length && { jobTypes: d.employment }),
+        // The form is the whole search: an empty work mode or employment means any, never the saved preference.
+        exact: true,
+        remoteTypes: d.work,
+        jobTypes: d.employment,
         visaSponsorshipRequired: d.visa,
         ...rulesOf(d),
       })

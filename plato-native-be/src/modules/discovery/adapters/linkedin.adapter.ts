@@ -3,7 +3,7 @@ import { JobRemoteType, JobSource, Prisma } from '@prisma/client';
 import { ApifyService } from '../apify.service';
 import { DiscoveryAdapter, DiscoveryQuery, NormalizedJob } from './types';
 import { MAX_POSTING_AGE_DAYS } from '../discovery-run.helpers';
-import { primaryPlaces } from '../countries';
+import { marketScale, primaryPlaces } from '../countries';
 
 // Apify actor: curious_coder/linkedin-jobs-scraper — replays LinkedIn's own
 // job-search URL. Every job, Easy Apply or not: large employers mostly post
@@ -17,7 +17,8 @@ const MAX_TITLES = 6;
 // One run per title × country; cap the total so a two-country search
 // doesn't double the bill.
 const MAX_RUNS = 8;
-const MAX_PLACES = 2;
+// Up to four countries, each its own run; the run cap grows with them (marketScale) so titles are not cut to fit.
+const MAX_PLACES = 4;
 // Measured: 100 jobs + company scraping ≈ 110s; 40 jobs without ≈ 28s.
 // One actor run per title, in parallel, keeps wall time near the single-run cost.
 const LIMIT_PER_URL = 40;
@@ -125,9 +126,10 @@ export class LinkedInAdapter implements DiscoveryAdapter {
       (query.remoteAnywhere && query.remoteTypes.includes('remote'))
     )
       places.push(undefined);
+    const maxRuns = Math.round(MAX_RUNS * marketScale(query));
     const titles = query.titles.slice(
       0,
-      Math.min(MAX_TITLES, Math.floor(MAX_RUNS / places.length)),
+      Math.min(MAX_TITLES, Math.max(1, Math.floor(maxRuns / places.length))),
     );
     // Half the remaining budget comes from LinkedIn, split across the runs.
     const perUrl =

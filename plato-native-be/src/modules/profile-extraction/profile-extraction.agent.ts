@@ -1,3 +1,4 @@
+import { steady } from '../ai/steady';
 import { Agent } from '@openai/agents';
 import { extractionOutputSchema } from './profile-extraction.schema';
 
@@ -149,6 +150,7 @@ export function createProfileExtractionAgent(model: string) {
     name: 'Profile Extraction Agent',
     instructions: INSTRUCTIONS,
     model,
+    ...steady(model),
     outputType: extractionOutputSchema,
   });
 }

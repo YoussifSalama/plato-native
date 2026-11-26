@@ -41,12 +41,17 @@ import {
   MAX_POSTING_AGE_DAYS,
   postedCutoff,
   remainingBudget,
+  RUN_TARGET,
   RunProgress,
   toMatchPercent,
 } from './discovery-run.helpers';
 import { indexFilter, LocalIndexAdapter } from './adapters/local-index.adapter';
 import { PublicBoardsAdapter } from './adapters/public-boards.adapter';
-import { buildJobSeekerSnapshot, residenceOf } from './job-seeker-snapshot';
+import {
+  buildJobSeekerSnapshot,
+  residenceOf,
+  type JobSeekerSnapshot,
+} from './job-seeker-snapshot';
 import { MatchingService } from './matching.service';
 import { fantasticEnabled, loadFantastic } from './adapters/fantastic-jobs';
 import { textWhere } from './match-text';
@@ -55,7 +60,7 @@ import { DiscoveryQueryOverrides, mergeDiscoveryQuery } from './query-merge';
 import { RunProgressBus } from './run-progress.bus';
 import { NotificationsBus } from '../notifications/notifications.bus';
 import { resolvePlaces } from './country-resolver';
-import { countryName, resolveCountry } from './countries';
+import { countryName, marketScale, resolveCountry } from './countries';
 import { excludesCountry } from '../apply/eligibility';
 import { companyDomain, companyMark, normalizeCompany } from './company';
 import { jobEligibility } from './job-eligibility';
@@ -220,6 +225,14 @@ export class DiscoveryService implements OnModuleInit {
       this.preferenceService,
       jobSeekerId,
     );
+    return this.queryFromSnapshot(snapshot, overrides);
+  }
+
+  /** buildQuery for a profile that is not on an account yet (the public search's guest). */
+  async queryFromSnapshot(
+    snapshot: JobSeekerSnapshot,
+    overrides?: DiscoveryQueryOverrides,
+  ): Promise<DiscoveryQuery> {
     let query = mergeDiscoveryQuery(buildDiscoveryQuery(snapshot), overrides);
     if (overrides?.sentence) query = { ...query, sentence: overrides.sentence };
     // Checked after the merge: titles asked for in chat count, not only saved roles.
@@ -441,7 +454,10 @@ export class DiscoveryService implements OnModuleInit {
           indexResult.status === 'fulfilled' ? indexResult.value : [];
         const budget = await this.affordableBudget(
           jobSeekerId,
-          remainingBudget(indexJobs.length),
+          remainingBudget(
+            indexJobs.length,
+            Math.round(RUN_TARGET * marketScale(query)),
+          ),
           threadId,
         );
         const remoteQuery: DiscoveryQuery = { ...query, budget };
@@ -708,18 +724,23 @@ export class DiscoveryService implements OnModuleInit {
    * backfill). Same filters as a search: professional work, one row per posting.
    */
   async indexJobs(jobs: NormalizedJob[]): Promise<number> {
-    let stored = 0;
+    return (await this.indexJobIds(jobs)).length;
+  }
+
+  /** indexJobs, returning the stored rows' ids in the order given (the guest search keeps them). */
+  async indexJobIds(jobs: NormalizedJob[]): Promise<string[]> {
+    const ids: string[] = [];
     for (const raw of dedupeJobs(jobs.filter((j) => !isBlueCollar(j.title)))) {
       try {
-        await this.indexJob(raw);
-        stored++;
+        const { id } = await this.indexJob(raw);
+        if (!ids.includes(id)) ids.push(id);
       } catch (err) {
         this.logger.warn(
           `Skipped ${raw.source} job ${raw.url}: ${String(err)}`,
         );
       }
     }
-    return stored;
+    return ids;
   }
 
   // One posting, one row, whichever board it came from. One company, one spelling.

@@ -1,0 +1,49 @@
+// A visitor using the public /search page before having an account: their CV, what Plato read from it, and their
+// searches. Known by a random token in an httpOnly cookie on their device (only its hash is stored). On signup or login
+// from that device it all moves onto the account and the row is deleted. Unclaimed rows are deleted after 7 days.
+model Guest {
+  id         String  @id @default(auto()) @map("_id") @db.ObjectId
+  token_hash String  @unique
+  ip         String?
+  user_agent String?
+
+  cv_storage_key String?
+  cv_name        String?
+  cv_mime        String?
+  cv_text        String?
+  cv_uploads     Int     @default(0)
+  // CvAnalysis: extraction + section statuses + findings, as onboarding's analyze makes them.
+  analysis       Json?
+  // The preference suggestion read from the CV (roles, locations, seniority...).
+  suggestion     Json?
+
+  // The open jobs the visitor ticked: saved on the account when it is claimed.
+  picked_job_ids String[] @default([]) @db.ObjectId
+
+  searches GuestSearch[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([ip, created_at])
+  @@index([created_at])
+  @@map("guests")
+}
+
+// One guest search: LinkedIn only. The visitor sees the first two jobs; the rest stay on the server until claimed.
+model GuestSearch {
+  id       String             @id @default(auto()) @map("_id") @db.ObjectId
+  guest_id String             @db.ObjectId
+  guest    Guest              @relation(fields: [guest_id], references: [id], onDelete: Cascade)
+  status   DiscoveryRunStatus @default(RUNNING)
+  query    Json
+  // Best first (BM25 against the CV); the first two are the open ones.
+  job_ids  String[]           @default([]) @db.ObjectId
+  error    String?
+
+  created_at DateTime @default(now())
+
+  @@index([guest_id, created_at])
+  @@index([created_at])
+  @@map("guest_searches")
+}

@@ -30,7 +30,7 @@ export class MatchingService {
     });
     if (!matches.length) return { ranked: 0, shortlisted: 0 };
 
-    const keywords = this.buildKeywords(snapshot);
+    const keywords = matchKeywords(snapshot);
     const documents = matches.map((m) =>
       [m.job.title, m.job.company, m.job.description ?? '']
         .join(' ')
@@ -62,16 +62,24 @@ export class MatchingService {
       shortlisted: Math.min(shortlistSize, ranked.length),
     };
   }
+}
 
-  private buildKeywords(snapshot: JobSeekerSnapshot): string[] {
-    const terms = [
-      ...snapshot.skills,
-      ...snapshot.roles,
-      ...snapshot.experienceKeywords,
-    ]
-      .map((t) => t.trim().toLowerCase())
-      .filter(Boolean);
+/** The words a job is scored on (BM25): the seeker's skills, roles and work history. */
+export function matchKeywords(snapshot: JobSeekerSnapshot): string[] {
+  const terms = [
+    ...snapshot.skills,
+    ...snapshot.roles,
+    ...snapshot.experienceKeywords,
+  ]
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+  return [...new Set(terms)].map(escapeRegExp);
+}
 
-    return [...new Set(terms)].map(escapeRegExp);
-  }
+/** Indexes of `documents`, best first, scored against `keywords` (the same BM25 a search ranks with). */
+export function rankDocuments(documents: string[], keywords: string[]) {
+  const scores = keywords.length
+    ? (BM25(documents, keywords) as number[])
+    : documents.map(() => 0);
+  return documents.map((_, i) => i).sort((a, b) => scores[b] - scores[a]);
 }

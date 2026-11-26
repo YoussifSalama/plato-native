@@ -318,6 +318,23 @@ describe('BoardsAdapter', () => {
     ).toContain(JobSource.INDEED);
   });
 
+  // QC 2026-11-26: adding the US and Canada halved Egypt's and the UAE's board runs (Bayt 34 -> 20 jobs).
+  it('a country added to a search takes no runs from the others', () => {
+    const a = new BoardsAdapter({} as never);
+    const q = (countries: string[]) =>
+      query({
+        locations: ['Cairo'],
+        countries,
+        remoteTypes: ['any'],
+        titles: ['Backend Engineer', 'Node.js Developer', 'API Developer'],
+      });
+    const local = (countries: string[]) =>
+      a
+        .plan(q(countries))
+        .filter((r) => r.country === 'EG' || r.country === 'AE').length;
+    expect(local(['EG', 'AE', 'US', 'CA'])).toBe(local(['EG', 'AE']));
+  });
+
   it('reports a board failed only when all its runs failed', async () => {
     const apify = {
       runActor: jest.fn((actorId: string) =>

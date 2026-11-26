@@ -230,10 +230,30 @@ type PlaceQuery = Pick<
 // Where to search. Relocating seekers get the countries they chose (any
 // city inside them); others get their own places.
 export function searchPlaces(query: PlaceQuery): string[] {
-  return query.willingToRelocate
-    ? query.countries.map(countryName)
-    : query.locations;
+  if (query.willingToRelocate) return query.countries.map(countryName);
+  if (!query.countries.length) return query.locations;
+  // QC 2026-11-26: the search's countries are the places. Before, a New search for Egypt + UAE sent LinkedIn only the
+  // saved "Cairo", so no UAE (or US, Canada) job ever came from it. Own cities inside those countries stay (more
+  // precise); each other country is searched by name; saved cities outside them are not searched.
+  const own = query.locations.filter((l) => {
+    const c = resolveCountry(l);
+    return !c || query.countries.includes(c);
+  });
+  const rest = query.countries
+    .filter((c) => !own.some((l) => resolveCountry(l) === c))
+    .map(countryName);
+  return [...own, ...rest];
 }
+
+/**
+ * How much a search grows with its markets: two countries = the usual budget, each one past that adds half, up to
+ * four (2x). QC 2026-11-26: with a fixed budget, adding the US and Canada halved Egypt's and the UAE's board results.
+ */
+export const marketScale = (query: Pick<PlaceQuery, 'countries'>) =>
+  Math.max(
+    1,
+    Math.min(4, new Set(query.countries.map((c) => c.toUpperCase())).size) / 2,
+  );
 
 // One place per country, for sources billed per search: two cities in one
 // country shouldn't crowd out a second country.

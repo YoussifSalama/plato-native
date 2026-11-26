@@ -17,6 +17,10 @@ export type DiscoveryQueryOverrides = Partial<
   strictTitles?: boolean;
   // New search: the sentence the seeker wrote, stored on the run as written.
   sentence?: string;
+  // New search: the form IS the search. An empty work mode or employment field means "any", never the saved
+  // preference (QC 2026-11-26: the same CV and the same form gave 118 or 53 jobs, depending on what the CV reading
+  // had once suggested for work mode).
+  exact?: boolean;
 } & Partial<
     Pick<
       DiscoveryQuery,
@@ -54,8 +58,12 @@ export function mergeDiscoveryQuery(
     titles: pick(overrides.titles, base.titles),
     locations,
     countries,
-    remoteTypes: pick(overrides.remoteTypes, base.remoteTypes),
-    jobTypes: pick(overrides.jobTypes, base.jobTypes),
+    remoteTypes: overrides.exact
+      ? pick(overrides.remoteTypes, ['any'])
+      : pick(overrides.remoteTypes, base.remoteTypes),
+    jobTypes: overrides.exact
+      ? [...new Set(overrides.jobTypes ?? [])]
+      : pick(overrides.jobTypes, base.jobTypes),
     industries: pick(overrides.industries, base.industries),
     visaSponsorshipRequired:
       overrides.visaSponsorshipRequired ?? base.visaSponsorshipRequired,

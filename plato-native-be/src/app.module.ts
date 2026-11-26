@@ -26,6 +26,7 @@ import { CreditsModule } from './modules/credits/credits.module';
 import { MailModule } from './modules/mail/mail.module';
 import { InsightsModule } from './modules/insights/insights.module';
 import { QuizzesModule } from './modules/quizzes/quizzes.module';
+import { GuestModule } from './modules/guest/guest.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { QuizzesModule } from './modules/quizzes/quizzes.module';
     MailModule,
     InsightsModule,
     QuizzesModule,
+    GuestModule,
   ],
   controllers: [AppController],
   providers: [

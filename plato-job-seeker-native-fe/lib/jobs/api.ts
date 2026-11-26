@@ -284,7 +284,7 @@ export type ParsedSearch = {
   willingToRelocate: boolean | null
 }
 const parseSearch = (text: string, polish = false) => request<ParsedSearch>(apiClient.post("/job-seeker/discover/parse", { text, ...(polish && { polish }) }))
-export type StartSearch = SearchRules & { threadId: string; sentence?: string; titles: string[]; strictTitles?: boolean; countries?: string[]; remoteTypes?: string[]; jobTypes?: string[]; visaSponsorshipRequired?: boolean }
+export type StartSearch = SearchRules & { threadId: string; sentence?: string; titles: string[]; strictTitles?: boolean; exact?: boolean; countries?: string[]; remoteTypes?: string[]; jobTypes?: string[]; visaSponsorshipRequired?: boolean }
 const startSearch = (body: StartSearch) => request<DiscoveryRun>(apiClient.post("/job-seeker/discover", body))
 // On Start: does the search fit the profile? If not, why, and the closest search that does (one AI call).
 // New search rules, all enforced by the search on every job (server: fitsSearch).

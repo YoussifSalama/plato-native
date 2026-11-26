@@ -1,3 +1,4 @@
+import { steady } from '../ai/steady';
 import { Agent } from '@openai/agents';
 import { preferenceSuggestionSchema } from './preferences.schema';
 
@@ -44,6 +45,7 @@ export function createPreferenceSuggestionAgent(model: string) {
     name: 'Preference Suggestion Agent',
     instructions: INSTRUCTIONS,
     model,
+    ...steady(model),
     outputType: preferenceSuggestionSchema,
   });
 }

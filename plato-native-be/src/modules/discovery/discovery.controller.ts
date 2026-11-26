@@ -82,6 +82,7 @@ const startRunSchema = z.object({
   threadId: z.string().optional(),
   titles: z.array(z.string().min(1)).max(8).optional(),
   strictTitles: z.boolean().optional(),
+  exact: z.boolean().optional(),
   sentence: z.string().trim().max(600).optional(),
   countries: z.array(z.enum(COUNTRY_CODES)).optional(),
   visaSponsorshipRequired: z.boolean().optional(),

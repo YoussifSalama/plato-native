@@ -1,6 +1,7 @@
 import {
   countriesOf,
   inCountries,
+  marketScale,
   placeIn,
   primaryPlaces,
   resolveCountry,
@@ -77,6 +78,27 @@ describe('places', () => {
       'Cairo, Egypt',
     ]);
   });
+  // QC 2026-11-26: a New search for Egypt + UAE sent LinkedIn only the saved "Cairo".
+  it('searches every chosen country: own city inside it, else its name; saved cities elsewhere are not searched', () => {
+    const cairo = q({ locations: ['Cairo'], countries: ['EG', 'AE'] });
+    expect(searchPlaces(cairo)).toEqual(['Cairo', 'UAE']);
+    expect(
+      primaryPlaces({ ...cairo, countries: ['EG', 'AE', 'US', 'CA'] }, 4),
+    ).toEqual(['Cairo', 'UAE', 'United States', 'Canada']);
+    expect(
+      searchPlaces(q({ locations: ['Cairo'], countries: ['AE'] })),
+    ).toEqual(['UAE']);
+  });
+  it('grows the search with its markets, up to 2x at four countries', () => {
+    const all = ['EG', 'AE', 'US', 'CA', 'SA', 'QA', 'KW', 'GB', 'DE'];
+    expect(
+      [0, 1, 2, 3, 4, 9].map((n) =>
+        marketScale({ countries: all.slice(0, n) }),
+      ),
+    ).toEqual([1, 1, 1, 1.5, 2, 2]);
+    // The same country twice (any case) is one market.
+    expect(marketScale({ countries: ['us', 'US', 'EG'] })).toBe(1);
+  });
   it('sends a board the own city in its country, else the country', () => {
     expect(placeIn(q({}), 'EG')).toBe('Cairo, Egypt');
     expect(placeIn(q({}), 'US')).toBe('United States');
@@ -126,6 +148,30 @@ describe('country in the query', () => {
     expect(
       mergeDiscoveryQuery(q, { titles: ['Full Stack Developer'] }).titles,
     ).toEqual(['Full Stack Developer']);
+  });
+
+  // QC 2026-11-26: New search's empty work mode fell back to the CV-suggested one (remote only: 53 jobs, not 118).
+  it('New search (exact): an empty work mode or employment means any, not the saved preference', () => {
+    const saved = {
+      ...base,
+      remoteTypes: ['remote'],
+      jobTypes: ['full_time'],
+    } as DiscoveryQuery;
+    const exact = mergeDiscoveryQuery(saved, {
+      exact: true,
+      remoteTypes: [],
+      jobTypes: [],
+    });
+    expect(exact.remoteTypes).toEqual(['any']);
+    expect(exact.jobTypes).toEqual([]);
+    expect(
+      mergeDiscoveryQuery(saved, { exact: true, remoteTypes: ['hybrid'] })
+        .remoteTypes,
+    ).toEqual(['hybrid']);
+    // The chat (no exact) still treats empty as "not said".
+    expect(mergeDiscoveryQuery(saved, { remoteTypes: [] }).remoteTypes).toEqual(
+      ['remote'],
+    );
   });
 
   it('follows new places from chat, and an explicit list wins', () => {

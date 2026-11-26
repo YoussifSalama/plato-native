@@ -7,7 +7,7 @@ import {
 } from '../discovery-run.helpers';
 import { ApifyService } from '../apify.service';
 import { BoardDef, Country } from './boards/types';
-import { placeIn } from '../countries';
+import { marketScale, placeIn } from '../countries';
 import { locationText } from './boards/util';
 import { builtin } from './boards/builtin';
 import { dice } from './boards/dice';
@@ -166,7 +166,8 @@ export class BoardsAdapter implements DiscoveryAdapter {
         .filter(({ board }) => i === 0 || board.perTitle !== false)
         .map(({ board, country }) => ({ board, country, title })),
     );
-    return runs.slice(0, maxRuns());
+    // More markets, more runs (marketScale): a third or fourth country must not take runs from the first two.
+    return runs.slice(0, Math.round(maxRuns() * marketScale(query)));
   }
 
   // Which boards this run will search: the cards the seeker sees.

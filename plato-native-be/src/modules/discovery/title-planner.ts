@@ -1,3 +1,4 @@
+import { steady } from '../ai/steady';
 import { Agent, run } from '@openai/agents';
 import { z } from 'zod';
 import { metered } from '../usage/usage';
@@ -138,6 +139,7 @@ export async function planTitles(
       name: 'Search Title Planner',
       instructions: INSTRUCTIONS,
       model,
+      ...steady(model),
       outputType: planSchema,
     });
     const input = JSON.stringify({

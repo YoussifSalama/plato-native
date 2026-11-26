@@ -15,7 +15,7 @@ import { JobSeekerService } from '../user/job-seeker.service';
 import { JobSeekerDocumentService } from '../user/job-seeker-document.service';
 import { JobSeekerDocumentVersionService } from '../user/job-seeker-document-version.service';
 import { JobSeekerProfileService } from '../user/job-seeker-profile.service';
-import { ProfileExtractionAgentService } from './profile-extraction-agent.service';
+import { CvAnalysisService, profileInputOf } from './cv-analysis.service';
 import { ProfileEvaluationService } from './profile-evaluation.service';
 import { profileEditSchema } from './profile-edit.schema';
 import { Finding } from './profile-extraction.schema';
@@ -35,7 +35,7 @@ export class ProfileExtractionController {
     private readonly documentService: JobSeekerDocumentService,
     private readonly versionService: JobSeekerDocumentVersionService,
     private readonly profileService: JobSeekerProfileService,
-    private readonly agentService: ProfileExtractionAgentService,
+    private readonly cvAnalysis: CvAnalysisService,
     private readonly evaluationService: ProfileEvaluationService,
   ) {}
 
@@ -69,60 +69,12 @@ export class ProfileExtractionController {
       .map((d) => `# ${d.type}: ${d.name ?? 'document'}\n${d.extracted_text}`)
       .join('\n\n');
 
-    const rawExtraction = await this.agentService.extract(combinedText);
-    // Defense-in-depth against the model padding a list with a blank
-    // entry — drop anything missing its required text field(s) rather
-    // than trust the prompt alone.
-    const extraction = {
-      ...rawExtraction,
-      experience: rawExtraction.experience.filter((e) => e.company && e.title),
-      education: rawExtraction.education.filter(
-        (e) => e.institution && e.degree,
-      ),
-      certifications: rawExtraction.certifications.filter((c) => c.name),
-      languages: rawExtraction.languages.filter((l) => l.language),
-    };
-    const deterministic = this.evaluationService.evaluate(extraction);
-    const evaluation = this.evaluationService.deriveStatuses(
-      deterministic,
-      extraction.findings,
+    const analysis = await this.cvAnalysis.analyze(combinedText);
+    await this.profileService.replaceProfile(
+      jobSeekerId,
+      profileInputOf(analysis),
     );
-    const findings = this.evaluationService.augmentFindings(
-      deterministic,
-      extraction.findings,
-    );
-
-    await this.profileService.replaceProfile(jobSeekerId, {
-      experiences: extraction.experience.map((e) => ({
-        company: e.company,
-        title: e.title,
-        start_date: parseDate(e.start_date),
-        end_date: parseDate(e.end_date),
-        description: e.description ?? undefined,
-        technologies: e.technologies,
-      })),
-      educations: extraction.education.map((e) => ({
-        institution: e.institution,
-        degree: e.degree,
-        field: e.field ?? undefined,
-        start_date: parseDate(e.start_date),
-        end_date: parseDate(e.end_date),
-      })),
-      certifications: extraction.certifications.map((c) => ({
-        name: c.name,
-        issuer: c.issuer ?? undefined,
-        issue_date: parseDate(c.issue_date),
-        expiration_date: parseDate(c.expiration_date),
-      })),
-      languages: extraction.languages.map((l) => ({
-        language: l.language,
-        proficiency: l.proficiency ?? undefined,
-      })),
-      skills: extraction.skills,
-      location: extraction.location,
-      evaluation,
-      findings,
-    });
+    const { evaluation } = analysis;
 
     // A version is a document batch, not an analysis run — mark it consumed,
     // don't bump the counter. The next upload lazily starts a new batch.

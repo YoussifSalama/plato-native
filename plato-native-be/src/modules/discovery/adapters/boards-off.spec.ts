@@ -39,7 +39,8 @@ it('caps runs per search and lets every market in before second titles', () => {
       remoteTypes: ['remote'],
       willingToRelocate: false,
     } as never);
-    expect(plan).toHaveLength(6);
+    // Three markets (US, AE, EG): the cap grows by half (marketScale), 6 -> 9.
+    expect(plan).toHaveLength(9);
     // round-robin: US, AE, EG and the remote boards each get a run first
     expect(plan.slice(0, 4).map((r) => r.country)).toEqual([
       'US',

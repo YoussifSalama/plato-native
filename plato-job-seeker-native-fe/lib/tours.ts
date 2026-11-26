@@ -1029,67 +1029,18 @@ const TOURS: { match: (path: string, state: string | null) => boolean; tour: Tou
   // ───────── Career
   // ───────────── /career ─────────────
   {
-    match: (p, s) => p === "/career" && s === "career.new",
-    tour: {
-      id: "career-new",
-      name: "Career",
-      steps: [
-        { target: '[data-tour="career-overview"]', title: "Where you start", body: "You're at Get started until your first score. Readiness for your target roles and the four bars under it fill in as you practise." },
-        { target: '[data-tour="career-recommendations"]', title: "Start here", body: "The first card is the best first step, usually a practice interview. Each card says why it helps and how long it takes." },
-        { target: '[data-tour="career-snapshot"]', title: "Skills Plato knows about", body: "Skills from your CV and your matches. They stay Unproven until an assessment or a challenge measures them. Full snapshot shows them all." },
-        { target: '[data-tour="career-results"]', title: "Your first score lands here", body: "Every assessment, interview and challenge you finish shows up here, with a link to its full report." },
-        { target: '[data-ai="career.coach"]', title: "Ask your coach", body: "Opens the career coach beside the page. Ask for resume help or what to do next." },
-        CAREER_TABS,
-        ...SHELL.slice(2),
-      ],
-    },
-  },
-  {
-    match: (p, s) => p === "/career" && s === "career.results",
-    tour: {
-      id: "career-progress",
-      name: "Career",
-      steps: [
-        { target: '[data-tour="career-overview"]', title: "Where you stand", body: "Your stage and your readiness for the roles you want. Both follow your scores." },
-        { target: '[data-tour="career-dimensions"]', title: "What employers look at", body: "Resume, interviewing, skills proven and proof of work. Click a bar to work on it." },
-        { target: '[data-tour="career-recommendations"]', title: "What to do next", body: "Ranked by how much each step raises your readiness. Start the top one." },
-        { target: '[data-tour="career-continue"]', title: "Pick up where you left off", body: "Unfinished interviews, challenge drafts and coach chats. Resume opens them where you stopped." },
-        { target: '[data-tour="career-results"]', title: "Your results", body: "Your latest scores. Open one for the full report; All results opens your whole history." },
-        CAREER_TABS,
-        ...SHELL.slice(2),
-      ],
-    },
-  },
-  {
-    // Default (loading or load error): only the header and tabs are sure to be there.
     match: (p) => p === "/career",
     tour: {
       id: "career",
       name: "Career",
       steps: [
+        { target: '[data-tour="career-overview"]', title: "How ready you are", body: "Your readiness for your first preferred role, and the four things employers look at. Click one to work on it." },
+        { target: '[data-tour="career-catalog"]', title: "Every test and practice", body: "Interviews, aptitude tests, skills, business English and resume work. Pick a category or search, then Start." },
+        { target: '[data-tour="career-prep"]', title: "Prep for an interview", body: "Pick one of your jobs, or paste any job post. Plato builds the interview from it." },
+        { target: '[data-tour="career-continue"]', title: "Pick up where you left off", body: "Unfinished interviews, challenge drafts and coach chats. Resume opens them where you stopped." },
+        { target: '[data-tour="career-recommendations"]', title: "What to do next", body: "Ranked by how much each step raises your readiness. Start the top one." },
         CAREER_TABS,
-        { target: '[data-tour="career-overview"]', title: "Where you stand", body: "Your stage, your readiness for the roles you want, and the four things employers look at." },
-        { target: '[data-tour="career-recommendations"]', title: "What to do next", body: "The most valuable next steps, each with the reason. Start the top one." },
-        { target: '[data-tour="career-results"]', title: "Your results", body: "Every score links to its full report." },
-        { target: '[data-ai="career.coach"]', title: "Ask your coach", body: "Opens the career coach beside the page." },
         ...SHELL.slice(2),
-      ],
-    },
-  },
-
-  // ───────────── /career/library ─────────────
-  {
-    match: (p) => p === "/career/library",
-    tour: {
-      id: "career-library",
-      name: "Practice library",
-      steps: [
-        CAREER_TABS,
-        { target: '[data-tour="library-filters"]', title: "Find a practice", body: "Pick a category or search by name." },
-        { target: '[data-tour="library-list"]', title: "Start one", body: "Open goes to its own screen. Start opens your career coach with the request ready." },
-        { target: '[data-ai="library.clear"]', title: "Nothing matched", body: "Clear search shows every practice again." },
-        { target: '[data-ai="library.interviews"]', title: "Interview practice", body: "Interviews are not in this list. This card takes you to the interview setup." },
-        ...SHELL.slice(2, 3),
       ],
     },
   },

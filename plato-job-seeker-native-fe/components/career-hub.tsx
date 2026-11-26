@@ -10,6 +10,7 @@ import { InfoTip } from "@/components/info-tip"
 import { timeAgo } from "@/lib/jobs/links"
 import type { Activity, Recommendation } from "@/lib/career-hub/snapshot"
 import type { HubKind } from "@/lib/career-hub/store"
+import { CAT_ACCENT, startHref, type Practice } from "@/lib/career-hub/catalog"
 
 // Pieces shared by the Career hub and its practice screens. Built from the same tokens and
 // card style as the rest of the app (white card, 1px border, primary-soft icon tiles).
@@ -165,6 +166,24 @@ export function RecommendationCard({ r, primary, index }: { r: Recommendation; p
         </Link>
       </div>
     </div>
+  )
+}
+
+// One test or practice in a grid (Career overview, Practice library). Cards in a grid share one size.
+export function PracticeCard({ p, dataAi }: { p: Practice; dataAi: string }) {
+  return (
+    <Link href={startHref(p)} data-ai={dataAi} className="card-lift group flex h-full min-w-0 flex-col gap-2 rounded-2xl border bg-card p-4 shadow-card">
+      <span className="flex items-center justify-between gap-2">
+        <StatIcon icon={p.icon} accent={CAT_ACCENT[p.cat]} />
+        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-text-secondary">{p.cat}</span>
+      </span>
+      <b className="type-card-title mt-1 line-clamp-2 leading-snug text-foreground">{p.title}</b>
+      <span className="truncate text-[13px] text-text-secondary">{p.body}</span>
+      <span className="mt-auto flex items-center justify-between gap-2 pt-2">
+        <span className="type-meta truncate text-text-secondary">{p.meta}</span>
+        <span className={cn(OUTLINE_CTA, "group-hover:border-primary-line group-hover:text-primary")}>{p.cta ?? "Start"}</span>
+      </span>
+    </Link>
   )
 }
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { BriefcaseBusiness, Check, ClipboardPaste, Search } from "lucide-react"
 import { cn } from "cn"
 import { EmptyState, MatchPill, MonoTile } from "@/components/plato-ui"
@@ -15,8 +16,12 @@ type JobTab = "discover" | "saved" | "applied"
 const PAGE_STEP = 8
 export type PickedJob = { id: string; title: string; company: string }
 
+const TABS: JobTab[] = ["discover", "saved", "applied"]
+
 export function JobPicker({ pickedId, onPick, onPaste }: { pickedId: string | null; onPick: (j: PickedJob) => void; onPaste: () => void }) {
-  const [tab, setTab] = useState<JobTab>("discover")
+  // ?jobs=applied|saved opens that list first (the Career prep card's "See all" link).
+  const asked = useSearchParams().get("jobs") as JobTab | null
+  const [tab, setTab] = useState<JobTab>(asked && TABS.includes(asked) ? asked : "discover")
   const [q, setQ] = useState("")
   const [take, setTake] = useState(PAGE_STEP)
   const [list, setList] = useState<{ items: JobMatch[]; total: number } | null>(null)

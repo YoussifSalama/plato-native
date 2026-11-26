@@ -9,7 +9,7 @@ import { summaryName } from "@/lib/interviews/flow"
 import { getMatches, type JobMatch } from "@/lib/jobs/api"
 import { getPreferences } from "@/lib/preferences/api"
 import { getSkillGap, listCredentials, type Credential, type SkillGap } from "@/lib/skills/api"
-import { bankFor, challengeById, challengeFor, slug } from "./content"
+import { bankFor, challengeById, challengeFor } from "./content"
 import { useHubState, type Draft, type HubKind, type HubResult } from "./store"
 
 // Everything Plato knows about the seeker's career development, read from the existing
@@ -144,7 +144,7 @@ export function computeSnapshot(d: CareerData, allResults: HubResult[], drafts: 
   const rows = new Map<string, SkillRow>()
   const add = (name: string, from?: string) => {
     const key = skillKey(name)
-    const row = rows.get(key) ?? { key, name: key, from: [], level: null, status: "unproven" as SkillStatus, evidence: "On your CV, not yet proven", trend: null, assessHref: bankFor(key) ? `/career/assessments/${slug(bankFor(key)!.skill)}` : null, proofHref: proofHref(key) }
+    const row = rows.get(key) ?? { key, name: key, from: [], level: null, status: "unproven" as SkillStatus, evidence: "On your CV, not yet proven", trend: null, assessHref: null, proofHref: proofHref(key) }
     if (from && !row.from.includes(from) && from !== key) row.from.push(from)
     rows.set(key, row)
     return row
@@ -170,7 +170,7 @@ export function computeSnapshot(d: CareerData, allResults: HubResult[], drafts: 
     row.evidence = row.evidence.startsWith("On your CV") ? "Verified certificate" : `${row.evidence} · verified certificate`
   })
   rows.forEach((r) => (r.status = r.level === null ? "unproven" : r.level >= 65 ? "proven" : "needs-work"))
-  const gapRows: SkillRow[] = d.gaps.slice(0, 4).filter((g) => !rows.has(skillKey(g.skill))).map((g) => ({ key: g.skill, name: g.skill, from: [], level: null, status: "gap", evidence: `${g.missingIn} of your matches ask for it`, trend: null, assessHref: bankFor(g.skill) ? `/career/assessments/${slug(bankFor(g.skill)!.skill)}` : null, proofHref: proofHref(g.skill), missingIn: g.missingIn }))
+  const gapRows: SkillRow[] = d.gaps.slice(0, 4).filter((g) => !rows.has(skillKey(g.skill))).map((g) => ({ key: g.skill, name: g.skill, from: [], level: null, status: "gap", evidence: `${g.missingIn} of your matches ask for it`, trend: null, assessHref: null, proofHref: proofHref(g.skill), missingIn: g.missingIn }))
   const order: Record<SkillStatus, number> = { proven: 0, "needs-work": 1, unproven: 2, gap: 3 }
   const skills = [...[...rows.values()].sort((a, b) => order[a.status] - order[b.status] || (b.level ?? 0) - (a.level ?? 0)), ...gapRows]
 
@@ -183,7 +183,7 @@ export function computeSnapshot(d: CareerData, allResults: HubResult[], drafts: 
   const dimensions: Dimension[] = [
     { key: "resume", label: "Resume", value: d.resume?.score ?? null, hint: d.resume ? `${d.resume.topFixes.length} quick fix${d.resume.topFixes.length === 1 ? "" : "es"} left` : "Not scored yet", href: `/career?prompt=${encodeURIComponent("Score my resume out of 100 and list the quick fixes")}` },
     { key: "interview", label: "Interviewing", value: interviewing, hint: interviewScores.length ? `Average of your last ${Math.min(3, interviewScores.length)}` : "No interviews yet", href: "/career/interviews/new" },
-    { key: "skills", label: "Skills proven", value: provenShare, hint: `${top.filter((r) => r.status === "proven").length} of ${top.length || 0} main skills`, href: "/career/quizzes" },
+    { key: "skills", label: "Skills proven", value: provenShare, hint: `${top.filter((r) => r.status === "proven").length} of ${top.length || 0} main skills`, href: "/career/proof" },
     { key: "proof", label: "Proof of work", value: Math.min(100, proofs * 34), hint: `${proofs} challenge${proofs === 1 ? "" : "s"} passed`, href: "/career/proof" },
   ]
   const weights: Record<string, number> = { resume: 0.3, interview: 0.3, skills: 0.25, proof: 0.15 }
@@ -208,18 +208,20 @@ export function computeSnapshot(d: CareerData, allResults: HubResult[], drafts: 
   // What to do next, most valuable first, each with the reason.
   const recs: (Recommendation & { p: number })[] = []
   if (!interviewScores.length) recs.push({ id: "first-interview", kind: "interview", title: "Do your first practice interview", why: "You haven't practised an interview yet. It's the quickest way to raise your readiness.", href: "/career/interviews/new?target=general", cta: "Start", impact: "High", minutes: 15, p: 90 })
-  const unproven = skills.find((s) => s.status === "unproven" && s.assessHref)
-  if (unproven) recs.push({ id: `assess-${unproven.key}`, kind: "assessment", title: `Assess your ${unproven.name}`, why: "It's on your CV, but nothing shows your level yet. A score carries more weight than a keyword.", href: unproven.assessHref!, cta: "Start", impact: "High", minutes: 8, p: 80 })
+  // Per-skill assessments were retired (their links land on Quizzes, whose scores aren't per skill), so a
+  // skill is proven by a challenge or a verified certificate: that is where these steps lead.
+  const unproven = skills.find((s) => s.status === "unproven")
+  if (unproven) recs.push({ id: `prove-cv-${unproven.key}`, kind: "proof", title: `Prove your ${unproven.name}`, why: "It's on your CV, but nothing shows your level yet. A scored challenge carries more weight than a keyword.", href: unproven.proofHref, cta: "Start", impact: "High", minutes: challengeFor(unproven.key).minutes, p: 80 })
   const gap = d.gaps[0]
   if (gap) recs.push({ id: `prove-${gap.skill}`, kind: "proof", title: `Prove ${gap.skill}`, why: `${gap.missingIn} of your matches ask for it and your CV doesn't show it. A finished challenge fills the gap.`, href: proofHref(gap.skill), cta: "Start", impact: "High", minutes: challengeFor(gap.skill).minutes, p: 76 })
   const best = d.matches[0]
   if (best) recs.push({ id: `sim-${best.job.id}`, kind: "simulation", title: `Rehearse your ${best.job.company} interview`, why: `Your best match (${Math.round(best.match_percent)}%). Practise with questions built from its job post before you apply.`, href: `/career/interviews/new?${new URLSearchParams({ target: "job", job: best.job.id, jt: best.job.title, jc: best.job.company })}`, cta: "Set up", impact: interviewScores.length ? "High" : "Medium", minutes: 20, p: interviewScores.length ? 85 : 70 })
   const weak = skills.find((s) => s.status === "needs-work")
-  if (weak) recs.push({ id: `retake-${weak.key}`, kind: "assessment", title: `Raise your ${weak.name} score`, why: `You scored ${weak.level}/100. Review the explanations, then retake it to update your snapshot.`, href: weak.assessHref ?? weak.proofHref, cta: "Retake", impact: "Medium", minutes: 8, p: 66 })
+  if (weak) recs.push({ id: `retake-${weak.key}`, kind: "assessment", title: `Raise your ${weak.name} score`, why: `You scored ${weak.level}/100. Read the feedback, then retake the challenge to update your snapshot.`, href: weak.proofHref, cta: "Retake", impact: "Medium", minutes: 8, p: 66 })
   if (d.resume && d.resume.score < 80 && d.resume.topFixes[0]) recs.push({ id: "resume", kind: "resume", title: `Lift your resume from ${d.resume.score}`, why: d.resume.topFixes[0], href: `/career?prompt=${encodeURIComponent(`Help me raise my resume score. Start with: ${d.resume.topFixes[0]}`)}`, cta: "Fix", impact: "Medium", minutes: 5, p: 62 })
   if (interviewing !== null && interviewing < 70) recs.push({ id: "interview-again", kind: "interview", title: "Rework your weakest answers", why: `Your interviews average ${interviewing}/100. A behavioral round targets structure and results.`, href: "/career/interviews/new?target=general&focus=behavioral", cta: "Practise", impact: "Medium", minutes: 15, p: 60 })
   if (!history.some((h) => h.kind === "proof")) recs.push({ id: "first-proof", kind: "proof", title: "Finish a proof-of-skill challenge", why: "Real work samples are what hiring managers trust most.", href: "/career/proof", cta: "Browse", impact: "Medium", minutes: 20, p: 50 })
-  if (!skills.some((s) => s.assessHref)) recs.push({ id: "pick-assessment", kind: "assessment", title: "Take a hiring quiz", why: "Practise the test a company gives candidates, with a score per section.", href: "/career/quizzes", cta: "Browse", impact: "Medium", minutes: 8, p: 45 })
+  recs.push({ id: "pick-assessment", kind: "assessment", title: "Take a hiring quiz", why: "Practise the test a company gives candidates, with a score per section.", href: "/career/quizzes", cta: "Browse", impact: "Medium", minutes: 8, p: 45 })
   const recommendations = recs.sort((a, b) => b.p - a.p).map(({ p, ...r }) => (void p, r))
 
   // Improvement: the same skill measured more than once.

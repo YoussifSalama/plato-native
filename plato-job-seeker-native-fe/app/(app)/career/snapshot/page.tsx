@@ -162,7 +162,7 @@ export default function SnapshotPage() {
                 title="No scored activities yet"
                 hint="Every assessment, interview and challenge you finish is listed here with its score."
                 action={
-                  <Link href="/career/library" data-ai="snapshot.library" className={SOFT_CTA}>
+                  <Link href="/career" data-ai="snapshot.library" className={SOFT_CTA}>
                     Browse practice
                   </Link>
                 }

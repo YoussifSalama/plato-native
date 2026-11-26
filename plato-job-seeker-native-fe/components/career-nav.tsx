@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname, useRouter } from "next/navigation"
-import { BookOpen, ClipboardCheck, Gauge, Lightbulb, Mic, Trophy, UserRound } from "lucide-react"
+import { ClipboardCheck, Gauge, Lightbulb, Mic, Trophy, UserRound } from "lucide-react"
 import { PillTabs } from "@/components/pill-tabs"
 
 // One navigation for every Career page, so each part of Career is one click from the others.
@@ -12,7 +12,6 @@ const TABS = [
   { key: "/career/proof", label: "Proof of skills", icon: Trophy },
   { key: "/career/skills", label: "Skills gap", icon: Lightbulb },
   { key: "/career/snapshot", label: "Snapshot", icon: UserRound },
-  { key: "/career/library", label: "Practice library", icon: BookOpen },
 ] as const
 
 export function CareerNav({ active: forced }: { active?: string } = {}) {

@@ -186,7 +186,7 @@ function JobStep({ a, paste, onBack, onPick, onPaste, onNext }: { a: FlowAnswers
   return (
     <Question id="job" tourState="interview-new.job" title="Which job?" hint="Questions come from its posting and your CV, like the real interview would.">
       <JobPicker pickedId={a.job && a.job !== "paste" ? a.job : null} onPick={onPick} onPaste={() => setPasting(true)} />
-      <QuestionNav dataAi="interview.new.next" onBack={onBack} next={!!a.job || !!a.retry} onNext={onNext} />
+      <QuestionNav dataAi="interview.new.next" onBack={onBack} next={!!a.retry || (a.job === "paste" ? pasteOk(paste) : !!a.job)} onNext={onNext} />
     </Question>
   )
 }

@@ -92,7 +92,7 @@ function CommandPalette() {
       { id: "proof", label: "Proof of skills", hint: "Career", icon: Award, run: go("/career/proof"), words: "challenge work sample" },
       { id: "skills", label: "Skills gap", hint: "Career", icon: Target, run: go("/career/skills"), words: "learn certificate" },
       { id: "snapshot", label: "Profile snapshot", hint: "Career", icon: UserRound, run: go("/career/snapshot"), words: "history scores" },
-      { id: "library", label: "Practice library", hint: "Career", icon: BookOpen, run: go("/career/library"), words: "exercises" },
+      { id: "library", label: "Practice library", hint: "Career", icon: BookOpen, run: go("/career"), words: "exercises tests practice" },
       { id: "messages", label: "Messages", hint: "Go to", icon: MessageCircle, run: go(PAGE_PATH.messages), words: "inbox employers" },
       { id: "notifications", label: "Notifications", hint: "Go to", icon: Bell, run: go(PAGE_PATH.notifications), words: "updates" },
       { id: "profile", label: "Profile", hint: "Go to", icon: User, run: go(PAGE_PATH.profile), words: "resume cv experience documents answers preferences" },

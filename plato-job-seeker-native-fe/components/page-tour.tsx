@@ -91,7 +91,7 @@ export function PageTour() {
 
   return (
     <>
-      <div data-ai-skip className="pointer-events-none fixed right-5 bottom-[148px] z-40 flex items-center gap-2 sm:right-7 lg:bottom-[76px]">
+      <div data-ai-skip className="pointer-events-none fixed right-5 bottom-[72px] z-40 flex items-center gap-2 sm:right-7 sm:bottom-[76px]">
         <AnimatePresence>
           {hint && !steps && (
             <motion.button

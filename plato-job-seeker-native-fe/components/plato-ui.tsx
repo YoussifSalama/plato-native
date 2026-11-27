@@ -15,7 +15,7 @@ import { CountUp } from "@/components/count-up"
 //   buttons sm 36 · default 40 · lg 44; icon buttons size-9 / size-10
 
 // The one card surface. Add padding and layout at the call site.
-export const CARD = "fx rounded-2xl border bg-card shadow-card"
+export const CARD = "rounded-2xl border bg-card shadow-card"
 
 // A section's title with its one "see more" link, the same on every page.
 // Section icons are always brand cobalt: a page never takes its sidebar colour (the accent prop is ignored on purpose).

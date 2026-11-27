@@ -35,7 +35,7 @@ export function UnsubscribeCard() {
   }
 
   return (
-    <motion.section initial={reduced ? false : { opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={spring.enter} className="relative isolate flex w-full max-w-md flex-col items-center gap-5 overflow-hidden rounded-2xl border bg-card p-8 text-center shadow-[0_30px_60px_-40px_rgba(11,63,122,0.6)]">
+    <motion.section initial={reduced ? false : { opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={spring.enter} className="relative isolate flex w-full max-w-md flex-col items-center gap-5 overflow-hidden rounded-2xl border bg-card p-8 text-center shadow-[0_30px_60px_-40px_rgba(0,91,167,0.6)]">
       {/* The Home hero's glow: cobalt from the top left, azure from the bottom right. */}
       <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(70%_60%_at_0%_0%,color-mix(in_oklch,var(--primary)_9%,transparent),transparent_65%),radial-gradient(60%_55%_at_100%_100%,color-mix(in_oklch,var(--azure)_10%,transparent),transparent_70%)]" />
       <PlatoMark size={44} />

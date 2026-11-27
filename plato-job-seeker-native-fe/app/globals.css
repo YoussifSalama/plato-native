@@ -87,8 +87,8 @@
      (input/textarea/select) with their own dark-mode chrome under OS dark
      preference, fighting our explicit light backgrounds. */
   color-scheme: light;
-  /* Plato palette: night navy #0b3f7a (the action colour, 10.8:1 on white; the sidebar and headers use
-     the night blue #0b4f96 -> #08264c -> #050b16), brightening to azure #00a1e2. Azure and
+  /* Plato palette, taken from the logo: deep cobalt #005ba7 brightening to
+     azure #00a1e2. Cobalt is the action colour (6.9:1 on white); azure and
      sky are for gradients, glows and fills, never small text on white.
      Neutrals are cool navy-greys. Shared with plato-landing (globals.css)
      and the extension panel (panel.css): change all three together. */
@@ -98,27 +98,27 @@
   --card-foreground: #0e1b2c;
   --popover: #ffffff;
   --popover-foreground: #0e1b2c;
-  --primary: #0b3f7a;
+  --primary: #005ba7;
   --primary-foreground: #ffffff;
-  --primary-hover: #08305e;
-  --primary-soft: #e8eef7;
-  --primary-tint: #f4f7fb;
-  --primary-line: #c6d5ea;
+  --primary-hover: #004c8c;
+  --primary-soft: #e8f2fc;
+  --primary-tint: #f5f9fe;
+  --primary-line: #c9e0f5;
   --azure: #00a1e2;
   --sky: #a9dcf7;
-  --brand-deep: #062a52;
-  --secondary: #eef2f8;
-  --secondary-foreground: #0b4f96;
+  --brand-deep: #003a6e;
+  --secondary: #eef4fb;
+  --secondary-foreground: #0a6fc2;
   --muted: #eff3f8;
   --muted-foreground: #7a889c;
-  --accent: #e8eef7;
-  --accent-foreground: #0b3f7a;
+  --accent: #e8f2fc;
+  --accent-foreground: #005ba7;
   --destructive: #d92d20;
   --danger-soft: #fee4e2;
   --border: #e2e8f0;
   --input: #dce4ee;
-  --ring: #0b3f7a;
-  --chart-1: #0b3f7a;
+  --ring: #005ba7;
+  --chart-1: #005ba7;
   --chart-2: #00a1e2;
   --chart-3: #1c9a4b;
   --chart-4: #d97706;
@@ -126,12 +126,12 @@
   --radius: 0.625rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #0e1b2c;
-  --sidebar-primary: #0b3f7a;
+  --sidebar-primary: #005ba7;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e8eef7;
-  --sidebar-accent-foreground: #0b3f7a;
+  --sidebar-accent: #e8f2fc;
+  --sidebar-accent-foreground: #005ba7;
   --sidebar-border: #e8edf3;
-  --sidebar-ring: #0b3f7a;
+  --sidebar-ring: #005ba7;
   --success: #1c9a4b;
   --success-soft: #e3f9ea;
   --info: #0b7fab;
@@ -152,13 +152,13 @@
   --teal: #0d9488;
   --teal-soft: #ccfbf1;
   /* Surfaces borrowed from the landing page's cards. */
-  --brand-gradient: linear-gradient(135deg, #08264c 0%, #0b4f96 55%, #1a7fd0 100%);
+  --brand-gradient: linear-gradient(135deg, #005ba7 0%, #0a7fd0 55%, #00a1e2 100%);
   --brand-glow: rgba(0, 161, 226, 0.14);
-  --shadow-brand: 0 12px 30px -12px rgba(11, 63, 122, 0.45);
+  --shadow-brand: 0 12px 30px -12px rgba(0, 91, 167, 0.45);
   /* Elevation scale: card (resting, barely there), lift (hover), float (launchers, popovers). */
   --shadow-card: 0 1px 2px rgba(14, 27, 44, 0.04), 0 2px 6px -2px rgba(14, 27, 44, 0.04);
   --shadow-lift: 0 1px 2px rgba(14, 27, 44, 0.04), 0 10px 24px -12px rgba(14, 27, 44, 0.16);
-  --shadow-float: 0 12px 32px -12px rgba(8, 38, 76, 0.3), 0 2px 6px -2px rgba(14, 27, 44, 0.08);
+  --shadow-float: 0 12px 32px -12px rgba(0, 58, 110, 0.3), 0 2px 6px -2px rgba(14, 27, 44, 0.08);
 }
 
 /* Post-login product shell: the same palette on cool paper, softer
@@ -247,7 +247,7 @@
 
 /* Text in the logo's gradient (headlines, the big numbers). */
 @utility text-brand-gradient {
-  background-image: linear-gradient(90deg, #0b3f7a, #0b4f96 45%, #1a8fe0);
+  background-image: linear-gradient(90deg, #005ba7, #0a7fd0 50%, #00a1e2);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -324,80 +324,16 @@
 @utility shadow-float {
   box-shadow: var(--shadow-float);
 }
-/* Interactive cards: lift and lean toward the pointer (--px/--py from components/card-fx.tsx), easing back. */
 @utility card-lift {
-  /* !important: entrance animations (motion) leave an inline transform that would cancel the lean. */
-  transform: perspective(1000px) rotateX(calc(var(--py, 0) * -2.5deg)) rotateY(calc(var(--px, 0) * 2.5deg)) translateY(var(--lift, 0px)) !important;
-  transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s, border-color 0.25s;
-  will-change: transform;
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.2s, border-color 0.2s;
   &:hover {
-    --lift: -3px;
+    transform: translateY(-1px);
     box-shadow: var(--shadow-lift);
     border-color: var(--primary-line);
   }
   @media (prefers-reduced-motion: reduce) {
-    transform: none !important;
+    &:hover { transform: none; }
   }
-}
-
-/* ---------- Card feel (from Confirmo1) ----------
-   .fx (every CARD): a light top edge, a soft light that follows the pointer, and the edge glowing where it is.
-   .fx-dark: the same on the night-blue panels. .fx-depth: a header whose .depth-1/.depth-2 layers move with
-   the pointer at their own rates. The pointer position comes from components/card-fx.tsx. */
-@layer components {
-/* Every card-shaped surface, not only CARD: many pages write the classes by hand. Dialogs and menus stay still.
-   No isolation or z-index here: a dropdown inside a card must still rise above the next card. */
-:where(.fx, .card-lift, .bg-card.border:is(.rounded-2xl, .rounded-3xl)):not(dialog, [role="dialog"], [role="menu"], [role="listbox"], .fx-off) {
-  position: relative;
-  box-shadow: var(--shadow-card), inset 0 1px 0 rgb(255 255 255 / 0.9);
-  &::before,
-  &::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.35s;
-  }
-  &::before {
-    background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgb(11 63 122 / 0.06), transparent 45%);
-  }
-  &::after {
-    padding: 1px;
-    background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgb(11 63 122 / 0.45), transparent 60%);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-  }
-  &:hover::before,
-  &:hover::after {
-    opacity: 1;
-  }
-}
-.fx-dark {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
-}
-.fx-dark::before {
-  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 0.14), transparent 55%);
-}
-.fx-dark::after {
-  background: radial-gradient(200px circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 0.6), transparent 60%);
-}
-.fx-depth .depth-1 {
-  transform: translate3d(calc(var(--px, 0) * -6px), calc(var(--py, 0) * -6px), 0);
-  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-.fx-depth .depth-2 {
-  transform: translate3d(calc(var(--px, 0) * -18px), calc(var(--py, 0) * -14px), 0);
-  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-@media (prefers-reduced-motion: reduce) {
-  .fx-depth .depth-1,
-  .fx-depth .depth-2 {
-    transform: none;
-  }
-}
 }
 
 /* ---------- Flat surfaces (the business owner's screens) ----------

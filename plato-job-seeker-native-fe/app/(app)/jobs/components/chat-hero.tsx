@@ -51,7 +51,7 @@ function Composer({ onSend, busy, autoFocus, placeholder = "Tell Plato what you'
         submit()
       }}
     >
-      <InputGroup className="group flex-wrap items-end gap-2 rounded-lg bg-card p-2 pl-4 shadow-[0_12px_40px_-16px_rgba(11,63,122,0.35)] transition-shadow focus-within:shadow-[0_16px_50px_-16px_rgba(11,63,122,0.5)]">
+      <InputGroup className="group flex-wrap items-end gap-2 rounded-lg bg-card p-2 pl-4 shadow-[0_12px_40px_-16px_rgba(0,91,167,0.35)] transition-shadow focus-within:shadow-[0_16px_50px_-16px_rgba(0,91,167,0.5)]">
       {chip && (
         // A pinned reference (a job): sent with the next message so Plato knows exactly what it is about.
         <span data-ai="chat.reference" className="flex w-full items-center pt-1">

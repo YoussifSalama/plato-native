@@ -643,7 +643,7 @@ function ResultsView({ run, threadId, tab, q: typed, command, onState, tabs }: {
       {/* What is ticked, always in reach while scrolling the list. */}
       <AnimatePresence>
         {selected.size > 0 && (
-          <motion.div data-tour="results-selection" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }} className="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-primary-line bg-card px-4 py-3 shadow-[0_18px_44px_-24px_rgba(11,63,122,0.45)]">
+          <motion.div data-tour="results-selection" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }} className="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-primary-line bg-card px-4 py-3 shadow-[0_18px_44px_-24px_rgba(0,91,167,0.45)]">
             <span className="flex -space-x-2">
               {selectedList.slice(0, 3).map((m) => (
                 <CompanyAvatar key={m.job.id} name={m.job.company} domain={m.job.company_domain} logo={m.job.company_logo} size={28} />

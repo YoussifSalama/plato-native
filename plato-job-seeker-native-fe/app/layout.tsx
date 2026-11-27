@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { WebVitals } from "@/components/web-vitals";
-import { CardFx } from "@/components/card-fx";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta-sans",
@@ -21,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 // Mobile browser chrome in the logo's cobalt.
-export const viewport: Viewport = { themeColor: "#0b3f7a" };
+export const viewport: Viewport = { themeColor: "#005ba7" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -31,7 +30,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <WebVitals />
-        <CardFx />
         {children}
       </body>
     </html>

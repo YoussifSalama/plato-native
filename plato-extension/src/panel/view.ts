@@ -9,12 +9,16 @@ import { renderChat, type Assistant } from './assistant';
 import { icon, type IconName } from './icons';
 import { renderDock, renderJobs, renderSheet } from './jobs-view';
 import { renderBatch } from './batch-view';
+import { tabsFor, type Capacity } from '../core/capacity';
+
+/** Jobs at once for this seeker on this computer: their Speed, within what the computer can take. */
+export const tabsOf = (s: Pick<PanelState, 'settings' | 'capacity'>) => tabsFor(s.settings?.speed, s.capacity ?? null, 10, s.settings?.tabs);
 
 // Pure rendering: state in, DOM out. Text only (textContent): job titles come
 // from third-party listings and must never be parsed as HTML.
 // The panel: header, Jobs | Batch nav, one scrolling body, the batch dock pinned at the bottom.
 export type SessionStep = 'preparing' | 'review' | 'armed' | 'needs-user';
-export type BatchTab = 'line' | 'sent' | 'needs'; // the batch view's three tabs
+export type BatchTab = 'summary' | 'line' | 'sent' | 'needs'; // a finished batch's Summary, and the three job tabs
 export type PickKey = `item:${string}` | `job:${string}`; // a queued server item, or a job from a search
 export interface JobsState {
   searches: SearchCard[];
@@ -62,6 +66,7 @@ export interface PanelState {
   menuOpen?: boolean;
   stopArmed?: boolean; // "Stop batch" asked; waiting for Yes / Keep going
   batchTab?: { run: string; tab: BatchTab }; // the tab the seeker picked, for this batch only (a new batch starts on its own choice)
+  capacity?: Capacity | null; // what this computer can take (core/capacity.ts); null = not read yet
   run: BatchRun | null; // the batch this panel is applying to (or the last finished one)
   rows: Row[]; // the batch's rows, from the server list and this panel's sessions
   eta?: { ms: number; basis: number } | 'first' | null; // the runner's estimate for the rows
@@ -101,7 +106,7 @@ export interface BatchActions {
   ticket(item: ApiItem): void; // open the chat on this job's problem
   newBatch(): void; // after a finished batch: back to Jobs with an empty selection
   retryFailed(): void; // a new selection from the failed jobs of the finished batch
-  tab(tab: BatchTab): void; // In line | Sent | Needs you
+  tab(tab: BatchTab): void; // Summary (a finished batch) | In line | Sent | Needs you
   answerMany(items: ApiItem[], text: string, answers?: SeekerAnswer[]): void; // forms asking the same questions: one answer, each job continues
   skipMany(items: ApiItem[]): void; // jobs waiting on the seeker that they let go: cancelled before Submit, nothing sent
 }
@@ -178,7 +183,7 @@ export function render(doc: Document, root: HTMLElement, s: PanelState, a: Actio
 function header(doc: Document, s: PanelState, a: Actions) {
   const linked = s.status !== 'unpaired';
   const live = !!s.run && s.run.status === 'running';
-  const conn = h(doc, 'div', { class: `conn${linked && s.policy ? ' ok' : ''}` }, h(doc, 'i'), h(doc, 'span', { text: !linked ? 'Not linked' : s.policy ? 'Connected' : 'Offline · showing the last known state' }));
+  const conn = h(doc, 'div', { class: `conn${linked && s.policy ? ' ok' : ''}` }, h(doc, 'i'), h(doc, 'span', { text: !linked ? 'Not connected' : s.policy ? 'Connected' : 'Offline · showing the last known state' }));
   const more = h(doc, 'button', { class: 'ibtn', id: 'menu-btn', type: 'button', onclick: () => a.menu(!s.menuOpen), attrs: { 'aria-label': 'Menu', 'aria-expanded': String(!!s.menuOpen) } }, icon(doc, 'more'));
   return h(doc, 'header', { class: 'hdr' }, h(doc, 'span', { class: `mark${live ? ' live' : ''}`, text: 'P' }), h(doc, 'div', { class: 'ttl' }, h(doc, 'h1', { text: 'Plato Apply' }), conn), linked ? more : null);
 }
@@ -201,7 +206,7 @@ function nav(doc: Document, s: PanelState, a: Actions) {
     else if (s.run.status === 'finished') badge = h(doc, 'span', { class: 'b ok' }, icon(doc, 'check'));
     else badge = h(doc, 'span', { class: 'b num', text: `${done}/${s.run.itemIds.length}` });
   }
-  return h(doc, 'nav', { class: 'seg', attrs: { role: 'tablist' } }, tab('jobs', 'Jobs'), tab('batch', 'Batch', badge));
+  return h(doc, 'nav', { class: 'seg', attrs: { role: 'tablist' } }, tab('jobs', 'Find jobs'), tab('batch', 'Applying', badge));
 }
 
 // Screen 04: paste the code from Plato into eight boxes (XXXX-XXXX). Typing moves to the

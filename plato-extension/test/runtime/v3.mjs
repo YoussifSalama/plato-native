@@ -56,7 +56,7 @@ const loaded = async (p) => { const tab = await p; await tab.waitForLoadState('d
 console.log(`Runtime tests, engine v3 (fixtures build, extension ${id})`);
 await T('the built manifest is the same approved one (engine is a build define, not a permission)', async () => {
   const m = await sw.evaluate(() => chrome.runtime.getManifest());
-  eq(m.permissions, ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting', 'notifications']); // scripting: off-board apply (owner, 2026-11-13); notifications: outcomes outside the panel
+  eq(m.permissions, ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting', 'notifications', 'system.cpu', 'system.memory']); // scripting: off-board apply (owner, 2026-11-13); notifications: outcomes outside the panel
   eq(m.optional_host_permissions, ['https://*/*', 'http://*/*']); // any-site access only as optional, asked at Start batch
   ok(!m.host_permissions, 'unexpected host access');
 });
@@ -78,18 +78,18 @@ await T('pairing stores the token and shows the queued jobs, the newest pick tic
 
 let tab;
 await T('the batch starts only from the sheet; while it runs the Jobs view is locked and says so', async () => {
-  await btn(panel, 'Review batch').click();
+  await btn(panel, 'Review and apply').click();
   await panel.locator('#sheet').waitFor();
   const sheet = await panel.locator('#sheet').textContent();
-  ok(/One batch at a time/.test(sheet) && /Another batch can start once this one finishes/.test(sheet), 'the sheet states the rule');
-  ok(/Start batch · 5 jobs/.test(sheet), `the sheet counts the jobs: ${sheet.slice(0, 200)}`);
+  ok(/One round at a time/.test(sheet) && /another round when this one finishes/.test(sheet), 'the sheet states the rule');
+  ok(/Apply to 5 jobs/.test(sheet), `the sheet counts the jobs: ${sheet.slice(0, 200)}`);
   const opened = nextTab();
   await panel.locator('#start-batch').click();
   tab = await loaded(opened);
   await panel.locator('#batch-head').waitFor();
   eq(await panel.locator('#tab-batch').getAttribute('aria-selected'), 'true', 'the panel switches to the batch');
   await panel.locator('#tab-jobs').click();
-  ok(/No second batch until this one finishes/.test(await panel.locator('#dock').textContent()), 'the dock says one batch at a time');
+  ok(/when this round finishes/.test(await panel.locator('#dock').textContent()), 'the dock says one batch at a time');
   eq(await panel.locator('.job').filter({ hasText: 'Engineer 9' }).getAttribute('aria-disabled'), 'true');
   await panel.locator('#tab-batch').click();
   eq(api.log.filter((l) => l.path.endsWith('/claim') && l.method === 'POST').length, 1, 'one tab at a time (the stub speed): one claim so far');
@@ -114,7 +114,7 @@ await T('flow A (v3): the brain fills every field through the executor; armed BE
   await row(panel, 1).getByRole('button', { name: 'Submit for me' }).click();
   await tab.waitForURL('**/confirmed.html', { timeout: 30000 });
   eq(fixture.submits, 1);
-  await row(panel, 1).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 20000 });
+  await row(panel, 1).locator('.pill').filter({ hasText: 'Sent' }).waitFor({ state: 'attached', timeout: 20000 });
   eq([itemOnServer('1').state, itemOnServer('1').detail?.marker], ['SUBMITTED_CONFIRMED', 'Application received']);
   const pressed = resultsFor('1').filter((r) => /\(Submit\)/.test(r.text ?? ''));
   eq(pressed.length, 1, 'exactly one Submit press reported to the brain');
@@ -145,7 +145,7 @@ await T('interrupted: the panel reloads with job 2 armed and its form still open
   eq(fixture.submits, before, 'submitted during reconcile');
   ok(/1 of 5 finished/.test(await panel.locator('#batch-head').textContent()), 'the batch record survived the reload');
   await row(panel, 2).getByRole('button', { name: 'It was not' }).click();
-  await row(panel, 2).locator('.pill').filter({ hasText: 'Failed' }).waitFor({ timeout: 10000 });
+  await row(panel, 2).locator('.pill').filter({ hasText: 'Didn’t go through' }).waitFor({ state: 'attached', timeout: 10000 });
   eq(itemOnServer('2').state, 'FAILED');
   await tab.close();
   tab = await loaded(opened);
@@ -168,7 +168,7 @@ await T('captcha stop and resume: a human check seen by the page stops the run f
   eq(fixture.submits, before, 'nothing was sent');
   const opened = nextTab();
   await row(panel, 6).getByRole('button', { name: 'I submitted it' }).click(); // the person's word, recorded as such
-  await row(panel, 6).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 10000 });
+  await row(panel, 6).locator('.pill').filter({ hasText: 'Sent' }).waitFor({ state: 'attached', timeout: 10000 });
   eq(itemOnServer('6').state, 'SUBMITTED_ATTESTED');
   await tab.close();
   tab = await loaded(opened);
@@ -200,7 +200,7 @@ Why do you want to work at Acme? → ${answer}`, 'the text the brain reads');
   eq(fixture.submits, before, 'nothing was sent');
   const opened = nextTab();
   await row(panel, 7).getByRole('button', { name: 'I submitted it' }).click();
-  await row(panel, 7).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 10000 });
+  await row(panel, 7).locator('.pill').filter({ hasText: 'Sent' }).waitFor({ state: 'attached', timeout: 10000 });
   await tab.close();
   tab = await loaded(opened);
 });
@@ -211,7 +211,7 @@ await T('one Submit only: after Submit is allowed, an Enter in a text field (a r
   eq(itemOnServer('8').state, 'AWAITING_SUBMIT', 'armed once complete');
   await row(panel, 8).getByRole('button', { name: 'Submit for me' }).click();
   await tab.waitForURL('**/confirmed.html', { timeout: 30000 });
-  await row(panel, 8).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 20000 });
+  await row(panel, 8).locator('.pill').filter({ hasText: 'Sent' }).waitFor({ state: 'attached', timeout: 20000 });
   const errors = resultsFor('8').filter((r) => !r.ok).map((r) => r.error);
   ok(errors.some((e) => /Submit only with the Submit control itself/.test(e)), `the Enter was refused: ${JSON.stringify(errors)}`);
   ok(errors.some((e) => /Not executed: an earlier action/.test(e)), 'the Submit click after the refused Enter was not run in that turn');
@@ -223,8 +223,8 @@ await T('one Submit only: after Submit is allowed, an Enter in a text field (a r
 await T('the batch finishes with a summary of every outcome, and a new batch may start only then', async () => {
   await panel.locator('#batch-summary').waitFor({ timeout: 20000 });
   const t = await panel.locator('#batch-summary').textContent();
-  ok(/Batch finished/.test(t) && /4 of 5 applications sent/.test(t), `summary: ${t.slice(0, 200)}`);
-  ok(/Retry 1 failed/.test(t), 'the failed one can be retried');
+  ok(/All done/.test(t) && /4 of 5 applications sent/.test(t), `summary: ${t.slice(0, 200)}`);
+  ok(/Try the one that didn’t go/.test(t), 'the failed one can be retried');
   eq(await panel.locator('.strip i').count(), 5, 'one cell per job');
   await panel.locator('#new-batch').click();
   await panel.locator('#dock').waitFor();

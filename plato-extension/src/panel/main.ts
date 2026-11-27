@@ -25,11 +25,12 @@ import { createTokenStore } from '../core/token-store';
 import { newPassword, savedPassword, wipeVault } from '../core/vault';
 import type { ApiItem, Decision, Evidence, PolicyMap, SearchJob } from '../core/types';
 import { registry } from '../providers';
-import { render, type Actions, type PanelState, type PickKey } from './view';
+import { tabsOf, render, type Actions, type PanelState, type PickKey } from './view';
 import { canStart, JOBS_PAGE_SIZE, latestBatch, queuedItems, visibleJobs } from './jobs-view';
 import { noticeText, type Notice } from '../core/notice';
 import type { AnswerQuestion, OrchestratorEvent, OrchestratorRequest } from './../core/types';
 import { askLabel } from './batch-view';
+import { memoryLow, readMachine, tabCap } from '../core/capacity';
 
 // The side panel runs the whole flow. It is the only place (besides the
 // service worker's one-line storage restriction) that ever sees the token.
@@ -201,7 +202,8 @@ async function probeFor(item: ApiItem): Promise<Evidence> {
 }
 
 // The seeker's speed setting decides how many jobs are open at once (careful 2, smart 4, fast 8).
-const tabLimit = () => Math.min(state.settings?.tabs ?? MAX_TABS, MAX_TABS);
+// The seeker's Speed within what this computer can take (core/capacity.ts): 2 on a light laptop, up to 8 on a strong one.
+const tabLimit = () => Math.min(tabsOf(state), MAX_TABS);
 // Jobs Plato is working on now. A job waiting for the seeker (needs you, or "please check") keeps its tab open but
 // not a slot: otherwise N stuck jobs froze the queue for good.
 const busyTabs = () => Object.entries(state.sessions).filter(([id, x]) => x.step !== 'needs-user' && x.step !== 'armed' && state.items.find((i) => i.id === id)?.state !== 'VERIFY').length;
@@ -232,6 +234,7 @@ async function refresh() {
     state.items = decided.some((d) => d.plan.action === 'confirm' || d.plan.action === 'to-verify') ? await api.batches() : items;
     state.pendingOutbox = (await outbox.list()).length;
     if (!state.settings) state.settings = await api.settings().catch(() => null);
+    if (state.capacity === undefined) state.capacity = tabCap(await readMachine().catch(() => ({ cores: null, memoryGB: null })));
     if (state.settings && !state.settings.createAccounts) await wipeVault().catch(() => undefined); // the seeker turned job-site accounts off: their passwords go from this browser
     state.autoSubmitPreview = autoSubmitDefault();
     if (state.settings && !preselected) {
@@ -252,7 +255,7 @@ async function refresh() {
     if (state.run?.status === 'finished' && finishedToasted !== state.run.id) {
       finishedToasted = state.run.id;
       state.view = 'batch';
-      toast('Batch finished. You can start another one.', 'ok');
+      toast('All done. You can apply to more jobs now.', 'ok');
     }
     // the first look at the queue: the newest pick made on Plato is ticked for the next batch
     if (!preselected) {
@@ -1160,10 +1163,15 @@ async function runQueue() {
   if (launching || !run || run.status !== 'running') return;
   const waiting = state.items.filter((i) => run.itemIds.includes(i.id) && i.state === 'PENDING' && !tried.has(i.id) && !state.sessions[i.id] && canStart(i, state, registry));
   if (!waiting.length) return;
-  const slots = tabLimit() - busyTabs();
+  let slots = tabLimit() - busyTabs();
   if (slots <= 0) return;
-  launching = true;
+  launching = true; // before any await: two refreshes arriving together must not both start jobs
   try {
+    // memory running low: no new tab while another job is still running (one always goes); the next refresh tries again
+    if (await memoryLow()) {
+      if (busyTabs() > 0) return void log('info', 'Memory is low on this computer: the next job waits for a running one to finish.');
+      slots = 1;
+    }
     const batch = waiting.slice(0, slots);
     batch.forEach((i) => tried.add(i.id));
     const res = await Promise.allSettled(batch.map(startItem));
@@ -1181,8 +1189,8 @@ async function startBatch() {
   const j = state.jobs;
   const jobIds = j.picked.filter((k) => k.startsWith('job:')).map((k) => k.slice(4));
   const itemIds = j.picked.filter((k) => k.startsWith('item:')).map((k) => k.slice(5));
-  if (j.picked.length > MAX_BATCH_JOBS) throw new BatchError('cap', `A batch holds at most ${MAX_BATCH_JOBS} jobs.`);
-  if (runner.isActive()) throw new BatchError('active', 'A batch is already running. Wait for it to finish.');
+  if (j.picked.length > MAX_BATCH_JOBS) throw new BatchError('cap', `One round holds up to ${MAX_BATCH_JOBS} jobs.`);
+  if (runner.isActive()) throw new BatchError('active', 'Plato is already applying. Wait for this round to finish.');
   const settings = state.settings ?? (await api.settings().catch(() => null));
   state.settings = settings;
   if (settings && j.resumeMode !== settings.resumeMode) state.settings = await api.saveSettings({ resumeMode: j.resumeMode }).catch(() => settings); // the choice on the sheet is the seeker's preference from now on
@@ -1216,7 +1224,7 @@ async function stopBatch() {
   const queued = state.rows.filter((r) => r.status === 'queued' && !orch.session(r.itemId) && state.items.find((i) => i.id === r.itemId)?.state === 'PENDING').map((r) => r.itemId);
   if (queued.length) {
     const r = await api.dropFromQueue(queued);
-    log('info', `Stop batch: ${r.dropped} queued job(s) removed.`);
+    log('info', `Stopped: ${r.dropped} waiting job(s) removed.`);
     queued.forEach((id) => runner.record(id, 'cancelled', 'Not started: you stopped the batch.'));
   }
   let failed = 0;
@@ -1270,12 +1278,12 @@ async function fetchJobs(append: boolean) {
   }
 }
 const togglePick = (key: PickKey) => {
-  if (runner.isActive()) return toast('A batch is running. New jobs wait until it finishes.');
+  if (runner.isActive()) return toast('Plato is applying. New jobs wait until this round finishes.');
   const r = pickToggle(state.jobs.picked, key, MAX_BATCH_JOBS);
   state.jobs.picked = r.picked;
   draw();
   if (r.refused) {
-    toast(`Batch is full (${MAX_BATCH_JOBS} of ${MAX_BATCH_JOBS}). Remove one to add another.`, 'err');
+    toast(`This round is full (${MAX_BATCH_JOBS} of ${MAX_BATCH_JOBS}). Remove one to add another.`, 'err');
     root.querySelector(`[data-key="${key}"]`)?.classList.add('shake');
   }
 };
@@ -1373,9 +1381,9 @@ const applyEvent = async (e: OrchestratorEvent, a: NonNullable<PanelState['assis
     tried.clear(); // an explicit "continue": jobs that failed to start earlier may try again
     const n = await resumeOrphans();
     void runQueue();
-    a.messages.push({ role: 'assistant', content: n ? `Resumed: ${n} open job${n === 1 ? '' : 's'} reattached.` : 'Nothing from your batch is waiting to be resumed.' });
+    a.messages.push({ role: 'assistant', content: n ? `Resumed: ${n} open job${n === 1 ? '' : 's'} reattached.` : 'Nothing from this round is waiting to be picked up.' });
   } else if (e.type === 'account') a.messages.push({ role: 'assistant', content: `${e.site}: ${e.reason}` });
-  else if (e.type === 'pause') a.messages.push({ role: 'assistant', content: `To pause, press Stop batch on the Batch view. ${e.reason}` });
+  else if (e.type === 'pause') a.messages.push({ role: 'assistant', content: `To pause, press Stop applying on the Applying tab. ${e.reason}` });
   else if (e.type === 'skip') {
     // Only the seeker drops a job. The chat may suggest it; it never happens on a loading problem.
     const lastUser = [...a.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
@@ -1457,13 +1465,13 @@ const actions: Actions = {
     toggle: togglePick,
     site: (site) => ((state.jobs.site = site), draw()), // client-side only: nothing is fetched
     selectVisible: () => {
-      if (runner.isActive()) return toast('A batch is running. New jobs wait until it finishes.');
+      if (runner.isActive()) return toast('Plato is applying. New jobs wait until this round finishes.');
       const j = state.jobs;
       const room = MAX_BATCH_JOBS - j.picked.length;
       const add = visibleJobs(j).filter((x) => x.applyable && !(x.queued && queuedItems(state).some((i) => i.job_id === x.id)) && !j.picked.includes(`job:${x.id}`)).map((x) => `job:${x.id}` as PickKey); // what the site chip shows, not the whole page
       j.picked = [...j.picked, ...add.slice(0, room)];
       draw();
-      if (add.length > room) toast(`Added ${Math.max(0, room)}. The batch is full at ${MAX_BATCH_JOBS}; ${add.length - room} not added.`);
+      if (add.length > room) toast(`Added ${Math.max(0, room)}. This round is full at ${MAX_BATCH_JOBS}; ${add.length - room} not added.`);
     },
     dropItem: (id) =>
       void guard(async () => {
@@ -1730,7 +1738,7 @@ async function applyNow() {
   if (!req) return;
   await chrome.storage.session.remove('applyNow').catch(() => undefined);
   if (Date.now() - req.at > APPLY_NOW_MS) return;
-  if (runner.isActive()) return void (toast('A batch is already running. The jobs from Plato wait in your queue.'), draw());
+  if (runner.isActive()) return void (toast('Plato is already applying. The new jobs wait for the next round.'), draw());
   await refresh(); // the web just queued them: make sure this panel has them
   const ids = new Set(req.jobIds);
   const picked = queuedItems(state).filter((i) => ids.has(i.job_id) && canStart(i, state, registry)).slice(0, MAX_BATCH_JOBS);

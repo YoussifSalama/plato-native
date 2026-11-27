@@ -3,7 +3,7 @@ import type { ApiItem } from '../core/types';
 import type { Registry } from '../providers/registry';
 import type { AskQuestion } from '../v3/contract';
 import { icon } from './icons';
-import { avatar, banner, btn, h, type Actions, type BatchTab, type PanelState } from './view';
+import { avatar, banner, btn, h, tabsOf, type Actions, type BatchTab, type PanelState } from './view';
 import { renderAskForm } from './ask-form';
 import { renderReviewCard } from './review-card';
 import { ALREADY_APPLIED, askFallback, type StopKind } from '../v3/run';
@@ -14,7 +14,8 @@ import { ALREADY_APPLIED, askFallback, type StopKind } from '../v3/run';
 // the engine can make keeps its own card (review before Submit, human checks, sign-ins, errors, the resume
 // choice, verify, interrupted). Nothing here is a button that submits by itself: "Submit for me" and "Looks
 // right, submit" are the seeker's explicit go-ahead for one job.
-const LABEL: Record<RowStatus, string> = { queued: 'Queued', running: 'Running', needs: 'Needs you', verify: 'Please check', interrupted: 'Interrupted', elsewhere: 'Elsewhere', submitted: 'Submitted', failed: 'Failed', skipped: 'Skipped', cancelled: 'Cancelled', gone: 'Settled elsewhere' };
+// The words a job seeker reads: what happened to the job, not the engine's state names.
+const LABEL: Record<RowStatus, string> = { queued: 'Waiting', running: 'Applying', needs: 'Needs you', verify: 'Check if it went', interrupted: 'Paused', elsewhere: 'In your other browser', submitted: 'Sent', failed: 'Didn’t go through', skipped: 'Skipped', cancelled: 'Removed', gone: 'Done elsewhere' };
 const STEP: Record<string, string> = { preparing: 'Opening the job page', review: 'Reading and filling the form', armed: 'Pressing Submit', 'needs-user': 'Waiting for you' };
 // The four moments of one application, as the design shows them.
 const MOMENTS = ['Opening the job page', 'Filling the form', 'Sending the application', 'Application sent'];
@@ -35,39 +36,55 @@ export const fmtDur = (ms: number) => {
 const isHumanStep = (why: string) => /captcha|human check|sign in|log in|verification|solve it/i.test(why);
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** The tab on screen: the seeker's pick for this batch, else Needs you when something waits on them, else In line (Sent once finished). */
+/** The tab on screen: the seeker's pick for this batch, else Needs you when something waits on them, else In line; a finished batch opens on its Summary. */
 export function batchTab(s: PanelState): BatchTab {
-  if (s.run && s.batchTab?.run === s.run.id) return s.batchTab.tab;
+  const finished = s.run?.status === 'finished';
+  if (s.run && s.batchTab?.run === s.run.id && (finished || s.batchTab.tab !== 'summary')) return s.batchTab.tab;
+  if (finished) return 'summary';
   if (s.rows.some((r) => NEEDS.includes(r.status))) return 'needs';
-  return s.run?.status === 'finished' ? 'sent' : 'line';
+  return 'line';
 }
 
 export function renderBatch(doc: Document, s: PanelState, a: Actions, registry: Registry): Node[] {
   const run = s.run;
   if (!run)
-    return [h(doc, 'div', { class: 'empty card' }, h(doc, 'span', { class: 'eico' }, icon(doc, 'inbox')), h(doc, 'h3', { text: 'No batch yet' }), h(doc, 'p', { text: 'Pick up to 10 jobs and Plato applies to them for you, one form after another.' }), btn(doc, 'Choose jobs', () => a.view('jobs'), 'btn primary'))];
+    return [h(doc, 'div', { class: 'empty card' }, h(doc, 'span', { class: 'eico' }, icon(doc, 'inbox')), h(doc, 'h3', { text: 'Not applying to anything yet' }), h(doc, 'p', { text: 'Pick up to 10 jobs and Plato fills and sends the applications for you.' }), btn(doc, 'Find jobs', () => a.view('jobs'), 'btn primary'))];
   const rows = s.rows;
   const out: Node[] = [];
   const interrupted = rows.filter((r) => r.status === 'interrupted');
   if (interrupted.length && run.status === 'running')
-    out.push(banner(doc, 'warn', 'alert', 'Batch interrupted', `${interrupted.length} job${interrupted.length === 1 ? ' is' : 's are'} open on the server but not in this panel (a reload, or a closed tab). Resume picks them up in their tabs; Release gives them back. Nothing was submitted meanwhile.`,
-      btn(doc, 'Resume', a.batch.resume, 'btn primary sm', { disabled: s.busy, id: 'resume-batch' }), btn(doc, 'Release', () => interrupted.forEach((r) => r.item && a.batch.release(r.item)), 'btn sm', { disabled: s.busy })));
-  out.push(run.status === 'finished' ? summary(doc, s, a) : head(doc, s, a));
-
+    out.push(banner(doc, 'warn', 'alert', `${plural(interrupted.length, 'job is', 'jobs are')} paused`, 'Plato lost track of them (the panel reloaded or a tab closed). Nothing was sent. Pick them up to carry on, or let them go.',
+      btn(doc, 'Pick them up', a.batch.resume, 'btn primary sm', { disabled: s.busy, id: 'resume-batch' }), btn(doc, 'Let them go', () => interrupted.forEach((r) => r.item && a.batch.release(r.item)), 'btn sm', { disabled: s.busy })));
   const tab = batchTab(s);
+  const finished = run.status === 'finished';
+  // A finished batch: two sub-tabs, Summary (how it went) and Jobs (every job, by the same three tabs). Both are
+  // drawn, one hidden, so a half-typed answer survives a switch. A running batch: the head card above the tabs.
+  const section = (on: boolean, id: string, ...children: Node[]) => {
+    const el = h(doc, 'div', { class: 'bsection', id }, ...children);
+    if (!on) el.hidden = true;
+    return el;
+  };
+  if (finished) {
+    const sub = (k: 'summary' | 'jobs', text: string) => h(doc, 'button', { type: 'button', id: `bsub-${k}`, onclick: () => a.batch.tab(k === 'summary' ? 'summary' : 'sent'), attrs: { role: 'tab', 'aria-selected': String((tab === 'summary') === (k === 'summary')) } }, text, k === 'jobs' ? h(doc, 'span', { class: 'n num', text: String(rows.length) }) : null);
+    out.push(h(doc, 'nav', { class: 'bsub', attrs: { role: 'tablist', 'aria-label': 'This round' } }, sub('summary', 'Summary'), sub('jobs', 'Job by job')));
+    out.push(section(tab === 'summary', 'bsection-summary', summary(doc, s, a)));
+  } else out.push(head(doc, s, a));
+  const jobTab: Exclude<BatchTab, 'summary'> = tab === 'summary' ? 'sent' : tab;
   const line = rows.filter((r) => LINE.includes(r.status));
   const sentN = rows.filter((r) => r.status === 'submitted').length;
   const needs = rows.filter((r) => NEEDS.includes(r.status));
-  const tabBtn = (k: BatchTab, text: string, n: number, warn = false) =>
-    h(doc, 'button', { type: 'button', class: warn && n ? 'warn' : '', id: `btab-${k}`, onclick: () => a.batch.tab(k), attrs: { role: 'tab', 'aria-selected': String(tab === k), 'aria-controls': `bpanel-${k}` } }, text, h(doc, 'span', { class: 'n num', text: String(n) }));
-  out.push(h(doc, 'nav', { class: 'btabs', attrs: { role: 'tablist', 'aria-label': 'Jobs in this batch' } }, tabBtn('line', 'In line', line.length), tabBtn('sent', 'Sent', sentN), tabBtn('needs', 'Needs you', needs.length, true)));
+  const tabBtn = (k: Exclude<BatchTab, 'summary'>, text: string, n: number, warn = false) =>
+    h(doc, 'button', { type: 'button', class: warn && n ? 'warn' : '', id: `btab-${k}`, onclick: () => a.batch.tab(k), attrs: { role: 'tab', 'aria-selected': String(jobTab === k), 'aria-controls': `bpanel-${k}` } }, text, h(doc, 'span', { class: 'n num', text: String(n) }));
+  const jobs: Node[] = [h(doc, 'nav', { class: 'btabs', attrs: { role: 'tablist', 'aria-label': 'Jobs in this round' } }, tabBtn('line', 'In line', line.length), tabBtn('sent', 'Sent', sentN), tabBtn('needs', 'Needs you', needs.length, true))];
   // all three panels are drawn, the others hidden: a half-typed answer survives a switch of tab
-  const panel = (k: BatchTab, ...children: Node[]) => {
+  const panel = (k: Exclude<BatchTab, 'summary'>, ...children: Node[]) => {
     const el = h(doc, 'div', { class: 'bpanel', id: `bpanel-${k}`, attrs: { role: 'tabpanel', 'aria-labelledby': `btab-${k}` } }, ...children);
-    if (tab !== k) el.hidden = true;
+    if (jobTab !== k) el.hidden = true;
     return el;
   };
-  out.push(panel('line', ...inLine(doc, s, a, registry, line, needs.length)), panel('sent', ...sent(doc, s, a, registry)), panel('needs', ...needsYou(doc, s, a, registry, needs)));
+  jobs.push(panel('line', ...inLine(doc, s, a, registry, line, needs.length)), panel('sent', ...sent(doc, s, a, registry)), panel('needs', ...needsYou(doc, s, a, registry, needs)));
+  if (finished) out.push(section(tab !== 'summary', 'bsection-jobs', ...jobs));
+  else out.push(...jobs);
   return out;
 }
 
@@ -87,16 +104,16 @@ function head(doc: Document, s: PanelState, a: Actions) {
     : eta ? [icon(doc, 'clock'), h(doc, 'span', {}, 'About ', h(doc, 'b', { class: 'num', text: fmtDur(eta.ms) }), ` left · based on ${eta.basis} finished job${eta.basis === 1 ? '' : 's'}`)]
     : [icon(doc, 'hand'), h(doc, 'span', { text: needs ? 'Waiting on you for the rest.' : 'Finishing up.' })];
   const card = h(doc, 'section', { class: 'card bhead', id: 'batch-head' },
-    h(doc, 'div', { class: 'top' }, h(doc, 'span', { class: 'eyebrow', text: `Batch running · ${run.label}` }), h(doc, 'span', { class: 'meta num', text: `started ${new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` })),
+    h(doc, 'div', { class: 'top' }, h(doc, 'span', { class: 'eyebrow', text: `Applying now · ${run.label}` }), h(doc, 'span', { class: 'meta num', text: `started ${new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` })),
     h(doc, 'h2', { text: `Applying to ${plural(run.itemIds.length, 'job')}` }),
-    h(doc, 'div', { class: 'sentbig' }, h(doc, 'b', { class: 'num', text: String(sentN) }), h(doc, 'span', {}, sentN === 1 ? 'application sent' : 'applications sent', h(doc, 'small', { class: 'num', text: sentN ? `About ${sentN * MINUTES_PER_FORM} minutes of form-filling saved` : `${done} of ${run.itemIds.length} finished` }))),
+    h(doc, 'div', { class: 'sentbig' }, h(doc, 'b', { class: 'num', text: String(sentN) }), h(doc, 'span', {}, sentN === 1 ? 'application sent' : 'applications sent', h(doc, 'small', { class: `num${sentN ? '' : ' wait'}`, text: sentN ? `About ${sentN * MINUTES_PER_FORM} minutes of form-filling saved` : 'The first one is on its way' }))),
     strip(doc, rows),
-    h(doc, 'p', { class: 'meta num fin', text: `${done} of ${run.itemIds.length} finished` }),
+    h(doc, 'p', { class: 'meta num fin', text: `${done} of ${run.itemIds.length} done` }),
     h(doc, 'div', { class: 'eta' }, ...etaLine));
   if (s.stopArmed)
-    card.append(banner(doc, 'warn', 'alert', 'Stop the batch?', 'Jobs already submitted stay submitted. Running jobs stop before Submit; a job already at Submit is left for you to settle.',
-      btn(doc, 'Stop batch', () => a.batch.stop('yes'), 'btn danger sm', { disabled: s.busy, id: 'stop-yes' }), btn(doc, 'Keep going', () => a.batch.stop('no'), 'btn sm', { id: 'stop-no' })));
-  else card.append(h(doc, 'div', { class: 'acts' }, btn(doc, 'Stop batch', () => a.batch.stop('ask'), 'btn', { icon: 'stop', disabled: s.busy, id: 'stop-batch' }), btn(doc, 'Browse jobs', () => a.view('jobs'), 'btn soft')));
+    card.append(banner(doc, 'warn', 'alert', 'Stop applying?', 'What was sent stays sent. Jobs in progress stop before they are sent; one already at the Send button waits for you to decide.',
+      btn(doc, 'Stop applying', () => a.batch.stop('yes'), 'btn danger sm', { disabled: s.busy, id: 'stop-yes' }), btn(doc, 'Keep going', () => a.batch.stop('no'), 'btn sm', { id: 'stop-no' })));
+  else card.append(h(doc, 'div', { class: 'acts' }, btn(doc, 'Stop applying', () => a.batch.stop('ask'), 'btn', { icon: 'stop', disabled: s.busy, id: 'stop-batch' }), btn(doc, 'See other jobs', () => a.view('jobs'), 'btn soft')));
   return card;
 }
 
@@ -111,20 +128,28 @@ function summary(doc: Document, s: PanelState, a: Actions) {
   const waiting = n('verify');
   const open = n(...NEEDS);
   const out = (cls: string, k: number, text: string) => h(doc, 'div', { class: `out ${cls}` }, h(doc, 'b', { class: 'num', text: String(k) }), h(doc, 'span', { text }));
+  const notSent = rows.filter((r) => r.outcome && r.status !== 'submitted').length;
   const sub = open
     ? `${plural(open, 'job is', 'jobs are')} still waiting for you. You can still send ${open === 1 ? 'it' : 'them'}.`
-    : sentN === total ? 'All of them are in Applications on Plato.' : `The sent ones are in Applications on Plato.`;
+    : notSent ? `${plural(notSent, 'job was', 'jobs were')} not sent. Job by job shows why.` : 'All of them are in Applications on Plato.';
+  // the design's list: the first jobs with how each ended; "Show all" opens the Sent tab with every one
+  const done = [...rows].sort((x, y) => (x.status === 'submitted' ? 1 : 0) - (y.status === 'submitted' ? 1 : 0)); // what did not go, first
+  const ended = (r: Row) => r.status === 'submitted' ? ['ok', 'Sent'] : r.status === 'failed' ? ['err', 'Didn’t go through'] : NEEDS.includes(r.status) ? ['warn', 'Needs you'] : ['', LABEL[r.status]];
   return h(doc, 'section', { class: 'card summary', id: 'batch-summary' },
-    h(doc, 'span', { class: 'ring' }, icon(doc, 'check')),
-    h(doc, 'p', { class: 'eyebrow', text: 'Batch finished' }),
-    h(doc, 'h2', { class: 'num', text: waiting ? `Batch finished, ${waiting} to check` : sentN === total ? `All ${total} sent` : `${sentN} of ${total} sent` }),
-    h(doc, 'p', { class: 'sub num', text: `${sentN} of ${total} application${total === 1 ? '' : 's'} sent · ${fmtDur((run.finishedAt ?? Date.now()) - run.startedAt)} · ${run.label}${sentN ? ` · about ${sentN * MINUTES_PER_FORM} min saved` : ''}` }),
-    h(doc, 'p', { class: 'sub2', text: sub }),
+    h(doc, 'div', { class: 'sumtop' },
+      h(doc, 'span', { class: 'ring' }, icon(doc, 'check')),
+      h(doc, 'p', { class: 'eyebrow', text: 'All done' }),
+      h(doc, 'h2', { class: 'num', text: waiting ? `Done. ${plural(waiting, 'job')} to check` : sentN === total ? `All ${total} sent` : `${sentN} of ${total} sent` }),
+      h(doc, 'p', { class: 'sub2', text: sub })),
     open ? h(doc, 'button', { type: 'button', class: 'openq', id: 'answer-open', onclick: () => a.batch.tab('needs') }, h(doc, 'span', { text: `Finish the last ${open === 1 ? 'one' : open}` }), h(doc, 'b', { text: 'Open' })) : null,
+    h(doc, 'div', { class: 'endlist' },
+      ...done.slice(0, 3).map((r) => h(doc, 'div', { class: 'mini', attrs: { 'data-item': r.itemId } }, avatar(doc, r.meta.company, 'av'), h(doc, 'span', { class: 't' }, h(doc, 'strong', { text: r.meta.title }), h(doc, 'span', { text: r.meta.company })), h(doc, 'span', { class: `ended ${ended(r)[0]}`, text: ended(r)[1]! }))),
+      total > 3 ? h(doc, 'button', { type: 'button', class: 'showall', id: 'show-all', onclick: () => a.batch.tab('sent') }, `Show all ${total}`) : null),
+    h(doc, 'p', { class: 'sub num', text: `${sentN} of ${total} application${total === 1 ? '' : 's'} sent · ${fmtDur((run.finishedAt ?? Date.now()) - run.startedAt)} · ${run.label}${sentN ? ` · about ${sentN * MINUTES_PER_FORM} min saved` : ''}` }),
     strip(doc, rows),
-    h(doc, 'div', { class: 'outs' }, out('ok', sentN, 'Submitted'), out(failed ? 'err' : '', failed, 'Failed'), out('', n('skipped', 'cancelled', 'gone'), 'Skipped')),
-    h(doc, 'div', { class: 'acts' }, btn(doc, 'Start a new batch', a.batch.newBatch, 'btn primary', { icon: 'arrow', id: 'new-batch' }), failed ? btn(doc, `Retry ${failed} failed`, a.batch.retryFailed, 'btn', { id: 'retry-failed' }) : null),
-    h(doc, 'a', { class: 'btn block soft', href: `${__WEB_ORIGIN__}/applications`, attrs: { target: '_blank', rel: 'noreferrer', id: 'see-applications' } }, 'See my applications on Plato', icon(doc, 'ext')));
+    h(doc, 'div', { class: 'outs' }, out('ok', sentN, 'Sent'), out(failed ? 'err' : '', failed, 'Didn’t go through'), out('', n('skipped', 'cancelled', 'gone'), 'Skipped')),
+    h(doc, 'a', { class: 'btn block primary big', href: `${__WEB_ORIGIN__}/applications`, attrs: { target: '_blank', rel: 'noreferrer', id: 'see-applications' } }, 'See my applications', icon(doc, 'ext')),
+    h(doc, 'div', { class: 'acts' }, btn(doc, 'Apply to more jobs', a.batch.newBatch, 'btn', { icon: 'arrow', id: 'new-batch' }), failed ? btn(doc, failed === 1 ? 'Try the one that didn’t go' : `Try the ${failed} that didn’t go`, a.batch.retryFailed, 'btn', { id: 'retry-failed' }) : null));
 }
 
 // In line: the jobs being applied to now (one card each, with the four moments), the last one sent, what is next.
@@ -142,7 +167,7 @@ function inLine(doc: Document, s: PanelState, a: Actions, registry: Registry, li
   if (!running.length && !queued.length)
     out.push(needsN
       ? h(doc, 'div', { class: 'empty card' }, h(doc, 'span', { class: 'eico warn' }, icon(doc, 'hand')), h(doc, 'h3', { text: 'Everything else is done' }), h(doc, 'p', { text: `${plural(needsN, 'job is', 'jobs are')} waiting for you.` }), btn(doc, 'Answer now', () => a.batch.tab('needs'), 'btn primary', { id: 'line-answer' }))
-      : h(doc, 'div', { class: 'empty card' }, h(doc, 'span', { class: 'eico' }, icon(doc, 'check')), h(doc, 'h3', { text: 'Nothing in line' }), h(doc, 'p', { text: s.run?.status === 'finished' ? 'Every job in this batch has finished.' : 'The last jobs are finishing.' })));
+      : h(doc, 'div', { class: 'empty card' }, h(doc, 'span', { class: 'eico' }, icon(doc, 'check')), h(doc, 'h3', { text: 'Nothing in line' }), h(doc, 'p', { text: s.run?.status === 'finished' ? 'Every job in this round is done.' : 'The last jobs are finishing.' })));
   return out;
 }
 
@@ -173,12 +198,12 @@ function blockedWhy(item: ApiItem | undefined, s: PanelState, registry: Registry
 function upNext(doc: Document, r: Row, s: PanelState, a: Actions, registry: Registry, first: boolean) {
   const item = r.item;
   const why = blockedWhy(item, s, registry);
-  const tabs = Math.min(s.settings?.tabs ?? 4, 10);
+  const tabs = tabsOf(s);
   return h(doc, 'div', { class: 'mini', attrs: { 'data-item': r.itemId } },
     avatar(doc, r.meta.company, 'av'),
-    h(doc, 'span', { class: 't' }, h(doc, 'strong', { text: item?.job?.title ?? r.meta.title }), h(doc, 'span', { text: why ?? (first ? `${r.meta.company} · next, when a tab is free (${tabs} at once)` : r.meta.company) })),
+    h(doc, 'span', { class: 't' }, h(doc, 'strong', { text: item?.job?.title ?? r.meta.title }), h(doc, 'span', { text: why ?? (first ? `${r.meta.company} · starts next (Plato works on ${tabs} at once)` : r.meta.company) })),
     h(doc, 'span', { class: `pill queued${first ? ' next' : ''}` }, h(doc, 'i'), LABEL.queued),
-    item ? h(doc, 'button', { type: 'button', class: 'ibtn', onclick: () => a.batch.cancelJob(item), disabled: s.busy, attrs: { 'aria-label': `Remove ${r.meta.title} from the batch`, title: 'Remove from batch' } }, icon(doc, 'close')) : h(doc, 'span'));
+    item ? h(doc, 'button', { type: 'button', class: 'ibtn', onclick: () => a.batch.cancelJob(item), disabled: s.busy, attrs: { 'aria-label': `Remove ${r.meta.title}`, title: 'Remove' } }, icon(doc, 'close')) : h(doc, 'span'));
 }
 
 // Sent: what went, then what did not, each with what happened.
@@ -249,8 +274,8 @@ function row(doc: Document, r: Row, s: PanelState, a: Actions, registry: Registr
 
   switch (r.status) {
     case 'queued':
-      note(blockedWhy(item, s, registry) ?? `Waits for a free slot (${Math.min(s.settings?.tabs ?? 4, 10)} tab${(s.settings?.tabs ?? 4) === 1 ? '' : 's'} at once).`);
-      if (item) act('Remove from batch', () => a.batch.cancelJob(item), 'btn ghost sm');
+      note(blockedWhy(item, s, registry) ?? `Starts when Plato has a free tab (it works on ${tabsOf(s)} at once).`);
+      if (item) act('Remove', () => a.batch.cancelJob(item), 'btn ghost sm');
       break;
     case 'running':
       el.append(h(doc, 'p', { class: 'step', text: s.progress[r.itemId] ?? STEP[sess?.step ?? ''] ?? 'Working' }));
@@ -338,12 +363,12 @@ function row(doc: Document, r: Row, s: PanelState, a: Actions, registry: Registr
       break;
     case 'interrupted':
       if (!item) break;
-      note('Open on the server but not in this panel. It has not been submitted.');
-      act('Resume', a.batch.resume, 'btn primary sm');
-      act('Release this job', () => a.batch.release(item));
+      note('Paused: Plato lost track of it (the panel reloaded or the tab closed). It has not been sent.');
+      act('Pick it up', a.batch.resume, 'btn primary sm');
+      act('Let it go', () => a.batch.release(item));
       break;
     case 'elsewhere':
-      note('Another linked browser is working on this job.');
+      note('Plato is applying to this one in your other browser.');
       break;
     default:
       if (r.outcome) {

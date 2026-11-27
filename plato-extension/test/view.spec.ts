@@ -93,7 +93,7 @@ describe('panel view', () => {
     const picked = Array.from({ length: MAX_BATCH_JOBS }, (_, i) => `job:j${i}` as const);
     const full = draw({ jobs: { ...base().jobs, picked } });
     expect(full.root.querySelector('#picked')!.textContent).toBe(`${MAX_BATCH_JOBS} / ${MAX_BATCH_JOBS}`);
-    expect(full.root.textContent).toContain('Batch is full');
+    expect(full.root.textContent).toContain('the most for one round');
     expect(full.root.querySelectorAll('.cap i.on').length).toBe(MAX_BATCH_JOBS);
     (full.root.querySelector('#review') as HTMLButtonElement).click();
     expect(full.a.jobs.sheet).toHaveBeenCalledWith(true);
@@ -103,17 +103,17 @@ describe('panel view', () => {
     const jobs = { ...base().jobs, known: { j1: job(1), j2: job(2) }, picked: ['job:j1', 'job:j2', 'item:iPENDING'] as PanelState['jobs']['picked'] };
     const { root, a, buttons } = draw({ items: [item('PENDING')], jobs, sheet: true, settings: { autoSubmit: true, coverLetter: true, speed: 'smart', customMessage: '', tabs: 4, resume: null, resumeMode: 'profile' }, autoSubmitPreview: true });
     const t = root.textContent!;
-    expect(t).toContain('Start this batch?');
+    expect(t).toContain('Apply to these jobs?');
     expect(t).toContain(`3`);
-    expect(t).toContain('One batch at a time');
-    expect(t).toContain('Another batch can start once this one finishes');
+    expect(t).toContain('One round at a time');
+    expect(t).toContain('another round when this one finishes');
     expect(t).toContain('up to 3 open tabs at once');
     expect(root.querySelectorAll('.mini').length).toBe(3);
     (root.querySelector('.mini .ibtn') as HTMLButtonElement).click();
     expect(a.jobs.toggle).toHaveBeenCalledWith('job:j1');
     (root.querySelector('#start-batch') as HTMLButtonElement).click();
     expect(a.jobs.start).toHaveBeenCalled();
-    expect(buttons.filter((b) => /^start/i.test(b))).toEqual(['Start batch · 3 jobs']);
+    expect(buttons.filter((b) => /^(start|apply to \d)/i.test(b))).toEqual(['Apply to 3 jobs']);
   });
 
   it('a job Plato marked as sent stays pickable, tagged "Applied before", and the sheet warns before Start', () => {
@@ -134,27 +134,29 @@ describe('panel view', () => {
   it('a running batch locks the jobs view: rows are disabled, the dock shows progress, the nav badge counts', () => {
     const b = batch([item('FILLING'), item('PENDING', { id: 'i2' })], { iFILLING: { step: 'review' } });
     const { root } = draw({ ...b, view: 'jobs', items: [item('FILLING'), item('PENDING', { id: 'i2' }), item('PENDING', { id: 'i3' })] });
-    expect(root.textContent).toContain('A batch is running');
+    expect(root.textContent).toContain('Plato is applying');
     expect(root.querySelector('.job')!.getAttribute('aria-disabled')).toBe('true'); // i3, queued earlier, waits
-    expect(root.querySelector('.dock')!.textContent).toContain('No second batch until this one finishes');
-    expect(root.querySelector('#tab-batch')!.textContent).toBe('Batch0/2');
+    expect(root.querySelector('.dock')!.textContent).toContain('when this round finishes');
+    expect(root.querySelector('#tab-batch')!.textContent).toBe('Applying0/2');
   });
 
   it('batch view: every row status has its own pill and its own text; no button anywhere acts as an automatic Submit', () => {
     const items = [item('PENDING', { id: 'q' }), item('FILLING', { id: 'r' }), item('NEEDS_USER', { id: 'n' }), item('VERIFY', { id: 'v', verify_reason: 'page_closed' }), item('REVIEW', { id: 'i' }), item('CLAIMED', { id: 'e', mine: false }), item('FILLING', { id: 's' }), item('FILLING', { id: 'f' })];
     const b = batch(items, { r: { step: 'review' }, n: { step: 'needs-user', message: 'questions', detail: 'What is your notice period?' } }, { outcomes: [['s', 'submitted', 'The page confirmed it.'], ['f', 'failed', 'The site refused it.']] });
-    const { root, buttons } = draw({ ...b, items, progress: { r: 'Filled: First name = Youssif.' } });
+    const { root } = draw({ ...b, items, progress: { r: 'Filled: First name = Youssif.' } });
     const pills = [...root.querySelectorAll('.pill')].map((p) => p.textContent);
-    expect(pills.sort()).toEqual(['Elsewhere', 'Failed', 'Interrupted', 'Needs you', 'Please check', 'Queued', 'Running', 'Submitted'].sort());
+    expect(pills.sort()).toEqual(['Applying', 'Check if it went', 'Didn’t go through', 'In your other browser', 'Needs you', 'Paused', 'Sent', 'Waiting'].sort());
     const t = root.textContent!;
     expect(t).toContain('What is your notice period?');
     expect(t).toContain('Filled: First name = Youssif.');
     expect(t).toContain('will not send it again by itself');
     expect(t).toContain('page closed');
-    expect(t).toContain('Another linked browser');
-    expect(t).toContain('not in this panel');
-    expect(t).toContain('2 of 8 finished'); // the two recorded outcomes
-    for (const b of buttons) expect(b).not.toMatch(/^(submit|send|apply|resubmit)/i);
+    expect(t).toContain('your other browser');
+    expect(t).toContain('lost track');
+    expect(t).toContain('2 of 8 done'); // the two recorded outcomes
+    // tabs only switch views ("Applying"); every button that acts is held to the rule
+    const acting = [...root.querySelectorAll('button:not([role="tab"])')].filter((x) => !x.closest('header')).map((x) => x.textContent!.trim());
+    for (const b of acting) expect(b).not.toMatch(/^(submit|send|apply|resubmit)/i);
   });
 
   it('batch view: the inline answer goes to that job; VERIFY offers only the person’s answers; Release for an interrupted job', () => {
@@ -173,8 +175,8 @@ describe('panel view', () => {
     (verify.querySelector('button:nth-child(2)') as HTMLButtonElement).click();
     expect(a.batch.notSubmitted).toHaveBeenCalledWith(expect.objectContaining({ id: 'v' }));
     const interrupted = root.querySelector('[data-item="i"]')!;
-    expect(interrupted.textContent).toContain('has not been submitted');
-    expect([...interrupted.querySelectorAll('button')].map((x) => x.textContent!.trim())).toEqual(['Resume', 'Release this job']);
+    expect(interrupted.textContent).toContain('has not been sent');
+    expect([...interrupted.querySelectorAll('button')].map((x) => x.textContent!.trim())).toEqual(['Pick it up', 'Let it go']);
   });
 
   it('batch view: a human check asks the person to do it on the page and continue; an armed job with auto-submit off asks THEM to press Submit', () => {
@@ -253,11 +255,11 @@ describe('panel view', () => {
     expect(first.root.textContent).toContain('after the first job finishes');
     const later = draw({ ...batch(items, { r: { step: 'review' } }), items, eta: { ms: 150_000, basis: 2 } });
     expect(later.root.textContent).toContain('About 3 min left · based on 2 finished jobs');
-    expect(first.root.textContent).toContain('Stop batch');
+    expect(first.root.textContent).toContain('Stop applying');
     (first.root.querySelector('#stop-batch') as HTMLButtonElement).click();
     expect(first.a.batch.stop).toHaveBeenCalledWith('ask');
     const armed = draw({ ...batch(items, { r: { step: 'review' } }), items, stopArmed: true });
-    expect(armed.root.textContent).toContain('Stop the batch?');
+    expect(armed.root.textContent).toContain('Stop applying?');
     (armed.root.querySelector('#stop-yes') as HTMLButtonElement).click();
     expect(armed.a.batch.stop).toHaveBeenCalledWith('yes');
   });
@@ -268,7 +270,7 @@ describe('panel view', () => {
     expect(b.run.status).toBe('finished');
     const { root, a } = draw({ ...b, items: [] });
     const t = root.textContent!;
-    expect(t).toContain('Batch finished');
+    expect(t).toContain('All done');
     expect(t).toContain('1 of 3 applications sent');
     expect(root.querySelectorAll('.strip i').length).toBe(3);
     (root.querySelector('#new-batch') as HTMLButtonElement).click();
@@ -279,7 +281,7 @@ describe('panel view', () => {
 
   it('empty states: nothing to pick from; no batch yet; no jobs match the filters', () => {
     expect(draw({}).root.textContent).toContain('Nothing to pick from yet');
-    expect(draw({ view: 'batch' }).root.textContent).toContain('No batch yet');
+    expect(draw({ view: 'batch' }).root.textContent).toContain('Not applying to anything yet');
     const s = draw({ jobs: { ...base().jobs, searches: [{ id: 's', title: 'Frontend', locations: ['Cairo'], remote: null, job_count: 0, featured: false, created_at: '2026-10-01' }], searchId: 's', q: 'zzz' } });
     expect(s.root.textContent).toContain('No jobs match');
   });
@@ -384,6 +386,14 @@ describe('batch view: the owner design (sent count, three tabs, applying now, sh
     expect(t).toContain('1 of 2 sent');
     expect(t).toContain('about 8 min saved');
     expect(root.querySelector('#see-applications')!.getAttribute('href')).toMatch(/\/applications$/);
+    // two sub-tabs: Summary on screen, every job under Jobs (drawn, hidden); Jobs opens on Sent
+    expect(root.querySelector('#bsub-summary')!.getAttribute('aria-selected')).toBe('true');
+    expect((root.querySelector('#bsection-jobs') as HTMLElement).hidden).toBe(true);
     expect(root.querySelector('#btab-sent')!.getAttribute('aria-selected')).toBe('true');
+    const jobs = draw({ ...b, items: [], batchTab: { run: b.run.id, tab: 'sent' } });
+    expect((jobs.root.querySelector('#bsection-summary') as HTMLElement).hidden).toBe(true);
+    expect((jobs.root.querySelector('#bsection-jobs') as HTMLElement).hidden).toBe(false);
+    (jobs.root.querySelector('#bsub-summary') as HTMLButtonElement).click();
+    expect(jobs.a.batch.tab).toHaveBeenCalledWith('summary');
   });
 });

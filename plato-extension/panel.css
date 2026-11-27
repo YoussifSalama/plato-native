@@ -345,15 +345,15 @@ select { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--fg); p
 /* ---- connect (screen 04) ---- */
 .connect-body { display: flex; flex-direction: column; }
 .connect { margin: auto 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0; padding: 8px 4px; }
-.connect .mark.big { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 16px; }
 .connect h2 { font-size: 21px; font-weight: 800; letter-spacing: -.015em; line-height: 1.2; }
 .connect > p { margin-top: 6px; font-size: 14px; color: var(--fg2); }
 .connect .banner { width: 100%; margin-bottom: 12px; text-align: left; }
+.connect .btn.block { text-decoration: none; }
+.connect .mark.big { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 16px; }
 .boxes { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 18px 0 16px; }
 .box { width: 34px; height: 46px; padding: 0; text-align: center; border: 1.5px solid var(--p-line); border-radius: 9px; background: var(--p-tint); font: inherit; font-size: 18px; font-weight: 700; color: var(--fg); text-transform: uppercase; }
 .box:focus { outline: 0; border-color: var(--p); background: var(--card); box-shadow: 0 0 0 3px var(--p-soft); }
 .boxes .dash { color: var(--dim); font-weight: 700; padding: 0 2px; }
-.connect .btn.block { text-decoration: none; }
 .connect .or { display: flex; align-items: center; gap: 10px; width: 100%; margin: 16px 0 12px; font-size: 12.5px; color: var(--muted); }
 .connect .or::before, .connect .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .connect .meta { margin-top: 10px; }
@@ -430,4 +430,46 @@ select { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--fg); p
 .openq { display: flex; align-items: center; gap: 10px; width: 100%; margin: 12px 0 0; padding: 12px 14px; border: 1px solid var(--warn-line); border-radius: 12px; background: var(--warn-soft); color: var(--fg); font-size: 13.5px; font-weight: 600; text-align: left; }
 .openq span { flex: 1; }
 .openq b { color: var(--warn-fg); }
-.summary > .btn.block { margin-top: 8px; text-decoration: none; }
+
+/* ---- owner design 2026-11-27: the finished card ---- */
+.btn.big { padding: 14px; font-size: 15px; border-radius: 14px; }
+.summary .sumtop { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.summary .sumtop .ring { margin-bottom: 8px; }
+.endlist { margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.endlist .mini { grid-template-columns: 30px 1fr auto; }
+.ended { font-size: 12px; font-weight: 700; color: var(--muted); }
+.ended.ok { color: var(--ok); } .ended.err { color: var(--err-fg); } .ended.warn { color: var(--warn-fg); }
+.showall { display: block; width: 100%; margin: 0; padding: 11px; border: 0; border-top: 1px solid var(--line); background: var(--card); color: var(--p); font-size: 13px; font-weight: 700; }
+.showall:hover { background: var(--p-tint); }
+.summary > .btn.block.primary { margin-top: 14px; text-decoration: none; }
+.summary .acts .btn { flex: 1; }
+/* the answers to a question: full-width choices, as in the design (several on one line only when short) */
+.jrow .ask .opts { flex-direction: column; }
+.jrow .ask .opt { width: 100%; padding: 10px 14px; border-radius: 12px; border-width: 2px; text-align: left; }
+.jrow .ask .opt[aria-pressed="true"] { background: var(--p-soft); border-color: var(--p); color: var(--fg); }
+.sentbig small.wait { color: var(--muted); }
+.summary .acts { flex-wrap: wrap; }
+.summary .acts .btn { flex: 1 1 auto; white-space: nowrap; }
+/* a finished batch: Summary | Jobs */
+.bsub { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--fill); border-radius: 12px; }
+.bsub button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin: 0; padding: 8px; border: 0; border-radius: 9px; background: none; color: var(--fg2); font-weight: 700; font-size: 13px; }
+.bsub button .n { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--card); font-size: 11px; line-height: 18px; }
+.bsub button[aria-selected="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 3px rgba(14, 27, 44, .10); }
+.bsection { display: flex; flex-direction: column; gap: 10px; }
+.bsection[hidden] { display: none; }
+
+/* ---- narrow panels and long text (checked at 300px, Chrome's narrowest side panel) ---- */
+/* a long unbroken word in a question or an answer must not widen the form past its card */
+.qcard, .ask, .ask > *, .ask .opts, .ask .opt { min-width: 0; }
+.ask { grid-template-columns: minmax(0, 1fr); }
+.qcard, .ask .ql, .ask .opt, .qcard .q, .note, .step, .justsent, .banner { overflow-wrap: anywhere; }
+/* job titles: two lines before the ellipsis, so a long status pill never squeezes them to a few letters */
+.jrow .t strong, .mini .t strong, .now .who strong { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.jrow .top { grid-template-columns: 38px minmax(0, 1fr) auto; }
+/* the three tabs keep their labels on one line */
+.btabs button { white-space: nowrap; min-width: 0; padding: 8px 4px; gap: 4px; }
+@media (max-width: 340px) {
+  .btabs button { font-size: 12px; }
+  .btabs button .n { padding: 0 4px; }
+  .sentbig > b { font-size: 34px; }
+}

@@ -55,7 +55,7 @@ await T('the extension id is the pinned one (fixed id from the manifest key)', a
 
 await T('loaded manifest has only the approved permissions and no host access', async () => {
   const m = await sw.evaluate(() => chrome.runtime.getManifest());
-  eq(m.permissions, ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting', 'notifications']); // scripting: off-board apply (owner, 2026-11-13); notifications: outcomes outside the panel
+  eq(m.permissions, ['sidePanel', 'storage', 'tabGroups', 'debugger', 'scripting', 'notifications', 'system.cpu', 'system.memory']); // scripting: off-board apply (owner, 2026-11-13); notifications: outcomes outside the panel
   eq(m.optional_host_permissions, ['https://*/*', 'http://*/*']); // any-site access only as optional, asked at Start batch
   ok(!m.host_permissions && !m.externally_connectable, 'unexpected host access');
   eq(m.content_scripts.map((c) => c.matches), [['http://127.0.0.1:4012/*']]);
@@ -175,9 +175,9 @@ let tab;
 
 await T('the batch starts only from the sheet: the five fillable jobs, one tab at a time', async () => {
   eq(await panel.locator('#picked').textContent(), '5 / 10', 'the newest pick is ticked, the blocked job is not');
-  await btn(panel, 'Review batch').click();
+  await btn(panel, 'Review and apply').click();
   await panel.locator('#sheet').waitFor();
-  ok(/One batch at a time/.test(await panel.locator('#sheet').textContent()), 'the sheet states the rule');
+  ok(/One round at a time/.test(await panel.locator('#sheet').textContent()), 'the sheet states the rule');
   const opened = nextTab();
   await panel.locator('#start-batch').click();
   tab = await loaded(opened);
@@ -206,7 +206,7 @@ await T('flow A: arm is recorded BEFORE the person is told to submit; Submit for
   await row(panel, 1).getByRole('button', { name: 'Submit for me' }).click();
   await tab.waitForURL('**/confirmed.html', { timeout: 30000 });
   eq(fixture.submits, 1);
-  await row(panel, 1).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 20000 });
+  await row(panel, 1).locator('.pill').filter({ hasText: 'Sent' }).waitFor({ state: 'attached', timeout: 20000 });
   eq([itemOnServer('1').state, itemOnServer('1').detail?.marker], ['SUBMITTED_CONFIRMED', 'Application received']);
   eq(fixture.submits, 1, 'extra submit');
   await tab.close();
@@ -222,7 +222,7 @@ await T('flow B: panel restarts after arming, form still open -> the batch is fo
   eq([itemOnServer('2').state, itemOnServer('2').verify_reason], ['VERIFY', 'form_still_open_after_restart']);
   eq(fixture.submits, before, 'submitted during reconcile');
   await row(panel, 2).getByRole('button', { name: 'It was not' }).click();
-  await row(panel, 2).locator('.pill').filter({ hasText: 'Failed' }).waitFor({ timeout: 10000 });
+  await row(panel, 2).locator('.pill').filter({ hasText: 'Didn’t go through' }).waitFor({ state: 'attached', timeout: 10000 });
   eq(itemOnServer('2').state, 'FAILED');
   eq(fixture.submits, before);
   await tab.close();
@@ -239,7 +239,7 @@ await T('flow C: person submitted, then the panel crashed before recording -> re
   panel = await openPanel();
   globalThis.__panel = panel;
   const opened = nextTab(); // job 4 opens once the reopened panel has reconciled (armed after the panel page itself)
-  await row(panel, 3).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 15000 }); // reconcile runs before the first draw
+  await row(panel, 3).locator('.pill').filter({ hasText: 'Sent' }).waitFor({ state: 'attached', timeout: 15000 }); // reconcile runs before the first draw
   eq([itemOnServer('3').state, itemOnServer('3').detail?.marker], ['SUBMITTED_CONFIRMED', 'Application received']);
   eq(fixture.submits, before + 1, 'exactly the person’s one submit');
   await tab.close();
@@ -266,7 +266,7 @@ await T('flow E: listing -> Apply -> 3-step dialog: a page rejects a value (repa
   eq(fixture.submits, before + 1);
   const opened = nextTab();
   await row(panel, 4).getByRole('button', { name: 'Check the page' }).click();
-  await row(panel, 4).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 15000 });
+  await row(panel, 4).locator('.pill').filter({ hasText: 'Sent' }).waitFor({ state: 'attached', timeout: 15000 });
   eq(itemOnServer('4').state, 'SUBMITTED_CONFIRMED');
   await tab.close();
   tab = await loaded(opened);
@@ -284,7 +284,7 @@ await T('flow F: the page rejects Submit with an inline field error -> the error
   eq(fixture.submits, before + 1, 'exactly one real submission');
   eq(api.repairs.length, 1, 'one repair call, carrying the page error');
   ok(/This field is required/.test(api.repairs[0].questions[0]?.hint ?? ''), `the repair question carries the page's error: ${api.repairs[0].questions[0]?.hint}`);
-  await row(panel, 5).locator('.pill').filter({ hasText: 'Submitted' }).waitFor({ timeout: 20000 });
+  await row(panel, 5).locator('.pill').filter({ hasText: 'Sent' }).waitFor({ state: 'attached', timeout: 20000 });
   eq(itemOnServer('5').state, 'SUBMITTED_CONFIRMED');
   await tab.close();
 });
@@ -292,14 +292,14 @@ await T('flow F: the page rejects Submit with an inline field error -> the error
 await T('the batch finishes with every outcome on one summary', async () => {
   await panel.locator('#batch-summary').waitFor({ timeout: 20000 });
   const t = await panel.locator('#batch-summary').textContent();
-  ok(/Batch finished/.test(t) && /4 of 5 applications sent/.test(t), `summary: ${t.slice(0, 200)}`);
+  ok(/All done/.test(t) && /4 of 5 applications sent/.test(t), `summary: ${t.slice(0, 200)}`);
 });
 
 await T('flow D: a new batch after a server reset; the tab is closed after arming (page gone) -> VERIFY, not "submitted", not retried', async () => {
   servers.reset();
   await panel.reload();
   await panel.locator('.job').filter({ hasText: 'Engineer 1' }).waitFor({ timeout: 15000 });
-  await btn(panel, 'Review batch').click();
+  await btn(panel, 'Review and apply').click();
   const opened = nextTab();
   await panel.locator('#start-batch').click();
   const t = await loaded(opened);

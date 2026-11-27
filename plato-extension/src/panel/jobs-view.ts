@@ -2,7 +2,7 @@ import { MAX_BATCH_JOBS } from '../core/batch-runner';
 import type { ApiItem, SearchJob } from '../core/types';
 import type { Registry } from '../providers/registry';
 import { icon } from './icons';
-import { avatar, banner, btn, h, type Actions, type PanelState, type PickKey } from './view';
+import { tabsOf, avatar, banner, btn, h, type Actions, type PanelState, type PickKey } from './view';
 
 // The Jobs view: what the seeker can put in the next batch. Two sources, one selection (up to MAX_BATCH_JOBS):
 // jobs already queued from the Plato web app (server items, PENDING), and the jobs of one of the seeker's searches.
@@ -57,12 +57,12 @@ export function renderJobs(doc: Document, s: PanelState, a: Actions, registry: R
   const out: Node[] = [];
   const j = s.jobs;
   const running = !!s.run && s.run.status === 'running';
-  if (running) out.push(banner(doc, 'info', 'layers', 'A batch is running', 'You can browse, but new jobs wait until it finishes. ', btn(doc, 'See progress', () => a.view('batch'), 'btn ghost sm')));
+  if (running) out.push(banner(doc, 'info', 'layers', 'Plato is applying', 'You can browse, but new jobs wait until it finishes. ', btn(doc, 'See how it’s going', () => a.view('batch'), 'btn ghost sm')));
 
   // queued on Plato
   const queued = queuedItems(s);
   if (queued.length) {
-    out.push(h(doc, 'div', { class: 'sect' }, 'Queued on Plato', h(doc, 'span', { class: 'n num', text: `· ${queued.length}` })));
+    out.push(h(doc, 'div', { class: 'sect' }, 'Picked on Plato', h(doc, 'span', { class: 'n num', text: `· ${queued.length}` })));
     const list = h(doc, 'div', { class: 'jobs', id: 'queued' });
     for (const i of queued) {
       const key: PickKey = `item:${i.id}`;
@@ -144,15 +144,15 @@ export function renderDock(doc: Document, s: PanelState, a: Actions) {
     const needs = s.rows.filter((r) => r.status === 'needs' || r.status === 'verify' || r.status === 'interrupted').length;
     dock.append(
       h(doc, 'div', { class: 'row' }, h(doc, 'span', { class: 'cnt num' }, String(done), h(doc, 'small', { text: ` / ${s.run.itemIds.length}` })),
-        h(doc, 'span', { class: 'lbl' }, h(doc, 'b', { text: needs ? `${needs} job${needs === 1 ? '' : 's'} need${needs === 1 ? 's' : ''} you` : 'Batch running' }), needs ? 'Answer on the Batch view to continue.' : 'No second batch until this one finishes.'),
+        h(doc, 'span', { class: 'lbl' }, h(doc, 'b', { text: needs ? `${needs} job${needs === 1 ? '' : 's'} need${needs === 1 ? 's' : ''} you` : 'Plato is applying' }), needs ? 'Answer on the Applying tab to continue.' : 'You can pick more when this round finishes.'),
         btn(doc, needs ? 'Answer' : 'Progress', () => a.view('batch'), needs ? 'btn primary' : 'btn soft')),
       h(doc, 'div', { class: 'cap' }, ...s.run.itemIds.map((id) => h(doc, 'i', { class: s.rows.find((r) => r.itemId === id)?.outcome ? 'on' : '' }))));
     return dock;
   }
   dock.append(
     h(doc, 'div', { class: 'row' }, h(doc, 'span', { class: 'cnt num', id: 'picked' }, String(n), h(doc, 'small', { text: ` / ${MAX_BATCH_JOBS}` })),
-      h(doc, 'span', { class: 'lbl' }, h(doc, 'b', { text: n ? `${n} job${n === 1 ? '' : 's'} selected` : 'Pick jobs to apply to' }), n >= MAX_BATCH_JOBS ? 'Batch is full. Remove one to add another.' : n ? `Room for ${MAX_BATCH_JOBS - n} more in this batch.` : `Up to ${MAX_BATCH_JOBS} per batch.`),
-      btn(doc, 'Review batch', () => a.jobs.sheet(true), 'btn primary', { disabled: !n || s.busy, id: 'review' })),
+      h(doc, 'span', { class: 'lbl' }, h(doc, 'b', { text: n ? `${n} job${n === 1 ? '' : 's'} selected` : 'Pick jobs to apply to' }), n >= MAX_BATCH_JOBS ? 'That’s the most for one round. Remove one to add another.' : n ? `Room for ${MAX_BATCH_JOBS - n} more in this round.` : `Up to ${MAX_BATCH_JOBS} per batch.`),
+      btn(doc, 'Review and apply', () => a.jobs.sheet(true), 'btn primary', { disabled: !n || s.busy, id: 'review' })),
     h(doc, 'div', { class: `cap${n >= MAX_BATCH_JOBS ? ' full' : ''}` }, ...Array.from({ length: MAX_BATCH_JOBS }, (_, i) => h(doc, 'i', { class: i < n ? 'on' : '' }))));
   return dock;
 }
@@ -167,7 +167,7 @@ export function renderSheet(doc: Document, s: PanelState, a: Actions): Node[] {
     list.append(h(doc, 'div', { class: 'mini' }, avatar(doc, p.meta?.company ?? '?'), h(doc, 'span', { class: 't' }, h(doc, 'strong', { text: p.meta?.title ?? 'Job' }), h(doc, 'span', { text: [p.meta?.company, p.meta?.via && `via ${p.meta.via}`].filter(Boolean).join(' · ') })),
       h(doc, 'button', { class: 'ibtn', type: 'button', onclick: () => a.jobs.toggle(p.key), attrs: { 'aria-label': `Remove ${p.meta?.title ?? 'job'}` } }, icon(doc, 'close'))));
   const fact = (ico: Parameters<typeof icon>[1], strong: string, text: string) => h(doc, 'div', { class: 'fact' }, icon(doc, ico), h(doc, 'span', {}, h(doc, 'b', { text: strong }), ` ${text}`));
-  const tabs = Math.min(s.settings?.tabs ?? 4, n || 1);
+  const tabs = Math.min(tabsOf(s), n || 1);
   // Two choices: a segmented toggle, not a dropdown (both visible, one tap, styled like the Jobs | Batch tabs).
   const choice = (mode: 'profile' | 'tailored', text: string) =>
     h(doc, 'button', { type: 'button', text, onclick: () => a.jobs.resumeMode(mode), attrs: { role: 'radio', 'aria-checked': String(s.jobs.resumeMode === mode) } });
@@ -182,20 +182,21 @@ export function renderSheet(doc: Document, s: PanelState, a: Actions): Node[] {
     : fact('sparkle', 'Plato fills, then checks with you.', 'Each job stops before Submit with every answer and where it came from. You fix any of them, or approve.');
   const sheet = h(doc, 'div', { class: 'sheet', id: 'sheet', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'sheet-title' } },
     h(doc, 'div', { class: 'grab' }),
-    h(doc, 'div', { class: 'sh' }, h(doc, 'h2', { id: 'sheet-title', text: 'Start this batch?' }), h(doc, 'p', { text: 'Plato applies to these jobs together, one batch, in your browser.' })),
+    h(doc, 'div', { class: 'sh' }, h(doc, 'h2', { id: 'sheet-title', text: 'Apply to these jobs?' }), h(doc, 'p', { text: 'Plato applies to them for you, in your own browser.' })),
     h(doc, 'div', { class: 'sb' },
       h(doc, 'div', { class: 'bigcount' }, h(doc, 'b', { class: 'num', text: String(n) }), h(doc, 'span', { text: `of ${MAX_BATCH_JOBS} jobs${n < MAX_BATCH_JOBS ? ` · room for ${MAX_BATCH_JOBS - n} more` : ' · full'}` })),
       list,
       sentBefore ? banner(doc, 'warn', 'alert', `${sentBefore} already marked as applied`, 'Plato sends a new application to each. Check the site or your email first if you are not sure.') : null,
       n < MAX_BATCH_JOBS ? btn(doc, '+ Add more jobs', () => a.jobs.sheet(false), 'btn ghost sm') : null,
       h(doc, 'div', { class: 'facts' },
-        fact('layers', 'One batch at a time.', `These ${n} run together, up to ${tabs} open tab${tabs === 1 ? '' : 's'} at once. Another batch can start once this one finishes.`),
+        fact('layers', 'One round at a time.', `These ${n} run together, up to ${tabs} open tab${tabs === 1 ? '' : 's'} at once. You can start another round when this one finishes.`),
+        s.capacity ? fact('clock', 'Paced for this computer.', `${s.capacity.why} It waits for a tab to finish when memory runs low.`) : null,
         submitFact,
         fact('hand', 'You step in only when asked.', 'A sign-in, a human check, or a fact only you know.')),
       s.autoSubmitPreview ? h(doc, 'div', { class: 'setrow stack' }, h(doc, 'div', { class: 'hd' }, icon(doc, 'check'), h(doc, 'span', { class: 'l' }, 'Before Submit', h(doc, 'small', { text: 'Plato remembers your choice.' }))), submitMode) : null,
       h(doc, 'div', { class: 'setrow stack' }, h(doc, 'div', { class: 'hd' }, icon(doc, 'file'), h(doc, 'span', { class: 'l' }, 'Resume to upload', h(doc, 'small', { text: 'Uploaded first on every form.' }))), resume)),
     h(doc, 'div', { class: 'sf' },
-      btn(doc, `Start batch · ${n} job${n === 1 ? '' : 's'}`, a.jobs.start, 'btn primary block', { disabled: !n || s.busy, id: 'start-batch' }),
+      btn(doc, `Apply to ${n} job${n === 1 ? '' : 's'}`, a.jobs.start, 'btn primary block', { disabled: !n || s.busy, id: 'start-batch' }),
       btn(doc, 'Keep editing', () => a.jobs.sheet(false), 'btn block')));
   sheet.addEventListener('keydown', (e) => e.key === 'Escape' && a.jobs.sheet(false));
   return [h(doc, 'div', { class: 'scrim', onclick: () => a.jobs.sheet(false) }), sheet];

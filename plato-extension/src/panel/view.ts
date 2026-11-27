@@ -14,6 +14,7 @@ import { renderBatch } from './batch-view';
 // from third-party listings and must never be parsed as HTML.
 // The panel: header, Jobs | Batch nav, one scrolling body, the batch dock pinned at the bottom.
 export type SessionStep = 'preparing' | 'review' | 'armed' | 'needs-user';
+export type BatchTab = 'line' | 'sent' | 'needs'; // the batch view's three tabs
 export type PickKey = `item:${string}` | `job:${string}`; // a queued server item, or a job from a search
 export interface JobsState {
   searches: SearchCard[];
@@ -60,6 +61,7 @@ export interface PanelState {
   sheet?: boolean; // the batch review sheet
   menuOpen?: boolean;
   stopArmed?: boolean; // "Stop batch" asked; waiting for Yes / Keep going
+  batchTab?: { run: string; tab: BatchTab }; // the tab the seeker picked, for this batch only (a new batch starts on its own choice)
   run: BatchRun | null; // the batch this panel is applying to (or the last finished one)
   rows: Row[]; // the batch's rows, from the server list and this panel's sessions
   eta?: { ms: number; basis: number } | 'first' | null; // the runner's estimate for the rows
@@ -99,6 +101,9 @@ export interface BatchActions {
   ticket(item: ApiItem): void; // open the chat on this job's problem
   newBatch(): void; // after a finished batch: back to Jobs with an empty selection
   retryFailed(): void; // a new selection from the failed jobs of the finished batch
+  tab(tab: BatchTab): void; // In line | Sent | Needs you
+  answerMany(items: ApiItem[], text: string, answers?: SeekerAnswer[]): void; // forms asking the same questions: one answer, each job continues
+  skipMany(items: ApiItem[]): void; // jobs waiting on the seeker that they let go: cancelled before Submit, nothing sent
 }
 export interface Actions {
   pair(code: string, label: string): void;

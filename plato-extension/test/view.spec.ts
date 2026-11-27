@@ -17,7 +17,7 @@ const job = (i: number, over: Partial<SearchJob> = {}): SearchJob => ({ id: `j${
 type Mocked = Actions & { jobs: Record<string, ReturnType<typeof vi.fn>>; batch: Record<string, ReturnType<typeof vi.fn>> } & Record<string, unknown>;
 const actions = (): Mocked => {
   const fns = (keys: string[]) => Object.fromEntries(keys.map((k) => [k, vi.fn()]));
-  return { ...fns(['pair', 'unlink', 'refresh', 'view', 'menu', 'toggleLog', 'chat', 'answer']), jobs: fns(['pickSearch', 'picker', 'filter', 'more', 'toggle', 'selectVisible', 'site', 'dropItem', 'sheet', 'resumeMode', 'submitMode', 'start']), batch: fns(['stop', 'cancelJob', 'release', 'resume', 'answerJob', 'retry', 'submitNow', 'fixReview', 'checkPage', 'attest', 'notSure', 'notSubmitted', 'resumeChoice', 'watch', 'ticket', 'newBatch', 'retryFailed']) } as unknown as Mocked;
+  return { ...fns(['pair', 'unlink', 'refresh', 'view', 'menu', 'toggleLog', 'chat', 'answer']), jobs: fns(['pickSearch', 'picker', 'filter', 'more', 'toggle', 'selectVisible', 'site', 'dropItem', 'sheet', 'resumeMode', 'submitMode', 'start']), batch: fns(['stop', 'cancelJob', 'release', 'resume', 'answerJob', 'retry', 'submitNow', 'fixReview', 'checkPage', 'attest', 'notSure', 'notSubmitted', 'resumeChoice', 'watch', 'ticket', 'newBatch', 'retryFailed', 'tab', 'answerMany', 'skipMany']) } as unknown as Mocked;
 };
 const base = (): PanelState => ({ status: 'ready', toasts: [], items: [], sessions: {}, progress: {}, cards: {}, pendingOutbox: 0, policy: { fx: 'FILL_ONLY' }, view: 'jobs', jobs: { searches: [], pickerOpen: false, jobs: [], jobsTotal: 0, known: {}, loading: false, q: '', sort: 'best', remote: false, fromPlato: false, picked: [], resumeMode: 'profile', submitMode: 'review' }, run: null, rows: [] });
 const draw = (s: Partial<PanelState>, a = actions()) => {
@@ -315,5 +315,75 @@ describe('jobs view: the site chips filter the loaded jobs on the client', () =>
     expect(d.root.querySelectorAll('#jobs .job').length).toBe(4);
     const one = draw({ jobs: { ...base().jobs, searches: [search], searchId: 's1', jobs: [job(1, { source: 'LEVER' })], jobsTotal: 1 } });
     expect(one.root.querySelector('#sites')).toBeNull();
+  });
+});
+
+describe('batch view: the owner design (sent count, three tabs, applying now, shared answers)', () => {
+  const ask = (label: string, id = 'q1') => [{ id, label, type: 'choice' as const, options: ['2 weeks', '1 month'] }];
+  it('while it runs: the sent count with the time saved; In line shows the job being applied to now, its moment, and what is next', () => {
+    const items = [item('REVIEW', { id: 'r', job: { title: 'Analyst', company: 'Synpulse', url: 'https://fx.test/r' } }), item('PENDING', { id: 'p1' }), item('PENDING', { id: 's' })];
+    const b = batch(items, { r: { step: 'review' } }, { outcomes: [['s', 'submitted', 'The page confirmed it.']] });
+    const { root } = draw({ ...b, items });
+    expect(root.querySelector('.sentbig')!.textContent).toContain('1application sent');
+    expect(root.querySelector('.sentbig')!.textContent).toContain('About 8 minutes of form-filling saved');
+    expect(root.querySelector('#btab-line')!.getAttribute('aria-selected')).toBe('true'); // nothing needs the seeker: In line first
+    const now = root.querySelector('.now[data-item="r"]')!;
+    expect(now.querySelector('.moments .on')!.textContent).toBe('Filling the form');
+    expect(now.querySelectorAll('.moments .done').length).toBe(1);
+    expect(root.querySelector('.justsent')!.textContent).toContain('Just sent: Engineer');
+    expect(root.querySelector('.upnext [data-item="p1"]')).not.toBeNull();
+  });
+
+  it('something waits on the seeker: Needs you opens first; a tab press goes through the tab action; the others stay drawn but hidden', () => {
+    const items = [item('NEEDS_USER', { id: 'n' }), item('PENDING', { id: 'p' })];
+    const b = batch(items, { n: { step: 'needs-user', message: 'questions', detail: 'Notice?', stop: 'ask', ask: ask('What is your notice period?') } });
+    const { root, a } = draw({ ...b, items });
+    expect(root.querySelector('#btab-needs')!.getAttribute('aria-selected')).toBe('true');
+    expect((root.querySelector('#bpanel-line') as HTMLElement).hidden).toBe(true);
+    (root.querySelector('#btab-sent') as HTMLButtonElement).click();
+    expect(a.batch.tab).toHaveBeenCalledWith('sent');
+    // the seeker's pick holds for this batch
+    const picked = draw({ ...b, items, batchTab: { run: b.run.id, tab: 'line' } });
+    expect(picked.root.querySelector('#btab-line')!.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('two forms ask the same question: one card, one answer for both, or skip both; a different question keeps its own card', () => {
+    const items = [item('NEEDS_USER', { id: 'x' }), item('NEEDS_USER', { id: 'y' }), item('NEEDS_USER', { id: 'z' })];
+    const b = batch(items, {
+      x: { step: 'needs-user', message: 'questions', stop: 'ask', ask: ask('What is your notice period?', 'a1') },
+      y: { step: 'needs-user', message: 'questions', stop: 'ask', ask: ask('What is your notice period ', 'b7') },
+      z: { step: 'needs-user', message: 'questions', stop: 'ask', ask: ask('Expected salary?') },
+    });
+    const { root, a } = draw({ ...b, items });
+    const group = root.querySelector('.shared')!;
+    expect(group.textContent).toContain('2 forms ask the same question');
+    expect(group.querySelectorAll('.mini').length).toBe(2);
+    (group.querySelector('.opt') as HTMLButtonElement).click(); // "2 weeks"
+    const send = [...group.querySelectorAll('button')].find((x) => x.textContent === 'Save and send both') as HTMLButtonElement;
+    send.click();
+    expect(a.batch.answerMany).toHaveBeenCalledWith([expect.objectContaining({ id: 'x' }), expect.objectContaining({ id: 'y' })], expect.any(String), [expect.objectContaining({ value: '2 weeks' })]);
+    (group.querySelector('#skip-group-x') as HTMLButtonElement).click();
+    expect(a.batch.skipMany).toHaveBeenCalledWith([expect.objectContaining({ id: 'x' }), expect.objectContaining({ id: 'y' })]);
+    expect(root.querySelector('.jrow[data-item="z"]')!.textContent).toContain('Expected salary?');
+  });
+
+  it('only waiting jobs left: In line says everything else is done and sends the seeker to Needs you', () => {
+    const items = [item('NEEDS_USER', { id: 'w' })];
+    const b = batch([...items, item('PENDING', { id: 'd' })], { w: { step: 'needs-user', message: 'questions', stop: 'ask', ask: ask('Notice?') } }, { outcomes: [['d', 'submitted', 'Sent.']] });
+    const { root, a } = draw({ ...b, items, batchTab: { run: b.run.id, tab: 'line' } });
+    expect(root.querySelector('#bpanel-line')!.textContent).toContain('Everything else is done');
+    (root.querySelector('#line-answer') as HTMLButtonElement).click();
+    expect(a.batch.tab).toHaveBeenCalledWith('needs');
+  });
+
+  it('finished: "N of M sent", the time saved, and a link to the applications on Plato', () => {
+    const items = [item('PENDING', { id: 'd' }), item('PENDING', { id: 'f' })];
+    const b = batch(items, {}, { outcomes: [['d', 'submitted', 'Sent.'], ['f', 'failed', 'Refused.']], finish: true });
+    const { root } = draw({ ...b, items: [] });
+    const t = root.querySelector('#batch-summary')!.textContent!;
+    expect(t).toContain('1 of 2 sent');
+    expect(t).toContain('about 8 min saved');
+    expect(root.querySelector('#see-applications')!.getAttribute('href')).toMatch(/\/applications$/);
+    expect(root.querySelector('#btab-sent')!.getAttribute('aria-selected')).toBe('true');
   });
 });

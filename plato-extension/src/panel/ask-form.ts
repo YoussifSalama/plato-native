@@ -37,7 +37,7 @@ export function collect(d: Draft, questions: AskQuestion[]): { text: string; ans
   return { text: answers.map((a) => `${a.label} → ${a.value}`).join('\n'), answers };
 }
 
-export function renderAskForm(doc: Document, key: string, questions: AskQuestion[], o: { busy?: boolean; onSubmit(text: string, answers: AskAnswer[]): void }): HTMLElement {
+export function renderAskForm(doc: Document, key: string, questions: AskQuestion[], o: { busy?: boolean; submitLabel?: string; onSubmit(text: string, answers: AskAnswer[]): void }): HTMLElement {
   const d = drafts.get(key) ?? { step: 0, values: {}, other: {} };
   drafts.set(key, d);
   const root = h(doc, 'div', { class: 'ask', id: `ask-${key}` });
@@ -103,7 +103,7 @@ export function renderAskForm(doc: Document, key: string, questions: AskQuestion
     if (n > 1) nodes.push(h(doc, 'div', { class: 'steps' }, h(doc, 'span', { class: 'num', text: `Question ${d.step + 1} of ${n}` }), h(doc, 'span', { class: 'dots' }, ...questions.map((_, i) => h(doc, 'i', { class: i === d.step ? 'on' : i < d.step ? 'done' : '' })))));
     nodes.push(h(doc, 'p', { class: 'ql', text: q.label }, q.why ? h(doc, 'small', { text: q.why }) : null));
     nodes.push(...control(q));
-    navBtn = h(doc, 'button', { class: 'btn primary sm', type: 'button', onclick: next, id: d.step === n - 1 ? `ask-send-${key}` : `ask-next-${key}` }, d.step === n - 1 ? (n > 1 ? 'Answer all' : 'Answer') : 'Next');
+    navBtn = h(doc, 'button', { class: 'btn primary sm', type: 'button', onclick: next, id: d.step === n - 1 ? `ask-send-${key}` : `ask-next-${key}` }, d.step === n - 1 ? (o.submitLabel ?? (n > 1 ? 'Answer all' : 'Answer')) : 'Next');
     nodes.push(h(doc, 'div', { class: 'nav' }, d.step > 0 ? h(doc, 'button', { class: 'btn ghost sm', type: 'button', onclick: () => ((d.step--), paint()) }, 'Back') : null, navBtn));
     root.replaceChildren(...nodes);
     refreshNav();

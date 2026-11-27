@@ -29,6 +29,7 @@ import { render, type Actions, type PanelState, type PickKey } from './view';
 import { canStart, JOBS_PAGE_SIZE, latestBatch, queuedItems, visibleJobs } from './jobs-view';
 import { noticeText, type Notice } from '../core/notice';
 import type { AnswerQuestion, OrchestratorEvent, OrchestratorRequest } from './../core/types';
+import { askLabel } from './batch-view';
 
 // The side panel runs the whole flow. It is the only place (besides the
 // service worker's one-line storage restriction) that ever sees the token.
@@ -1624,6 +1625,38 @@ const actions: Actions = {
       state.view = 'jobs';
       draw();
     },
+    tab: (tab) => {
+      const run = runner.current();
+      if (run) state.batchTab = { run: run.id, tab };
+      draw();
+    },
+    // Several forms asked the same questions: the answer is kept once, then each job gets it under its own
+    // question ids (matched by the question's words) and runs again.
+    answerMany: (items, text, answers) =>
+      void guard(async () => {
+        if (answers?.length) void api.remember(answers.map((x) => ({ question: x.label.slice(0, 300), value: x.value.slice(0, 1000) }))).catch(() => undefined);
+        const said = new Map((answers ?? []).map((x) => [askLabel(x.label), x.value]));
+        for (const item of items) {
+          note(item.id, text.slice(0, 4000));
+          const own = state.sessions[item.id]?.ask ?? [];
+          const mine = own.flatMap((q) => (said.has(askLabel(q.label)) ? [{ id: q.id, label: q.label, value: said.get(askLabel(q.label))! }] : []));
+          if (mine.length) v3Answers.set(item.id, mine);
+          jot(item.id, `The seeker answered (shared with ${items.length - 1} other form${items.length === 2 ? '' : 's'}): ${text.replace(/\n/g, '; ').slice(0, 160)}`);
+          await rerun(item);
+        }
+      }),
+    skipMany: (items) =>
+      void guard(async () => {
+        for (const item of items) {
+          const s = orch.session(item.id);
+          if (s) await cancelSession(s, 'Skipped by you before Submit. Nothing was sent.');
+          else if (item.state === 'PENDING') {
+            await api.dropFromQueue([item.id]);
+            runner.record(item.id, 'cancelled', 'Skipped by you. Nothing was sent.');
+          }
+        }
+        await refresh();
+      }),
     // The failed jobs of the finished batch, as a new selection: the server lets a FAILED job be tried again.
     retryFailed: () => {
       const run = runner.current();

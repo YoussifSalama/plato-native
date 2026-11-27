@@ -211,11 +211,11 @@ function Frame({ children }: { children: ReactNode }) {
               </span>
             )}
           </Link>
-          {/* The action used most, reachable from every page. */}
-          <Link href="/jobs/new" data-ai="nav.new-search" aria-label={collapsed ? "New search" : undefined} className={cn("group/tip relative flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary text-[14.5px] font-bold text-primary-foreground shadow-brand transition-[transform,background-color] duration-200 hover:-translate-y-px hover:bg-primary-hover", collapsed && "mx-auto w-11")}>
-            <Search className="size-[18px]" strokeWidth={2.2} />
-            {collapsed ? <RailTip label="New search" /> : "New search"}
-          </Link>
+          {/* Collapse / expand right under the logo, as before the redesign (owner, 2026-11-27). */}
+          <button type="button" onClick={toggleSidebar} aria-expanded={!collapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} className={cn("group/tip relative -mt-1 flex h-9 shrink-0 items-center gap-2.5 rounded-xl px-3 text-[13px] font-medium text-text-secondary transition-colors hover:bg-muted hover:text-foreground", collapsed && "justify-center px-0")}>
+            {collapsed ? <PanelLeftOpen className="size-4 shrink-0" strokeWidth={1.8} /> : <PanelLeftClose className="size-4 shrink-0" strokeWidth={1.8} />}
+            {collapsed ? <RailTip label="Expand sidebar" /> : "Collapse"}
+          </button>
           <nav data-tour="sidebar-nav" aria-label="Main" className="relative flex flex-col gap-1">
             {NAV.map((it) => link(it, "main"))}
           </nav>
@@ -258,10 +258,6 @@ function Frame({ children }: { children: ReactNode }) {
                 <span className="line-clamp-2 text-xs leading-snug font-semibold text-primary">{setup.next ? `${setup.next.short} →` : "Plato has everything it needs to apply for you."}</span>
               </div>
             )}
-            <button type="button" onClick={toggleSidebar} aria-expanded={!collapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} className={cn("group/tip relative flex h-9 items-center gap-2.5 rounded-xl px-3 text-[13px] font-medium text-text-secondary transition-colors hover:bg-muted hover:text-foreground", collapsed && "justify-center px-0")}>
-              {collapsed ? <PanelLeftOpen className="size-4 shrink-0" strokeWidth={1.8} /> : <PanelLeftClose className="size-4 shrink-0" strokeWidth={1.8} />}
-              {collapsed ? <RailTip label="Expand sidebar" /> : "Collapse"}
-            </button>
           </div>
         </div>
       </aside>

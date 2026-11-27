@@ -324,16 +324,80 @@
 @utility shadow-float {
   box-shadow: var(--shadow-float);
 }
+/* Interactive cards: lift and lean toward the pointer (--px/--py from components/card-fx.tsx), easing back. */
 @utility card-lift {
-  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.2s, border-color 0.2s;
+  /* !important: entrance animations (motion) leave an inline transform that would cancel the lean. */
+  transform: perspective(1000px) rotateX(calc(var(--py, 0) * -2.5deg)) rotateY(calc(var(--px, 0) * 2.5deg)) translateY(var(--lift, 0px)) !important;
+  transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s, border-color 0.25s;
+  will-change: transform;
   &:hover {
-    transform: translateY(-1px);
+    --lift: -3px;
     box-shadow: var(--shadow-lift);
     border-color: var(--primary-line);
   }
   @media (prefers-reduced-motion: reduce) {
-    &:hover { transform: none; }
+    transform: none !important;
   }
+}
+
+/* ---------- Card feel (from Confirmo1) ----------
+   .fx (every CARD): a light top edge, a soft light that follows the pointer, and the edge glowing where it is.
+   .fx-dark: the same on the night-blue panels. .fx-depth: a header whose .depth-1/.depth-2 layers move with
+   the pointer at their own rates. The pointer position comes from components/card-fx.tsx. */
+@layer components {
+/* Every card-shaped surface, not only CARD: many pages write the classes by hand. Dialogs and menus stay still.
+   No isolation or z-index here: a dropdown inside a card must still rise above the next card. */
+:where(.fx, .card-lift, .bg-card.border:is(.rounded-2xl, .rounded-3xl)):not(dialog, [role="dialog"], [role="menu"], [role="listbox"], .fx-off) {
+  position: relative;
+  box-shadow: var(--shadow-card), inset 0 1px 0 rgb(255 255 255 / 0.9);
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.35s;
+  }
+  &::before {
+    background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgb(0 91 167 / 0.06), transparent 45%);
+  }
+  &::after {
+    padding: 1px;
+    background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgb(0 91 167 / 0.45), transparent 60%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+  &:hover::before,
+  &:hover::after {
+    opacity: 1;
+  }
+}
+.fx-dark {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
+}
+.fx-dark::before {
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 0.14), transparent 55%);
+}
+.fx-dark::after {
+  background: radial-gradient(200px circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 0.6), transparent 60%);
+}
+.fx-depth .depth-1 {
+  transform: translate3d(calc(var(--px, 0) * -6px), calc(var(--py, 0) * -6px), 0);
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.fx-depth .depth-2 {
+  transform: translate3d(calc(var(--px, 0) * -18px), calc(var(--py, 0) * -14px), 0);
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-depth .depth-1,
+  .fx-depth .depth-2 {
+    transform: none;
+  }
+}
 }
 
 /* ---------- Flat surfaces (the business owner's screens) ----------

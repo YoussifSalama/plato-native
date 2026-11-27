@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { ArrowRight, BellRing, Bookmark, Building2, Plus, Search, Send } from "lucide-react"
+import { ArrowRight, BellRing, Bookmark, Building2, Hand, Mic, Plus, Search, Send, Sparkles, TrendingUp, Wallet, Zap } from "lucide-react"
 import { cn } from "cn"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -20,6 +20,10 @@ import { getDigests, getInsights, type Digest } from "@/lib/insights/api"
 import { getDiscoveryStats, getMatches, listApplications, setSaved, type DiscoveryStats, type JobApplication, type JobMatch } from "@/lib/jobs/api"
 import { needsAttention, statusView } from "@/lib/jobs/application-status"
 import { timeAgo } from "@/lib/jobs/links"
+import { BRAND_GLASS, BRAND_PANEL } from "@/lib/brand"
+import { openPlato } from "@/components/app-shell"
+import { getResumeScore, type ResumeScore } from "@/lib/career/api"
+import { listInterviews, type InterviewSummary } from "@/lib/interviews/api"
 import { staggerContainer, fadeUpItem } from "@/lib/motion-variants"
 
 const WEEK_GOAL = 10
@@ -82,7 +86,9 @@ export default function Home() {
   const [digest, setDigest] = useState<Digest | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [apply, setApply] = useState<string | null>(null)
+  const [apply, setApply] = useState<string[] | null>(null)
+  const [cv, setCv] = useState<ResumeScore | null>(null)
+  const [practice, setPractice] = useState<InterviewSummary[]>([])
 
   useEffect(() => {
     // Signed out goes to /login from the app shell; a new account finishes onboarding first.
@@ -111,6 +117,12 @@ export default function Home() {
     getDigests(1)
       .then((d) => setDigest(d[0] ?? null))
       .catch(() => setDigest(null))
+    getResumeScore()
+      .then(setCv)
+      .catch(() => setCv(null))
+    listInterviews()
+      .then(setPractice)
+      .catch(() => setPractice([]))
   }, [router])
 
   async function newSearch() {
@@ -129,7 +141,6 @@ export default function Home() {
   const sentWeek = apps?.filter((a) => a.status === "SUBMITTED" && within(a.submitted_at ?? a.updated_at, 7)).length ?? 0
   const sent = apps?.filter((a) => a.status === "SUBMITTED").length ?? 0
   // Marked by the seeker on a sent application (optional): Plato can't read replies.
-  const viewed = apps?.filter((a) => a.outcome && a.outcome !== "REJECTED").length ?? 0
   const interviews = apps?.filter((a) => a.outcome === "INTERVIEW" || a.outcome === "OFFER").length ?? 0
   // As on Following: open roles in the latest digest at companies you follow.
   const hiring = digest?.jobs.filter((j) => !j.closed && followed?.includes(j.company.toLowerCase())) ?? []
@@ -147,6 +158,11 @@ export default function Home() {
         : sentWeek < WEEK_GOAL && (topTotal ?? 0) > 0
           ? { title: `Send ${WEEK_GOAL - sentWeek} more application${WEEK_GOAL - sentWeek === 1 ? "" : "s"} this week`, body: `${topTotal} matches are waiting. Pick the best and Plato applies.`, href: "/jobs", cta: "Pick jobs" }
           : { title: "Get ready for your interviews", body: "Practise for the jobs you applied to, and see how ready you are.", href: "/career", cta: "Practise" }
+  const needing = apps?.filter(needsAttention) ?? []
+  const viewedOnly = apps?.filter((a) => a.outcome === "VIEWED").length ?? 0
+  // The last practice for the interview on the calendar (same company), to show how ready they are.
+  const lastPractice = interview ? practice.find((p) => p.score !== null && p.company?.toLowerCase() === interview.job.company.toLowerCase()) : undefined
+  const tone: "need" | "interview" | "plain" = needs ? "need" : interview ? "interview" : "plain"
   // The one line under the greeting: what changed and what Plato is doing.
   // The owner's line once there is something to show; a first step before that.
   const summary =
@@ -157,279 +173,388 @@ export default function Home() {
     <div className={PAGE} data-tour-state={top?.length === 0 && apps?.length === 0 ? "home.new" : "home.active"}>
       {error && <p className="rounded-xl border border-destructive/30 bg-danger-soft px-4 py-3 text-sm text-destructive">{error}</p>}
 
-      {/* Greeting and the four numbers that matter this week (owner design, 2026-11-13). */}
-      <section data-tour="page-header" className={cn(CARD, "flex flex-col gap-5 p-5 sm:p-6 xl:flex-row xl:items-center xl:gap-8")}>
-        <div className="min-w-0 xl:flex-1">
-          <p className="font-mono text-[13px] tracking-[0.12em] text-text-secondary uppercase">
-            {new Date().toLocaleDateString("en-GB", { weekday: "long" })}, {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long" })}
-          </p>
-          <h1 className="type-page-title mt-2 text-foreground">
-            {greeting()}
-            {name && `, ${name}`}
-          </h1>
-          <p className="mt-1.5 max-w-[60ch] text-[15px] leading-relaxed text-text-secondary">{summary}</p>
-        </div>
-        {stats ? (
-          <div data-tour="home-kpis" className="grid grid-cols-2 gap-3 sm:grid-cols-[auto_auto_auto_auto] xl:shrink-0">
-            <StatTile href="/jobs" dataAi="home.matches" value={stats.newThisWeek ?? stats.shortlisted} label={stats.newThisWeek === undefined ? "Jobs for you" : "New matches"} />
-            <StatTile href="/applications" dataAi="home.applied" value={sent} label="Applications sent" />
-            {/* Interviews the seeker marked on their applications ("Did you hear back?"). */}
-            <StatTile
-              href="/applications?tab=applied"
-              dataAi="home.interviews"
-              value={interviews}
-              label={interviews === 1 ? "Interview" : "Interviews"}
-              title="Mark it on an application when an employer gets back to you"
-              tone="hi"
-            />
-            <div className="col-span-2 flex items-center gap-3 rounded-xl border bg-card px-4 py-3 sm:col-span-1">
-              <MatchRing
-                value={(Math.min(sentWeek, WEEK_GOAL) / WEEK_GOAL) * 100}
-                size={44}
-                stroke={4}
-                label={<span className="sr-only">{Math.round((Math.min(sentWeek, WEEK_GOAL) / WEEK_GOAL) * 100)}%</span>}
-              />
-              <span className="min-w-0">
-                <b className="block text-lg leading-tight font-bold text-foreground tabular-nums">
-                  {sentWeek} / {WEEK_GOAL}
-                </b>
-                <span className="flex items-center gap-1 text-[13px] whitespace-nowrap text-text-secondary">
-                  This week’s goal
-                  <InfoTip
-                    text={`Applications sent in the last 7 days, against a target of ${WEEK_GOAL} a week. Only applications that actually went through count.`}
-                    label="What this week's goal counts"
-                  />
-                </span>
+      {/* The brand header: greeting, what Plato is doing, the week in four numbers (the same glow as the sidebar). */}
+      <section data-tour="page-header" className={cn(BRAND_PANEL, "fx-depth relative isolate overflow-hidden rounded-[28px] px-5 py-6 text-foreground shadow-card sm:px-8 sm:py-8")}>
+        <span aria-hidden className="depth-2 pointer-events-none absolute -top-24 -right-24 -z-10 size-[420px] rounded-full bg-[radial-gradient(circle,color-mix(in_oklch,var(--azure)_16%,transparent),transparent_65%)]" />
+        <span aria-hidden className="depth-1 pointer-events-none absolute -inset-6 -z-10 opacity-[0.05] [background-image:radial-gradient(var(--primary)_1px,transparent_1px)] [background-size:22px_22px]" />
+        <div className="grid gap-7 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-end">
+          <div className="min-w-0">
+            <p className="text-[12px] font-bold tracking-[0.22em] text-text-tertiary uppercase">
+              {new Date().toLocaleDateString("en-GB", { weekday: "long" })}, {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long" })}
+            </p>
+            <h1 className="mt-2 text-[30px] leading-tight font-extrabold tracking-tight sm:text-[38px]">
+              {greeting()}
+              {name && `, ${name}`}
+            </h1>
+            <p className={cn(BRAND_GLASS, "mt-3 inline-flex max-w-full items-center gap-2.5 rounded-full py-1.5 pr-4 pl-2.5 text-sm")}>
+              <span className="relative flex size-2.5 shrink-0">
+                {stats?.runs.running ? <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-70" /> : null}
+                <span className="relative inline-flex size-2.5 rounded-full bg-success" />
               </span>
+              <span className="truncate">{stats?.runs.running ? "Plato is searching for you right now" : stats && (stats.newThisWeek || stats.shortlisted) ? <>Plato found <b>{stats.newThisWeek ?? stats.shortlisted} new jobs</b> this week · {stats.shortlisted} ranked for you</> : summary}</span>
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button type="button" data-ai="home.new-search" onClick={newSearch} disabled={creating} className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-5 font-bold text-primary-foreground shadow-brand transition-[transform,background-color] hover:-translate-y-px hover:bg-primary-hover">
+                <Search className="size-[18px]" strokeWidth={2.3} />
+                New search
+              </button>
+              <button type="button" data-ai="home.ask-plato" onClick={() => openPlato()} className={cn(BRAND_GLASS, "inline-flex h-11 items-center gap-2 rounded-xl px-5 font-semibold text-primary transition-colors hover:border-primary-line hover:bg-primary-tint")}>
+                <Sparkles className="size-[18px]" />
+                Ask Plato
+              </button>
             </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:w-[640px] xl:shrink-0">
-            {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-[74px] rounded-xl" />
-            ))}
-          </div>
-        )}
+          {stats ? (
+            <div data-tour="home-kpis" className="grid grid-cols-2 gap-3 sm:grid-cols-4 2xl:w-[660px]">
+              <Kpi href="/jobs" dataAi="home.matches" value={stats.newThisWeek ?? stats.shortlisted} label={stats.newThisWeek === undefined ? "Jobs for you" : "New matches"} sub={<><TrendingUp className="size-3.5" />{stats.shortlisted} ranked</>} />
+              <Kpi href="/applications" dataAi="home.applied" value={sent} label="Applications sent" sub={`${sentWeek} this week`} />
+              {/* Interviews the seeker marked on their applications ("Did you hear back?"). */}
+              <Kpi href="/applications?tab=applied" dataAi="home.interviews" value={interviews} label={interviews === 1 ? "Interview" : "Interviews"} sub={interview ? interview.job.company : "Mark replies"} title="Mark it on an application when an employer gets back to you" lit={!!interview} />
+              {/* Same shape as the other tiles (number, label, one line), the ring in the corner. */}
+              <div className={cn(BRAND_GLASS, "fx card-lift relative flex min-w-0 flex-col rounded-2xl p-4 hover:!border-primary-line")}>
+                <svg viewBox="0 0 36 36" className="absolute top-3 right-3 size-8 -rotate-90" aria-hidden>
+                  <circle cx="18" cy="18" r="15" fill="none" stroke="var(--primary-soft)" strokeWidth="4" />
+                  {sentWeek > 0 && <circle cx="18" cy="18" r="15" fill="none" stroke="var(--primary)" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${(Math.min(sentWeek, WEEK_GOAL) / WEEK_GOAL) * 94.2} 94.2`} />}
+                </svg>
+                <b className="text-[28px] leading-none font-extrabold tabular-nums">
+                  {sentWeek}/{WEEK_GOAL}
+                </b>
+                <span className="mt-1.5 flex min-w-0 items-center gap-1 text-[13px] text-text-secondary">
+                  <span className="truncate">Week&apos;s goal</span>
+                  <InfoTip text={`Applications sent in the last 7 days, against a target of ${WEEK_GOAL} a week. Only applications that actually went through count.`} label="What this week's goal counts" className="shrink-0 text-text-tertiary" />
+                </span>
+                <span className="mt-1.5 truncate text-xs font-bold text-primary">{sentWeek >= WEEK_GOAL ? "Goal met" : `${WEEK_GOAL - sentWeek} to go`}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 2xl:w-[660px]">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-[92px] rounded-2xl" />
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
-      {/* Right under the greeting: setup steps while there are any, then the one thing to do now. */}
-      <NextSteps stats={stats} onNewSearch={newSearch} then={then} />
-
-      {/* Top matches. */}
-      <section data-tour="home-top-matches" className="flex flex-col gap-3">
-        <PlainHeader title="Top matches for you" href="/jobs" dataAi="home.all-jobs" action={topTotal ? `See all ${topTotal}` : null} />
-        {top === null && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-[268px] rounded-2xl" />
-            ))}
-          </div>
-        )}
-        {top?.length === 0 && (
-          <div className={cn(CARD, "p-5")}>
-            <EmptyState
-              icon={Search}
-              title="No matches yet"
-              hint="Tell Plato what you are after and it searches every board for you."
-              action={
-                <Button data-ai="home.first-search" size="sm" onClick={newSearch} disabled={creating}>
-                  <Plus />
-                  Start a search
-                </Button>
-              }
-              className="border-0 py-4"
-            />
-          </div>
-        )}
-        {!!top?.length && (
-          <motion.div variants={staggerContainer} initial="hidden" animate="show" className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {top.slice(0, 3).map((m, i) => (
-              // Two columns between md and xl: the third card would sit alone on its own row.
-              <motion.article key={m.id} variants={fadeUpItem} className={cn(CARD, "card-lift flex flex-col gap-3.5 p-5", i === 2 && "md:max-xl:hidden")}>
-                <div className="flex items-start justify-between gap-3">
-                  <Mark name={m.job.company} domain={m.job.company_domain} logo={m.job.company_logo} />
-                  <MatchRing value={m.match_percent} size={46} />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="line-clamp-2 text-[17px] leading-snug font-bold text-foreground">
-                    <a href={m.job.url} target="_blank" rel="noreferrer" data-ai={`home.job:${m.job.id}`} className="transition-colors hover:text-primary">
-                      {m.job.title}
-                    </a>
-                  </h3>
-                  <p className="mt-0.5 truncate text-sm text-text-secondary">{m.job.company}</p>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {[[m.job.location, REMOTE[m.job.remote_type]].filter(Boolean).join(" · "), m.job.posted_at && timeAgo(m.job.posted_at)].filter(Boolean).map((t) => (
-                    <MetaChip key={t as string} className="rounded-lg px-2.5 py-1 text-[13px]">
-                      {t}
-                    </MetaChip>
+      {/* The one thing to do now (amber only when it waits on you), and setup in one small card while it isn't done. */}
+      <section className="flex flex-col gap-4 lg:flex-row">
+        {then ? (
+          <motion.div
+            data-tour="next-action"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(CARD, "flex min-w-0 flex-1 flex-wrap items-center gap-4 p-5", tone === "need" ? "border-l-[4px] border-l-warning" : tone === "interview" ? "border-l-[4px] border-l-success" : "border-l-[4px] border-l-primary")}
+          >
+            <span className={cn("grid size-12 shrink-0 place-items-center rounded-2xl", tone === "need" ? "bg-warning-soft text-warning-ink" : tone === "interview" ? "bg-success-soft text-success-ink" : "bg-primary-soft text-primary")}>
+              {tone === "need" ? <Hand className="size-5" /> : tone === "interview" ? <Mic className="size-5" /> : <Zap className="size-5" />}
+            </span>
+            <div className="min-w-0 flex-1 basis-[240px]">
+              <p className="text-[17px] font-bold text-foreground">{then.title}</p>
+              <p className="mt-0.5 text-sm text-text-secondary">{then.body}</p>
+              {tone === "need" && needing.length > 0 && (
+                <div className="mt-2.5 flex gap-2">
+                  {needing.slice(0, 4).map((a) => (
+                    <Mark key={a.id} name={a.job.company} domain={a.job.company_domain} logo={a.job.company_logo} size="sm" />
                   ))}
                 </div>
-                <PlatoNote variant="inline">{reason(m)}</PlatoNote>
-                <div className="mt-auto flex gap-2 pt-1">
-                  <Button data-ai={`home.apply:${m.job.id}`} className="h-11 flex-1 rounded-xl text-[15px] font-semibold" onClick={() => setApply(m.job.id)}>
-                    Apply
-                  </Button>
-                  <Button
-                    variant="outline"
-                    aria-label={m.saved ? "Remove from saved" : "Save"}
-                    aria-pressed={m.saved}
-                    onClick={() => toggleSave(m)}
-                    className={cn("size-11 shrink-0 rounded-xl p-0", m.saved && "border-primary-line bg-primary-tint text-primary")}
-                  >
-                    <Bookmark className={cn("size-4", m.saved && "fill-current")} />
-                  </Button>
-                </div>
-              </motion.article>
-            ))}
+              )}
+            </div>
+            <Link href={then.href} data-ai="home.next-action" className={cn(buttonVariants(), "group/cta h-11 w-full rounded-xl px-5 font-bold sm:w-auto")}>
+              {then.cta}
+              <ArrowRight className="transition-transform group-hover/cta:translate-x-0.5" />
+            </Link>
           </motion.div>
+        ) : (
+          <Skeleton className="h-[104px] flex-1 rounded-2xl" />
         )}
+        <NextSteps compact stats={stats} onNewSearch={newSearch} />
       </section>
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Applications: the funnel and the latest moves. */}
-        <div data-tour="home-recent" className={cn(CARD, "flex flex-col gap-4 p-5")}>
-          <PlainHeader title="Your applications" href="/applications" action="Open" />
-          {apps && apps.length > 0 && (
-            <div className="flex flex-col gap-3">
-              {/* sent -> viewed -> interview, light to dark */}
-              <div className="flex h-2 gap-1" aria-hidden>
-                <span className="rounded-full bg-primary-line" style={{ flex: Math.max(1, sent) }} />
-                <span className="rounded-full bg-primary/60" style={{ flex: Math.max(0.4, viewed) }} />
-                <span className="rounded-full bg-brand-deep" style={{ flex: Math.max(0.2, interviews) }} />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* Top matches: logo, why it fits, pay, and the best three in one go. */}
+          <section data-tour="home-top-matches" className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="type-section-title text-foreground">Top matches for you</h2>
+                {!!topTotal && <p className="text-sm text-text-secondary">Best of {topTotal} jobs ranked against your CV</p>}
               </div>
-              <p className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[15px] text-text-secondary tabular-nums">
-                <span>
-                  <b className="font-bold text-foreground">{sent}</b> sent
-                </span>
-                <span>
-                  <b className="font-bold text-foreground">{viewed}</b> viewed
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span>
-                    <b className="font-bold text-foreground">{interviews}</b> interview{interviews === 1 ? "" : "s"}
-                  </span>
-                  <InfoTip
-                    text="Viewed and interviews come from what you mark on a sent application (Did you hear back?). Plato can't read employer replies, so they only move when you update them."
-                    label="Where viewed and interviews come from"
-                  />
-                </span>
-              </p>
-            </div>
-          )}
-          {apps === null && (
-            <div className="flex flex-col gap-2">
-              {Array.from({ length: 3 }, (_, i) => (
-                <Skeleton key={i} className="h-12 rounded-lg" />
-              ))}
-            </div>
-          )}
-          {apps?.length === 0 && (
-            <EmptyState
-              icon={Send}
-              title="Nothing sent yet"
-              hint="Pick jobs and Plato applies for you."
-              action={
-                <Link href="/jobs" className={buttonVariants({ variant: "outline", size: "sm" })}>
-                  Browse jobs
-                </Link>
-              }
-              className="flex-1 justify-center"
-            />
-          )}
-          {!!recent.length && (
-            <ul className="flex flex-col divide-y divide-divider">
-              {recent.map((a) => (
-                <li key={a.id}>
-                  <Link href={`/applications/${a.id}`} title={statusView(a).label} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/70">
-                    <Mark name={a.job.company} size="sm" />
-                    <span className="min-w-0 flex-1 truncate text-[15px] text-text-secondary [&_b]:font-semibold [&_b]:text-foreground">{event(a)}</span>
-                    <span className="shrink-0 text-sm text-text-secondary tabular-nums">{shortAge(a.submitted_at ?? a.updated_at)}</span>
+              {!!top?.length && (
+                <div className="flex gap-2">
+                  <Link href="/jobs" data-ai="home.all-jobs" className={cn(buttonVariants({ variant: "outline" }), "h-10 rounded-xl")}>
+                    See all
                   </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Companies you follow: the latest alert digest. */}
-        <div data-tour="home-following" className={cn(CARD, "flex flex-col gap-4 p-5")}>
-          <PlainHeader title="Companies you follow are hiring" href="/following" action="All" />
-          {followed === null ? (
-            <div className="flex flex-col gap-2">
-              {Array.from({ length: 3 }, (_, i) => (
-                <Skeleton key={i} className="h-12 rounded-lg" />
-              ))}
-            </div>
-          ) : followed.length === 0 ? (
-            <EmptyState
-              icon={Building2}
-              title="Follow companies and roles"
-              hint="Plato tells you when they post a job that fits."
-              action={
-                <Link href="/following" className={buttonVariants({ variant: "outline", size: "sm" })}>
-                  Follow one
-                </Link>
-              }
-              className="flex-1 justify-center"
-            />
-          ) : hiring.length === 0 ? (
-            <EmptyState
-              icon={BellRing}
-              title="No new roles yet"
-              hint={`Plato checks the ${followed.length} compan${followed.length === 1 ? "y" : "ies"} you follow and tells you when one posts a job that fits.`}
-              action={
-                <Link href="/following" className={buttonVariants({ variant: "outline", size: "sm" })}>
-                  Manage following
-                </Link>
-              }
-              className="flex-1 justify-center"
-            />
-          ) : (
-            <ul className="flex flex-col divide-y divide-divider">
-              {hiring.slice(0, 3).map((j) => (
-                <li key={j.id} className="flex items-center gap-3 py-2.5">
-                  <Mark name={j.company} size="sm" />
-                  <span className="min-w-0 flex-1">
-                    <b className="block truncate text-[15px] font-semibold">{j.title}</b>
-                    <span className="block truncate text-sm text-text-secondary">{[j.company, j.location, j.posted_at && timeAgo(j.posted_at)].filter(Boolean).join(" · ")}</span>
-                  </span>
-                  {j.match_percent ? (
-                    <MatchPill value={j.match_percent} className="px-2.5 py-1 text-[13px]" />
-                  ) : (
-                    <a href={j.url} target="_blank" rel="noreferrer" className="text-[13px] font-semibold text-primary hover:text-primary-hover">
-                      View
-                    </a>
+                  {top.length > 1 && (
+                    <Button data-ai="home.apply-top" onClick={() => setApply(top.slice(0, 3).map((m) => m.job.id))} className="h-10 gap-1.5 rounded-xl font-bold">
+                      <Zap className="size-4" />
+                      Apply to top {Math.min(3, top.length)}
+                    </Button>
                   )}
-                </li>
-              ))}
-            </ul>
-          )}
+                </div>
+              )}
+            </div>
+            {top === null && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {[0, 1, 2].map((i) => (
+                  <Skeleton key={i} className="h-[300px] rounded-2xl" />
+                ))}
+              </div>
+            )}
+            {top?.length === 0 && (
+              <div className={cn(CARD, "p-5")}>
+                <EmptyState
+                  icon={Search}
+                  title="No matches yet"
+                  hint="Tell Plato what you are after and it searches every board for you."
+                  action={
+                    <Button data-ai="home.first-search" size="sm" onClick={newSearch} disabled={creating}>
+                      <Plus />
+                      Start a search
+                    </Button>
+                  }
+                  className="border-0 py-4"
+                />
+              </div>
+            )}
+            {!!top?.length && (
+              <motion.div variants={staggerContainer} initial="hidden" animate="show" className={cn("grid grid-cols-1 gap-4", top.length >= 3 ? "md:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-2")}>
+                {top.slice(0, 3).map((m, i) => (
+                  // Two columns between md and xl: the third card would sit alone on its own row.
+                  <motion.article key={m.id} variants={fadeUpItem} className={cn(CARD, "card-lift relative flex flex-col gap-3 p-5", i === 2 && "md:max-xl:hidden")}>
+                    {m.job.posted_at && within(m.job.posted_at, 2) && <span className="absolute -top-px right-5 rounded-b-lg bg-primary px-2 py-0.5 text-[10px] font-extrabold tracking-wider text-primary-foreground">NEW</span>}
+                    <div className="flex items-start justify-between gap-3">
+                      <Mark name={m.job.company} domain={m.job.company_domain} logo={m.job.company_logo} />
+                      <MatchRing value={m.match_percent} size={48} />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="line-clamp-2 text-[16.5px] leading-snug font-bold text-foreground">
+                        <a href={m.job.url} target="_blank" rel="noreferrer" data-ai={`home.job:${m.job.id}`} className="transition-colors hover:text-primary">
+                          {m.job.title}
+                        </a>
+                      </h3>
+                      <p className="mt-0.5 truncate text-sm text-text-secondary">{[m.job.company, m.job.location, m.job.posted_at && timeAgo(m.job.posted_at)].filter(Boolean).join(" · ")}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {REMOTE[m.job.remote_type] && <MetaChip className="rounded-lg px-2.5 py-1 text-[12.5px]">{REMOTE[m.job.remote_type]}</MetaChip>}
+                      <MetaChip className="gap-1 rounded-lg px-2.5 py-1 text-[12.5px]">
+                        <Wallet className="size-3.5" />
+                        {pay(m) ?? "Pay not shown"}
+                      </MetaChip>
+                    </div>
+                    {m.job.eligibility && m.job.eligibility.status !== "open" && m.job.eligibility.note ? (
+                      <PlatoNote variant="inline">{m.job.eligibility.note}</PlatoNote>
+                    ) : m.reasons?.length ? (
+                      <div className="flex flex-wrap gap-1.5" aria-label="Why it fits you">
+                        {m.reasons.slice(0, 3).map((r) => (
+                          <span key={r} className="rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-semibold text-primary">
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <PlatoNote variant="inline">{reason(m)}</PlatoNote>
+                    )}
+                    <div className="mt-auto flex gap-2 pt-1">
+                      <Button data-ai={`home.apply:${m.job.id}`} className="h-10 flex-1 rounded-xl text-[15px] font-bold" onClick={() => setApply([m.job.id])}>
+                        Apply
+                      </Button>
+                      <Button variant="outline" aria-label={m.saved ? "Remove from saved" : "Save"} aria-pressed={m.saved} onClick={() => toggleSave(m)} className={cn("size-10 shrink-0 rounded-xl p-0", m.saved && "border-primary-line bg-primary-tint text-primary")}>
+                        <Bookmark className={cn("size-4", m.saved && "fill-current")} />
+                      </Button>
+                    </div>
+                  </motion.article>
+                ))}
+              </motion.div>
+            )}
+          </section>
+
+          {/* Applications: every stage named and counted, then the latest moves. */}
+          <section data-tour="home-recent" className={cn(CARD, "flex flex-col gap-4 p-5 sm:p-6")}>
+            <PlainHeader title="Your applications" href="/applications" action="Open all" />
+            {apps === null ? (
+              <Skeleton className="h-[84px] rounded-2xl" />
+            ) : apps.length === 0 ? (
+              <EmptyState
+                icon={Send}
+                title="Nothing sent yet"
+                hint="Pick jobs and Plato applies for you."
+                action={
+                  <Link href="/jobs" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    Browse jobs
+                  </Link>
+                }
+                className="flex-1 justify-center"
+              />
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  <Stage href="/applications?tab=active" n={(stats?.applications.queued ?? 0) + (stats?.applications.inProgress ?? 0)} label="In line" />
+                  <Stage href="/applications?tab=needs" n={needs} label="Need you" tone={needs ? "need" : undefined} />
+                  <Stage href="/applications?tab=applied" n={sent} label="Sent" bar="bg-primary" />
+                  <Stage href="/applications?tab=applied" n={viewedOnly} label="Viewed" bar="bg-primary/60" />
+                  <Stage href="/applications?tab=applied" n={interviews} label={interviews === 1 ? "Interview" : "Interviews"} tone={interviews ? "good" : undefined} />
+                </div>
+                <ul className="flex flex-col divide-y divide-divider border-t border-divider">
+                  {recent.map((a) => {
+                    const st = statusView(a)
+                    return (
+                      <li key={a.id}>
+                        <Link href={`/applications/${a.id}`} title={st.label} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/70">
+                          <Mark name={a.job.company} domain={a.job.company_domain} logo={a.job.company_logo} size="sm" />
+                          <span className="min-w-0 flex-1 truncate text-[15px] text-text-secondary [&_b]:font-semibold [&_b]:text-foreground">
+                            {event(a)} <span className="hidden text-text-tertiary sm:inline">· {a.job.title}</span>
+                          </span>
+                          <span className={cn("hidden shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold sm:inline", needsAttention(a) ? "bg-warning-soft text-warning-ink" : a.outcome === "INTERVIEW" || a.outcome === "OFFER" ? "bg-success-soft text-success-ink" : "bg-primary-soft text-primary")}>{a.outcome === "INTERVIEW" ? "Interview" : a.outcome === "OFFER" ? "Offer" : st.label}</span>
+                          <span className="w-8 shrink-0 text-right text-sm text-text-secondary tabular-nums">{shortAge(a.submitted_at ?? a.updated_at)}</span>
+                        </Link>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </>
+            )}
+          </section>
         </div>
-      </section>
 
+        {/* The rail: the interview coming up, the CV's score, companies you follow that are hiring. */}
+        <aside className="flex flex-col gap-6">
+          {interview && (
+            <section className={cn(CARD, "overflow-hidden")}>
+              <div className="bg-linear-to-br from-success-soft to-card p-5">
+                <div className="flex items-center gap-3">
+                  <Mark name={interview.job.company} domain={interview.job.company_domain} logo={interview.job.company_logo} />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold tracking-[0.14em] text-success-ink uppercase">Interview</p>
+                    <p className="truncate font-bold text-foreground">
+                      {interview.job.company} · {interview.job.title}
+                    </p>
+                  </div>
+                </div>
+                {lastPractice?.score != null && (
+                  <>
+                    <p className="mt-4 flex items-center justify-between text-sm">
+                      <span className="text-text-secondary">Last practice</span>
+                      <b className="tabular-nums">{lastPractice.score} / 100</b>
+                    </p>
+                    <span className="mt-1.5 block h-2 overflow-hidden rounded-full bg-success/15">
+                      <span className="block h-full rounded-full bg-success" style={{ width: `${lastPractice.score}%` }} />
+                    </span>
+                  </>
+                )}
+                <Link
+                  href={`/career/interviews/new?${new URLSearchParams({ target: "job", job: interview.job.id, jt: interview.job.title, jc: interview.job.company })}`}
+                  data-ai="home.interview-prep"
+                  className={cn(buttonVariants(), "mt-4 h-10 w-full gap-2 rounded-xl font-bold")}
+                >
+                  <Mic className="size-4" />
+                  Practise with questions from the post
+                </Link>
+              </div>
+            </section>
+          )}
+          {cv && (
+            <section className={cn(CARD, "flex items-center gap-4 p-5")}>
+              <MatchRing value={cv.score} size={64} stroke={5} label={<span className="text-base font-extrabold text-primary tabular-nums">{cv.score}</span>} />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-foreground">Your CV scores {cv.score}</p>
+                {cv.topFixes[0] && <p className="line-clamp-2 text-sm text-text-secondary">{cv.topFixes[0]}</p>}
+                <Link href="/career" data-ai="home.cv-score" className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:text-primary-hover">
+                  Improve it with Plato
+                  <ArrowRight className="size-3.5" />
+                </Link>
+              </div>
+            </section>
+          )}
+          <section data-tour="home-following" className={cn(CARD, "flex flex-col gap-3 p-5")}>
+            <PlainHeader title="Companies you follow are hiring" href="/following" action="All" />
+            {followed === null ? (
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: 3 }, (_, i) => (
+                  <Skeleton key={i} className="h-12 rounded-lg" />
+                ))}
+              </div>
+            ) : followed.length === 0 ? (
+              <EmptyState
+                icon={Building2}
+                title="Follow companies and roles"
+                hint="Plato tells you when they post a job that fits."
+                action={
+                  <Link href="/following" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    Follow one
+                  </Link>
+                }
+                className="flex-1 justify-center"
+              />
+            ) : hiring.length === 0 ? (
+              <EmptyState
+                icon={BellRing}
+                title="No new roles yet"
+                hint={`Plato checks the ${followed.length} compan${followed.length === 1 ? "y" : "ies"} you follow and tells you when one posts a job that fits.`}
+                action={
+                  <Link href="/following" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    Manage following
+                  </Link>
+                }
+                className="flex-1 justify-center"
+              />
+            ) : (
+              <ul className="flex flex-col divide-y divide-divider">
+                {hiring.slice(0, 3).map((j) => (
+                  <li key={j.id} className="flex items-center gap-3 py-2.5">
+                    <Mark name={j.company} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <b className="block truncate text-[15px] font-semibold">{j.title}</b>
+                      <span className="block truncate text-xs text-text-secondary">{[j.company, j.location, j.posted_at && timeAgo(j.posted_at)].filter(Boolean).join(" · ")}</span>
+                    </span>
+                    {j.match_percent ? (
+                      <MatchPill value={j.match_percent} className="px-2.5 py-1 text-[13px]" />
+                    ) : (
+                      <a href={j.url} target="_blank" rel="noreferrer" className="text-[13px] font-semibold text-primary hover:text-primary-hover">
+                        View
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </aside>
+      </div>
 
-      <ExtensionApplyModal open={!!apply} count={1} req={{ jobIds: apply ? [apply] : [] }} onClose={() => setApply(null)} />
+      <ExtensionApplyModal open={!!apply} count={apply?.length ?? 0} req={{ jobIds: apply ?? [] }} onClose={() => setApply(null)} />
     </div>
   )
 }
 
-// One number tile in the greeting card: a bordered box, a big number, a short label. "hi" = tinted (interviews).
-function StatTile({ href, value, label, tone, title, dataAi }: { href: string; value: ReactNode; label: string; tone?: "hi"; title?: string; dataAi?: string }) {
+// One number on the brand header: a tile, big number, label, and what it means this week.
+function Kpi({ href, value, label, sub, title, lit, dataAi }: { href: string; value: ReactNode; label: string; sub: ReactNode; title?: string; lit?: boolean; dataAi?: string }) {
   return (
-    <Link
-      href={href}
-      data-ai={dataAi}
-      title={title}
-      className={cn(
-        "flex min-w-[120px] flex-col justify-center rounded-xl border px-4 py-3 transition-colors",
-        tone === "hi" ? "border-primary-line bg-primary-soft text-primary hover:bg-primary-soft/80" : "bg-card text-foreground hover:bg-muted/60",
-      )}
-    >
-      <b className="text-[26px] leading-none font-bold tabular-nums">{value}</b>
-      <span className={cn("mt-1.5 text-[13px] whitespace-nowrap", tone === "hi" ? "text-primary" : "text-text-secondary")}>{label}</span>
+    <Link href={href} data-ai={dataAi} title={title} className={cn(BRAND_GLASS, "fx card-lift flex min-w-0 flex-col rounded-2xl p-4 hover:!border-primary-line", lit && "ring-1 ring-primary-line")}>
+      <b className="text-[28px] leading-none font-extrabold tabular-nums">{value}</b>
+      <span className="mt-1.5 text-[13px] whitespace-nowrap text-text-secondary">{label}</span>
+      <span className="mt-1.5 flex items-center gap-1 truncate text-xs font-bold text-primary">{sub}</span>
     </Link>
   )
+}
+
+// One stage of the application pipeline: its count, its name, a bar in its meaning's colour.
+function Stage({ href, n, label, tone, bar = "bg-primary-line" }: { href: string; n: number; label: string; tone?: "need" | "good"; bar?: string }) {
+  return (
+    <Link href={href} className={cn("card-lift flex flex-col rounded-2xl p-3", tone === "need" ? "bg-warning-soft ring-1 ring-warning-line" : tone === "good" ? "bg-success-soft ring-1 ring-success/30" : "bg-primary-tint hover:bg-primary-soft")}>
+      <b className={cn("text-[22px] leading-none font-extrabold tabular-nums", tone === "need" ? "text-warning-ink" : tone === "good" ? "text-success-ink" : "text-foreground")}>{n}</b>
+      <span className={cn("mt-1 text-xs font-semibold", tone === "need" ? "text-warning-ink" : tone === "good" ? "text-success-ink" : "text-text-secondary")}>{label}</span>
+      <span className={cn("mt-2 h-1.5 rounded-full", tone === "need" ? "bg-warning" : tone === "good" ? "bg-success" : bar)} />
+    </Link>
+  )
+}
+
+// The job's stated pay, short ("$4–5k / mo"); null when the posting doesn't say.
+function pay(m: JobMatch) {
+  const { salary_min: lo, salary_max: hi, salary_currency: cur } = m.job
+  if (!lo && !hi) return null
+  const k = (n: number) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : `${n}`)
+  const sym = !cur || cur === "USD" ? "$" : `${cur} `
+  return `${sym}${lo && hi && lo !== hi ? `${k(lo)}–${k(hi)}` : k((lo ?? hi)!)}`
 }
 
 // A section title with its one link, plain like the owner's Home ("See all 122 →").

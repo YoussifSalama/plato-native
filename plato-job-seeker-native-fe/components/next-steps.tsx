@@ -35,7 +35,8 @@ const setHidden = (v: boolean) => {
   hideListeners.forEach((l) => l())
 }
 
-export function NextSteps({ stats, onNewSearch, then }: { stats: DiscoveryStats | null; onNewSearch: () => void; then?: NextAction | null }) {
+// compact: Home's small setup card beside its action card (the action is Home's own); nothing once setup is done or hidden.
+export function NextSteps({ stats, onNewSearch, then, compact }: { stats: DiscoveryStats | null; onNewSearch: () => void; then?: NextAction | null; compact?: boolean }) {
   const [ready, setReady] = useState<boolean | null>(null)
   const [linked, setLinked] = useState<boolean | null>(null)
   const [alerts, setAlerts] = useState<boolean | null>(null)
@@ -60,8 +61,43 @@ export function NextSteps({ stats, onNewSearch, then }: { stats: DiscoveryStats 
   const known = steps.every((s) => s.done !== null)
   const doneCount = steps.filter((s) => s.done).length
   const next = steps.find((s) => s.done === false)
-  if (hidden || (known && !next)) return then ? <NextActionCard a={then} /> : null
+  if (hidden || (known && !next)) return compact ? null : then ? <NextActionCard a={then} /> : null
   const pct = Math.round((doneCount / steps.length) * 100)
+  if (compact) {
+    const go = next?.href === "#new-search" ? { onClick: onNewSearch } : null
+    const arrow = "flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary-line text-primary transition-colors duration-200 hover:bg-primary-soft"
+    return (
+      <motion.section data-tour="next-steps" aria-label="Setup" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn(CARD, "relative flex items-center gap-4 p-5 lg:w-[380px]")}>
+        <div className="relative size-14 shrink-0">
+          <svg viewBox="0 0 36 36" className="size-14 -rotate-90" aria-hidden>
+            <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--primary-soft)" strokeWidth="3.5" />
+            <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--primary)" strokeWidth="3.5" strokeLinecap="round" strokeDasharray={`${(pct / 100) * 97.4} 97.4`} className="transition-[stroke-dasharray] duration-700" />
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-[13px] font-extrabold text-foreground tabular-nums">
+            {doneCount}/{steps.length}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <span className="eyebrow">Setup</span>
+          <p className="truncate text-[15px] font-bold text-foreground">{next ? next.title : "Checking your account…"}</p>
+          {next && <p className="line-clamp-2 text-xs text-text-secondary">{next.body}</p>}
+        </div>
+        {next &&
+          (go ? (
+            <button type="button" data-ai="home.next-step" aria-label={next.cta} onClick={go.onClick} className={arrow}>
+              <ArrowRight className="size-4" />
+            </button>
+          ) : (
+            <Link href={next.href} data-ai="home.next-step" aria-label={next.cta} className={arrow}>
+              <ArrowRight className="size-4" />
+            </Link>
+          ))}
+        <button type="button" onClick={() => setHidden(true)} aria-label="Dismiss setup" title="Dismiss" className="absolute top-2 right-2 flex size-6 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-muted hover:text-foreground">
+          <X className="size-3.5" />
+        </button>
+      </motion.section>
+    )
+  }
 
   return (
     <motion.section data-tour="next-steps" aria-label="Your next steps" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn(CARD, "relative overflow-hidden")}>

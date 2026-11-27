@@ -348,7 +348,7 @@ function UploadScreen({ onUploaded, onBack, announce }: { onUploaded: (g: GuestV
               [Briefcase, "See your best matches", "Two are free. Sign up free to see every job and apply."],
             ] as const
           ).map(([Icon, t, d], i) => (
-            <li key={t} className="rounded-2xl border bg-card p-4 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-card">
+            <li key={t} className="card-lift rounded-2xl border bg-card p-4">
               <span className="flex items-center gap-2">
                 <span className="grid size-7 place-items-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">{i + 1}</span>
                 <Icon className="size-4 text-primary" />
@@ -743,7 +743,7 @@ function Facts({ job }: { job: Pick<GuestJob, "location" | "remote_type" | "post
 function JobCard({ job, picked, onPick, best }: { job: GuestJob; picked: boolean; onPick: () => void; best: boolean }) {
   const pay = salary(job)
   return (
-    <label className={cn("group relative flex cursor-pointer gap-4 rounded-3xl border bg-card p-5 shadow-card transition-[border-color,box-shadow,transform] duration-200 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-primary/20", picked ? "border-primary shadow-[0_18px_40px_-22px_rgb(0_91_167/0.45)]" : "hover:-translate-y-0.5 hover:border-primary-line hover:shadow-[0_18px_40px_-26px_rgb(14_27_44/0.35)]")}>
+    <label className={cn("card-lift group relative flex cursor-pointer gap-4 rounded-3xl border bg-card p-5 shadow-card has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-primary/20", picked ? "border-primary shadow-[0_18px_40px_-22px_rgb(0_91_167/0.45)]" : "hover:-translate-y-0.5 hover:border-primary-line hover:shadow-[0_18px_40px_-26px_rgb(14_27_44/0.35)]")}>
       <input type="checkbox" checked={picked} onChange={onPick} aria-label={`Pick ${job.title} at ${job.company}`} className="sr-only" />
       <CompanyAvatar name={job.company} logo={job.company_logo} domain={job.company_domain} size={48} className="rounded-xl" />
       <span className="min-w-0 flex-1">

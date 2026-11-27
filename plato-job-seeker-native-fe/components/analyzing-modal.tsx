@@ -85,7 +85,7 @@ function AnalyzingModalContent() {
                   transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 />
                 <motion.span
-                  className="relative flex size-14 items-center justify-center rounded-full bg-linear-to-br from-primary via-[#0a7fd0] to-azure text-white shadow-lg"
+                  className="relative flex size-14 items-center justify-center rounded-full bg-linear-to-br from-primary via-[#1a7fd0] to-azure text-white shadow-lg"
                   animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.1, 1] }}
                   transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
                 >
@@ -101,7 +101,7 @@ function AnalyzingModalContent() {
             <div className="relative flex items-center gap-3">
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                 <motion.div
-                  className="h-full rounded-full bg-linear-to-r from-primary via-[#0a7fd0] to-azure"
+                  className="h-full rounded-full bg-linear-to-r from-primary via-[#1a7fd0] to-azure"
                   animate={{ width: `${progress}%` }}
                   transition={{ duration: 0.5, ease: "easeOut" }}
                 />

@@ -313,7 +313,7 @@ function PlatoDock({
           whileHover={reduced ? undefined : { y: -2 }}
           whileTap={{ scale: 0.98 }}
           // Compact pill on desktop, just the mark on phones. The page tour button sits right above it.
-          className="fixed right-4 bottom-4 z-50 flex h-12 items-center gap-2.5 rounded-full border bg-card p-1.5 shadow-float transition-colors duration-200 hover:border-primary-line sm:right-6 sm:bottom-5 sm:pr-4"
+          className="fixed right-4 bottom-[88px] z-50 lg:bottom-5 flex h-12 items-center gap-2.5 rounded-full border bg-card p-1.5 shadow-float transition-colors duration-200 hover:border-primary-line sm:right-6 sm:pr-4"
         >
           <PlatoMark size={36} live={status === "searching"} />
           <span className="hidden text-left leading-tight sm:block">

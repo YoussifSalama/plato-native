@@ -21,9 +21,12 @@ export type AdminRequest = Request & {
 export const ADMIN_PAGE_METADATA = 'plato:admin-page';
 const ANY_PAGE = '*';
 
-/** The page an admin endpoint belongs to: `@UseGuards(AdminGuard) @AdminPage('usage')`. */
-export const AdminPage = (key: AdminPageKey) =>
-  SetMetadata(ADMIN_PAGE_METADATA, key);
+/**
+ * The page an admin endpoint belongs to: `@UseGuards(AdminGuard) @AdminPage('usage')`.
+ * Several keys = any one of them is enough (a read another page needs too).
+ */
+export const AdminPage = (...keys: [AdminPageKey, ...AdminPageKey[]]) =>
+  SetMetadata(ADMIN_PAGE_METADATA, keys.length === 1 ? keys[0] : keys);
 
 /** Any signed-in admin, whatever their pages (auth/me, the page list). */
 export const AdminAnyPage = () => SetMetadata(ADMIN_PAGE_METADATA, ANY_PAGE);
@@ -84,14 +87,15 @@ export class AdminGuard implements CanActivate {
       throw genericAuthError();
 
     const pages = pagesFor(admin);
-    const required = this.reflector.getAllAndOverride<string | undefined>(
+    const required = this.reflector.getAllAndOverride<string | string[] | undefined>(
       ADMIN_PAGE_METADATA,
       [context.getHandler(), context.getClass()],
     );
     const allowed =
       admin.is_super ||
       required === ANY_PAGE ||
-      (required !== undefined && pages.includes(required));
+      (typeof required === 'string' && pages.includes(required)) ||
+      (Array.isArray(required) && required.some((p) => pages.includes(p)));
     if (!allowed)
       throw new ForbiddenException("You don't have access to this page.");
 

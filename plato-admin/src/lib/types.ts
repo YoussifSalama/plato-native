@@ -68,11 +68,11 @@ export type ProviderUsage = {
   byModel: { model: string; costUsd: number; inputTokens: number; outputTokens: number; events: number }[];
   byFeature: FeatureCost[];
   byDay: { day: string; costUsd: number }[];
-  topUsers: { userId: string; email: string; costUsd: number; events: number }[];
+  topUsers: { userId: string; email: string | null; costUsd: number; events: number }[];
 };
 export type UsageUserRow = {
   userId: string;
-  email: string;
+  email: string | null;
   name: string | null;
   plan: string;
   costUsd: number;
@@ -88,8 +88,8 @@ export type Plan = {
   tokens: number;
   priceUsd: number;
   active: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 export type PlansResponse = { items: Plan[]; usdPerToken: number };
 export type CalculatorData = {
@@ -145,7 +145,7 @@ export type UserRow = {
   verified: boolean;
   blocked: boolean;
   plan: string;
-  balance: number;
+  balance: number | null;
   lastActiveAt: string | null;
   costUsd: number;
 };
@@ -160,7 +160,7 @@ export type UserAnalytics = {
     blocked: boolean;
     blockedReason: string | null;
     plan: string;
-    balance: number;
+    balance: number | null;
   };
   activity: {
     lastActiveAt: string | null;
@@ -213,7 +213,7 @@ export type ExtensionUserRow = {
   email: string;
   name: string | null;
   errors: number;
-  lastAt: string;
+  lastAt: string | null;
   topCodes: { code: string; count: number }[];
 };
 export type ExtensionUserLogs = {

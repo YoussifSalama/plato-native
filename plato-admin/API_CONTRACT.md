@@ -107,11 +107,12 @@ Plans and top-ups move from the constants in `credit-prices.ts` to a DB collecti
 stay as the defaults used when the collection has no row for a key (no seed script).
 
 `Plan = { key, kind: "plan" | "topup", label, tokens, priceUsd, active, createdAt, updatedAt }`
+(`createdAt`/`updatedAt` are `null` for a default that has no stored row)
 (`tokens` = monthly grant for a plan, pack size for a top-up). `free` cannot be deleted or priced.
 
 | Method | Path | Result |
 |---|---|---|
-| GET | `/admin/plans` | `{ items: Plan[], usdPerToken }` |
+| GET | `/admin/plans` | `{ items: Plan[], usdPerToken }` — page `plans` **or** `credits` (the Credits page's plan / pack pickers) |
 | POST | `/admin/plans` | `Plan` (key: `^[a-z0-9_]{2,20}$`, unique) |
 | PATCH | `/admin/plans/:key` | `Plan` |
 | DELETE | `/admin/plans/:key` | `{ ok }` → sets `active: false` (accounts on it keep working) |
@@ -137,7 +138,7 @@ and every existing session is refused (`403 { code: "BLOCKED", message: "Your ac
 | Method | Path | Result |
 |---|---|---|
 | GET | `/admin/users?q&status=all\|verified\|unverified\|blocked&page&sort` | `{ items: [{ id, name, email, createdAt, verified, blocked, plan, balance, lastActiveAt, costUsd }], total }` |
-| GET | `/admin/users/:id/analytics?from&to` | `{ user: { id, name, email, createdAt, verified, blocked, blockedReason, plan, balance }, activity: { lastActiveAt, activeDays, activeDaysByWeek: [{ week, days }], events }, features: [{ feature, events, costUsd }], searches: { total, topTitles: [{ title, count }], topLocations: [...] }, applications: { total, byStatus: {...}, byEngine: {...} }, chat: { threads, messages }, interviews: number, spentTokens, costUsd, profile: { headline?, yearsExperience?, cvFile? } }` |
+| GET | `/admin/users/:id/analytics?from&to` | `{ user: { id, name, email, createdAt, verified, blocked, blockedReason, plan, balance }, activity: { lastActiveAt, activeDays, activeDaysByWeek: [{ week, days }], events }, features: [{ feature, events, costUsd }], searches: { total, topTitles: [{ title, count }], topLocations: [{ location, count }] }, applications: { total, byStatus: {...}, byEngine: {...} }, chat: { threads, messages }, interviews: number, spentTokens, costUsd, profile: { headline?, yearsExperience?, cvFile? } }` |
 | POST | `/admin/users/:id/block` | `{ reason }` → user row |
 | POST | `/admin/users/:id/unblock` | user row |
 | POST | `/admin/users/:id/verify-email` | user row |
@@ -176,3 +177,8 @@ Apply stops already stored in `ApplyBatchItem.detail.stops` are shown in the ext
 | GET | `/admin/logs/extension/users/:userId?page` | `{ user, items: [...same as extension/all] , total }` |
 
 Pagination everywhere: `page` 1-based, 50 per page.
+
+`sort` on list routes = a field name (ascending) or `-field` (descending), as the panel's tables send it:
+`/admin/users` → `createdAt` (default `-createdAt`), `email`, `name`, `balance`, `costUsd`, `lastActiveAt`;
+`/admin/usage/users` → `costUsd` (default `-costUsd`), `events`, `tokensSpent`, `email`.
+`/admin/logs` keeps `sort=newest|oldest`.

@@ -21,7 +21,9 @@ import { PlansService } from './plans.service';
 export class PlansAdminController {
   constructor(private readonly plans: PlansService) {}
 
+  // the Credits page lists plans and packs for its pickers
   @Get()
+  @AdminPage('plans', 'credits')
   list() {
     return this.plans.list();
   }

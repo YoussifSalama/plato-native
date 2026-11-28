@@ -41,6 +41,20 @@ export function parseRange(from?: string, to?: string, now = new Date()): Range 
   return { from: f, to: t };
 }
 
+/** `sort` as the panel sends it: `field` (ascending) or `-field` (descending); unknown → the default. */
+export function parseSort<F extends string>(
+  sort: string | undefined,
+  fields: readonly F[],
+  fallback: `${'' | '-'}${F}`,
+): { field: F; desc: boolean } {
+  const pick = (s: string) => {
+    const desc = s.startsWith('-');
+    const field = s.replace(/^-/, '') as F;
+    return fields.includes(field) ? { field, desc } : null;
+  };
+  return pick(sort ?? '') ?? pick(fallback)!;
+}
+
 /** 1-based page of 50. */
 export const PAGE_SIZE = 50;
 export const pageOf = (p?: string) => Math.max(1, Math.floor(Number(p) || 1));

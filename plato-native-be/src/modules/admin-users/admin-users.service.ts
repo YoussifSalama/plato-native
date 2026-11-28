@@ -10,6 +10,7 @@ import {
   ejId,
   num,
   OBJECT_ID,
+  parseSort,
   PAGE_SIZE,
   type Range,
   round,
@@ -29,14 +30,14 @@ const weekOf = (d: string) => {
   t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7));
   return day(t);
 };
-const top = (values: string[], n = 10) => {
+const top = <K extends string>(values: string[], key: K, n = 10) => {
   const m = new Map<string, number>();
   for (const v of values) {
     const k = v.trim();
     if (k) m.set(k, (m.get(k) ?? 0) + 1);
   }
   return [...m]
-    .map(([title, count]) => ({ title, count }))
+    .map(([v, count]) => ({ [key]: v, count }) as { [P in K]: string } & { count: number })
     .sort((a, b) => b.count - a.count)
     .slice(0, n);
 };
@@ -168,7 +169,7 @@ export class AdminUsersService {
     blocked_at: true,
   } as const;
 
-  /** sort = newest (default) | oldest | email | name | active | cost. */
+  /** sort = [-]createdAt (default -createdAt) | email | name | balance | costUsd | lastActiveAt. */
   async list(q: string | undefined, status: string, page: number, sort: string) {
     const needle = q?.trim();
     const where: Prisma.UserWhereInput = {
@@ -193,25 +194,31 @@ export class AdminUsersService {
     };
     const total = await this.prisma.user.count({ where });
     const skip = (page - 1) * PAGE_SIZE;
-    if (sort === 'active' || sort === 'cost') {
+    const order = parseSort(
+      sort,
+      ['createdAt', 'email', 'name', 'balance', 'costUsd', 'lastActiveAt'] as const,
+      '-createdAt',
+    );
+    const dir = order.desc ? 'desc' : 'asc';
+    if (order.field === 'balance' || order.field === 'costUsd' || order.field === 'lastActiveAt') {
       // ponytail: computed over every matching user; fine to a few thousand seekers
       const all = await this.prisma.user.findMany({ where, select: this.userSelect });
       const rows = await this.rows(all);
-      rows.sort((a, b) =>
-        sort === 'cost'
-          ? b.costUsd - a.costUsd
-          : (b.lastActiveAt?.getTime() ?? 0) - (a.lastActiveAt?.getTime() ?? 0),
-      );
+      const key = (r: (typeof rows)[number]) =>
+        order.field === 'lastActiveAt'
+          ? (r.lastActiveAt?.getTime() ?? 0)
+          : order.field === 'balance'
+            ? (r.balance ?? 0)
+            : r.costUsd;
+      rows.sort((a, b) => (order.desc ? key(b) - key(a) : key(a) - key(b)));
       return { items: rows.slice(skip, skip + PAGE_SIZE), total };
     }
     const orderBy: Prisma.UserOrderByWithRelationInput =
-      sort === 'oldest'
-        ? { created_at: 'asc' }
-        : sort === 'email'
-          ? { email: 'asc' }
-          : sort === 'name'
-            ? { full_name: 'asc' }
-            : { created_at: 'desc' };
+      order.field === 'email'
+        ? { email: dir }
+        : order.field === 'name'
+          ? { full_name: dir }
+          : { created_at: dir };
     const users = await this.prisma.user.findMany({
       where,
       select: this.userSelect,
@@ -361,8 +368,8 @@ export class AdminUsersService {
       })),
       searches: {
         total: runs.length,
-        topTitles: top(queries.flatMap((q) => q.requestedTitles ?? q.titles ?? [])),
-        topLocations: top(queries.flatMap((q) => q.locations ?? [])),
+        topTitles: top(queries.flatMap((q) => q.requestedTitles ?? q.titles ?? []), 'title'),
+        topLocations: top(queries.flatMap((q) => q.locations ?? []), 'location'),
       },
       applications: {
         total: apps.length,

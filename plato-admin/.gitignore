@@ -3,3 +3,6 @@ dist
 .env
 .env.local
 *.tsbuildinfo
+
+# The repo root ignores logs/; this folder is source (the Logs pages).
+!src/pages/logs/

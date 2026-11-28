@@ -14,6 +14,7 @@ import {
   PAGE_SIZE,
   pageOf,
   parseRange,
+  parseSort,
   PROVIDERS,
   Provider,
   round,
@@ -90,14 +91,14 @@ export class AdminUsageController {
     };
   }
 
-  /** Seekers by what they cost us in the range. sort = cost (default) | events | tokens. */
+  /** Seekers by what they cost us in the range. sort = [-]costUsd (default -costUsd) | events | tokensSpent | email. */
   @Get('users')
   async users(
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('q') q?: string,
     @Query('page') page?: string,
-    @Query('sort') sort = 'cost',
+    @Query('sort') sort?: string,
   ) {
     const range = parseRange(from, to);
     let ids: string[] | undefined;
@@ -125,8 +126,22 @@ export class AdminUsageController {
       'userId',
       (g) => g.userId!,
     ).map((r) => ({ ...r, tokensSpent: tokens.get(r.userId) ?? 0 }));
-    if (sort === 'events') rows.sort((a, b) => b.events - a.events);
-    else if (sort === 'tokens') rows.sort((a, b) => b.tokensSpent - a.tokensSpent);
+    const order = parseSort(sort, ['costUsd', 'events', 'tokensSpent', 'email'] as const, '-costUsd');
+    if (order.field === 'email') {
+      const emails = new Map(
+        (
+          await this.prisma.user.findMany({
+            where: { id: { in: rows.map((r) => r.userId) } },
+            select: { id: true, email: true },
+          })
+        ).map((u) => [u.id, u.email]),
+      );
+      rows.sort((a, b) => (emails.get(a.userId) ?? '').localeCompare(emails.get(b.userId) ?? ''));
+    } else {
+      const f = order.field;
+      rows.sort((a, b) => a[f] - b[f]);
+    }
+    if (order.desc) rows.reverse();
     const p = pageOf(page);
     const slice = rows.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE);
     const sliceIds = slice.map((r) => r.userId);

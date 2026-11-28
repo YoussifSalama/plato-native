@@ -29,9 +29,9 @@ export class AdminUsersController {
     @Query('q') q?: string,
     @Query('status') status = 'all',
     @Query('page') page?: string,
-    @Query('sort') sort = 'newest',
+    @Query('sort') sort?: string,
   ) {
-    return this.users.list(q, STATUSES.has(status) ? status : 'all', pageOf(page), sort);
+    return this.users.list(q, STATUSES.has(status) ? status : 'all', pageOf(page), sort ?? '');
   }
 
   @Get(':id/analytics')

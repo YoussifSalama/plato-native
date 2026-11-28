@@ -15,7 +15,10 @@ export interface IEnvParams {
   careerModel: string;
   careerSearchModel: string;
   realtimeModel: string;
-  adminReportKey: string;
+  // Admin panel: the super admin's address and signup/recovery key, and the panel's origin (CORS, invite links).
+  superAdminEmail: string;
+  superAdminKey: string;
+  adminUrl: string;
   apifyToken: string;
   // Apply worker. ON and always submitting. APPLY_WORKER_ENABLED=false pauses
   // it; APPLY_DRY_RUN=true is a developer-only rehearsal switch.

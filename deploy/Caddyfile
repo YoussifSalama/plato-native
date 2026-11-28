@@ -1,4 +1,5 @@
-# Three hostnames from .env: LANDING_DOMAIN (platohiring.com, the static landing), WEB_DOMAIN (the web app), API_DOMAIN (the API).
+# Four hostnames from .env: LANDING_DOMAIN (platohiring.com, the static landing), WEB_DOMAIN (the web app), API_DOMAIN (the API),
+# ADMIN_DOMAIN (the admin panel).
 # Caddy fetches and renews the certificates itself.
 {$WEB_DOMAIN} {
 	encode gzip
@@ -12,6 +13,11 @@
 		max_size 16MB
 	}
 	reverse_proxy api:3000
+}
+
+{$ADMIN_DOMAIN} {
+	encode gzip
+	reverse_proxy admin:80
 }
 
 {$LANDING_DOMAIN} {

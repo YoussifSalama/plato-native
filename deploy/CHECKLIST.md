@@ -11,6 +11,19 @@ Without mail nobody can confirm an email address. An unconfirmed account gets no
    - Sign up with an address you can read and check that the confirmation email arrives. Open the link and check that the account shows its 1,000 free tokens.
    - On the login page, use *Forgot password* for the same address and check that the reset email arrives.
 
+## Admin panel subdomain: required
+
+The stack does not start without these values (compose stops with "set ADMIN_DOMAIN in .env" and the like).
+
+1. DNS (GoDaddy): add an `A` record for the admin host (for example `admin`, giving `admin.platohiring.com`) pointing to the VPS IP, the same IP as the other records. Keep it under the same parent domain as `API_DOMAIN`, so the admin login cookie is same-site.
+2. In `/opt/plato/.env` on the server, set:
+   - `ADMIN_DOMAIN`: the admin host, without `https://` (for example `admin.platohiring.com`).
+   - `SUPER_ADMIN_EMAIL`: the email the owner signs up with as the one super admin.
+   - `SUPER_ADMIN_KEY`: a long random value, for example from `openssl rand -hex 32`. Keep it only in `.env` and a password manager.
+   - Remove `ADMIN_REPORT_KEY` if it is still there: the API no longer reads it.
+3. Deploy. Caddy gets the certificate for the new host by itself once DNS points to the VPS.
+4. Open `https://<ADMIN_DOMAIN>/signup`, sign up with `SUPER_ADMIN_EMAIL`, enter the key when asked, and scan the QR code with an authenticator app.
+
 ## One-time steps for the 2026-11-26 work
 
 - `npm run prisma:push` in `plato-native-be`, against the production database. It creates the unique index on `guests.token_hash` and the guest indexes. The other schema changes need no push.

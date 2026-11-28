@@ -10,11 +10,11 @@ import { CreditLedger, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   categoryOf,
+  allPlans,
   FEATURE_LABELS,
-  PLANS,
   planOf,
-  TOPUPS,
   tokensFor,
+  topupOf,
   type MeteredRow,
 } from './credit-prices';
 import { InsufficientTokensException } from './insufficient-tokens.exception';
@@ -42,7 +42,7 @@ const holdUntil = (h: CreditLedger) =>
 // How many raw ledger rows one history page groups.
 const PAGE_ROWS = 500;
 
-export type CheckoutItem = { plan: 'pro' | 'max' } | { pack: string };
+export type CheckoutItem = { plan: string } | { pack: string };
 type Tx = Prisma.TransactionClient;
 
 // Plato tokens: accounts, charges, reservations, top-ups and plan changes.
@@ -499,12 +499,12 @@ export class CreditsService implements OnModuleInit {
     });
   }
 
-  /** Admin: add (or, negative, take away) tokens with a reason, in the ledger like everything else. */
-  async adjust(userId: string, amount: number, reason: string) {
+  /** Admin: add (or, negative, take away) tokens with a reason, in the ledger like everything else. `admin` = the acting admin's id. */
+  async adjust(userId: string, amount: number, reason: string, admin?: string) {
     await this.account(userId);
     return this.move(userId, { balance: { increment: amount } }, amount, {
       kind: 'adjust',
-      meta: { reason },
+      meta: { reason, ...(admin && { admin }) },
     });
   }
 
@@ -514,10 +514,17 @@ export class CreditsService implements OnModuleInit {
    * bought tokens stay on top. A paid plan runs `months` periods (paid_until),
    * then lapses to Free.
    */
-  async setPlan(userId: string, plan: string, now = new Date(), months = 1) {
-    if (!PLANS[plan]) throw new Error(`Unknown plan: ${plan}`);
+  async setPlan(
+    userId: string,
+    plan: string,
+    now = new Date(),
+    months = 1,
+    admin?: string,
+  ) {
+    const p = allPlans()[plan];
+    if (!p) throw new Error(`Unknown plan: ${plan}`);
     const before = await this.account(userId, now);
-    const grant = before.unverified ? 0 : PLANS[plan].monthly;
+    const grant = before.unverified ? 0 : p.monthly;
     const kept = keptTopup(before);
     let paidUntil: Date | null = null;
     if (plan !== 'free')
@@ -541,6 +548,7 @@ export class CreditsService implements OnModuleInit {
           from_plan: before.plan,
           previous_balance: before.balance,
           ...(paidUntil && { paid_until: paidUntil.toISOString() }),
+          ...(admin && { admin }),
         },
       },
     );
@@ -551,15 +559,15 @@ export class CreditsService implements OnModuleInit {
    * manual sale): the tokens are added to the balance and to the never-expiring
    * bought part. `ref` is the payment's id, kept in the ledger.
    */
-  async addTopup(userId: string, pack: string, ref: string) {
-    const p = TOPUPS[pack];
+  async addTopup(userId: string, pack: string, ref: string, admin?: string) {
+    const p = topupOf(pack);
     if (!p) throw new Error(`Unknown top-up: ${pack}`);
     await this.account(userId);
     return this.move(
       userId,
       { balance: { increment: p.tokens }, topup: { increment: p.tokens } },
       p.tokens,
-      { kind: 'topup', meta: { pack, ref } },
+      { kind: 'topup', meta: { pack, ref, ...(admin && { admin }) } },
     );
   }
 
@@ -697,12 +705,15 @@ export class CreditsService implements OnModuleInit {
    */
   async checkout(userId: string, item: CheckoutItem): Promise<{ url: string }> {
     if ('plan' in item) {
+      // a switched-off plan is not on sale (accounts already on it keep it)
+      if (item.plan === 'free' || !allPlans()[item.plan]?.active)
+        throw new BadRequestException('That plan is not on sale.');
       const acc = await this.account(userId);
       if (acc.plan === item.plan)
         throw new BadRequestException(
-          `You are already on ${PLANS[item.plan].label}.`,
+          `You are already on ${planOf(item.plan).label}.`,
         );
-    } else if (!TOPUPS[item.pack])
+    } else if (!topupOf(item.pack)?.active)
       throw new BadRequestException('Unknown top-up.');
     if (!process.env.PAYMENTS_PROVIDER) {
       // the admin sets it up by hand (POST admin/credits/:user/plan or /topup)

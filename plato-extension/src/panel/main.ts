@@ -31,11 +31,16 @@ import { noticeText, type Notice } from '../core/notice';
 import type { AnswerQuestion, OrchestratorEvent, OrchestratorRequest } from './../core/types';
 import { askLabel } from './batch-view';
 import { memoryLow, readMachine, tabCap } from '../core/capacity';
+import { createErrorReporter, describeError, pageOf } from '../core/error-report';
 
 // The side panel runs the whole flow. It is the only place (besides the
 // service worker's one-line storage restriction) that ever sees the token.
 const tokens = createTokenStore(chrome.storage.local as never);
 const api = createApi({ base: __API_ORIGIN__, getToken: () => tokens.get() });
+// Uncaught errors and failed runs go to the admin error log: throttled, best effort, never a screenshot or the page.
+const reportError = createErrorReporter({ send: (b) => api.reportError(b) });
+window.addEventListener('error', (ev) => void reportError({ message: ev.message || describeError(ev.error).message, code: 'uncaught', page: 'panel', stack: (ev.error as Error | undefined)?.stack, data: { file: pageOf(ev.filename), line: ev.lineno, col: ev.colno } }));
+window.addEventListener('unhandledrejection', (ev) => void reportError({ ...describeError(ev.reason), code: 'unhandled_rejection', page: 'panel' }));
 const outbox = createOutbox(chrome.storage.local);
 let policy: PolicyMap | undefined;
 const root = document.getElementById('root')!;
@@ -166,6 +171,8 @@ const toast = (text: string, kind?: 'ok' | 'err') => {
 const fail = (e: unknown) => {
   errorAt = Date.now();
   log('error', e instanceof ApiError ? `${e.status || 'network'}: ${e.message}` : e instanceof Error ? e.message : String(e));
+  // The server logs its own HTTP errors and a BatchError is a rule the seeker hit: report only the unexpected.
+  if (!(e instanceof ApiError) && !(e instanceof BatchError)) reportError({ ...describeError(e), code: e instanceof OrchestratorError ? `orchestrator_${e.code}` : 'panel_error', page: 'panel' });
   if (e instanceof ApiError && e.status === 401) {
     void tokens.clear();
     state.status = 'unpaired';
@@ -751,6 +758,7 @@ async function runAi(item: ApiItem) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     log('error', `apply loop: ${msg}`);
+    reportRunFailure(item, 'v2', e);
     await finishRun(item, s, { kind: 'needs-user', why: `Plato lost the page (${msg.slice(0, 120)}). Open the tab and try again.` });
   } finally {
     eaRunning.delete(item.id);
@@ -759,6 +767,12 @@ async function runAi(item: ApiItem) {
 }
 
 const eaRunning = new Set<string>();
+
+// A run that threw (not a stop the engine chose: those reach the server as stops). HTTP errors are in the server's own log.
+function reportRunFailure(item: ApiItem, engine: 'v2' | 'v3', e: unknown) {
+  if (e instanceof ApiError && e.status > 0) return;
+  reportError({ ...describeError(e), code: e instanceof ApiError ? 'network' : e instanceof OrchestratorError ? `orchestrator_${e.code}` : `apply_${engine}_failed`, page: pageOf(jobUrlOf.get(item.id) ?? item.job?.url), data: { itemId: item.id, provider: item.provider ?? null, engine } });
+}
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -1030,6 +1044,7 @@ async function runV3Item(item: ApiItem) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     log('error', `apply loop (v3): ${msg}`);
+    reportRunFailure(item, 'v3', e);
     // The backend refused the Submit (nothing was pressed): the list is still held for the seeker, or the conversation
     // has no SUBMIT_READY any more (a backend restart). Back to the list, or a stop whose Try again reads the form again.
     if (e instanceof ApiError && e.status === 409 && /review_needed|submit_not_ready|session_lost/.test(msg)) {
@@ -1720,6 +1735,13 @@ chrome.runtime.onMessage.addListener((msg: unknown, sender) => {
     void applyNow();
     void openSearch();
   });
+});
+
+// An error in the service worker (background.ts forwards it; it makes no API calls itself). Only the lead panel reports.
+chrome.runtime.onMessage.addListener((msg: unknown, sender) => {
+  const m = msg as { type?: string; message?: unknown; stack?: unknown; code?: unknown } | null;
+  if (sender.id !== chrome.runtime.id || sender.tab || m?.type !== 'plato:sw-error' || !leader) return;
+  reportError({ message: String(m.message ?? 'Service worker error'), code: typeof m.code === 'string' ? m.code : 'service_worker', page: 'service-worker', stack: typeof m.stack === 'string' ? m.stack : undefined });
 });
 
 // The person pressed Stop on the page overlay: cancel that job's session.

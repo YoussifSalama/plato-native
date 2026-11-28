@@ -1,0 +1,67 @@
+// Admin panel accounts (plato-admin). Separate from seekers (User): their own
+// collection, session cookie, JWT audience and signing key.
+model AdminUser {
+  id            String  @id @default(auto()) @map("_id") @db.ObjectId
+  // Stored lowercase.
+  email         String  @unique
+  password_hash String
+  // The one account named by SUPER_ADMIN_EMAIL: every page, manages admins. Never set through the API.
+  is_super      Boolean @default(false)
+  // Invited admins start inactive until a super admin turns them on.
+  active        Boolean @default(false)
+  role_id       String?    @db.ObjectId
+  role          AdminRole? @relation(fields: [role_id], references: [id])
+
+  // TOTP (RFC 6238) base32 secret, set once the first code is verified.
+  totp_secret         String?
+  // Shown as a QR during setup, promoted to totp_secret on the first good code.
+  totp_pending_secret String?
+  // Sessions (and half-way logins) issued before this are refused.
+  sessions_valid_after DateTime?
+  last_login_at        DateTime?
+
+  invites_sent AdminInvite[] @relation("AdminInviteSender")
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("admin_users")
+}
+
+// A named set of admin pages (permission keys in src/modules/admin/admin-pages.ts).
+// "admin" (admins, roles, invites) is never stored here: super admin only.
+model AdminRole {
+  id    String   @id @default(auto()) @map("_id") @db.ObjectId
+  name  String   @unique
+  pages String[] @default([])
+
+  admins  AdminUser[]
+  invites AdminInvite[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("admin_roles")
+}
+
+// An invitation link sent by the super admin. Only the token's SHA-256 is stored.
+// used_at / revoked_at are written as explicit nulls on create: Mongo's null filter does not match a missing field.
+model AdminInvite {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  // Stored lowercase.
+  email      String
+  role_id    String?    @db.ObjectId
+  role       AdminRole? @relation(fields: [role_id], references: [id])
+  token_hash String    @unique
+  expires_at DateTime
+  used_at    DateTime?
+  revoked_at DateTime?
+  invited_by String?    @db.ObjectId
+  inviter    AdminUser? @relation("AdminInviteSender", fields: [invited_by], references: [id])
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([email])
+  @@map("admin_invites")
+}

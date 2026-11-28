@@ -3,6 +3,6 @@
   "private": true,
   "scripts": {
     "predev": "npm --prefix plato-native-be run prisma:generate",
-    "dev":"trap 'kill 0' INT TERM EXIT; npm --prefix plato-native-be run start:dev -- --preserveWatchOutput & npm --prefix plato-job-seeker-native-fe run dev & npm --prefix plato-landing run dev & wait"
+    "dev":"trap 'kill 0' INT TERM EXIT; npm --prefix plato-native-be run start:dev -- --preserveWatchOutput & npm --prefix plato-job-seeker-native-fe run dev & npm --prefix plato-landing run dev & npm --prefix plato-admin run dev & wait"
   }
 }

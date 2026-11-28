@@ -28,6 +28,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AnswersService } from './answers.service';
 import { ResumeFileService } from './resume-file.service';
 import { ProofService } from './proof.service';
+import { ErrorLogService } from '../error-log/error-log.service';
 import { QueueService } from './queue.service';
 import { ExtensionSettingsService } from './settings';
 import { OrchestratorService } from './orchestrator.service';
@@ -107,6 +108,7 @@ describe('route protection over HTTP', () => {
         { provide: AnswersService, useValue: { draft: async () => [] } },
         { provide: ResumeFileService, useValue: {} },
         { provide: ProofService, useValue: {} },
+        { provide: ErrorLogService, useValue: { client: jest.fn() } },
         { provide: OrchestratorService, useValue: { turn: async () => ({ reply: 'ok', events: [] }) } },
         {
           provide: JobSeekerService,

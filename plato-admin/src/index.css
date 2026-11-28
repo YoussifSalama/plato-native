@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+/* Brand tokens copied from plato-job-seeker-native-fe/app/globals.css (light only).
+   Change them together with the seeker app, the landing page and the extension panel. */
+@theme inline {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-tint: var(--primary-tint);
+  --color-primary-line: var(--primary-line);
+  --color-azure: var(--azure);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-divider: var(--divider);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-destructive: var(--destructive);
+  --color-danger-soft: var(--danger-soft);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  /* One card radius for the whole app (16px). Controls use rounded-lg, chips rounded-full. */
+  --radius-2xl: 1rem;
+  --shadow-card: 0 1px 2px rgba(14, 27, 44, 0.04), 0 2px 6px -2px rgba(14, 27, 44, 0.04);
+  --shadow-float: 0 12px 32px -12px rgba(0, 58, 110, 0.3), 0 2px 6px -2px rgba(14, 27, 44, 0.08);
+}
+
+:root {
+  color-scheme: light;
+  --background: #f5f8fc;
+  --foreground: #0e1b2c;
+  --card: #ffffff;
+  --primary: #005ba7;
+  --primary-foreground: #ffffff;
+  --primary-hover: #004c8c;
+  --primary-soft: #e8f2fc;
+  --primary-tint: #f5f9fe;
+  --primary-line: #c9e0f5;
+  --azure: #00a1e2;
+  --muted: #eff3f8;
+  --muted-foreground: #7a889c;
+  --border: #e2e8f0;
+  --input: #dce4ee;
+  --ring: #005ba7;
+  --divider: #eef2f7;
+  --text-secondary: #4a5a70;
+  --text-tertiary: #8593a6;
+  --success: #1c9a4b;
+  --success-soft: #e3f9ea;
+  --success-ink: #15803d;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --warning-ink: #b45309;
+  --destructive: #d92d20;
+  --danger-soft: #fee4e2;
+  --radius: 0.625rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--primary) 50%, transparent) transparent;
+  }
+  dialog::backdrop {
+    background: rgb(14 27 44 / 0.4);
+  }
+}
+
+@utility card {
+  @apply rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5;
+}
+@utility btn {
+  @apply inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3.5 text-sm font-semibold whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50;
+}
+@utility btn-primary {
+  @apply btn bg-primary text-primary-foreground hover:bg-primary-hover;
+}
+@utility btn-outline {
+  @apply btn border border-input bg-card text-foreground hover:bg-muted;
+}
+@utility btn-danger {
+  @apply btn bg-destructive text-white hover:opacity-90;
+}
+@utility btn-ghost {
+  @apply btn text-text-secondary hover:bg-muted hover:text-foreground;
+}
+@utility input {
+  @apply h-9 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20;
+}
+@utility label {
+  @apply mb-1 block text-xs font-semibold text-text-secondary;
+}
+@utility chip {
+  @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap;
+}
+@utility chip-neutral {
+  @apply chip bg-muted text-text-secondary;
+}
+@utility chip-success {
+  @apply chip bg-success-soft text-success-ink;
+}
+@utility chip-warning {
+  @apply chip bg-warning-soft text-warning-ink;
+}
+@utility chip-danger {
+  @apply chip bg-danger-soft text-destructive;
+}
+@utility chip-primary {
+  @apply chip bg-primary-soft text-primary;
+}
+@utility tab {
+  @apply inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold whitespace-nowrap text-text-secondary hover:bg-muted hover:text-foreground;
+}
+@utility tab-active {
+  @apply bg-primary-soft text-primary hover:bg-primary-soft hover:text-primary;
+}

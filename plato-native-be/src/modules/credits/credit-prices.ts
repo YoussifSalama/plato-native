@@ -8,7 +8,8 @@ export const USD_PER_TOKEN = Number(process.env.CREDITS_USD_PER_TOKEN ?? 0.001);
 
 // Monthly tokens per plan. Starting points from MEASURED_COSTS.md (Pro $19 with
 // about $7 of cost, Max $59 with about $25): the plan price is where the margin is.
-export const PLANS: Record<
+// Defaults only: a row in the plans collection (admin panel) overrides its key.
+export const DEFAULT_PLANS: Record<
   string,
   { label: string; monthly: number; priceUsd: number }
 > = {
@@ -28,11 +29,10 @@ export const PLANS: Record<
     priceUsd: Number(process.env.CREDITS_MAX_PRICE_USD ?? 59),
   },
 };
-export const planOf = (plan: string) => PLANS[plan] ?? PLANS.free;
 
 // One-time packs of extra tokens. They cost more per token than a plan (a plan is
 // the better deal for steady use) and never expire.
-export const TOPUPS: Record<
+export const DEFAULT_TOPUPS: Record<
   string,
   { label: string; tokens: number; priceUsd: number }
 > = {
@@ -52,6 +52,74 @@ export const TOPUPS: Record<
     priceUsd: Number(process.env.CREDITS_TOPUP_LARGE_USD ?? 35),
   },
 };
+
+export type PlanInfo = {
+  label: string;
+  monthly: number;
+  priceUsd: number;
+  active: boolean;
+};
+export type TopupInfo = {
+  label: string;
+  tokens: number;
+  priceUsd: number;
+  active: boolean;
+};
+export type PlanRow = {
+  key: string;
+  kind: string;
+  label: string;
+  tokens: number;
+  price_usd: number;
+  active: boolean;
+};
+
+// The live catalog: the defaults with the plans collection laid over them.
+// PlansService loads it at boot and after every admin write; until then (and in
+// unit tests) it is the defaults. Free can never be switched off or priced.
+let catalog = buildCatalog([]);
+
+export function buildCatalog(rows: PlanRow[]) {
+  const plans: Record<string, PlanInfo> = {};
+  const topups: Record<string, TopupInfo> = {};
+  for (const [k, p] of Object.entries(DEFAULT_PLANS))
+    plans[k] = { ...p, active: true };
+  for (const [k, t] of Object.entries(DEFAULT_TOPUPS))
+    topups[k] = { ...t, active: true };
+  for (const r of rows)
+    if (r.kind === 'topup')
+      topups[r.key] = {
+        label: r.label,
+        tokens: r.tokens,
+        priceUsd: r.price_usd,
+        active: r.active,
+      };
+    else
+      plans[r.key] = {
+        label: r.label,
+        monthly: r.tokens,
+        priceUsd: r.price_usd,
+        active: r.active,
+      };
+  plans.free = { ...plans.free, priceUsd: 0, active: true };
+  return { plans, topups };
+}
+
+export function setCatalog(rows: PlanRow[]) {
+  catalog = buildCatalog(rows);
+}
+
+/** Every plan, active or not (accounts on a switched-off plan keep it). */
+export const allPlans = () => catalog.plans;
+export const allTopups = () => catalog.topups;
+/** What is on sale. */
+export const activePlans = () =>
+  Object.fromEntries(Object.entries(catalog.plans).filter(([, p]) => p.active));
+export const activeTopups = () =>
+  Object.fromEntries(Object.entries(catalog.topups).filter(([, t]) => t.active));
+export const planOf = (plan: string) => catalog.plans[plan] ?? catalog.plans.free;
+export const topupOf = (pack: string): TopupInfo | undefined =>
+  catalog.topups[pack];
 
 // A voice interview runs browser <-> OpenAI, so the server never sees its tokens
 // directly. It is reserved per minute at this ceiling when the call starts and

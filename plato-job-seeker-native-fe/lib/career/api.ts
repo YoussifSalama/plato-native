@@ -1,5 +1,5 @@
 import { AxiosError } from "axios"
-import { apiClient } from "@/lib/api-client"
+import { apiClient, handleBlocked, pageHeader } from "@/lib/api-client"
 import { isOutOfTokens, reportOutOfTokens, reportTokensChanged } from "@/lib/credits/api"
 
 // A resume Plato built in the chat; shown under the message as a PDF link.
@@ -44,13 +44,14 @@ async function streamCareerMessage(id: string, content: string, onDelta: (text: 
   const res = await fetch(`${apiClient.defaults.baseURL}/job-seeker/career/threads/${id}/messages/stream`, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...pageHeader() },
     body: JSON.stringify({ content, attachmentIds, reference }),
     signal,
   })
   if (!res.ok || !res.body) {
     const body = await res.json().catch(() => null)
     if (isOutOfTokens(res.status, body)) reportOutOfTokens(body)
+    handleBlocked(res.status, body)
     throw new Error(body?.message ?? "Request failed")
   }
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()

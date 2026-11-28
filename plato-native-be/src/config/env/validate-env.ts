@@ -20,12 +20,14 @@ const REQUIRED = [
 const PAIRS: [string, string, string][] = [
   ['SENDGRID_API_KEY', 'MAIL_FROM', 'email'],
   ['ADZUNA_APP_ID', 'ADZUNA_APP_KEY', 'the Adzuna feed'],
+  ['SUPER_ADMIN_EMAIL', 'SUPER_ADMIN_KEY', 'the admin panel super admin'],
 ];
 
 const URLS = [
   'FRONTEND_URL',
   'API_PUBLIC_URL',
   'EXTENSION_ORIGIN',
+  'ADMIN_URL',
   'CLOUDFLARE_S3_CLIENT_API',
 ];
 
@@ -63,11 +65,23 @@ export function envProblems(env: Env): string[] {
     // A short secret can be guessed offline from any session cookie.
     if (set(env, 'JWT_SECRET') && (env.JWT_SECRET as string).length < 32)
       out.push('JWT_SECRET must be at least 32 characters in production');
+    // It creates the super admin and resets its 2FA: as strong as a signing key.
+    if (
+      set(env, 'SUPER_ADMIN_KEY') &&
+      (env.SUPER_ADMIN_KEY as string).length < 32
+    )
+      out.push('SUPER_ADMIN_KEY must be at least 32 characters in production');
   }
 
   for (const [a, b, what] of PAIRS)
     if (set(env, a) !== set(env, b))
       out.push(`${a} and ${b} go together (${what}): set both or neither`);
+
+  if (
+    set(env, 'SUPER_ADMIN_EMAIL') &&
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(env.SUPER_ADMIN_EMAIL as string)
+  )
+    out.push('SUPER_ADMIN_EMAIL must be an email address');
 
   if (
     set(env, 'MAIL_FROM') &&

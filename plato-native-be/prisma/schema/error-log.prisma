@@ -1,0 +1,31 @@
+// Every API response with status >= 400 (and every uncaught error), plus errors
+// the browser extension reports itself (POST /extension/v1/errors). Shown in the
+// admin panel's Logs page. data = query + redacted body, at most 8 KB.
+model ErrorLog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  // "web" (the seeker app sent x-plato-page) | "extension" | "api"
+  platform    String
+  // "server" (a response) | "client" (the extension reported it)
+  source      String   @default("server")
+  module      String
+  page        String?
+  method      String
+  path        String
+  // 0 for a client report (no HTTP response)
+  status      Int
+  code        String?
+  message     String
+  explanation String?
+  data        Json?
+  user_id     String?  @db.ObjectId
+  user_email  String?
+  ip          String?
+  user_agent  String?
+  created_at  DateTime @default(now())
+
+  @@index([platform, created_at])
+  @@index([module])
+  @@index([status])
+  @@index([user_id])
+  @@map("error_logs")
+}

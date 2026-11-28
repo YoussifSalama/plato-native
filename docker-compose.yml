@@ -1,4 +1,4 @@
-# Plato on one VPS: Mongo (single-node replica set, Prisma needs one), Redis, API, web app, landing site, Caddy (the only
+# Plato on one VPS: Mongo (single-node replica set, Prisma needs one), Redis, API, web app, admin panel, landing site, Caddy (the only
 # public ports; TLS from Let's Encrypt). Settings and secrets come from ./.env next to this file (deploy/env.example).
 # Local smoke test: WEB_DOMAIN=localhost API_DOMAIN=api.localhost -> Caddy serves a self-signed cert.
 # Every container's logs rotate: 20 MB x 3 files, so logs can never fill the disk (the usual cause of a stuck VPS).
@@ -60,6 +60,9 @@ services:
       REDIS_URL: redis://redis:6379
       FRONTEND_URL: https://${WEB_DOMAIN:?set WEB_DOMAIN in .env}
       API_PUBLIC_URL: https://${API_DOMAIN:?set API_DOMAIN in .env}
+      ADMIN_URL: https://${ADMIN_DOMAIN:?set ADMIN_DOMAIN in .env}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:?set SUPER_ADMIN_EMAIL in .env}
+      SUPER_ADMIN_KEY: ${SUPER_ADMIN_KEY:?set SUPER_ADMIN_KEY in .env}
     depends_on:
       mongo:
         condition: service_healthy
@@ -76,6 +79,18 @@ services:
         NEXT_PUBLIC_EXTENSION_STORE_URL: ${EXTENSION_STORE_URL:-}
         NEXT_PUBLIC_EXTENSION_IDS: ${EXTENSION_IDS:-}
         NEXT_PUBLIC_SUPPORT_EMAIL: ${SUPPORT_EMAIL:-raefalwani06@gmail.com}
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  # The admin panel (Vite build, static files on port 80); talks to the API with its own cookie.
+  admin:
+    <<: *logging
+    image: ${ADMIN_IMAGE:-ghcr.io/youssifsalama/plato-admin:latest}
+    build:
+      context: ./plato-admin
+      args:
+        VITE_API_URL: https://${API_DOMAIN}
     restart: unless-stopped
     depends_on:
       - api
@@ -98,6 +113,7 @@ services:
       WEB_DOMAIN: ${WEB_DOMAIN}
       API_DOMAIN: ${API_DOMAIN}
       LANDING_DOMAIN: ${LANDING_DOMAIN:?set LANDING_DOMAIN in .env}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -105,6 +121,7 @@ services:
     depends_on:
       - api
       - web
+      - admin
       - landing
 
 volumes:

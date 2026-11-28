@@ -45,6 +45,8 @@ export const ACCOUNT_DATA: [model: string, scope: Scope][] = [
   ['jobSeekerProfileEvaluation', 'seeker'],
   ['jobSeekerPreference', 'seeker'],
   ['authToken', 'user'],
+  // Admin Logs rows naming the seeker (their failed requests, the extension's reports).
+  ['errorLog', 'user'],
   ['creditLedger', 'user'],
   ['creditAccount', 'user'],
   // Kept without the user id: it is Plato's own AI and Apify spend, and holds nothing personal.
@@ -63,6 +65,11 @@ export const SHARED_MODELS = [
   'insightsCursor',
   'guest',
   'guestSearch',
+  'plan',
+  // Plato's admin panel accounts, not seekers.
+  'adminUser',
+  'adminRole',
+  'adminInvite',
 ];
 
 // Where each seeker's files sit in object storage (documents, proof screenshots, resumes Plato drew).

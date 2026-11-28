@@ -17,6 +17,25 @@ const setup = () => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   void chrome.sidePanel.setOptions({ path: 'panel.html', enabled: true }); // one global panel, every tab
 };
+// Uncaught errors here go to the side panel, which reports them (core/error-report.ts): the service worker keeps its
+// one network call. No panel open = not reported. Never throws, never loops (a failed hand-over is dropped).
+let forwarding = false;
+const forward = (code: string, e: unknown) => {
+  if (forwarding) return;
+  forwarding = true;
+  try {
+    const message = e instanceof Error ? e.message || e.name : String(e);
+    const stack = e instanceof Error ? e.stack?.slice(0, 4000) : undefined;
+    void chrome.runtime.sendMessage({ type: 'plato:sw-error', code, message: message.slice(0, 500), stack }).catch(() => undefined);
+  } catch {
+    /* nothing to do */
+  } finally {
+    forwarding = false;
+  }
+};
+self.addEventListener('error', (ev) => forward('service_worker', (ev as ErrorEvent).error ?? (ev as ErrorEvent).message));
+self.addEventListener('unhandledrejection', (ev) => forward('service_worker_rejection', (ev as PromiseRejectionEvent).reason));
+
 setup();
 chrome.runtime.onInstalled.addListener(setup);
 chrome.runtime.onStartup.addListener(setup);

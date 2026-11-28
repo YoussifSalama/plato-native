@@ -6,37 +6,11 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
-import { PrismaService } from '../prisma/prisma.service';
+import { blockedError, sessionState } from './session-state';
 
 export const ACCESS_TOKEN_COOKIE = 'access_token';
 
-// A password reset signs out every session issued before it. The cut-off is
-// read from the user row and cached briefly, so most requests cost no query;
-// the instance that handled the reset forgets its copy at once.
-// ponytail: other API instances notice within SESSION_CACHE_MS.
-const SESSION_CACHE_MS = 60_000;
-const cutoffs = new Map<string, { after: number; until: number }>();
-
-export function forgetSessions(userId: string) {
-  cutoffs.delete(userId);
-}
-
-// null = the user row is gone (account deleted, DB reset): the token is dead.
-async function sessionsValidAfter(userId: string): Promise<number | null> {
-  const hit = cutoffs.get(userId);
-  if (hit && hit.until > Date.now()) return hit.after;
-  const prisma = PrismaService.instance;
-  if (!prisma) return 0;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { sessions_valid_after: true },
-  });
-  if (!user) return null;
-  const after = user.sessions_valid_after?.getTime() ?? 0;
-  if (cutoffs.size > 50_000) cutoffs.clear();
-  cutoffs.set(userId, { after, until: Date.now() + SESSION_CACHE_MS });
-  return after;
-}
+export { blockedError, forgetSessions } from './session-state';
 
 export interface AuthenticatedRequest extends Request {
   userId: string;
@@ -53,18 +27,27 @@ export class JwtAuthGuard implements CanActivate {
     const token = request.cookies?.[ACCESS_TOKEN_COOKIE];
     if (!token) throw new UnauthorizedException('Not authenticated');
 
-    let payload: { sub: string; iat?: number };
+    let payload: { sub: string; iat?: number; aud?: unknown };
     try {
       payload = await this.jwtService.verifyAsync<{
         sub: string;
         iat?: number;
+        aud?: unknown;
       }>(token);
     } catch {
       throw new UnauthorizedException('Invalid or expired session');
     }
-    const after = await sessionsValidAfter(payload.sub);
-    if (after === null || (after && (payload.iat ?? 0) * 1000 < after))
+    // Seeker sessions carry no audience. Admin tokens (aud plato-admin*) are
+    // signed with other keys and never verify here; this refuses them anyway.
+    if (payload.aud !== undefined || typeof payload.sub !== 'string')
       throw new UnauthorizedException('Invalid or expired session');
+    const state = await sessionState(payload.sub);
+    if (
+      state === null ||
+      (state.after && (payload.iat ?? 0) * 1000 < state.after)
+    )
+      throw new UnauthorizedException('Invalid or expired session');
+    if (state.blocked) throw blockedError();
     request.userId = payload.sub;
     request.tokenIssuedAt = payload.iat;
     return true;

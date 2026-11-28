@@ -27,6 +27,7 @@ import { MailModule } from './modules/mail/mail.module';
 import { InsightsModule } from './modules/insights/insights.module';
 import { QuizzesModule } from './modules/quizzes/quizzes.module';
 import { GuestModule } from './modules/guest/guest.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { GuestModule } from './modules/guest/guest.module';
     InsightsModule,
     QuizzesModule,
     GuestModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

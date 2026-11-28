@@ -12,6 +12,7 @@ import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { ExtensionPrincipal, ExtensionService } from './extension.service';
 import { ExtensionScope, RateLimiter } from './extension-token';
+import { blockedError, sessionState, userOfSeeker } from '../auth/session-state';
 
 export interface ExtensionRequest extends Request {
   extension: ExtensionPrincipal;
@@ -33,7 +34,7 @@ export const extensionOrigin = () => extensionOrigins()[0] ?? null;
 export const isExtensionOrigin = (origin: string | undefined) => !!origin && extensionOrigins().includes(origin);
 
 export const TOKEN_LIMIT = { limit: 120, windowMs: 60_000 };
-export const limiter = new RateLimiter();
+export const limiter = new RateLimiter('extension');
 
 @Injectable()
 export class ExtensionAuthGuard implements CanActivate {
@@ -64,6 +65,9 @@ export class ExtensionAuthGuard implements CanActivate {
       throw new UnauthorizedException('Not authenticated');
     const principal = await this.extension.authenticate(header.slice(7));
     if (!principal) throw new UnauthorizedException('Invalid or expired token');
+    // a blocked seeker's linked browsers are refused like their web sessions
+    const userId = await userOfSeeker(principal.jobSeekerId);
+    if (userId && (await sessionState(userId))?.blocked) throw blockedError();
 
     if (
       !limiter.hit(

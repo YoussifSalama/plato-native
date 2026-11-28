@@ -1,29 +1,24 @@
-import { BadRequestException, Controller, Get, Headers, Query } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { BadRequestException, Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { AdminGuard, AdminPage } from '../admin/admin-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
-import { assertAdminKey } from './admin-key';
 import { v3Summary, type V3ItemInfo } from './v3-summary';
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
 
 // Internal report on metered usage and estimated cost, by feature. NOT for
-// customers: it needs the ADMIN_REPORT_KEY header and answers 404 otherwise
-// (or when no key is configured), so the app and its users never see cost data.
+// customers: admin panel session with the Usage page only.
 @Controller('admin/usage')
+@UseGuards(AdminGuard)
+@AdminPage('usage')
 export class UsageController {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   @Get('summary')
   async summary(
-    @Headers('x-admin-key') key: string | undefined,
     @Query('days') days = '30',
     @Query('feature') feature?: string,
     @Query('userId') userId?: string,
   ) {
-    this.assertKey(key);
 
     const n = Math.min(Number(days) || 30, 365);
     const rows = await this.prisma.usageEvent.findMany({
@@ -86,12 +81,10 @@ export class UsageController {
   // than one model side by side. Read-only.
   @Get('v3')
   async v3(
-    @Headers('x-admin-key') key: string | undefined,
     @Query('days') days = '30',
     @Query('model') model?: string,
     @Query('item') item?: string,
   ) {
-    this.assertKey(key);
     const n = Math.min(Number(days) || 30, 365);
     const all = await this.prisma.usageEvent.findMany({
       where: {
@@ -156,30 +149,23 @@ export class UsageController {
     );
     return { days: n, stops, ...v3Summary(rows, items) };
   }
-
-  private assertKey(key: string | undefined) {
-    assertAdminKey(this.config, key);
-  }
 }
 
 type Stop = { at: string; reason: string; message: string; code?: string; detail?: string };
 
 // Support: the seeker copies the error code from the extension panel ("Error code PL-XXXXXX") and sends it to us.
-// GET /admin/errors?code=PL-XXXXXX (x-admin-key) answers with that stop: who, which job, what the panel said, the raw
+// GET /admin/errors?code=PL-XXXXXX (admin panel, Logs page) answers with that stop: who, which job, what the panel said, the raw
 // error behind it, and the item's stops before it. The server log has the same code on the Claude failure line.
 @Controller('admin/errors')
+@UseGuards(AdminGuard)
+@AdminPage('logs')
 export class ErrorsController {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   @Get()
   async byCode(
-    @Headers('x-admin-key') key: string | undefined,
     @Query('code') raw = '',
   ) {
-    assertAdminKey(this.config, key);
     const code = raw.trim().toUpperCase();
     if (!/^PL-[A-Z2-9]{6}$/.test(code))
       throw new BadRequestException('code looks like PL-XXXXXX');

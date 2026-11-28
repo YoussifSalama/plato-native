@@ -10,14 +10,22 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { PLANS, TOPUPS } from './credit-prices';
+import { activePlans, activeTopups } from './credit-prices';
 import { CreditsService } from './credits.service';
 import { CreditsEstimatesService } from './estimates.service';
 
+// Only what is on sale now (the plans collection can switch a plan or pack off); never Free.
 const checkoutSchema = z.union([
-  z.object({ plan: z.enum(['pro', 'max']) }),
-  z.object({ pack: z.enum(Object.keys(TOPUPS) as [string, ...string[]]) }),
+  z.object({
+    plan: z.string().refine((k) => k !== 'free' && k in activePlans()),
+  }),
+  z.object({ pack: z.string().refine((k) => k in activeTopups()) }),
 ]);
+// The public shape, as before the plans collection: { label, monthly, priceUsd } / { label, tokens, priceUsd }.
+const publicList = <T extends { active: boolean }>(r: Record<string, T>) =>
+  Object.fromEntries(
+    Object.entries(r).map(([k, { active: _active, ...v }]) => [k, v]),
+  );
 
 // The seeker's Plato tokens. Never returns what anything costs Plato: only
 // tokens, and the public plan and top-up prices.
@@ -47,7 +55,10 @@ export class CreditsController {
   /** The plans and top-up packs on offer (public). */
   @Get('prices')
   prices() {
-    return { plans: PLANS, topups: TOPUPS };
+    return {
+      plans: publicList(activePlans()),
+      topups: publicList(activeTopups()),
+    };
   }
 
   /** What things are likely to cost, in rounded figures: the same answer the assistants get. */

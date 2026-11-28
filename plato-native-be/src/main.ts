@@ -38,8 +38,8 @@ async function bootstrap() {
     }),
   );
   app.use(cookieParser());
-  // Per route: web app + cookies, or (extension routes) the extension origin
-  // only, no cookies.
+  // Per route: web app + cookies, (extension routes) the extension origin
+  // only, no cookies, or (/admin/*) the admin panel only, with cookies.
   app.enableCors((req, cb) =>
     cb(
       null,
@@ -47,6 +47,7 @@ async function bootstrap() {
         req,
         process.env.FRONTEND_URL ?? 'http://localhost:3001',
         process.env.EXTENSION_ORIGIN,
+        process.env.ADMIN_URL,
       ),
     ),
   );

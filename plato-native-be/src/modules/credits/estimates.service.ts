@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PLANS, planOf, TOPUPS } from './credit-prices';
+import { activePlans, activeTopups, planOf } from './credit-prices';
 import { CreditsService } from './credits.service';
 import { buildEstimates } from './estimates';
 
@@ -55,12 +55,12 @@ export class CreditsEstimatesService {
       monthly: planOf(acc.plan).monthly,
       refillsOn: acc.period_end.toISOString().slice(0, 10),
       estimates: buildEstimates(avg),
-      plans: Object.values(PLANS).map((p) => ({
+      plans: Object.values(activePlans()).map((p) => ({
         name: p.label,
         tokensPerMonth: p.monthly,
         priceUsdPerMonth: p.priceUsd,
       })),
-      topUps: Object.values(TOPUPS).map((t) => ({
+      topUps: Object.values(activeTopups()).map((t) => ({
         name: t.label,
         tokens: t.tokens,
         priceUsd: t.priceUsd,

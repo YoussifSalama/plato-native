@@ -1,4 +1,5 @@
 import type { Decision } from './types';
+import type { ClientError } from './error-report';
 import type { SubmitMode, TurnRequest, TurnResponse } from '../v3/contract';
 import type { AnswerQuestion, ApiItem, Candidate, ConsentBody, JobFilters, JobsPage, OrchestratorEvent, OrchestratorRequest, PolicyMap, RunSettings, SearchCard, TransitionBody } from './types';
 
@@ -106,6 +107,8 @@ export function createApi(cfg: ApiConfig) {
     // The seeker's identity details for this item (only while this device holds it).
     candidate: (id: string) => call<Candidate>('GET', `/extension/v1/items/${id}/candidate`),
     unpair: () => call<{ revoked: boolean }>('DELETE', '/extension/v1/device'),
+    // A client error for the admin error log (core/error-report.ts throttles and caps it).
+    reportError: (body: ClientError) => call<unknown>('POST', '/extension/v1/errors', body),
   };
 }
 export type Api = ReturnType<typeof createApi>;

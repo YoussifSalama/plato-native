@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PLANS, USD_PER_TOKEN } from './credit-prices';
+import { allPlans, USD_PER_TOKEN } from './credit-prices';
 
 const round = (n: number, d = 4) => Math.round(n * 10 ** d) / 10 ** d;
 type Line = { costUsd: number; calls: number; tokens: number };
@@ -91,7 +91,7 @@ export class CreditsReportService {
     return {
       days: n,
       usdPerToken: USD_PER_TOKEN,
-      plans: PLANS,
+      plans: allPlans(),
       unattributedCostUsd: round(unattributedUsd),
       requests: requests.map((r) => ({
         userId: r.user_id,

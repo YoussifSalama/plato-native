@@ -49,7 +49,7 @@ const parse = <T>(schema: ZodType<T>, body: unknown): T => {
 
 // Password guessing and mass sign-ups: per account (works behind any proxy)
 // and, more loosely, per address. In memory, per process, like the extension's.
-export const authLimiter = new RateLimiter();
+export const authLimiter = new RateLimiter('auth');
 function allow(key: string, limit: number, windowMs: number) {
   if (!authLimiter.hit(key, limit, windowMs))
     throw new HttpException(

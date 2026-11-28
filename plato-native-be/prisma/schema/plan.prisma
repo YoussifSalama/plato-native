@@ -1,0 +1,17 @@
+// Plans and top-up packs, edited in the admin panel. A key with no row here uses
+// its default from src/modules/credits/credit-prices.ts (no seed script).
+// "Deleting" sets active false: it can no longer be bought, accounts on it keep working.
+model Plan {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  key        String   @unique
+  // "plan" (tokens = monthly grant) or "topup" (tokens = pack size)
+  kind       String
+  label      String
+  tokens     Float
+  price_usd  Float
+  active     Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("plans")
+}

@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api-client"
+import { apiClient, handleBlocked, pageHeader } from "@/lib/api-client"
 import { isOutOfTokens, reportOutOfTokens, reportTokensChanged } from "@/lib/credits/api"
 import { createThread, getThread, listThreads, type ChatUiContext, type OrchestratorEvent, type QuestionCard } from "@/lib/jobs/api"
 import { getCareerThread, listCareerThreads, type CareerMessage } from "@/lib/career/api"
@@ -48,12 +48,13 @@ export async function streamThreadMessage(
   const res = await fetch(`${apiClient.defaults.baseURL}/chat/threads/${id}/messages/stream`, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...pageHeader() },
     body: JSON.stringify({ content, context: opts.context, attachmentIds: opts.attachmentIds, reference: opts.reference }),
   })
   if (!res.ok || !res.body) {
     const body = await res.json().catch(() => null)
     if (isOutOfTokens(res.status, body)) reportOutOfTokens(body)
+    handleBlocked(res.status, body)
     throw new Error(Array.isArray(body?.message) ? "That message could not be sent." : (body?.message ?? "Request failed"))
   }
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()

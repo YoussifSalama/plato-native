@@ -1,6 +1,6 @@
 "use client"
 
-import { type ReactNode, useEffect, useState } from "react"
+import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Controller, useForm } from "react-hook-form"
@@ -15,6 +15,7 @@ import { RequiredMark } from "@/app/onboarding/components/required-mark"
 import { SuccessModal } from "@/components/success-modal"
 import { InfoTip } from "@/components/info-tip"
 import { getMe, login, safeNext, signup } from "@/lib/auth/api"
+import { clearLoginNotice, readLoginNotice } from "@/lib/api-client"
 import { claimGuest } from "@/lib/jobs/guest"
 import { loginSchema, signupSchema, type LoginFormValues, type SignupFormValues } from "@/lib/auth/schema"
 import { fadeUpItem, staggerContainer } from "@/lib/motion-variants"
@@ -230,6 +231,8 @@ function SignupForm() {
   )
 }
 
+const noSubscribe = () => () => {}
+
 function LoginForm() {
   const router = useRouter()
   const [formError, setFormError] = useState<string | null>(null)
@@ -243,7 +246,11 @@ function LoginForm() {
     defaultValues: { email: "", password: "" },
   })
 
+  // Sent here because the session was refused (a blocked account): say why until the next try.
+  const notice = useSyncExternalStore(noSubscribe, readLoginNotice, () => null)
+
   async function onSubmit(values: LoginFormValues) {
+    clearLoginNotice()
     setFormError(null)
     setIsSubmitting(true)
     try {
@@ -263,7 +270,7 @@ function LoginForm() {
     <AuthFormShell
       heading="Welcome back"
       subheading="Your matches, searches and applications are where you left them."
-      formError={formError}
+      formError={formError ?? notice}
       submitLabel={isSubmitting ? "Logging in…" : "Log in"}
       isSubmitting={isSubmitting}
       onSubmit={handleSubmit(onSubmit)}

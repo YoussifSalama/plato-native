@@ -19,8 +19,11 @@ export default registerAs('env', (): IEnvParams => ({
   // Reads the live web for the Career assistant (needs a model with web search).
   careerSearchModel: process.env.CAREER_SEARCH_MODEL ?? 'gpt-4.1-mini',
   // Voice interviews (WebRTC from the browser). Mini keeps a 15-minute session in the cents.
-  // Header key for the internal usage report (/admin/usage/summary). Unset = report disabled.
-  adminReportKey: process.env.ADMIN_REPORT_KEY ?? '',
+  // Admin panel (plato-admin): the super admin is the account with this email;
+  // the key is asked at its first signup and for /admin/auth/super-reset.
+  superAdminEmail: (process.env.SUPER_ADMIN_EMAIL ?? '').trim().toLowerCase(),
+  superAdminKey: process.env.SUPER_ADMIN_KEY ?? '',
+  adminUrl: process.env.ADMIN_URL ?? '',
   realtimeModel: process.env.REALTIME_MODEL ?? 'gpt-realtime-mini',
   apifyToken: process.env.APIFY_TOKEN ?? '',
   // Apply worker: runs by default and REALLY SUBMITS (product decision,

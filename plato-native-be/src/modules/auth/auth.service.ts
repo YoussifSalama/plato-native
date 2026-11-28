@@ -10,6 +10,7 @@ import * as bcrypt from 'bcryptjs';
 import { Prisma, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserService } from '../user/user.service';
+import { blockedError } from './session-state';
 import {
   E164,
   LoginInput,
@@ -163,6 +164,8 @@ export class AuthService implements OnModuleInit {
     if (!user || !passwordMatches) {
       throw new UnauthorizedException('Invalid email or password');
     }
+    // only once the password is proven, so it never tells who has an account
+    if (user.blocked_at) throw blockedError();
 
     return { token: await this.issueToken(user.id), user: toSafeUser(user) };
   }

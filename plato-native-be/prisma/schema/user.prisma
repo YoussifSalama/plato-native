@@ -10,6 +10,9 @@ model User {
   email_verified_at    DateTime?
   // Sessions issued before this are refused (set by a password reset).
   sessions_valid_after DateTime?
+  // Blocked by an admin: no login, and every session and extension token is refused (403 BLOCKED).
+  blocked_at     DateTime?
+  blocked_reason String?
 
   job_seeker JobSeeker?
 

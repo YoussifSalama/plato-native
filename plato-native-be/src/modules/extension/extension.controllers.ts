@@ -41,6 +41,7 @@ import { ExtensionSettingsService, settingsPatchSchema, siteAccountSchema } from
 import { OrchestratorService, orchestratorSchema } from './orchestrator.service';
 import { jobsQuerySchema, SearchesService } from './searches.service';
 import { ProofService, proofSchema } from './proof.service';
+import { ErrorLogService } from '../error-log/error-log.service';
 
 const MINUTE = 60_000;
 const tooMany = () =>
@@ -157,6 +158,14 @@ export class ExtensionWebController {
 const featuredSchema = z.object({ featured: z.boolean() });
 // code: the error code the panel shows the seeker (PL-XXXXXX); detail: the raw error behind the stop, for us only
 const stopSchema = z.object({ reason: z.string().min(1).max(60), message: z.string().max(300), code: z.string().regex(/^PL-[A-Z2-9]{6}$/).optional(), detail: z.string().max(2000).optional(), states: z.array(z.string().max(300)).max(5).optional() }); // states: the last pages the run saw ("LOGIN https://…"), newest last
+// An error the extension hit on its side (a script error, a page it could not read), for the admin Logs page.
+const clientErrorSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+  code: z.string().max(100).optional(),
+  page: z.string().max(300).optional(),
+  stack: z.string().max(8000).optional(),
+  data: z.unknown().optional(),
+});
 const consentSchema = z
   .object({
     decision: z.enum(['allow', 'decline']),
@@ -485,6 +494,17 @@ export class ExtensionApiController {
     return this.candidates.load(req.extension.jobSeekerId);
   }
 
+  // The extension reports an error of its own; stored for the admin Logs page (platform extension, source client).
+  @Post('errors')
+  @ExtensionScopes()
+  clientError(@Req() req: ExtensionRequest, @Body() body: unknown) {
+    const p = clientErrorSchema.safeParse(body);
+    if (!p.success) throw new BadRequestException('Invalid request');
+    if (!limiter.hit(`err:${req.extension.deviceId}`, 30, MINUTE)) throw tooMany();
+    this.errorLog.client(req, req.extension.jobSeekerId, p.data);
+    return { ok: true };
+  }
+
   // The extension unpairs itself.
   @Delete('device')
   @ExtensionScopes()
@@ -506,5 +526,6 @@ export class ExtensionApiController {
     private readonly queueSvc: QueueService,
     private readonly resumeFiles: ResumeFileService,
     private readonly proofs: ProofService,
+    private readonly errorLog: ErrorLogService,
   ) {}
 }

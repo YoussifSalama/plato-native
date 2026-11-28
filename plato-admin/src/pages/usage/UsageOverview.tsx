@@ -1,5 +1,5 @@
 import { BarList, providerColor, providerLabel, StackedDayChart } from '../../components/charts';
-import { ErrorNote, Grid2, Loading, Section, Stat, StatGrid } from '../../components/ui';
+import { ErrorNote, Grid2, PageSkeleton, Section, Stat, StatGrid } from '../../components/ui';
 import { money, num } from '../../lib/format';
 import { useRange } from '../../lib/searchState';
 import type { UsageOverview as T } from '../../lib/types';
@@ -8,7 +8,7 @@ import { useApi } from '../../lib/useApi';
 export default function UsageOverview() {
   const { from, to } = useRange();
   const { data, error, loading, reload } = useApi<T>('/admin/usage/overview', { from, to });
-  if (!data) return loading ? <Loading /> : <ErrorNote error={error} onRetry={reload} />;
+  if (!data) return loading ? <PageSkeleton /> : <ErrorNote error={error} onRetry={reload} />;
   const days = data.byDay.length || 1;
   const top = [...data.byProvider].sort((a, b) => b.costUsd - a.costUsd)[0];
   return (

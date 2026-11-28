@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { money, num, shortDay } from '../lib/format';
+import { prefersReducedMotion } from '../lib/motion';
 import { Empty } from './ui';
 
 // Provider identity, fixed per entity (never by rank). Cobalt / azure / violet pass the
@@ -17,6 +18,8 @@ export const PROVIDER_LABEL: Record<string, string> = { apify: 'Apify', anthropi
 export const providerLabel = (p: string) => PROVIDER_LABEL[p] ?? p;
 
 const AXIS = { fontSize: 11, fill: '#8593a6' };
+// Bars rise from the axis once, quickly (recharts' own animation); none with reduced motion.
+const barMotion = () => ({ isAnimationActive: !prefersReducedMotion(), animationDuration: 700, animationEasing: 'ease-out' as const });
 const compactUsd = (v: number) => (Math.abs(v) >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v < 10 && v % 1 ? v.toFixed(2) : Math.round(v)}`);
 
 function ChartTooltip({
@@ -79,7 +82,8 @@ export function StackedDayChart({ data }: { data: { day: string; byProvider: Rec
               stroke="#fff"
               strokeWidth={1}
               radius={i === keys.length - 1 ? [4, 4, 0, 0] : 0}
-              isAnimationActive={false}
+              {...barMotion()}
+              animationBegin={i * 80}
             />
           ))}
         </BarChart>
@@ -120,7 +124,7 @@ export function DayChart({
             tickFormatter={format === money ? compactUsd : (v: number) => num(v)}
           />
           <Tooltip cursor={{ fill: 'rgba(0,91,167,0.06)' }} content={<ChartTooltip format={format} />} />
-          <Bar dataKey={y} name={name} fill="#005ba7" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+          <Bar dataKey={y} name={name} fill="#005ba7" radius={[4, 4, 0, 0]} {...barMotion()} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -140,8 +144,8 @@ export function BarList({
   if (!items.length) return <Empty />;
   const max = Math.max(...items.map((i) => i.value), 0) || 1;
   return (
-    <ul className="flex flex-col gap-2.5">
-      {items.map((i) => (
+    <ul className="stagger flex flex-col gap-2.5">
+      {items.map((i, n) => (
         <li key={i.key} className="text-sm" title={`${typeof i.label === 'string' ? i.label : i.key}: ${format(i.value)}`}>
           <div className="mb-1 flex items-baseline justify-between gap-3">
             <span className="min-w-0 truncate">{i.label}</span>
@@ -151,7 +155,10 @@ export function BarList({
             </span>
           </div>
           <div className="h-2 rounded-full bg-muted">
-            <div className="h-2 rounded-full" style={{ width: `${Math.max(1, (i.value / max) * 100)}%`, background: color?.(i.key) ?? '#005ba7' }} />
+            <div
+              className="bar-grow h-2 rounded-full"
+              style={{ width: `${Math.max(1, (i.value / max) * 100)}%`, background: color?.(i.key) ?? '#005ba7', animationDelay: `${Math.min(n, 8) * 60}ms` }}
+            />
           </div>
         </li>
       ))}

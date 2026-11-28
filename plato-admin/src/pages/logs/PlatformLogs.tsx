@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
-import { ErrorNote, SearchInput, Section } from '../../components/ui';
+import { ErrorNote, Tabs, SearchInput, Section } from '../../components/ui';
 import { dateTime } from '../../lib/format';
 import { useRange, useSearchState } from '../../lib/searchState';
 import type { ErrorLog, LogFacets, Paged } from '../../lib/types';
@@ -35,18 +35,7 @@ export default function PlatformLogs() {
     <Section
       actions={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
-          <div className="flex gap-1 overflow-x-auto">
-            {PLATFORMS.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                className={`tab h-8 ${s.platform === t.value ? 'tab-active' : ''}`}
-                onClick={() => set({ platform: t.value, module: '' })}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <Tabs compact label="Platform" value={s.platform} onChange={(platform) => set({ platform, module: '' })} items={PLATFORMS} />
           <div className="flex flex-wrap items-center gap-2">
             <select className="input w-auto" aria-label="Module" value={s.module} onChange={(e) => set({ module: e.target.value })}>
               <option value="">All modules</option>

@@ -38,6 +38,8 @@
   --radius-2xl: 1rem;
   --shadow-card: 0 1px 2px rgba(14, 27, 44, 0.04), 0 2px 6px -2px rgba(14, 27, 44, 0.04);
   --shadow-float: 0 12px 32px -12px rgba(0, 58, 110, 0.3), 0 2px 6px -2px rgba(14, 27, 44, 0.08);
+  --shadow-lift: 0 1px 2px rgba(14, 27, 44, 0.04), 0 10px 24px -12px rgba(14, 27, 44, 0.16);
+  --shadow-brand: 0 12px 30px -12px rgba(0, 91, 167, 0.45);
 }
 
 :root {
@@ -69,6 +71,10 @@
   --destructive: #d92d20;
   --danger-soft: #fee4e2;
   --radius: 0.625rem;
+  --brand-glow: rgba(0, 161, 226, 0.14);
+  /* Motion: the seeker app's curves (lib/motion-system.ts). */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-settle: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 @layer base {
@@ -98,6 +104,16 @@
 }
 @utility btn-primary {
   @apply btn bg-primary text-primary-foreground hover:bg-primary-hover;
+  /* the seeker app's primary button: lifts a pixel with the brand shadow, presses back down */
+  transition: background-color 0.15s, box-shadow 0.2s, translate 0.2s var(--ease-settle), scale 0.1s;
+  &:hover:not(:disabled) {
+    translate: 0 -1px;
+    box-shadow: var(--shadow-brand);
+  }
+  &:active:not(:disabled) {
+    translate: 0 0;
+    scale: 0.98;
+  }
 }
 @utility btn-outline {
   @apply btn border border-input bg-card text-foreground hover:bg-muted;
@@ -137,4 +153,206 @@
 }
 @utility tab-active {
   @apply bg-primary-soft text-primary hover:bg-primary-soft hover:text-primary;
+}
+
+/* ===================================================================================
+   Motion and card feel, learned from the seeker app (plato-job-seeker-native-fe:
+   app/globals.css "Card feel", components/card-fx.tsx, lib/motion-system.ts).
+   Every rule here is decoration: with prefers-reduced-motion nothing moves (see the end).
+   Entrances animate `translate` / `opacity`, never `transform`, so they never fight the
+   pointer lean (.card-lift), which owns `transform`.
+   =================================================================================== */
+
+/* ---------- Card feel ----------
+   Every card: a light top edge, a soft light that follows the pointer, and the border lit
+   where the pointer is (--mx/--my from components/CardFx.tsx). Dialogs and menus stay still. */
+@layer components {
+  :where(.card, .fx, .card-lift):not(dialog, [role='dialog'], [role='menu'], [role='listbox'], .fx-off) {
+    position: relative;
+    box-shadow: var(--shadow-card), inset 0 1px 0 rgb(255 255 255 / 0.9);
+    &::before,
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.35s;
+    }
+    &::before {
+      background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgb(0 91 167 / 0.06), transparent 45%);
+    }
+    &::after {
+      padding: 1px;
+      background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgb(0 91 167 / 0.45), transparent 60%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+    }
+    &:hover::before,
+    &:hover::after {
+      opacity: 1;
+    }
+  }
+  /* Only fine pointers get the light: on touch a tap would leave it stuck on. */
+  @media (hover: none) {
+    :where(.card, .fx, .card-lift)::before,
+    :where(.card, .fx, .card-lift)::after {
+      display: none;
+    }
+  }
+
+  /* A header whose .depth-1 / .depth-2 layers drift with the pointer at their own rates. */
+  .fx-depth .depth-1 {
+    transform: translate3d(calc(var(--px, 0) * -6px), calc(var(--py, 0) * -6px), 0);
+    transition: transform 0.6s var(--ease-settle);
+  }
+  .fx-depth .depth-2 {
+    transform: translate3d(calc(var(--px, 0) * -18px), calc(var(--py, 0) * -14px), 0);
+    transition: transform 0.6s var(--ease-settle);
+  }
+}
+
+/* Clickable cards: lift and lean toward the pointer (--px/--py), easing back when it leaves. */
+@utility card-lift {
+  transform: perspective(1000px) rotateX(calc(var(--py, 0) * -2.5deg)) rotateY(calc(var(--px, 0) * 2.5deg)) translateY(var(--lift, 0px));
+  transition: transform 0.5s var(--ease-settle), box-shadow 0.25s, border-color 0.25s;
+  will-change: transform;
+  &:hover {
+    --lift: -3px;
+    box-shadow: var(--shadow-lift);
+    border-color: var(--primary-line);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* Soft azure wash at the top of a hero panel (an aria-hidden layer). */
+@utility glow-top {
+  background-image: radial-gradient(ellipse at top, var(--brand-glow), transparent 65%);
+}
+
+/* ---------- Entrances ----------
+   .enter: one element rises in. .stagger: its children rise one after another (70 ms apart,
+   like the seeker app's stat tiles), so a grid of cards fills in instead of popping. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
+}
+@utility enter {
+  animation: rise 0.5s var(--ease-out) both;
+}
+@utility stagger {
+  & > * {
+    animation: rise 0.5s var(--ease-out) both;
+  }
+  & > :nth-child(2) { animation-delay: 70ms; }
+  & > :nth-child(3) { animation-delay: 140ms; }
+  & > :nth-child(4) { animation-delay: 210ms; }
+  & > :nth-child(5) { animation-delay: 280ms; }
+  & > :nth-child(6) { animation-delay: 350ms; }
+  & > :nth-child(7) { animation-delay: 420ms; }
+  & > :nth-child(n + 8) { animation-delay: 490ms; }
+}
+
+/* ---------- Loading ----------
+   A skeleton in the shape of what is coming, with a light sweeping across it. */
+@keyframes sweep {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+@utility skeleton {
+  border-radius: var(--radius-lg);
+  background-color: var(--muted);
+  background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 0.65) 50%, transparent 100%);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: sweep 1.4s ease-in-out infinite;
+}
+
+/* ---------- Data ----------
+   A ranked bar grows from the left when it appears, and slides to its new length when the
+   range changes. scaleX on entry (no layout), width afterwards. */
+@keyframes grow {
+  from { transform: scaleX(0); }
+}
+@utility bar-grow {
+  transform-origin: left center;
+  animation: grow 0.8s var(--ease-out) both;
+  transition: width 0.6s var(--ease-out);
+}
+
+/* A live status dot: a ring that pulses out of it. */
+@keyframes ping {
+  75%, 100% { transform: scale(2.2); opacity: 0; }
+}
+@utility ping {
+  animation: ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* ---------- Dialogs and the phone drawer ----------
+   Native <dialog>: fades and settles in from 96%, backdrop fades (browsers without
+   @starting-style just show it). */
+dialog[open] {
+  opacity: 1;
+  scale: 1;
+  transition: opacity 0.2s var(--ease-out), scale 0.25s var(--ease-out), overlay 0.2s allow-discrete, display 0.2s allow-discrete;
+  @starting-style {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+dialog[open]::backdrop {
+  transition: background-color 0.2s;
+  @starting-style {
+    background-color: rgb(14 27 44 / 0);
+  }
+}
+@keyframes drawer-in {
+  from { translate: -100% 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+@utility drawer-in {
+  animation: drawer-in 0.3s var(--ease-out) both;
+}
+@utility fade-in {
+  animation: fade-in 0.2s ease-out both;
+}
+
+/* ---------- Reduced motion: nothing moves, everything is still there ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .card-lift,
+  .fx-depth .depth-1,
+  .fx-depth .depth-2 {
+    transform: none !important;
+  }
+  .skeleton {
+    animation: none !important;
+  }
+  .btn-primary:hover {
+    translate: none !important;
+  }
+}
+
+/* Sideways scrollers (tab strips) that should not show a bar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }

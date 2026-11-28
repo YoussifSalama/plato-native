@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { BarList, DayChart, providerLabel } from '../../components/charts';
 import { DataTable, sortRows } from '../../components/DataTable';
-import { ErrorNote, Grid2, Loading, Section, Stat, StatGrid } from '../../components/ui';
+import { ErrorNote, Grid2, PageSkeleton, Section, Stat, StatGrid } from '../../components/ui';
 import { money, num } from '../../lib/format';
 import { useRange } from '../../lib/searchState';
 import type { ProviderUsage } from '../../lib/types';
@@ -20,7 +20,7 @@ export default function UsageProvider() {
   const [sort, setSort] = useState('-costUsd');
 
   if (!valid) return <NotFound />;
-  if (!data) return loading ? <Loading /> : <ErrorNote error={error} onRetry={reload} />;
+  if (!data) return loading ? <PageSkeleton /> : <ErrorNote error={error} onRetry={reload} />;
   const tokens = data.byModel.reduce((s, m) => s + m.inputTokens + m.outputTokens, 0);
   return (
     <>

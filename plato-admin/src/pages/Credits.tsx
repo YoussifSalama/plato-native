@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useConfirm } from '../components/ConfirmDialog';
 import { DataTable } from '../components/DataTable';
 import { Dialog } from '../components/Dialog';
-import { ErrorNote, Loading, PageHeader, SearchInput, Section, Spinner, Stat, StatGrid, StatusChip } from '../components/ui';
+import { ErrorNote, PageSkeleton, PageHeader, SearchInput, Section, Spinner, Stat, StatGrid, StatusChip } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
 import { date, dateTime, num, num1 } from '../lib/format';
 import { useSearchState } from '../lib/searchState';
@@ -101,7 +101,7 @@ function Account({ user, onBack }: { user: string; onBack: () => void }) {
       />
       <ErrorNote error={view.error} onRetry={view.reload} />
       {!acc ? (
-        view.loading && <Loading />
+        view.loading && <PageSkeleton />
       ) : (
         <>
           <StatGrid>

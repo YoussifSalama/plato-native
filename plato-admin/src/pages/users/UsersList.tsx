@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router';
 import { Gauge } from 'lucide-react';
 import { DataTable } from '../../components/DataTable';
-import { ErrorNote, PageHeader, SearchInput, Section, StatusChip } from '../../components/ui';
+import { ErrorNote, Tabs, PageHeader, SearchInput, Section, StatusChip } from '../../components/ui';
 import { date, money, num1 } from '../../lib/format';
 import { useSearchState } from '../../lib/searchState';
 import type { Paged, UserRow, UserStatus } from '../../lib/types';
@@ -40,13 +40,7 @@ export default function UsersList() {
       <Section
         actions={
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            <div className="flex gap-1 overflow-x-auto">
-              {STATUSES.map((t) => (
-                <button key={t.value} type="button" className={`tab h-8 ${s.status === t.value ? 'tab-active' : ''}`} onClick={() => set({ status: t.value })}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
+            <Tabs compact label="Status" value={s.status as UserStatus} onChange={(status) => set({ status })} items={STATUSES} />
             <SearchInput value={s.q} onChange={(q) => set({ q })} placeholder="Search email or name" />
           </div>
         }

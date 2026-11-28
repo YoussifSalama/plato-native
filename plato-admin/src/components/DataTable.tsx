@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { num } from '../lib/format';
-import { Spinner } from './ui';
+import { Skeleton } from './ui';
 
 export const PAGE_SIZE = 50;
 
@@ -89,7 +89,7 @@ export function DataTable<T>({
               return (
                 <Fragment key={id}>
                   <tr
-                    className={`border-b border-divider last:border-0 ${onRowClick ? 'cursor-pointer hover:bg-primary-tint' : ''} ${expanded === id ? 'bg-primary-tint' : ''}`}
+                    className={`border-b border-divider transition-colors duration-150 last:border-0 ${onRowClick ? 'cursor-pointer hover:bg-primary-tint' : ''} ${expanded === id ? 'bg-primary-tint' : ''}`}
                     onClick={onRowClick ? () => onRowClick(r) : undefined}
                   >
                     {columns.map((c) => (
@@ -102,7 +102,7 @@ export function DataTable<T>({
                     ))}
                   </tr>
                   {expanded === id && renderExpanded && (
-                    <tr className="border-b border-divider bg-primary-tint">
+                    <tr className="fade-in border-b border-divider bg-primary-tint">
                       <td colSpan={columns.length} className="px-4 pb-4 sm:px-5">
                         {renderExpanded(r)}
                       </td>
@@ -115,8 +115,16 @@ export function DataTable<T>({
         </table>
       </div>
       {loading && !rows?.length && (
-        <div className="flex justify-center py-10">
-          <Spinner className="size-5" />
+        // the table's shape while the first page loads
+        <div className="fade-in flex flex-col gap-3 py-3" aria-busy="true" aria-label="Loading">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="flex items-center gap-4">
+              <Skeleton className="h-4 flex-[2]" />
+              <Skeleton className="h-4 flex-1" />
+              <Skeleton className="hidden h-4 flex-1 sm:block" />
+              <Skeleton className="hidden h-4 w-16 sm:block" />
+            </div>
+          ))}
         </div>
       )}
       {!loading && rows?.length === 0 && <p className="py-10 text-center text-sm text-text-tertiary">{empty}</p>}

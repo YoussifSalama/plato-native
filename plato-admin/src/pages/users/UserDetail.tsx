@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { BarList, DayChart } from '../../components/charts';
 import { DateRange } from '../../components/DateRange';
-import { Empty, ErrorNote, Grid2, KeyValues, Loading, PageHeader, Section, Stat, StatGrid } from '../../components/ui';
+import { Empty, ErrorNote, Grid2, KeyValues, PageSkeleton, PageHeader, Section, Stat, StatGrid } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
 import { date, dateTime, money, num, num1 } from '../../lib/format';
 import { useRange } from '../../lib/searchState';
@@ -98,7 +98,7 @@ export default function UserDetail() {
       </div>
       <ErrorNote error={error} onRetry={reload} />
       {!data ? (
-        loading && <Loading />
+        loading && <PageSkeleton />
       ) : (
         <>
           {data.user.blocked && data.user.blockedReason && (

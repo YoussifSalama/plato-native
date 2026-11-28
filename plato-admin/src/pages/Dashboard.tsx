@@ -1,4 +1,4 @@
-import { BrandHeader } from '../components/BrandHeader';
+import { BrandHeader, greeting, today } from '../components/BrandHeader';
 import { DateRange } from '../components/DateRange';
 import { BarList, providerColor, providerLabel } from '../components/charts';
 import { ErrorNote, Grid2, PageSkeleton, Section, Stat, StatGrid } from '../components/ui';
@@ -20,7 +20,12 @@ export default function Dashboard() {
   return (
     <>
       <BrandHeader
-        title="Dashboard"
+        eyebrow={today()}
+        title={
+          <>
+            {greeting()} <span className="text-text-tertiary">·</span> Dashboard
+          </>
+        }
         live={!!data?.users.activeInRange}
         status={
           data ? (

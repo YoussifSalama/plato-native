@@ -1,22 +1,23 @@
 import { useId, type ReactNode } from 'react';
-import { Link, NavLink } from 'react-router';
+import { Link, NavLink, useLocation } from 'react-router';
 import { ArrowUpRight, Loader2 } from 'lucide-react';
 import * as m from 'motion/react-m';
 import type { ApiError } from '../lib/api';
 import { spring } from '../lib/motion';
+import { NAV } from '../lib/nav';
+import { BrandHeader } from './BrandHeader';
 import { CountUp } from './CountUp';
 
-/** Title on the left, the page's action bar on the right — the same spot on every page. */
-export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
-  return (
-    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0">
-        <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">{title}</h1>
-        {description && <p className="mt-1 text-sm text-text-secondary">{description}</p>}
-      </div>
-      {actions && <div className="flex flex-wrap items-center gap-2 sm:justify-end">{actions}</div>}
-    </div>
-  );
+/**
+ * Every page's header: the brand panel (components/BrandHeader.tsx) with the section's name as its
+ * eyebrow, the title, its description, and the page's action bar on the right — the same spot on every page.
+ */
+export function PageHeader({ title, description, actions, eyebrow }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode }) {
+  const { pathname } = useLocation();
+  const section = NAV.find((n) => n.to !== '/' && (pathname === n.to || pathname.startsWith(`${n.to}/`)))?.label;
+  // the section's name only where it adds something (a user's page, Rate limits), never above the same title
+  const crumb = eyebrow ?? (section && section !== title ? section : undefined);
+  return <BrandHeader eyebrow={crumb} title={title} description={description} actions={actions} />;
 }
 
 /**

@@ -7,15 +7,34 @@ export const BRAND_PANEL =
 // Chips and secondary controls sitting on the brand panel.
 export const BRAND_GLASS = 'border border-primary-line/70 bg-card/85 backdrop-blur-sm';
 
-const greeting = (h = new Date().getHours()) => (h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening');
+export const greeting = (h = new Date().getHours()) =>
+  h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+
+/** "Saturday, 28 November". */
+export const today = (d = new Date()) =>
+  `${d.toLocaleDateString('en-GB', { weekday: 'long' })}, ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`;
 
 /**
- * A page's header as the seeker Home draws it: date, greeting, title line, a status pill, and the
- * page's actions in the usual top-right spot. Its two background layers drift with the pointer at
- * their own rates (.fx-depth, written by CardFx); still with reduced motion or on touch.
+ * Every page's header, as the seeker Home draws it: a small eyebrow, the title, a line under it
+ * (plain text, or a status pill with a live dot), and the page's actions in the usual top-right spot.
+ * Its two background layers drift with the pointer at their own rates (.fx-depth, written by CardFx);
+ * still with reduced motion or on touch.
  */
-export function BrandHeader({ title, status, live, actions }: { title: ReactNode; status?: ReactNode; live?: boolean; actions?: ReactNode }) {
-  const now = new Date();
+export function BrandHeader({
+  eyebrow,
+  title,
+  description,
+  status,
+  live,
+  actions,
+}: {
+  eyebrow?: ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  status?: ReactNode;
+  live?: boolean;
+  actions?: ReactNode;
+}) {
   return (
     <section className={`${BRAND_PANEL} fx-depth enter relative isolate mb-5 overflow-hidden rounded-[28px] px-5 py-6 shadow-card sm:px-8 sm:py-7`}>
       <span
@@ -28,12 +47,9 @@ export function BrandHeader({ title, status, live, actions }: { title: ReactNode
       />
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <p className="text-[12px] font-bold tracking-[0.22em] text-text-tertiary uppercase">
-            {now.toLocaleDateString('en-GB', { weekday: 'long' })}, {now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
-          </p>
-          <h1 className="mt-2 text-[28px] leading-tight font-extrabold tracking-tight sm:text-[34px]">
-            {greeting()} <span className="text-text-tertiary">·</span> {title}
-          </h1>
+          {eyebrow && <p className="text-[12px] font-bold tracking-[0.22em] text-text-tertiary uppercase">{eyebrow}</p>}
+          <h1 className={`${eyebrow ? 'mt-2' : ''} text-[26px] leading-tight font-extrabold tracking-tight break-words sm:text-[32px]`}>{title}</h1>
+          {description && <div className="mt-2 text-sm text-text-secondary">{description}</div>}
           {status && (
             // wraps on a phone instead of cutting the numbers off; one line from sm up
             <p className={`${BRAND_GLASS} mt-3 inline-flex max-w-full items-center gap-2.5 rounded-2xl py-1.5 pr-4 pl-2.5 text-sm sm:rounded-full`}>
@@ -45,7 +61,7 @@ export function BrandHeader({ title, status, live, actions }: { title: ReactNode
             </p>
           )}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2 lg:justify-end">{actions}</div>}
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">{actions}</div>}
       </div>
     </section>
   );

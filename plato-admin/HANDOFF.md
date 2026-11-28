@@ -79,9 +79,26 @@ spec moved off the old key, account-data spec now includes `errorLog`).
   seeker session 403 BLOCKED and login 403; unblock, verify, logout-all, clear-rate-limits; seeker/admin cookies
   never cross; cross-site write 403; every page renders as super admin, phone width has no sideways scroll.
 
+## Done after the owner's review (2026-11-28, later)
+
+- Honest numbers: "Paid plans (set by hand)" instead of revenue until payments exist, with our cost as a monthly
+  run-rate; errors split into server (5xx), ran out of tokens (402), other 4xx; every day in `ADMIN_TZ` (Cairo).
+- Dashboard: every tile against the period before (green better / red worse), daily trend (active, signups, cost,
+  searches), "Needs your attention" (`/admin/attention`), signup funnel, costliest seekers (loss marked), weekly
+  retention (`/admin/retention`). One definition of "active" everywhere (includes page visits).
+- Security: logout ends the admin's sessions on the server; admin audit log (`AdminAuditInterceptor`, Team > Audit
+  log); Rate limits is super admin only; the user page no longer shows what a seeker searched for.
+- Scale: Logs grouped view (`/admin/logs/groups`, "New" since the last deploy), error logs expire after 90 days
+  (TTL index at boot, `ERROR_LOG_RETENTION_DAYS`), 60 s cache on the heavy reads.
+- Removed as duplicates: dashboard Users and Cost-by-provider cards, user page "Active days per week" and "Events",
+  Usage "Other" and "By user" tabs.
+
 ## Left to do
 
-1. `npm run prisma:push` on the real database for the new unique indexes — **ask the owner first**.
+1. `npm run prisma:push` on the real database for the new collections and indexes (page_activity unique,
+   admin_audit_logs, usage_events.discovery_run_id, credit_ledger.usage_event_id) — **ask the owner first**.
+   Then restart the API: it recreates the error-log TTL index the push removes. On first start, error logs older than
+   90 days are deleted by Mongo (set `ERROR_LOG_RETENTION_DAYS=0` before to keep them).
 2. Pages were walked with an empty DB (one test seeker): usage, plans calculator and credits have not been seen
    with real numbers yet.
 3. Known and accepted (owner rules or ponytails): typing the super admin's email at signup reveals it is the super

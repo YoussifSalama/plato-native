@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router';
 import { ArrowUpRight, Loader2 } from 'lucide-react';
 import * as m from 'motion/react-m';
 import type { ApiError } from '../lib/api';
+import { num } from '../lib/format';
 import { spring } from '../lib/motion';
 import { NAV } from '../lib/nav';
 import { BrandHeader } from './BrandHeader';
@@ -30,12 +31,17 @@ export function Stat({
   hint,
   tone,
   to,
+  change,
+  good = 'up',
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
   tone?: 'success' | 'warning' | 'danger';
   to?: string;
+  /** Change against the previous period (0.12 = +12%); green when it moved the `good` way. */
+  change?: number | null;
+  good?: 'up' | 'down';
 }) {
   const color =
     tone === 'success' ? 'text-success-ink' : tone === 'warning' ? 'text-warning-ink' : tone === 'danger' ? 'text-destructive' : 'text-foreground';
@@ -45,8 +51,9 @@ export function Stat({
         <span className="truncate">{label}</span>
         {to && <ArrowUpRight className="size-3.5 shrink-0 text-text-tertiary transition-[translate,color] duration-200 group-hover/stat:translate-x-0.5 group-hover/stat:-translate-y-0.5 group-hover/stat:text-primary" />}
       </p>
-      <p className={`mt-2 text-2xl font-bold tabular-nums ${color}`}>
+      <p className={`mt-2 flex items-baseline gap-2 text-2xl font-bold tabular-nums ${color}`}>
         <CountUp value={value} />
+        {change !== undefined && <Delta change={change} good={good} />}
       </p>
       {hint && <p className="mt-1 truncate text-xs text-text-tertiary">{hint}</p>}
     </>
@@ -58,6 +65,21 @@ export function Stat({
       </Link>
     );
   return <div className="card flex min-h-[104px] flex-col">{body}</div>;
+}
+
+/** "+12%" against the previous period: green when better, red when worse, grey when flat or unknown. */
+export function Delta({ change, good = 'up' }: { change: number | null; good?: 'up' | 'down' }) {
+  if (change === null) return <span className="text-xs font-semibold text-text-tertiary" title="Nothing to compare with in the previous period">—</span>;
+  const flat = Math.abs(change) < 0.005;
+  const better = good === 'up' ? change > 0 : change < 0;
+  const color = flat ? 'text-text-tertiary' : better ? 'text-success-ink' : 'text-destructive';
+  // from almost nothing, a percentage is noise: say how many times bigger instead
+  const pctText = change >= 9.995 ? `×${num(change + 1)}` : `${change > 0 ? '+' : ''}${Math.round(change * 100)}%`;
+  return (
+    <span className={`text-xs font-semibold ${color}`} title="Against the same length of time just before">
+      {flat ? '±0%' : pctText}
+    </span>
+  );
 }
 
 /** A row of KPI tiles; they rise in one after another. */

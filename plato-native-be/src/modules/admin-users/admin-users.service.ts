@@ -1,10 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AccountService } from '../auth/account.service';
 import { forgetSessions } from '../auth/session-state';
 import { planOf } from '../credits/credit-prices';
 import { CreditsService } from '../credits/credits.service';
 import { planFit } from './plan-fit';
+import { ADMIN_TZ, tzDay, weekOf } from '../usage/tz';
 import { clearRateLimitsFor } from '../extension/extension-token';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -22,27 +27,12 @@ import {
   usageGroups,
 } from '../usage/usage-stats';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Ej = Record<string, any>;
-const notSet = (f: string) => ({ OR: [{ [f]: null }, { [f]: { isSet: false } }] });
-const day = (d: Date) => d.toISOString().slice(0, 10);
-/** Monday of the day's ISO week. */
-const weekOf = (d: string) => {
-  const t = new Date(`${d}T00:00:00Z`);
-  t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7));
-  return day(t);
-};
-const top = <K extends string>(values: string[], key: K, n = 10) => {
-  const m = new Map<string, number>();
-  for (const v of values) {
-    const k = v.trim();
-    if (k) m.set(k, (m.get(k) ?? 0) + 1);
-  }
-  return [...m]
-    .map(([v, count]) => ({ [key]: v, count }) as { [P in K]: string } & { count: number })
-    .sort((a, b) => b.count - a.count)
-    .slice(0, n);
-};
+const notSet = (f: string) => ({
+  OR: [{ [f]: null }, { [f]: { isSet: false } }],
+});
+// calendar days in the admin time zone (tz.ts), as every chart in the panel
+const day = (d: Date) => tzDay(d);
 
 // Admin panel, Users page: the seeker list, one seeker's use of Plato (from
 // existing data only: usage, chat, applications, searches, interviews, tokens),
@@ -88,47 +78,25 @@ export class AdminUsersService {
       const s = str(v);
       if (!u || !s) return;
       const d = new Date(s);
-      if (!isNaN(d.getTime()) && d > (last.get(u) ?? new Date(0))) last.set(u, d);
+      if (!isNaN(d.getTime()) && d > (last.get(u) ?? new Date(0)))
+        last.set(u, d);
     };
     for (const r of usage) put(str(r._id), r.last);
-    for (const r of [...threads, ...apps, ...runs]) put(userOf.get(str(r._id) ?? ''), r.last);
+    for (const r of [...threads, ...apps, ...runs])
+      put(userOf.get(str(r._id) ?? ''), r.last);
     return last;
-  }
-
-  /** How many users did anything in `range` (usage, chat, applications, searches): the Dashboard's "active". */
-  async activeUsers(range: Range) {
-    const at = { $gte: ejDate(range.from), $lt: ejDate(range.to) };
-    const distinct = async (
-      model: { aggregateRaw: (a: { pipeline: Ej[] }) => Promise<unknown> },
-      key: string,
-      field: string,
-    ) =>
-      ((await model.aggregateRaw({
-        pipeline: [{ $match: { [field]: at } }, { $group: { _id: `$${key}` } }],
-      })) as { _id: unknown }[])
-        .map((r) => str(r._id))
-        .filter((s): s is string => !!s);
-    const [usage, threads, apps, runs] = await Promise.all([
-      distinct(this.prisma.usageEvent, 'user_id', 'created_at'),
-      distinct(this.prisma.chatThread, 'job_seeker_id', 'updated_at'),
-      distinct(this.prisma.jobApplication, 'job_seeker_id', 'updated_at'),
-      distinct(this.prisma.discoveryRun, 'job_seeker_id', 'started_at'),
-    ]);
-    const sIds = [...new Set([...threads, ...apps, ...runs])];
-    const seekers = sIds.length
-      ? await this.prisma.jobSeeker.findMany({
-          where: { id: { in: sIds } },
-          select: { user_id: true },
-        })
-      : [];
-    return new Set([...usage, ...seekers.map((s) => s.user_id)]).size;
   }
 
   private async costAllTime(userIds: string[]) {
     const rows = (await this.prisma.usageEvent.aggregateRaw({
       pipeline: [
         { $match: { user_id: { $in: userIds.map(ejId) } } },
-        { $group: { _id: '$user_id', cost: { $sum: { $ifNull: ['$cost_usd', 0] } } } },
+        {
+          $group: {
+            _id: '$user_id',
+            cost: { $sum: { $ifNull: ['$cost_usd', 0] } },
+          },
+        },
       ],
     })) as unknown as { _id: unknown; cost: unknown }[];
     return new Map(rows.map((r) => [str(r._id) ?? '', round(num(r.cost))]));
@@ -136,7 +104,14 @@ export class AdminUsersService {
 
   /** The list rows for these users, in this order. */
   private async rows(
-    users: { id: string; full_name: string; email: string; created_at: Date; email_verified_at: Date | null; blocked_at: Date | null }[],
+    users: {
+      id: string;
+      full_name: string;
+      email: string;
+      created_at: Date;
+      email_verified_at: Date | null;
+      blocked_at: Date | null;
+    }[],
   ) {
     const ids = users.map((u) => u.id);
     const [accounts, last, cost] = await Promise.all([
@@ -172,7 +147,12 @@ export class AdminUsersService {
   } as const;
 
   /** sort = [-]createdAt (default -createdAt) | email | name | balance | costUsd | lastActiveAt. */
-  async list(q: string | undefined, status: string, page: number, sort: string) {
+  async list(
+    q: string | undefined,
+    status: string,
+    page: number,
+    sort: string,
+  ) {
     const needle = q?.trim();
     const where: Prisma.UserWhereInput = {
       AND: [
@@ -198,13 +178,27 @@ export class AdminUsersService {
     const skip = (page - 1) * PAGE_SIZE;
     const order = parseSort(
       sort,
-      ['createdAt', 'email', 'name', 'balance', 'costUsd', 'lastActiveAt'] as const,
+      [
+        'createdAt',
+        'email',
+        'name',
+        'balance',
+        'costUsd',
+        'lastActiveAt',
+      ] as const,
       '-createdAt',
     );
     const dir = order.desc ? 'desc' : 'asc';
-    if (order.field === 'balance' || order.field === 'costUsd' || order.field === 'lastActiveAt') {
+    if (
+      order.field === 'balance' ||
+      order.field === 'costUsd' ||
+      order.field === 'lastActiveAt'
+    ) {
       // ponytail: computed over every matching user; fine to a few thousand seekers
-      const all = await this.prisma.user.findMany({ where, select: this.userSelect });
+      const all = await this.prisma.user.findMany({
+        where,
+        select: this.userSelect,
+      });
       const rows = await this.rows(all);
       const key = (r: (typeof rows)[number]) =>
         order.field === 'lastActiveAt'
@@ -233,7 +227,10 @@ export class AdminUsersService {
 
   private async user(id: string) {
     const u = OBJECT_ID.test(id)
-      ? await this.prisma.user.findUnique({ where: { id }, select: this.userSelect })
+      ? await this.prisma.user.findUnique({
+          where: { id },
+          select: this.userSelect,
+        })
       : null;
     if (!u) throw new NotFoundException('No such user');
     return u;
@@ -246,86 +243,141 @@ export class AdminUsersService {
   async analytics(id: string, range: Range) {
     const u = await this.prisma.user.findUnique({
       where: { id: OBJECT_ID.test(id) ? id : '000000000000000000000000' },
-      select: { ...this.userSelect, blocked_reason: true, job_seeker: { select: { id: true } } },
+      select: {
+        ...this.userSelect,
+        blocked_reason: true,
+        job_seeker: { select: { id: true } },
+      },
     });
     if (!u) throw new NotFoundException('No such user');
     const seekerId = u.job_seeker?.id;
     const inRange = { gte: range.from, lt: range.to };
     const bySeeker = <T>(fn: (sid: string) => Promise<T>, none: T) =>
       seekerId ? fn(seekerId) : Promise.resolve(none);
-    const [acc, usage, spent, last, usageDays, runs, apps, threads, messages, messageDays, interviews, prefs, exp, cv] =
-      await Promise.all([
-        this.prisma.creditAccount.findUnique({ where: { user_id: id }, select: { plan: true, balance: true } }),
-        usageGroups(this.prisma, range, ['feature'], { userId: id }),
-        tokensSpentBy(this.prisma, range, [id]),
-        this.lastActive([id]),
-        this.prisma.usageEvent.aggregateRaw({
-          pipeline: [
-            { $match: { user_id: ejId(id), created_at: { $gte: ejDate(range.from), $lt: ejDate(range.to) } } },
-            { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$created_at' } } } },
-          ],
-        }) as unknown as Promise<{ _id: unknown }[]>,
-        bySeeker(
-          (sid) =>
-            this.prisma.discoveryRun.findMany({
-              where: { job_seeker_id: sid, started_at: inRange },
-              select: { query: true, started_at: true },
-              take: 2000,
-            }),
-          [],
-        ),
-        bySeeker(
-          (sid) =>
-            this.prisma.jobApplication.findMany({
-              where: { job_seeker_id: sid, created_at: inRange },
-              select: { status: true, engine: true, created_at: true },
-              take: 10000,
-            }),
-          [],
-        ),
-        bySeeker((sid) => this.prisma.chatThread.count({ where: { job_seeker_id: sid, created_at: inRange } }), 0),
-        bySeeker(
-          (sid) => this.prisma.chatMessage.count({ where: { thread: { job_seeker_id: sid }, created_at: inRange } }),
-          0,
-        ),
-        bySeeker(
-          (sid) =>
-            this.prisma.chatMessage.findMany({
-              where: { thread: { job_seeker_id: sid }, role: 'USER', created_at: inRange },
-              select: { created_at: true },
-              take: 5000,
-            }),
-          [],
-        ),
-        bySeeker((sid) => this.prisma.mockInterview.count({ where: { job_seeker_id: sid, created_at: inRange } }), 0),
-        bySeeker(
-          (sid) =>
-            this.prisma.jobSeekerPreference.findUnique({
-              where: { job_seeker_id: sid },
-              select: { years_experience: true },
-            }),
-          null,
-        ),
-        bySeeker(
-          (sid) =>
-            this.prisma.jobSeekerExperience.findMany({
-              where: { job_seeker_id: sid },
-              select: { title: true, end_date: true },
-              orderBy: { start_date: 'desc' },
-              take: 10,
-            }),
-          [],
-        ),
-        bySeeker(
-          (sid) =>
-            this.prisma.jobSeekerDocument.findFirst({
-              where: { job_seeker_id: sid, type: 'CV_RESUME' },
-              select: { name: true },
-              orderBy: { created_at: 'desc' },
-            }),
-          null,
-        ),
-      ]);
+    const [
+      acc,
+      usage,
+      spent,
+      last,
+      usageDays,
+      runs,
+      apps,
+      threads,
+      messages,
+      messageDays,
+      interviews,
+      prefs,
+      exp,
+      cv,
+    ] = await Promise.all([
+      this.prisma.creditAccount.findUnique({
+        where: { user_id: id },
+        select: { plan: true, balance: true },
+      }),
+      usageGroups(this.prisma, range, ['feature'], { userId: id }),
+      tokensSpentBy(this.prisma, range, [id]),
+      this.lastActive([id]),
+      this.prisma.usageEvent.aggregateRaw({
+        pipeline: [
+          {
+            $match: {
+              user_id: ejId(id),
+              created_at: { $gte: ejDate(range.from), $lt: ejDate(range.to) },
+            },
+          },
+          {
+            $group: {
+              _id: {
+                $dateToString: {
+                  format: '%Y-%m-%d',
+                  date: '$created_at',
+                  timezone: ADMIN_TZ,
+                },
+              },
+            },
+          },
+        ],
+      }) as unknown as Promise<{ _id: unknown }[]>,
+      bySeeker(
+        (sid) =>
+          this.prisma.discoveryRun.findMany({
+            where: { job_seeker_id: sid, started_at: inRange },
+            select: { started_at: true },
+            take: 2000,
+          }),
+        [],
+      ),
+      bySeeker(
+        (sid) =>
+          this.prisma.jobApplication.findMany({
+            where: { job_seeker_id: sid, created_at: inRange },
+            select: { status: true, engine: true, created_at: true },
+            take: 10000,
+          }),
+        [],
+      ),
+      bySeeker(
+        (sid) =>
+          this.prisma.chatThread.count({
+            where: { job_seeker_id: sid, created_at: inRange },
+          }),
+        0,
+      ),
+      bySeeker(
+        (sid) =>
+          this.prisma.chatMessage.count({
+            where: { thread: { job_seeker_id: sid }, created_at: inRange },
+          }),
+        0,
+      ),
+      bySeeker(
+        (sid) =>
+          this.prisma.chatMessage.findMany({
+            where: {
+              thread: { job_seeker_id: sid },
+              role: 'USER',
+              created_at: inRange,
+            },
+            select: { created_at: true },
+            take: 5000,
+          }),
+        [],
+      ),
+      bySeeker(
+        (sid) =>
+          this.prisma.mockInterview.count({
+            where: { job_seeker_id: sid, created_at: inRange },
+          }),
+        0,
+      ),
+      bySeeker(
+        (sid) =>
+          this.prisma.jobSeekerPreference.findUnique({
+            where: { job_seeker_id: sid },
+            select: { years_experience: true },
+          }),
+        null,
+      ),
+      bySeeker(
+        (sid) =>
+          this.prisma.jobSeekerExperience.findMany({
+            where: { job_seeker_id: sid },
+            select: { title: true, end_date: true },
+            orderBy: { start_date: 'desc' },
+            take: 10,
+          }),
+        [],
+      ),
+      bySeeker(
+        (sid) =>
+          this.prisma.jobSeekerDocument.findFirst({
+            where: { job_seeker_id: sid, type: 'CV_RESUME' },
+            select: { name: true },
+            orderBy: { created_at: 'desc' },
+          }),
+        null,
+      ),
+    ]);
 
     // "Visits": distinct days with any activity in the range
     const days = new Set<string>([
@@ -338,9 +390,11 @@ export class AdminUsersService {
     const weeks = new Map<string, number>();
     for (const d of days) weeks.set(weekOf(d), (weeks.get(weekOf(d)) ?? 0) + 1);
 
-    const queries = runs.map((r) => (r.query ?? {}) as { titles?: string[]; requestedTitles?: string[]; locations?: string[] });
     const count = (vals: string[]) =>
-      vals.reduce<Record<string, number>>((m, v) => ((m[v] = (m[v] ?? 0) + 1), m), {});
+      vals.reduce<Record<string, number>>(
+        (m, v) => ((m[v] = (m[v] ?? 0) + 1), m),
+        {},
+      );
     const current = exp.find((e) => !e.end_date) ?? exp[0];
     const costUsd = round(usage.reduce((s, r) => s + r.costUsd, 0));
     return {
@@ -368,11 +422,8 @@ export class AdminUsersService {
         events: f.events,
         costUsd: f.costUsd,
       })),
-      searches: {
-        total: runs.length,
-        topTitles: top(queries.flatMap((q) => q.requestedTitles ?? q.titles ?? []), 'title'),
-        topLocations: top(queries.flatMap((q) => q.locations ?? []), 'location'),
-      },
+      // how many, never what: the owner does not look at what a seeker searched for
+      searches: { total: runs.length },
       applications: {
         total: apps.length,
         byStatus: count(apps.map((a) => a.status)),
@@ -385,7 +436,9 @@ export class AdminUsersService {
       // minimal on purpose: the owner does not want the personal profile shown here
       profile: {
         ...(current?.title && { headline: current.title }),
-        ...(prefs?.years_experience && { yearsExperience: prefs.years_experience }),
+        ...(prefs?.years_experience && {
+          yearsExperience: prefs.years_experience,
+        }),
         ...(cv?.name && { cvFile: cv.name }),
       },
     };
@@ -415,7 +468,10 @@ export class AdminUsersService {
   async verifyEmail(id: string) {
     const u = await this.user(id);
     if (!u.email_verified_at)
-      await this.prisma.user.update({ where: { id }, data: { email_verified_at: new Date() } });
+      await this.prisma.user.update({
+        where: { id },
+        data: { email_verified_at: new Date() },
+      });
     await this.credits.account(id);
     return this.row(id);
   }
@@ -437,8 +493,11 @@ export class AdminUsersService {
     const sid = u.job_seeker?.id;
     const [devices, logs] = await Promise.all([
       sid
-        ? this.prisma.extensionDevice.findMany({ where: { job_seeker_id: sid }, select: { id: true } })
-        : Promise.resolve([]),
+        ? this.prisma.extensionDevice.findMany({
+            where: { job_seeker_id: sid },
+            select: { id: true },
+          })
+        : Promise.resolve([] as { id: string }[]),
       // ponytail: the only IPs Plato keeps for a seeker are on their error logs
       this.prisma.errorLog.findMany({
         where: {
@@ -451,7 +510,10 @@ export class AdminUsersService {
         take: 200,
       }),
     ]);
-    const ips = [...new Set(logs.map((l) => l.ip!).filter(Boolean))].slice(0, 20);
+    const ips = [...new Set(logs.map((l) => l.ip!).filter(Boolean))].slice(
+      0,
+      20,
+    );
     return {
       cleared: clearRateLimitsFor([
         u.id,
@@ -469,10 +531,19 @@ export class AdminUsersService {
    */
   async engagement(id: string, range: Range) {
     const u = await this.user(id);
-    const days = { gte: range.from.toISOString().slice(0, 10), lte: new Date(range.to.getTime() - 1).toISOString().slice(0, 10) };
+    const days = {
+      gte: tzDay(range.from),
+      lte: tzDay(new Date(range.to.getTime() - 1)),
+    };
     const [activity, firstTracked, acc, groups, everyone] = await Promise.all([
-      this.prisma.pageActivity.findMany({ where: { user_id: id, day: days }, select: { day: true, page: true, views: true, seconds: true } }),
-      this.prisma.pageActivity.findFirst({ orderBy: { day: 'asc' }, select: { day: true } }),
+      this.prisma.pageActivity.findMany({
+        where: { user_id: id, day: days },
+        select: { day: true, page: true, views: true, seconds: true },
+      }),
+      this.prisma.pageActivity.findFirst({
+        orderBy: { day: 'asc' },
+        select: { day: true },
+      }),
       // a read: no account is opened for a seeker who has none
       this.prisma.creditAccount.findUnique({ where: { user_id: id } }),
       usageGroups(this.prisma, range, ['user'], { userId: id }),
@@ -492,15 +563,21 @@ export class AdminUsersService {
       byPage.set(a.page, p);
     }
     const seconds = [...byDay.values()].reduce((s, d) => s + d.seconds, 0);
-    const activeDays = [...byDay.values()].filter((d) => d.seconds > 0 || d.views > 0).length;
+    const activeDays = [...byDay.values()].filter(
+      (d) => d.seconds > 0 || d.views > 0,
+    ).length;
 
     // this billing period, from the ledger
     const fit = acc ? await this.planFitOf(id, acc) : null;
 
     const cost = groups.reduce((s, g) => s + g.costUsd, 0);
     const perUser = new Map<string, number>();
-    for (const g of everyone) if (g.userId) perUser.set(g.userId, (perUser.get(g.userId) ?? 0) + g.costUsd);
-    const avg = perUser.size ? [...perUser.values()].reduce((s, v) => s + v, 0) / perUser.size : null;
+    for (const g of everyone)
+      if (g.userId)
+        perUser.set(g.userId, (perUser.get(g.userId) ?? 0) + g.costUsd);
+    const avg = perUser.size
+      ? [...perUser.values()].reduce((s, v) => s + v, 0) / perUser.size
+      : null;
 
     return {
       user: { id: u.id },
@@ -509,8 +586,12 @@ export class AdminUsersService {
       timeInApp: {
         seconds,
         activeDays,
-        avgSecondsPerActiveDay: activeDays ? Math.round(seconds / activeDays) : null,
-        byDay: [...byDay].sort(([a], [b]) => a.localeCompare(b)).map(([day, d]) => ({ day, seconds: d.seconds, views: d.views })),
+        avgSecondsPerActiveDay: activeDays
+          ? Math.round(seconds / activeDays)
+          : null,
+        byDay: [...byDay]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([day, d]) => ({ day, seconds: d.seconds, views: d.views })),
       },
       pages: [...byPage]
         .map(([page, p]) => ({ page, views: p.views, seconds: p.seconds }))
@@ -525,16 +606,35 @@ export class AdminUsersService {
     };
   }
 
-  private async planFitOf(id: string, acc: { plan: string; period_start: Date; period_end: Date; balance: number }) {
+  private async planFitOf(
+    id: string,
+    acc: {
+      plan: string;
+      period_start: Date;
+      period_end: Date;
+      balance: number;
+    },
+  ) {
     const [ledger, ranOut] = await Promise.all([
       this.prisma.creditLedger.groupBy({
         by: ['kind'],
-        where: { user_id: id, created_at: { gte: acc.period_start }, kind: { in: ['consume', 'topup'] } },
+        where: {
+          user_id: id,
+          created_at: { gte: acc.period_start },
+          kind: { in: ['consume', 'topup'] },
+        },
         _sum: { amount: true },
       }),
-      this.prisma.errorLog.count({ where: { user_id: id, status: 402, created_at: { gte: acc.period_start } } }),
+      this.prisma.errorLog.count({
+        where: {
+          user_id: id,
+          status: 402,
+          created_at: { gte: acc.period_start },
+        },
+      }),
     ]);
-    const sum = (k: string) => ledger.find((l) => l.kind === k)?._sum.amount ?? 0;
+    const sum = (k: string) =>
+      ledger.find((l) => l.kind === k)?._sum.amount ?? 0;
     const info = planOf(acc.plan);
     return planFit({
       plan: acc.plan,
@@ -552,7 +652,9 @@ export class AdminUsersService {
   static reasonOf(body: unknown) {
     const r = (body as { reason?: unknown } | null)?.reason;
     if (typeof r !== 'string' || r.trim().length < 3 || r.length > 300)
-      throw new BadRequestException('A reason of 3 to 300 characters is needed.');
+      throw new BadRequestException(
+        'A reason of 3 to 300 characters is needed.',
+      );
     return r.trim();
   }
 }

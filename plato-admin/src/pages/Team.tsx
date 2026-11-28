@@ -9,9 +9,10 @@ import { api, errorMessage } from '../lib/api';
 import { date, dateTime, num } from '../lib/format';
 import { useSearchState } from '../lib/searchState';
 import type { AdminRow, Invite, PageInfo, Role } from '../lib/types';
+import { AuditLog } from './AuditLog';
 import { useApi } from '../lib/useApi';
 
-type Tab = 'admins' | 'roles' | 'invites';
+type Tab = 'admins' | 'roles' | 'invites' | 'audit';
 
 /** Super admin only: admins, roles and invitations. */
 export default function Team() {
@@ -46,11 +47,13 @@ export default function Team() {
           { value: 'admins', label: 'Admins' },
           { value: 'roles', label: 'Roles' },
           { value: 'invites', label: 'Invites' },
+          { value: 'audit', label: 'Audit log' },
         ]}
       />
       {tab === 'admins' && <Admins roles={roles.data ?? []} />}
       {tab === 'roles' && <Roles roles={roles} onEdit={setRoleDialog} />}
       {tab === 'invites' && <Invites key={invitesTick} />}
+      {tab === 'audit' && <AuditLog />}
 
       <Dialog open={roleDialog !== null} onClose={() => setRoleDialog(null)} title={roleDialog === 'new' ? 'New role' : `Edit ${roleDialog?.name ?? ''}`}>
         {roleDialog !== null && (

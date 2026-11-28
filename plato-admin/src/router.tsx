@@ -13,7 +13,6 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const UsageLayout = lazy(() => import('./pages/usage/UsageLayout'));
 const UsageOverview = lazy(() => import('./pages/usage/UsageOverview'));
 const UsageProvider = lazy(() => import('./pages/usage/UsageProvider'));
-const UsageUsers = lazy(() => import('./pages/usage/UsageUsers'));
 const UsageSearches = lazy(() => import('./pages/usage/UsageSearches'));
 const Plans = lazy(() => import('./pages/Plans'));
 const Credits = lazy(() => import('./pages/Credits'));
@@ -53,7 +52,6 @@ export const router = createBrowserRouter([
             element: s(<UsageLayout />),
             children: [
               { index: true, element: s(<UsageOverview />) },
-              { path: 'users', element: s(<UsageUsers />) },
               { path: 'searches', element: s(<UsageSearches />) },
               { path: ':provider', element: s(<UsageProvider />) },
             ],
@@ -66,7 +64,6 @@ export const router = createBrowserRouter([
         element: <RequirePage page="users" />,
         children: [
           { path: 'users', element: s(<UsersList />) },
-          { path: 'users/rate-limits', element: s(<RateLimits />) },
           { path: 'users/:id', element: s(<UserDetail />) },
         ],
       },
@@ -84,7 +81,13 @@ export const router = createBrowserRouter([
           },
         ],
       },
-      { element: <RequirePage page="admin" />, children: [{ path: 'team', element: s(<Team />) }] },
+      {
+        element: <RequirePage page="admin" />,
+        children: [
+          { path: 'team', element: s(<Team />) },
+          { path: 'users/rate-limits', element: s(<RateLimits />) },
+        ],
+      },
       { path: '*', element: <NotFound /> },
     ],
   },

@@ -40,15 +40,50 @@ export type Invite = {
 export type PageInfo = { key: string; label: string };
 
 // ---------- Dashboard ----------
+export type PeriodErrors = { server: number; outOfTokens: number; client: number; extension: number };
+export type SearchAverages = { total: number; avgCostUsd: number | null; avgTokens: number | null; avgDurationSec: number | null };
 export type Overview = {
   users: { total: number; new: number; verified: number; blocked: number; activeInRange: number };
+  revenue: { plansMonthlyUsd: number; paidUsers: number; paymentsConnected: boolean };
   costUsd: number;
-  revenueUsdMonthly: number;
+  costMonthlyRunRateUsd: number;
   byProvider: { provider: string; costUsd: number }[];
   applications: { total: number; submitted: number; failed: number };
-  errors: { total: number; platform: { web: number; extension: number; api: number } };
+  errors: PeriodErrors;
   perActiveUser: { costUsd: number | null; tokens: number | null };
-  searches: { total: number; avgCostUsd: number | null; avgTokens: number | null; avgDurationSec: number | null };
+  searches: SearchAverages;
+  previous: {
+    from: string;
+    to: string;
+    signups: number;
+    active: number;
+    costUsd: number;
+    applications: { total: number; submitted: number; failed: number };
+    errors: PeriodErrors;
+    searches: SearchAverages;
+    perActiveUser: { costUsd: number | null; tokens: number | null };
+  };
+  changes: Record<
+    'signups' | 'active' | 'costUsd' | 'searches' | 'avgSearchCostUsd' | 'avgSearchSec' | 'costPerActiveUser' | 'applications' | 'serverErrors',
+    number | null
+  >;
+  byDay: { day: string; signups: number; active: number; costUsd: number; searches: number }[];
+  funnel: { key: string; label: string; count: number; ofSignups: number | null; ofPrevious: number | null }[];
+  topUsers: { userId: string; email: string | null; name: string | null; plan: string; costUsd: number; priceUsd: number }[];
+};
+export type AttentionItem = { kind: string; severity: 'high' | 'medium'; title: string; detail: string; link: string };
+export type RetentionRow = { week: string; users: number; weeks: (number | null)[] };
+
+// ---------- Admin audit log ----------
+export type AuditRow = {
+  id: string;
+  adminId: string | null;
+  adminEmail: string | null;
+  action: string;
+  target: Record<string, unknown> | null;
+  detail: unknown;
+  ip: string | null;
+  createdAt: string;
 };
 
 // ---------- Searches (job searches: counts and cost, never the query) ----------
@@ -242,11 +277,7 @@ export type UserAnalytics = {
     events: number;
   };
   features: FeatureCost[];
-  searches: {
-    total: number;
-    topTitles: CountBy<'title'>[];
-    topLocations: CountBy<'location'>[];
-  };
+  searches: { total: number };
   applications: { total: number; byStatus: Record<string, number>; byEngine: Record<string, number> };
   chat: { threads: number; messages: number };
   interviews: number;
@@ -276,6 +307,22 @@ export type ErrorLog = {
   userAgent?: string | null;
   createdAt: string;
 };
+export type ErrorGroup = {
+  platform: Platform;
+  module: string;
+  status: number;
+  code: string | null;
+  message: string;
+  count: number;
+  firstAt: string;
+  lastAt: string;
+  isNew: boolean;
+  sampleId: string | null;
+  method: string | null;
+  path: string | null;
+  explanation: string | null;
+};
+export type ErrorGroups = Paged<ErrorGroup> & { startedAt: string };
 export type ExtensionLog = ErrorLog & { source: 'client' | 'server' | 'apply' };
 export type LogFacets = {
   modules: { module: string; count: number }[];

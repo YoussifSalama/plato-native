@@ -125,6 +125,42 @@ export class AdminManageService {
     return { ok: true as const };
   }
 
+  // ---- audit log --------------------------------------------------------------
+
+  async audit(q: string | undefined, page: number) {
+    const needle = q?.trim();
+    const where = needle
+      ? {
+          OR: [
+            { admin_email: { contains: needle, mode: 'insensitive' as const } },
+            { action: { contains: needle, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
+    const [rows, total] = await Promise.all([
+      this.prisma.adminAuditLog.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * 50,
+        take: 50,
+      }),
+      this.prisma.adminAuditLog.count({ where }),
+    ]);
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        adminId: r.admin_id,
+        adminEmail: r.admin_email,
+        action: r.action,
+        target: r.target,
+        detail: r.detail,
+        ip: r.ip,
+        createdAt: r.created_at,
+      })),
+      total,
+    };
+  }
+
   // ---- roles ----------------------------------------------------------------
 
   async listRoles() {

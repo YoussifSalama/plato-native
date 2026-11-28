@@ -72,6 +72,7 @@ export const SHARED_MODELS = [
   'adminUser',
   'adminRole',
   'adminInvite',
+  'adminAuditLog',
 ];
 
 // Where each seeker's files sit in object storage (documents, proof screenshots, resumes Plato drew).

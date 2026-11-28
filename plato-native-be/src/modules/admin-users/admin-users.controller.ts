@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Body,
   Controller,
   Delete,
@@ -9,11 +8,10 @@ import {
   Param,
   Post,
   Query,
-  Req,
   UseGuards,
 } from '@nestjs/common';
-import { AdminGuard, AdminPage, type AdminRequest } from '../admin/admin-auth.guard';
-import { isAdminLimiter, listRateLimits, rateLimiters } from '../extension/extension-token';
+import { AdminGuard, AdminPage } from '../admin/admin-auth.guard';
+import { listRateLimits, rateLimiters } from '../extension/extension-token';
 import { pageOf, parseRange } from '../usage/usage-stats';
 import { AdminUsersService } from './admin-users.service';
 
@@ -33,16 +31,29 @@ export class AdminUsersController {
     @Query('page') page?: string,
     @Query('sort') sort?: string,
   ) {
-    return this.users.list(q, STATUSES.has(status) ? status : 'all', pageOf(page), sort ?? '');
+    return this.users.list(
+      q,
+      STATUSES.has(status) ? status : 'all',
+      pageOf(page),
+      sort ?? '',
+    );
   }
 
   @Get(':id/analytics')
-  analytics(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
+  analytics(
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
     return this.users.analytics(id, parseRange(from, to));
   }
 
   @Get(':id/engagement')
-  engagement(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
+  engagement(
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
     return this.users.engagement(id, parseRange(from, to));
   }
 
@@ -77,28 +88,23 @@ export class AdminUsersController {
   }
 }
 
-// The in-memory rate limits (IP / user / email keys), on the Users page.
+// The in-memory rate limits (IP / user / email keys): the super admin's, like the admin section.
+// Seeker support keeps "Clear rate limits" on a user's page (page "users"), which never lifts the
+// admin panel's own sign-in limits.
 @Controller('admin/rate-limits')
 @UseGuards(AdminGuard)
-@AdminPage('users')
+@AdminPage('admin')
 export class AdminRateLimitsController {
-  // The admin panel's own sign-in limits (admin-*) are the super admin's alone:
-  // clearing them would let one admin lift the brute-force limit on another's login.
   @Get()
-  list(@Req() req: AdminRequest, @Query('q') q?: string) {
-    return listRateLimits(q, Date.now(), req.admin.isSuper);
+  list(@Query('q') q?: string) {
+    return listRateLimits(q);
   }
 
   @Delete()
-  clear(
-    @Req() req: AdminRequest,
-    @Query('limiter') limiter?: string,
-    @Query('key') key?: string,
-  ) {
+  clear(@Query('limiter') limiter?: string, @Query('key') key?: string) {
     const l = limiter ? rateLimiters.get(limiter) : undefined;
-    if (!l || !key) throw new BadRequestException('limiter and key are required');
-    if (isAdminLimiter(l.name) && !req.admin.isSuper)
-      throw new ForbiddenException("Only the super admin can clear the admin panel's sign-in limits.");
+    if (!l || !key)
+      throw new BadRequestException('limiter and key are required');
     l.reset(key);
     return { ok: true };
   }

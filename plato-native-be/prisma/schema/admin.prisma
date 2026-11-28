@@ -65,3 +65,23 @@ model AdminInvite {
   @@index([email])
   @@map("admin_invites")
 }
+
+// Who did what in the admin panel: every successful write by a signed-in admin, each sign-in and
+// each super-key reset. Append-only; read by the super admin (Team > Audit log).
+model AdminAuditLog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  admin_id    String?  @db.ObjectId
+  admin_email String?
+  // "POST /admin/users/:id/block" (the route, not the filled-in URL)
+  action      String
+  // the route's ids, e.g. { id: "<user id>" }
+  target      Json?
+  // the request body, secrets removed, at most 8 KB
+  detail      Json?
+  ip          String?
+  created_at  DateTime @default(now())
+
+  @@index([created_at])
+  @@index([admin_id, created_at])
+  @@map("admin_audit_logs")
+}

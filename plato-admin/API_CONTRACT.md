@@ -47,7 +47,7 @@ Every admin endpoint declares its page with `@AdminPage('<key>')`; super admin p
 | POST | `/admin/auth/login` | `{ email, password }` | `{ next: "totp" \| "totp_setup" }` + pending cookie, or 403 INACTIVE, or 401 generic |
 | GET | `/admin/auth/totp/setup` | (pending cookie, step totp_setup) | `{ otpauthUrl, secret }` (secret kept as pending on the admin until verified) |
 | POST | `/admin/auth/totp/verify` | `{ code }` (pending cookie) | sets `plato_admin`, clears pending, returns `Me` |
-| POST | `/admin/auth/logout` | | `{ ok: true }` |
+| POST | `/admin/auth/logout` | | `{ ok: true }` — clears the cookies **and** ends every session of this admin on the server (`sessions_valid_after`), so a copied token is dead too |
 | GET | `/admin/auth/me` | | `Me` |
 | POST | `/admin/auth/super-reset` | `{ email, superKey, newPassword? }` | `{ ok: true }` — clears the super admin's TOTP (and sets the password if given). Generic 401 on any mismatch. |
 
@@ -84,10 +84,33 @@ TOTP: RFC 6238, SHA-1, 6 digits, 30 s, ±1 step window, issuer `Plato Admin`. Ma
 
 ## Dashboard — page `dashboard`
 
-`GET /admin/overview?from&to` →
-`{ users: { total, new, verified, blocked, activeInRange }, costUsd, revenueUsdMonthly, byProvider: [{ provider, costUsd }], applications: { total, submitted, failed }, errors: { total, platform: { web, extension, api } }, perActiveUser: { costUsd, tokens }, searches: { total, avgCostUsd, avgTokens, avgDurationSec } }`
+Days everywhere in the panel are calendar days in `ADMIN_TZ` (default `Africa/Cairo`, summer time included): a
+bare `from`/`to` date is that whole day there, and every `byDay` / `day` is bucketed there.
 
-`from`/`to` are ISO dates everywhere; default last 30 days.
+`GET /admin/overview?from&to` →
+```
+{ users: { total, new, verified, blocked, activeInRange },
+  revenue: { plansMonthlyUsd, paidUsers, paymentsConnected },   // plans set by hand until payments exist: not money received
+  costUsd, costMonthlyRunRateUsd,                               // the range's cost, and scaled to 30 days
+  byProvider: [{ provider, costUsd }],
+  applications: { total, submitted, failed },
+  errors: { server, outOfTokens, client, extension },           // 5xx (ours) | 402 | other 4xx | extension client reports
+  perActiveUser: { costUsd, tokens },
+  searches: { total, avgCostUsd, avgTokens, avgDurationSec },
+  previous: { from, to, signups, active, costUsd, applications, errors, searches, perActiveUser },  // same length, just before
+  changes: { signups, active, costUsd, searches, avgSearchCostUsd, avgSearchSec, costPerActiveUser, applications, serverErrors },  // 0.12 = +12%, null = nothing to compare
+  byDay: [{ day, signups, active, costUsd, searches }],
+  funnel: [{ key, label, count, ofSignups, ofPrevious }],      // signup → verified → onboarded → searched → applied → interview, for signups in the range
+  topUsers: [{ userId, email, name, plan, costUsd, priceUsd }] }
+```
+"Active" = did anything that day: usage events, chat, applications, searches, page visits (one definition everywhere).
+
+| Method | Path | Result |
+|---|---|---|
+| GET | `/admin/attention` | `[{ kind, severity: "high"\|"medium", title, detail, link }]` — 5xx spike (24 h vs the week before), searches stuck > 15 min, a provider's 24 h spend > 2× its daily average, seekers costing more than their plan (30 days), seekers who ran out of tokens this week and bought nothing |
+| GET | `/admin/retention?weeks=8` | `[{ week, users, weeks: [share \| null] }]` — signup-week cohorts (Monday, `ADMIN_TZ`) and the share active in each week after |
+
+Heavy reads (overview periods, activity, retention, attention, searches) are cached in memory for 60 s per process.
 
 ## Usage — page `usage`
 
@@ -146,14 +169,14 @@ and every existing session is refused (`403 { code: "BLOCKED", message: "Your ac
 | Method | Path | Result |
 |---|---|---|
 | GET | `/admin/users?q&status=all\|verified\|unverified\|blocked&page&sort` | `{ items: [{ id, name, email, createdAt, verified, blocked, plan, balance, lastActiveAt, costUsd }], total }` |
-| GET | `/admin/users/:id/analytics?from&to` | `{ user: { id, name, email, createdAt, verified, blocked, blockedReason, plan, balance }, activity: { lastActiveAt, activeDays, activeDaysByWeek: [{ week, days }], events }, features: [{ feature, events, costUsd }], searches: { total, topTitles: [{ title, count }], topLocations: [{ location, count }] }, applications: { total, byStatus: {...}, byEngine: {...} }, chat: { threads, messages }, interviews: number, spentTokens, costUsd, profile: { headline?, yearsExperience?, cvFile? } }` |
+| GET | `/admin/users/:id/analytics?from&to` | `{ user: { id, name, email, createdAt, verified, blocked, blockedReason, plan, balance }, activity: { lastActiveAt, activeDays, activeDaysByWeek: [{ week, days }], events }, features: [{ feature, events, costUsd }], searches: { total }, applications: { total, byStatus: {...}, byEngine: {...} }, chat: { threads, messages }, interviews: number, spentTokens, costUsd, profile: { headline?, yearsExperience?, cvFile? } }` |
 | GET | `/admin/users/:id/engagement?from&to` | `{ user: { id }, trackedSince, timeInApp: { seconds, activeDays, avgSecondsPerActiveDay, byDay: [{ day, seconds, views }] }, pages: [{ page, views, seconds }], planFit: PlanFit \| null, cost: { costUsd, avgActiveUserCostUsd, vsAverage } }` |
 | POST | `/admin/users/:id/block` | `{ reason }` → user row |
 | POST | `/admin/users/:id/unblock` | user row |
 | POST | `/admin/users/:id/verify-email` | user row |
 | POST | `/admin/users/:id/logout-all` | `{ ok }` |
-| GET | `/admin/rate-limits?q` | `[{ limiter, key, hits, resetAt }]` — current in-memory limits (IP / user / email keys) |
-| DELETE | `/admin/rate-limits?limiter&key` | `{ ok }` |
+| GET | `/admin/rate-limits?q` | `[{ limiter, key, hits, resetAt }]` — current in-memory limits (IP / user / email keys). **Super admin only** (page `admin`): it holds the panel's own sign-in limits |
+| DELETE | `/admin/rate-limits?limiter&key` | `{ ok }` — super admin only |
 | POST | `/admin/users/:id/clear-rate-limits` | `{ cleared: n }` — every limiter key tied to that user, email or last IPs |
 
 "Visits" = distinct days with any activity (usage events, chat messages, applications, searches).
@@ -185,11 +208,25 @@ Apply stops already stored in `ApplyBatchItem.detail.stops` are shown in the ext
 | Method | Path | Result |
 |---|---|---|
 | GET | `/admin/logs?platform&module&status&q&from&to&sort=newest\|oldest&page` | `{ items: ErrorLog[], total }` |
+| GET | `/admin/logs/groups?platform&module&status&q&from&to&sort=count\|last&page` | `{ startedAt, items: [{ platform, module, status, code, message, count, firstAt, lastAt, isNew, sampleId, method, path, explanation }], total }` — identical errors collapsed; `isNew` = first seen after this server started (a deploy) |
 | GET | `/admin/logs/facets?platform` | `{ modules: [{ module, count }], statuses: [{ status, count }] }` |
 | GET | `/admin/logs/:id` | `ErrorLog` |
 | GET | `/admin/logs/extension/all?q&from&to&page` | `{ items: (ErrorLog & { source: "client" \| "server" \| "apply" })[], total }` |
 | GET | `/admin/logs/extension/users?q&page` | `{ items: [{ userId, email, name, errors, lastAt, topCodes: [{ code, count }] }], total }` |
 | GET | `/admin/logs/extension/users/:userId?page` | `{ user, items: [...same as extension/all] , total }` |
+
+Retention: error logs expire after `ERROR_LOG_RETENTION_DAYS` (default 90, `0` = keep) through a Mongo TTL index
+`error_logs_ttl` the API creates at boot (`prisma db push` drops it; the next start puts it back).
+
+## Audit log — page `admin` (super only)
+
+Every successful admin write (`POST`/`PATCH`/`PUT`/`DELETE` under `/admin`, not the sign-in steps), plus each finished
+sign-in (`/admin/auth/totp/verify`) and super-key reset, is stored in `admin_audit_logs`: admin, route pattern
+(`POST /admin/users/:id/block`), route ids, the body without secrets, IP, time.
+
+| Method | Path | Result |
+|---|---|---|
+| GET | `/admin/audit?q&page` | `{ items: [{ id, adminId, adminEmail, action, target, detail, ip, createdAt }], total }` — `q` matches the admin's email or the action |
 
 Pagination everywhere: `page` 1-based, 50 per page.
 

@@ -6,6 +6,7 @@ import { date, money, num1 } from '../../lib/format';
 import { useSearchState } from '../../lib/searchState';
 import type { Paged, UserRow, UserStatus } from '../../lib/types';
 import { useApi } from '../../lib/useApi';
+import { useAuth } from '../../lib/auth';
 
 const STATUSES: { value: UserStatus; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -21,6 +22,7 @@ export function UserStatusChip({ u }: { u: { blocked: boolean; verified: boolean
 }
 
 export default function UsersList() {
+  const { me } = useAuth();
   const nav = useNavigate();
   const [s, set] = useSearchState({ q: '', status: 'all', sort: '-createdAt', page: '1' });
   const page = Number(s.page) || 1;
@@ -32,9 +34,12 @@ export default function UsersList() {
         title="Users"
         description="Every seeker account. Open one for their activity and account actions."
         actions={
-          <Link to="/users/rate-limits" className="btn-outline">
-            <Gauge className="size-4" /> Rate limits
-          </Link>
+          // the limiter list is the super admin's (it holds the panel's own sign-in limits too)
+          me?.isSuper && (
+            <Link to="/users/rate-limits" className="btn-outline">
+              <Gauge className="size-4" /> Rate limits
+            </Link>
+          )
         }
       />
       <Section

@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AdminAuditInterceptor } from './admin-audit.interceptor';
 import { AdminAuthController } from './admin-auth.controller';
 import { AdminGuard } from './admin-auth.guard';
 import { AdminAuthService } from './admin-auth.service';
@@ -18,7 +20,14 @@ import { AdminTokens } from './admin-tokens';
     AdminPagesController,
     AdminManageController,
   ],
-  providers: [AdminTokens, AdminGuard, AdminAuthService, AdminManageService],
+  providers: [
+    AdminTokens,
+    AdminGuard,
+    AdminAuthService,
+    AdminManageService,
+    // every successful admin write is recorded (Team > Audit log)
+    { provide: APP_INTERCEPTOR, useClass: AdminAuditInterceptor },
+  ],
   exports: [AdminTokens, AdminGuard],
 })
 export class AdminModule {}

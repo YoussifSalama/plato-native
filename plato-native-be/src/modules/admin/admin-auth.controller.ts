@@ -140,8 +140,14 @@ export class AdminAuthController {
 
   @Post('logout')
   @HttpCode(200)
-  logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     this.origin(req);
+    // The token itself stops working, not only the cookie: a copied token is dead too.
+    // Ends every session of this admin (they sign in again on each device).
+    const claims = await this.tokens.verifySession(
+      req.cookies?.[ADMIN_SESSION_COOKIE],
+    );
+    if (claims) await this.auth.endSessions(claims.sub);
     clearAdminCookie(res, ADMIN_SESSION_COOKIE);
     clearAdminCookie(res, ADMIN_PENDING_COOKIE);
     return { ok: true };

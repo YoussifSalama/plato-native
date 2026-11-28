@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router';
 import { Ban, CheckCheck, Eraser, LogOut, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { BarList, DayChart } from '../../components/charts';
+import { BarList } from '../../components/charts';
 import { DateRange } from '../../components/DateRange';
 import { Empty, ErrorNote, Grid2, KeyValues, PageSkeleton, PageHeader, Section, Stat, StatGrid } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
@@ -107,34 +107,15 @@ export default function UserDetail() {
           )}
           <StatGrid>
             <Stat label="Active days" value={num(data.activity.activeDays)} hint={`Last active ${date(data.activity.lastActiveAt)}`} />
-            <Stat label="Events" value={num(data.activity.events)} hint="Billable calls in range" />
+            <Stat label="Applications" value={num(data.applications.total)} hint={`${num(data.applications.byStatus.SUBMITTED ?? 0)} went through`} />
             <Stat label="Tokens spent" value={num1(data.spentTokens)} hint={`Balance ${num1(data.user.balance)}`} />
             <Stat label="Our cost" value={money(data.costUsd)} hint="This range" />
           </StatGrid>
           <Grid2>
-            <Section title="Active days per week" wide>
-              <DayChart data={data.activity.activeDaysByWeek} x="week" y="days" name="Active days" format={num} height="h-48" />
-            </Section>
             <Section title="Features used">
               <BarList
                 items={[...data.features].sort((a, b) => b.costUsd - a.costUsd).map((f) => ({ key: f.feature, label: f.feature, value: f.costUsd, sub: `${num(f.events)} ev.` }))}
               />
-            </Section>
-            <Section title={`Searches · ${num(data.searches.total)}`}>
-              {data.searches.total === 0 ? (
-                <Empty>No searches in this range.</Empty>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <p className="label">Top titles</p>
-                    <BarList format={num} items={data.searches.topTitles.map((t) => ({ key: t.title, label: t.title, value: t.count }))} />
-                  </div>
-                  <div>
-                    <p className="label">Top locations</p>
-                    <BarList format={num} items={data.searches.topLocations.map((t) => ({ key: t.location, label: t.location, value: t.count }))} />
-                  </div>
-                </div>
-              )}
             </Section>
             <Section title={`Applications · ${num(data.applications.total)}`}>
               {data.applications.total === 0 ? (
@@ -152,7 +133,7 @@ export default function UserDetail() {
                 </div>
               )}
             </Section>
-            <Section title="Account">
+            <Section title="Account" wide>
               <KeyValues
                 rows={[
                   ['Joined', dateTime(data.user.createdAt)],

@@ -79,11 +79,9 @@ export class RateLimiter {
 export const isAdminLimiter = (name: string) => name.startsWith('admin-');
 
 /** Every live key of every limiter, optionally only keys containing `q`. */
-export function listRateLimits(q?: string, now = Date.now(), withAdmin = true) {
+export function listRateLimits(q?: string, now = Date.now()) {
   const needle = q?.trim().toLowerCase();
-  return [...rateLimiters.values()]
-    .filter((l) => withAdmin || !isAdminLimiter(l.name))
-    .flatMap((l) =>
+  return [...rateLimiters.values()].flatMap((l) =>
     l
       .entries(now)
       .filter((e) => !needle || e.key.toLowerCase().includes(needle))

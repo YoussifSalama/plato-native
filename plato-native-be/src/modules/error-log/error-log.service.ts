@@ -5,6 +5,7 @@ import {
   ExecutionContext,
   Injectable,
   Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { ModulesContainer } from '@nestjs/core';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
@@ -64,9 +65,18 @@ export class ErrorLogFilter extends SentryGlobalFilter {
   }
 }
 
+/** Days an error log is kept: ERROR_LOG_RETENTION_DAYS, default 90; 0 keeps them for good. */
+export function retentionDays(
+  env = process.env.ERROR_LOG_RETENTION_DAYS,
+): number {
+  if (env === undefined || env.trim() === '') return 90;
+  const n = Math.floor(Number(env));
+  return Number.isFinite(n) && n >= 0 ? n : 90;
+}
+
 /** Writes ErrorLog rows. Never throws, never holds up a response. */
 @Injectable()
-export class ErrorLogService {
+export class ErrorLogService implements OnModuleInit {
   private readonly logger = new Logger('ErrorLog');
   private modules?: Map<Function, string>;
   private window = { start: 0, n: 0, dropped: 0 };
@@ -76,6 +86,39 @@ export class ErrorLogService {
     private readonly container: ModulesContainer,
   ) {}
 
+  /**
+   * Error logs expire on their own after the retention period (a Mongo TTL index on created_at),
+   * so the collection never grows without bound. Changing the env updates the index at the next boot.
+   */
+  async onModuleInit() {
+    const days = retentionDays();
+    if (!days) return;
+    const seconds = days * 86_400;
+    const index = {
+      key: { created_at: 1 },
+      name: 'error_logs_ttl',
+      expireAfterSeconds: seconds,
+    };
+    try {
+      await this.prisma.$runCommandRaw({
+        createIndexes: 'error_logs',
+        indexes: [index],
+      });
+    } catch (e) {
+      // the index exists with another period: change it in place
+      try {
+        await this.prisma.$runCommandRaw({
+          collMod: 'error_logs',
+          index: { name: 'error_logs_ttl', expireAfterSeconds: seconds },
+        });
+      } catch {
+        this.logger.warn(
+          `error log retention not set: ${(e as Error).message}`,
+        );
+      }
+    }
+  }
+
   private moduleOf(controller?: Function) {
     if (!controller) return 'none';
     if (!this.modules) {
@@ -84,13 +127,18 @@ export class ErrorLogService {
         for (const c of m.controllers.keys())
           this.modules.set(c as Function, moduleKey(m.metatype?.name ?? ''));
     }
-    return this.modules.get(controller) ?? moduleKey(controller.name.replace(/Controller$/, ''));
+    return (
+      this.modules.get(controller) ??
+      moduleKey(controller.name.replace(/Controller$/, ''))
+    );
   }
 
   private allow(now = Date.now()) {
     if (now - this.window.start > 60_000) {
       if (this.window.dropped)
-        this.logger.warn(`${this.window.dropped} error logs dropped (over ${MAX_PER_MINUTE}/min)`);
+        this.logger.warn(
+          `${this.window.dropped} error logs dropped (over ${MAX_PER_MINUTE}/min)`,
+        );
       this.window = { start: now, n: 0, dropped: 0 };
     }
     if (++this.window.n > MAX_PER_MINUTE) {
@@ -103,7 +151,8 @@ export class ErrorLogService {
   /** Express middleware, first in the chain: every finished response >= 400 is logged. */
   readonly middleware = (req: Request, res: Response, next: NextFunction) => {
     res.on('finish', () => {
-      if (res.statusCode >= 400) setImmediate(() => this.fromResponse(req as Stamped, res.statusCode));
+      if (res.statusCode >= 400)
+        setImmediate(() => this.fromResponse(req as Stamped, res.statusCode));
     });
     next();
   };
@@ -113,7 +162,8 @@ export class ErrorLogService {
     try {
       if (!this.allow()) return;
       const path = (req.originalUrl ?? req.url ?? '').split('?')[0];
-      const page = String(req.headers?.[PAGE_HEADER] ?? '').slice(0, 300) || undefined;
+      const page =
+        String(req.headers?.[PAGE_HEADER] ?? '').slice(0, 300) || undefined;
       const error = req.plato?.error;
       const body = req.body as Record<string, unknown> | undefined;
       const row = {
@@ -126,17 +176,27 @@ export class ErrorLogService {
         status,
         code: codeOf(error),
         message: messageOf(error) || `HTTP ${status}`,
-        explanation: explain(status, error, { routed: !!req.plato?.controller, path }),
+        explanation: explain(status, error, {
+          routed: !!req.plato?.controller,
+          path,
+        }),
         // a code is the credential on pairing, TOTP and email/password-reset routes
-        data: capData({ query: req.query, body }, CODE_IS_SECRET.test(path) ? ['code'] : []),
+        data: capData(
+          { query: req.query, body },
+          CODE_IS_SECRET.test(path) ? ['code'] : [],
+        ),
         ip: req.ip,
-        user_agent: String(req.headers?.['user-agent'] ?? '').slice(0, 300) || undefined,
+        user_agent:
+          String(req.headers?.['user-agent'] ?? '').slice(0, 300) || undefined,
       };
-      const email = typeof body?.email === 'string' ? body.email.slice(0, 200) : undefined;
+      const email =
+        typeof body?.email === 'string' ? body.email.slice(0, 200) : undefined;
       void this.withUser(req.userId, req.extension?.jobSeekerId, email)
         .catch(() => ({}))
         .then((u) => this.prisma.errorLog.create({ data: { ...row, ...u } }))
-        .catch((e: Error) => this.logger.warn(`error log not written: ${e.message}`));
+        .catch((e: Error) =>
+          this.logger.warn(`error log not written: ${e.message}`),
+        );
     } catch (e) {
       this.logger.warn(`error log not built: ${(e as Error).message}`);
     }
@@ -146,7 +206,13 @@ export class ErrorLogService {
   client(
     req: Request,
     jobSeekerId: string,
-    r: { message: string; code?: string; page?: string; stack?: string; data?: unknown },
+    r: {
+      message: string;
+      code?: string;
+      page?: string;
+      stack?: string;
+      data?: unknown;
+    },
   ) {
     try {
       if (!this.allow()) return;
@@ -160,24 +226,35 @@ export class ErrorLogService {
         status: 0,
         code: r.code,
         message: r.message.slice(0, 1000),
-        explanation: 'Reported by the extension itself (an error in the browser, not an API response).',
+        explanation:
+          'Reported by the extension itself (an error in the browser, not an API response).',
         data: capData({ stack: r.stack, data: r.data }),
         ip: req.ip,
-        user_agent: String(req.headers['user-agent'] ?? '').slice(0, 300) || undefined,
+        user_agent:
+          String(req.headers['user-agent'] ?? '').slice(0, 300) || undefined,
       };
       void this.withUser(undefined, jobSeekerId)
         .catch(() => ({}))
         .then((u) => this.prisma.errorLog.create({ data: { ...row, ...u } }))
-        .catch((e: Error) => this.logger.warn(`client error log not written: ${e.message}`));
+        .catch((e: Error) =>
+          this.logger.warn(`client error log not written: ${e.message}`),
+        );
     } catch (e) {
       this.logger.warn(`client error log not built: ${(e as Error).message}`);
     }
   }
 
-  private async withUser(userId?: string, jobSeekerId?: string, email?: string) {
+  private async withUser(
+    userId?: string,
+    jobSeekerId?: string,
+    email?: string,
+  ) {
     const id = userId ?? (jobSeekerId ? await userOfSeeker(jobSeekerId) : null);
     if (!id) return email ? { user_email: email } : {};
-    const u = await this.prisma.user.findUnique({ where: { id }, select: { email: true } });
+    const u = await this.prisma.user.findUnique({
+      where: { id },
+      select: { email: true },
+    });
     return { user_id: id, user_email: u?.email ?? email };
   }
 }

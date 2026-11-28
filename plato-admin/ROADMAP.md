@@ -5,6 +5,10 @@ cost of building it is clear. "Have" = stored today; "Need" = must be recorded f
 
 ## Already there (2026-11-28)
 
+Also done since this list was written: funnel (7), retention (8), the needs-attention list (part of 1 and 2:
+loss-making seekers, spend jumps, error spikes, stuck searches; no emails yet), error groups (14, no email alert
+yet), admin audit log (21).
+
 Dashboard, Usage & cost (per provider, feature, user, **per search**), Plans + live calculator, Credits,
 Users (list, analytics, **time in app, pages used, plan fit, their searches**), Rate limits, Logs (web,
 extension, per user), Team (admins, roles, invites, TOTP).

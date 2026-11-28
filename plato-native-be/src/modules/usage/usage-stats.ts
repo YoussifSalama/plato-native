@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
+import { ADMIN_TZ, dayStart, nextDay, tzDay } from './tz';
 
 // Shared by the admin panel's Dashboard, Usage, Plans calculator and user views:
 // who we paid (provider), and one grouped pass over usage_events.
@@ -18,7 +19,11 @@ export function providerOf(r: {
 }): Provider {
   const model = r.model ?? '';
   // Apify actors are named "owner~actor"; a failed run has apify_usd 0 but is still Apify's
-  if ((r.apify_usd ?? 0) > 0 || model.includes('~') || r.feature === 'discovery.apify')
+  if (
+    (r.apify_usd ?? 0) > 0 ||
+    model.includes('~') ||
+    r.feature === 'discovery.apify'
+  )
     return 'apify';
   if (/^claude/i.test(model)) return 'anthropic';
   if (OPENAI.test(model)) return 'openai';
@@ -28,12 +33,24 @@ export function providerOf(r: {
 export type Range = { from: Date; to: Date };
 const DAY = 86_400_000;
 
-/** `from` / `to` as ISO dates (a bare date for `to` includes that whole day); default the last 30 days. */
-export function parseRange(from?: string, to?: string, now = new Date()): Range {
+/**
+ * `from` / `to` as ISO dates; a bare date is a whole calendar day in the admin time zone (tz.ts),
+ * so `to=2026-11-28` runs to the end of the 28th in Cairo. Default: the last 30 days.
+ */
+export function parseRange(
+  from?: string,
+  to?: string,
+  now = new Date(),
+): Range {
   const at = (s: string, end: boolean) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const d = dayStart(end ? nextDay(s) : s);
+      if (isNaN(d.getTime())) throw new BadRequestException(`Bad date: ${s}`);
+      return d;
+    }
     const d = new Date(s);
     if (isNaN(d.getTime())) throw new BadRequestException(`Bad date: ${s}`);
-    return end && /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(d.getTime() + DAY) : d;
+    return d;
   };
   const t = to ? at(to, true) : now;
   const f = from ? at(from, false) : new Date(t.getTime() - 30 * DAY);
@@ -64,23 +81,27 @@ export const ejDate = (d: Date) => ({ $date: d.toISOString() });
 export const ejId = (id: string) => ({ $oid: id });
 export const OBJECT_ID = /^[a-f0-9]{24}$/i;
 // Mongo extended-JSON object for aggregateRaw pipelines (any: Prisma wants InputJsonValue).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type Ej = Record<string, any>;
 export function num(v: unknown): number {
   if (typeof v === 'number') return v;
   if (v && typeof v === 'object') {
     const o = v as Ej;
-    const x = o.$numberLong ?? o.$numberInt ?? o.$numberDouble ?? o.$numberDecimal;
+    const x =
+      o.$numberLong ?? o.$numberInt ?? o.$numberDouble ?? o.$numberDecimal;
     if (x !== undefined) return Number(x);
   }
   return 0;
 }
 export function str(v: unknown): string | null {
   if (v == null) return null;
-  if (typeof v === 'object' && '$oid' in (v as Ej)) return String((v as Ej).$oid);
+  if (typeof v === 'object' && '$oid' in (v as Ej))
+    return String((v as Ej).$oid);
   if (typeof v === 'object' && '$date' in (v as Ej)) {
     const d = (v as Ej).$date;
-    return typeof d === 'object' ? new Date(num((d as Ej).$numberLong)).toISOString() : String(d);
+    return typeof d === 'object'
+      ? new Date(num((d as Ej).$numberLong)).toISOString()
+      : String(d);
   }
   return String(v);
 }
@@ -109,12 +130,20 @@ export async function usageGroups(
   keys: ('day' | 'feature' | 'user')[],
   where: { userId?: string; userIds?: string[] } = {},
 ): Promise<UsageGroup[]> {
-  const match: Ej = { created_at: { $gte: ejDate(range.from), $lt: ejDate(range.to) } };
+  const match: Ej = {
+    created_at: { $gte: ejDate(range.from), $lt: ejDate(range.to) },
+  };
   if (where.userId) match.user_id = ejId(where.userId);
   if (where.userIds) match.user_id = { $in: where.userIds.map(ejId) };
   const id: Ej = { model: '$model', apify: { $gt: ['$apify_usd', 0] } };
   if (keys.includes('day'))
-    id.day = { $dateToString: { format: '%Y-%m-%d', date: '$created_at' } };
+    id.day = {
+      $dateToString: {
+        format: '%Y-%m-%d',
+        date: '$created_at',
+        timezone: ADMIN_TZ,
+      },
+    };
   if (keys.includes('feature')) id.feature = '$feature';
   if (keys.includes('user')) id.user = '$user_id';
   const rows = (await prisma.usageEvent.aggregateRaw({
@@ -130,7 +159,13 @@ export async function usageGroups(
         },
       },
     ],
-  })) as unknown as { _id: Ej; cost: unknown; events: unknown; input: unknown; output: unknown }[];
+  })) as unknown as {
+    _id: Ej;
+    cost: unknown;
+    events: unknown;
+    input: unknown;
+    output: unknown;
+  }[];
   return rows.map((r) => {
     const model = str(r._id.model);
     return {
@@ -166,22 +201,33 @@ export function sumBy<K extends string>(
     m.set(k, g);
   }
   return [...m]
-    .map(([k, g]) => ({ [field]: k, costUsd: round(g.costUsd), events: g.events }) as { [P in K]: string } & { costUsd: number; events: number })
+    .map(
+      ([k, g]) =>
+        ({ [field]: k, costUsd: round(g.costUsd), events: g.events }) as {
+          [P in K]: string;
+        } & { costUsd: number; events: number },
+    )
     .sort((a, b) => b.costUsd - a.costUsd);
 }
 
-/** Every day of the range (UTC), so a chart has no gaps. */
+/** Every calendar day of the range (admin time zone), so a chart has no gaps. */
 export function daysOf(range: Range): string[] {
   const out: string[] = [];
-  const d = new Date(Date.UTC(range.from.getUTCFullYear(), range.from.getUTCMonth(), range.from.getUTCDate()));
-  for (; d < range.to && out.length < 400; d.setUTCDate(d.getUTCDate() + 1))
-    out.push(d.toISOString().slice(0, 10));
+  for (
+    let d = tzDay(range.from);
+    dayStart(d) < range.to && out.length < 400;
+    d = nextDay(d)
+  )
+    out.push(d);
   return out;
 }
 
 /** The Usage overview shape, for all users or one. */
 export function usageOverview(rows: UsageGroup[], range: Range) {
-  const byDay = new Map<string, { costUsd: number; byProvider: Record<string, number> }>();
+  const byDay = new Map<
+    string,
+    { costUsd: number; byProvider: Record<string, number> }
+  >();
   for (const d of daysOf(range)) byDay.set(d, { costUsd: 0, byProvider: {} });
   for (const r of rows) {
     const g = byDay.get(r.day!) ?? { costUsd: 0, byProvider: {} };

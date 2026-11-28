@@ -10,6 +10,7 @@ import { ErrorLog, Prisma } from '@prisma/client';
 import { AdminGuard, AdminPage } from '../admin/admin-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  ejDate,
   ejId,
   num,
   OBJECT_ID,
@@ -19,6 +20,38 @@ import {
   type Range,
   str,
 } from '../usage/usage-stats';
+
+/** The list's filters as a raw Mongo $match (the groups aggregation). Same rules as where(). */
+export function groupMatch(f: {
+  platform?: string;
+  module?: string;
+  status?: string;
+  q?: string;
+  range: Range;
+}) {
+  const q = f.q?.trim();
+  const status = f.status?.trim();
+  const cls =
+    status && /^[1-5]xx$/i.test(status) ? Number(status[0]) * 100 : null;
+  const re = q ? { $regex: escape(q), $options: 'i' } : null;
+  return {
+    created_at: { $gte: ejDate(f.range.from), $lt: ejDate(f.range.to) },
+    ...(f.platform && { platform: f.platform }),
+    ...(f.module && { module: f.module }),
+    ...(cls !== null
+      ? { status: { $gte: cls, $lt: cls + 100 } }
+      : status &&
+        Number.isFinite(Number(status)) && { status: Number(status) }),
+    ...(re && {
+      $or: ['message', 'path', 'code', 'user_email', 'explanation'].map(
+        (k) => ({ [k]: re }),
+      ),
+    }),
+  };
+}
+
+// when this server started: an error group first seen after it is new since the last deploy
+const BOOTED_AT = new Date();
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -76,13 +109,15 @@ export class AdminLogsController {
     const q = f.q?.trim();
     const status = f.status?.trim();
     // "404" exactly, or a class: "4xx" / "5xx"
-    const cls = status && /^[1-5]xx$/i.test(status) ? Number(status[0]) * 100 : null;
+    const cls =
+      status && /^[1-5]xx$/i.test(status) ? Number(status[0]) * 100 : null;
     return {
       ...(f.platform && { platform: f.platform }),
       ...(f.module && { module: f.module }),
       ...(cls !== null
         ? { status: { gte: cls, lt: cls + 100 } }
-        : status && Number.isFinite(Number(status)) && { status: Number(status) }),
+        : status &&
+          Number.isFinite(Number(status)) && { status: Number(status) }),
       ...(f.range && { created_at: { gte: f.range.from, lt: f.range.to } }),
       ...(q && {
         OR: [
@@ -107,7 +142,13 @@ export class AdminLogsController {
     @Query('sort') sort = 'newest',
     @Query('page') page?: string,
   ) {
-    const where = this.where({ platform, module, status, q, range: parseRange(from, to) });
+    const where = this.where({
+      platform,
+      module,
+      status,
+      q,
+      range: parseRange(from, to),
+    });
     const p = pageOf(page);
     const [rows, total] = await Promise.all([
       this.prisma.errorLog.findMany({
@@ -121,12 +162,107 @@ export class AdminLogsController {
     return { items: rows.map(logOut), total };
   }
 
+  /**
+   * The same error collapsed into one row: by platform, module, status, code and message, with how
+   * often, first and last seen, and whether it first appeared after this server started (a deploy).
+   * sort = count (default) | last.
+   */
+  @Get('groups')
+  async groups(
+    @Query('platform') platform?: string,
+    @Query('module') module?: string,
+    @Query('status') status?: string,
+    @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('sort') sort = 'count',
+    @Query('page') page?: string,
+  ) {
+    const p = pageOf(page);
+    // a native aggregation: Prisma's groupBy on these fields crashes its query engine on Mongo
+    const [out] = (await this.prisma.errorLog.aggregateRaw({
+      pipeline: [
+        {
+          $match: groupMatch({
+            platform,
+            module,
+            status,
+            q,
+            range: parseRange(from, to),
+          }),
+        },
+        { $sort: { created_at: -1 } },
+        {
+          $group: {
+            _id: {
+              platform: '$platform',
+              module: '$module',
+              status: '$status',
+              code: '$code',
+              message: '$message',
+            },
+            count: { $sum: 1 },
+            firstAt: { $min: '$created_at' },
+            lastAt: { $max: '$created_at' },
+            // the latest row: its path, explanation and id
+            sampleId: { $first: '$_id' },
+            method: { $first: '$method' },
+            path: { $first: '$path' },
+            explanation: { $first: '$explanation' },
+          },
+        },
+        { $sort: sort === 'last' ? { lastAt: -1 } : { count: -1, lastAt: -1 } },
+        {
+          $facet: {
+            items: [{ $skip: (p - 1) * PAGE_SIZE }, { $limit: PAGE_SIZE }],
+            total: [{ $count: 'n' }],
+          },
+        },
+      ],
+    })) as unknown as {
+      items: Record<string, unknown>[];
+      total: { n: unknown }[];
+    }[];
+    const date = (v: unknown) => (str(v) ? new Date(str(v)!) : null);
+    return {
+      startedAt: BOOTED_AT,
+      items: (out?.items ?? []).map((g) => {
+        const id = g._id as Record<string, unknown>;
+        const firstAt = date(g.firstAt);
+        return {
+          platform: str(id.platform),
+          module: str(id.module),
+          status: num(id.status),
+          code: str(id.code),
+          message: str(id.message) ?? '',
+          count: num(g.count),
+          firstAt,
+          lastAt: date(g.lastAt),
+          isNew: !!firstAt && firstAt >= BOOTED_AT,
+          sampleId: str(g.sampleId),
+          method: str(g.method),
+          path: str(g.path),
+          explanation: str(g.explanation),
+        };
+      }),
+      total: num(out?.total[0]?.n),
+    };
+  }
+
   @Get('facets')
   async facets(@Query('platform') platform?: string) {
     const where = this.where({ platform });
     const [modules, statuses] = await Promise.all([
-      this.prisma.errorLog.groupBy({ by: ['module'], where, _count: { _all: true } }),
-      this.prisma.errorLog.groupBy({ by: ['status'], where, _count: { _all: true } }),
+      this.prisma.errorLog.groupBy({
+        by: ['module'],
+        where,
+        _count: { _all: true },
+      }),
+      this.prisma.errorLog.groupBy({
+        by: ['status'],
+        where,
+        _count: { _all: true },
+      }),
     ]);
     return {
       modules: modules
@@ -145,7 +281,10 @@ export class AdminLogsController {
     @Query('to') to?: string,
     @Query('page') page?: string,
   ) {
-    return this.extensionErrors({ q, range: parseRange(from, to) }, pageOf(page));
+    return this.extensionErrors(
+      { q, range: parseRange(from, to) },
+      pageOf(page),
+    );
   }
 
   /** Seekers by their extension errors (server, client and apply stops), latest first. */
@@ -157,35 +296,57 @@ export class AdminLogsController {
           { $match: { platform: 'extension', user_id: { $ne: null } } },
           {
             $group: {
-              _id: { user: '$user_id', code: { $ifNull: ['$code', { $toString: '$status' }] } },
+              _id: {
+                user: '$user_id',
+                code: { $ifNull: ['$code', { $toString: '$status' }] },
+              },
               n: { $sum: 1 },
               last: { $max: '$created_at' },
             },
           },
         ],
-      }) as unknown as Promise<{ _id: { user: unknown; code: unknown }; n: unknown; last: unknown }[]>,
+      }) as unknown as Promise<
+        { _id: { user: unknown; code: unknown }; n: unknown; last: unknown }[]
+      >,
       this.prisma.applyBatchItem.aggregateRaw({
         pipeline: [
           { $match: { 'detail.stops.0': { $exists: true } } },
           { $unwind: '$detail.stops' },
           {
             $group: {
-              _id: { seeker: '$job_seeker_id', code: { $ifNull: ['$detail.stops.reason', 'unknown'] } },
+              _id: {
+                seeker: '$job_seeker_id',
+                code: { $ifNull: ['$detail.stops.reason', 'unknown'] },
+              },
               n: { $sum: 1 },
               last: { $max: '$detail.stops.at' },
             },
           },
         ],
-      }) as unknown as Promise<{ _id: { seeker: unknown; code: unknown }; n: unknown; last: unknown }[]>,
+      }) as unknown as Promise<
+        { _id: { seeker: unknown; code: unknown }; n: unknown; last: unknown }[]
+      >,
     ]);
-    const seekerIds = [...new Set(stops.map((s) => str(s._id.seeker)).filter((s): s is string => !!s))];
+    const seekerIds = [
+      ...new Set(
+        stops.map((s) => str(s._id.seeker)).filter((s): s is string => !!s),
+      ),
+    ];
     const seekers = await this.prisma.jobSeeker.findMany({
       where: { id: { in: seekerIds } },
       select: { id: true, user_id: true },
     });
     const userOf = new Map(seekers.map((s) => [s.id, s.user_id]));
-    const acc = new Map<string, { errors: number; lastAt: string; codes: Map<string, number> }>();
-    const add = (user: string | null | undefined, code: string, n: number, last: string) => {
+    const acc = new Map<
+      string,
+      { errors: number; lastAt: string; codes: Map<string, number> }
+    >();
+    const add = (
+      user: string | null | undefined,
+      code: string,
+      n: number,
+      last: string,
+    ) => {
       if (!user) return;
       const a = acc.get(user) ?? { errors: 0, lastAt: '', codes: new Map() };
       a.errors += n;
@@ -193,16 +354,27 @@ export class AdminLogsController {
       a.codes.set(code, (a.codes.get(code) ?? 0) + n);
       acc.set(user, a);
     };
-    for (const l of logs) add(str(l._id.user), str(l._id.code) ?? '?', num(l.n), str(l.last) ?? '');
+    for (const l of logs)
+      add(str(l._id.user), str(l._id.code) ?? '?', num(l.n), str(l.last) ?? '');
     for (const s of stops)
-      add(userOf.get(str(s._id.seeker) ?? ''), str(s._id.code) ?? '?', num(s.n), str(s.last) ?? '');
+      add(
+        userOf.get(str(s._id.seeker) ?? ''),
+        str(s._id.code) ?? '?',
+        num(s.n),
+        str(s.last) ?? '',
+      );
     const users = await this.prisma.user.findMany({
       where: { id: { in: [...acc.keys()] } },
       select: { id: true, email: true, full_name: true },
     });
     const needle = q?.trim().toLowerCase();
     const rows = users
-      .filter((u) => !needle || u.email.toLowerCase().includes(needle) || u.full_name.toLowerCase().includes(needle))
+      .filter(
+        (u) =>
+          !needle ||
+          u.email.toLowerCase().includes(needle) ||
+          u.full_name.toLowerCase().includes(needle),
+      )
       .map((u) => {
         const a = acc.get(u.id)!;
         return {
@@ -219,28 +391,44 @@ export class AdminLogsController {
       })
       .sort((a, b) => (b.lastAt?.getTime() ?? 0) - (a.lastAt?.getTime() ?? 0));
     const p = pageOf(page);
-    return { items: rows.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE), total: rows.length };
+    return {
+      items: rows.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE),
+      total: rows.length,
+    };
   }
 
   @Get('extension/users/:userId')
-  async extensionUser(@Param('userId') userId: string, @Query('page') page?: string) {
+  async extensionUser(
+    @Param('userId') userId: string,
+    @Query('page') page?: string,
+  ) {
     if (!OBJECT_ID.test(userId)) throw new NotFoundException('No such user');
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, full_name: true, job_seeker: { select: { id: true } } },
+      select: {
+        id: true,
+        email: true,
+        full_name: true,
+        job_seeker: { select: { id: true } },
+      },
     });
     if (!user) throw new NotFoundException('No such user');
     const r = await this.extensionErrors(
       { userId, seekerId: user.job_seeker?.id ?? null },
       pageOf(page),
     );
-    return { user: { id: user.id, email: user.email, name: user.full_name }, ...r };
+    return {
+      user: { id: user.id, email: user.email, name: user.full_name },
+      ...r,
+    };
   }
 
   // after the fixed paths: "facets" and "extension/..." are not ids
   @Get(':id')
   async one(@Param('id') id: string) {
-    const r = OBJECT_ID.test(id) ? await this.prisma.errorLog.findUnique({ where: { id } }) : null;
+    const r = OBJECT_ID.test(id)
+      ? await this.prisma.errorLog.findUnique({ where: { id } })
+      : null;
     if (!r) throw new NotFoundException('No such log');
     return logOut(r);
   }
@@ -261,7 +449,7 @@ export class AdminLogsController {
       ...(f.userId && { user_id: f.userId }),
     };
     const q = f.q?.trim();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const stopMatch: Record<string, any> = {
       at: f.range
         ? { $gte: f.range.from.toISOString(), $lt: f.range.to.toISOString() }
@@ -274,7 +462,11 @@ export class AdminLogsController {
     };
     const noStops = f.userId !== undefined && !f.seekerId;
     const [logs, logTotal, stopPage] = await Promise.all([
-      this.prisma.errorLog.findMany({ where, orderBy: { created_at: 'desc' }, take: upTo }),
+      this.prisma.errorLog.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        take: upTo,
+      }),
       this.prisma.errorLog.count({ where }),
       noStops
         ? Promise.resolve([{ items: [], total: [] }])
@@ -306,14 +498,22 @@ export class AdminLogsController {
               },
               { $match: stopMatch },
               { $sort: { at: -1 } },
-              { $facet: { items: [{ $limit: upTo }], total: [{ $count: 'n' }] } },
+              {
+                $facet: { items: [{ $limit: upTo }], total: [{ $count: 'n' }] },
+              },
             ],
-          }) as unknown as Promise<{ items: StopRow[]; total: { n: unknown }[] }[]>),
+          }) as unknown as Promise<
+            { items: StopRow[]; total: { n: unknown }[] }[]
+          >),
     ]);
     const stops = stopPage[0]?.items ?? [];
     const stopTotal = num(stopPage[0]?.total[0]?.n);
     // who each stop belongs to
-    const seekerIds = [...new Set(stops.map((s) => str(s.seeker)).filter((s): s is string => !!s))];
+    const seekerIds = [
+      ...new Set(
+        stops.map((s) => str(s.seeker)).filter((s): s is string => !!s),
+      ),
+    ];
     const seekers = seekerIds.length
       ? await this.prisma.jobSeeker.findMany({
           where: { id: { in: seekerIds } },
@@ -322,7 +522,10 @@ export class AdminLogsController {
       : [];
     const owner = new Map(seekers.map((s) => [s.id, s.user]));
     const merged = [
-      ...logs.map((l) => ({ ...logOut(l), source: l.source === 'client' ? 'client' : 'server' })),
+      ...logs.map((l) => ({
+        ...logOut(l),
+        source: l.source === 'client' ? 'client' : 'server',
+      })),
       ...stops.map((s) => {
         const u = owner.get(str(s.seeker) ?? '');
         return {
@@ -336,7 +539,9 @@ export class AdminLogsController {
           status: 0,
           code: s.code ?? s.reason ?? null,
           message: s.message ?? s.reason ?? '',
-          explanation: s.detail ?? (s.reason ? `The apply run stopped: ${s.reason}.` : null),
+          explanation:
+            s.detail ??
+            (s.reason ? `The apply run stopped: ${s.reason}.` : null),
           data: {
             reason: s.reason,
             detail: s.detail,

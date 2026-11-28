@@ -41,4 +41,5 @@ export const activitySchema = z.object({
     .optional(),
 });
 
-export const utcDay = (d = new Date()) => d.toISOString().slice(0, 10);
+// the admin panel's calendar day (tz.ts), so a seeker's evening lands on the owner's same day
+export { tzDay as activityDay } from './tz';

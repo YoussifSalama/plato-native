@@ -23,6 +23,7 @@ import {
   usageGroups,
   usageOverview,
 } from './usage-stats';
+import { memo } from '../admin-users/memo';
 import { searchItems, summarize, type SearchItem } from './search-stats';
 
 // Admin panel, Usage page: what we paid, by provider, feature, day and seeker.
@@ -48,7 +49,9 @@ export class AdminUsageController {
     @Query('to') to?: string,
   ) {
     if (!PROVIDERS.includes(provider as Provider))
-      throw new BadRequestException(`provider is one of ${PROVIDERS.join(', ')}`);
+      throw new BadRequestException(
+        `provider is one of ${PROVIDERS.join(', ')}`,
+      );
     const range = parseRange(from, to);
     const [rows, perUser] = await Promise.all([
       usageGroups(this.prisma, range, ['day', 'feature']),
@@ -57,11 +60,23 @@ export class AdminUsageController {
     const mine = rows.filter((r) => r.provider === provider);
     const models = new Map<
       string,
-      { model: string; costUsd: number; inputTokens: number; outputTokens: number; events: number }
+      {
+        model: string;
+        costUsd: number;
+        inputTokens: number;
+        outputTokens: number;
+        events: number;
+      }
     >();
     for (const r of mine) {
       const k = r.model ?? '(none)';
-      const g = models.get(k) ?? { model: k, costUsd: 0, inputTokens: 0, outputTokens: 0, events: 0 };
+      const g = models.get(k) ?? {
+        model: k,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        events: 0,
+      };
       g.costUsd += r.costUsd;
       g.inputTokens += r.inputTokens;
       g.outputTokens += r.outputTokens;
@@ -127,7 +142,11 @@ export class AdminUsageController {
       'userId',
       (g) => g.userId!,
     ).map((r) => ({ ...r, tokensSpent: tokens.get(r.userId) ?? 0 }));
-    const order = parseSort(sort, ['costUsd', 'events', 'tokensSpent', 'email'] as const, '-costUsd');
+    const order = parseSort(
+      sort,
+      ['costUsd', 'events', 'tokensSpent', 'email'] as const,
+      '-costUsd',
+    );
     if (order.field === 'email') {
       const emails = new Map(
         (
@@ -137,7 +156,9 @@ export class AdminUsageController {
           })
         ).map((u) => [u.id, u.email]),
       );
-      rows.sort((a, b) => (emails.get(a.userId) ?? '').localeCompare(emails.get(b.userId) ?? ''));
+      rows.sort((a, b) =>
+        (emails.get(a.userId) ?? '').localeCompare(emails.get(b.userId) ?? ''),
+      );
     } else {
       const f = order.field;
       rows.sort((a, b) => a[f] - b[f]);
@@ -209,19 +230,42 @@ export class AdminUsageController {
     @Query('sort') sort?: string,
   ) {
     const range = parseRange(from, to);
-    const all = await searchItems(this.prisma, range, userId || undefined);
+    // the same range asked again within a minute is not recomputed (sorting, paging, the status filter)
+    const all = await memo(
+      `searches:${range.from.toISOString()}:${range.to.toISOString()}:${userId ?? ''}`,
+      () => searchItems(this.prisma, range, userId || undefined),
+    );
     const st = status?.toUpperCase();
-    const rows = st && ['DONE', 'FAILED', 'RUNNING'].includes(st) ? all.filter((r) => r.status === st) : all;
-    const order = parseSort(sort, ['startedAt', 'costUsd', 'tokens', 'durationSec', 'shortlisted'] as const, '-startedAt');
+    const rows =
+      st && ['DONE', 'FAILED', 'RUNNING'].includes(st)
+        ? all.filter((r) => r.status === st)
+        : [...all];
+    const order = parseSort(
+      sort,
+      ['startedAt', 'costUsd', 'tokens', 'durationSec', 'shortlisted'] as const,
+      '-startedAt',
+    );
     const key = (r: SearchItem) =>
-      order.field === 'startedAt' ? r.startedAt.getTime() : order.field === 'durationSec' ? (r.durationSec ?? -1) : r[order.field];
+      order.field === 'startedAt'
+        ? r.startedAt.getTime()
+        : order.field === 'durationSec'
+          ? (r.durationSec ?? -1)
+          : r[order.field];
     rows.sort((a, b) => (order.desc ? key(b) - key(a) : key(a) - key(b)));
     const p = pageOf(page);
     const slice = rows.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE);
-    const ids = [...new Set(slice.map((r) => r.userId).filter((x): x is string => !!x))];
+    const ids = [
+      ...new Set(slice.map((r) => r.userId).filter((x): x is string => !!x)),
+    ];
     const [users, accounts] = await Promise.all([
-      this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, email: true, full_name: true } }),
-      this.prisma.creditAccount.findMany({ where: { user_id: { in: ids } }, select: { user_id: true, plan: true } }),
+      this.prisma.user.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, email: true, full_name: true },
+      }),
+      this.prisma.creditAccount.findMany({
+        where: { user_id: { in: ids } },
+        select: { user_id: true, plan: true },
+      }),
     ]);
     const user = new Map(users.map((u) => [u.id, u]));
     const plan = new Map(accounts.map((a) => [a.user_id, a.plan]));

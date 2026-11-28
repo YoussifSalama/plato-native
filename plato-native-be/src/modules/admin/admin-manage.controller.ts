@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -44,6 +45,12 @@ export class AdminPagesController {
 @AdminPage('admin')
 export class AdminManageController {
   constructor(private readonly manage: AdminManageService) {}
+
+  /** Who did what in the panel, newest first. `q` matches the admin's email or the action. */
+  @Get('audit')
+  audit(@Query('q') q?: string, @Query('page') page?: string) {
+    return this.manage.audit(q, Math.max(1, Math.floor(Number(page) || 1)));
+  }
 
   @Get('admins')
   listAdmins() {

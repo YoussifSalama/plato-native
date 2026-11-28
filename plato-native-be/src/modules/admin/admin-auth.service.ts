@@ -350,6 +350,16 @@ export class AdminAuthService {
     return { ok: true as const };
   }
 
+  /** Every session issued to this admin until now is refused from here on (logout). */
+  async endSessions(adminId: string) {
+    await this.prisma.adminUser
+      .update({
+        where: { id: adminId },
+        data: { sessions_valid_after: new Date() },
+      })
+      .catch(() => undefined); // already gone: nothing to end
+  }
+
   /** After a reset-2fa: an old code step must not block the new authenticator. */
   forgetTotp(adminId: string) {
     this.lastStep.delete(adminId);

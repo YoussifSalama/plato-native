@@ -15,7 +15,7 @@ import {
 } from '../auth/jwt-auth.guard';
 import { RateLimiter } from '../extension/extension-token';
 import { PrismaService } from '../prisma/prisma.service';
-import { activitySchema, pageShape, utcDay } from './activity';
+import { activitySchema, pageShape, activityDay } from './activity';
 
 // A beat a minute plus page views: generous, but a script can't fill the collection.
 export const activityLimiter = new RateLimiter('activity');
@@ -45,11 +45,11 @@ export class ActivityController {
     const now = new Date();
     await this.prisma.pageActivity.upsert({
       where: {
-        user_id_day_page: { user_id: req.userId, day: utcDay(now), page },
+        user_id_day_page: { user_id: req.userId, day: activityDay(now), page },
       },
       create: {
         user_id: req.userId,
-        day: utcDay(now),
+        day: activityDay(now),
         page,
         views,
         seconds,

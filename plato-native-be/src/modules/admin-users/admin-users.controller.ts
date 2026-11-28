@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Body,
   Controller,
   Delete,
@@ -8,10 +9,11 @@ import {
   Param,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
-import { AdminGuard, AdminPage } from '../admin/admin-auth.guard';
-import { listRateLimits, rateLimiters } from '../extension/extension-token';
+import { AdminGuard, AdminPage, type AdminRequest } from '../admin/admin-auth.guard';
+import { isAdminLimiter, listRateLimits, rateLimiters } from '../extension/extension-token';
 import { pageOf, parseRange } from '../usage/usage-stats';
 import { AdminUsersService } from './admin-users.service';
 
@@ -75,15 +77,23 @@ export class AdminUsersController {
 @UseGuards(AdminGuard)
 @AdminPage('users')
 export class AdminRateLimitsController {
+  // The admin panel's own sign-in limits (admin-*) are the super admin's alone:
+  // clearing them would let one admin lift the brute-force limit on another's login.
   @Get()
-  list(@Query('q') q?: string) {
-    return listRateLimits(q);
+  list(@Req() req: AdminRequest, @Query('q') q?: string) {
+    return listRateLimits(q, Date.now(), req.admin.isSuper);
   }
 
   @Delete()
-  clear(@Query('limiter') limiter?: string, @Query('key') key?: string) {
+  clear(
+    @Req() req: AdminRequest,
+    @Query('limiter') limiter?: string,
+    @Query('key') key?: string,
+  ) {
     const l = limiter ? rateLimiters.get(limiter) : undefined;
     if (!l || !key) throw new BadRequestException('limiter and key are required');
+    if (isAdminLimiter(l.name) && !req.admin.isSuper)
+      throw new ForbiddenException("Only the super admin can clear the admin panel's sign-in limits.");
     l.reset(key);
     return { ok: true };
   }

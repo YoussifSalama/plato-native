@@ -28,6 +28,7 @@ type Stamped = Request & {
 };
 
 const PAGE_HEADER = 'x-plato-page';
+const CODE_IS_SECRET = /\/(pairing|auth)(\/|$)/;
 // ponytail: a flood guard per process (a crash loop must not fill Mongo); raise it if real errors get dropped.
 const MAX_PER_MINUTE = 600;
 
@@ -126,11 +127,8 @@ export class ErrorLogService {
         code: codeOf(error),
         message: messageOf(error) || `HTTP ${status}`,
         explanation: explain(status, error, { routed: !!req.plato?.controller }),
-        // the pairing code is the credential on /pairing routes
-        data: capData(
-          { query: req.query, body },
-          path.includes('/pairing') ? ['code'] : [],
-        ),
+        // a code is the credential on pairing, TOTP and email/password-reset routes
+        data: capData({ query: req.query, body }, CODE_IS_SECRET.test(path) ? ['code'] : []),
         ip: req.ip,
         user_agent: String(req.headers?.['user-agent'] ?? '').slice(0, 300) || undefined,
       };

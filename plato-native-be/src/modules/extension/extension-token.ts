@@ -75,10 +75,15 @@ export class RateLimiter {
   }
 }
 
+/** The admin panel's own sign-in limits: only the super admin sees or clears them. */
+export const isAdminLimiter = (name: string) => name.startsWith('admin-');
+
 /** Every live key of every limiter, optionally only keys containing `q`. */
-export function listRateLimits(q?: string, now = Date.now()) {
+export function listRateLimits(q?: string, now = Date.now(), withAdmin = true) {
   const needle = q?.trim().toLowerCase();
-  return [...rateLimiters.values()].flatMap((l) =>
+  return [...rateLimiters.values()]
+    .filter((l) => withAdmin || !isAdminLimiter(l.name))
+    .flatMap((l) =>
     l
       .entries(now)
       .filter((e) => !needle || e.key.toLowerCase().includes(needle))
@@ -93,7 +98,9 @@ export function listRateLimits(q?: string, now = Date.now()) {
 export function clearRateLimitsFor(ids: string[], now = Date.now()) {
   const wanted = ids.filter(Boolean).map((s) => s.toLowerCase());
   let cleared = 0;
-  for (const l of rateLimiters.values())
+  for (const l of rateLimiters.values()) {
+    // a seeker's support action never lifts the admin panel's sign-in limits
+    if (isAdminLimiter(l.name)) continue;
     for (const { key } of l.entries(now)) {
       const k = key.toLowerCase();
       if (wanted.some((t) => k.endsWith(`:${t}`) || k.includes(`:${t}:`))) {
@@ -101,5 +108,6 @@ export function clearRateLimitsFor(ids: string[], now = Date.now()) {
         cleared++;
       }
     }
+  }
   return cleared;
 }

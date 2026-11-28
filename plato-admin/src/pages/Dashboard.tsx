@@ -1,6 +1,7 @@
+import { BrandHeader } from '../components/BrandHeader';
 import { DateRange } from '../components/DateRange';
 import { BarList, providerColor, providerLabel } from '../components/charts';
-import { ErrorNote, Grid2, PageSkeleton, PageHeader, Section, Stat, StatGrid } from '../components/ui';
+import { ErrorNote, Grid2, PageSkeleton, Section, Stat, StatGrid } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { money, num } from '../lib/format';
 import { canSee } from '../lib/nav';
@@ -18,7 +19,20 @@ export default function Dashboard() {
 
   return (
     <>
-      <PageHeader title="Dashboard" description="Plato at a glance for the selected range." actions={<DateRange from={from} to={to_} onChange={setRange} />} />
+      <BrandHeader
+        title="Dashboard"
+        live={!!data?.users.activeInRange}
+        status={
+          data ? (
+            <>
+              <b>{num(data.users.activeInRange)}</b> {data.users.activeInRange === 1 ? 'person' : 'people'} used Plato in this range · {money(data.costUsd)} spent
+            </>
+          ) : (
+            'Plato at a glance for the selected range.'
+          )
+        }
+        actions={<DateRange from={from} to={to_} onChange={setRange} />}
+      />
       <ErrorNote error={error} onRetry={reload} />
       {!data && loading ? (
         <PageSkeleton stats={8} />

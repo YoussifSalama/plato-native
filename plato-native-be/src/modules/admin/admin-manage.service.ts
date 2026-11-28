@@ -15,7 +15,6 @@ import { actionEmail } from '../mail/action-email';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GRANTABLE_PAGES } from './admin-pages';
-import { AdminAuthService } from './admin-auth.service';
 import type {
   createInviteSchema,
   createRoleSchema,
@@ -68,7 +67,6 @@ export class AdminManageService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly mail: MailService,
-    private readonly auth: AdminAuthService,
   ) {}
 
   // ---- admins ---------------------------------------------------------------
@@ -118,10 +116,10 @@ export class AdminManageService {
       data: {
         totp_secret: null,
         totp_pending_secret: null,
+        totp_last_step: null,
         sessions_valid_after: new Date(),
       },
     });
-    this.auth.forgetTotp(id);
     return { ok: true as const };
   }
 

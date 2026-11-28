@@ -40,3 +40,23 @@ model PageActivity {
   @@index([day])
   @@map("page_activity")
 }
+
+// usage_events summed per finished calendar day (ADMIN_TZ), seeker, model, Apify-or-not and feature,
+// so the admin panel never re-reads every event for past days (usage-rollup.ts writes it with
+// $merge; usage-stats.ts reads it). _id = "day|user|model|apify|feature". Days are only ever added.
+model UsageDaily {
+  id       String  @id @map("_id")
+  day      String
+  user_id  String? @db.ObjectId
+  model    String?
+  apify    Boolean
+  feature  String
+  cost     Float
+  events   Int
+  input    Int
+  output   Int
+
+  @@index([day])
+  @@index([user_id, day])
+  @@map("usage_daily")
+}

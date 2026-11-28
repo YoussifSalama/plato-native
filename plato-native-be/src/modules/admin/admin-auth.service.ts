@@ -65,10 +65,9 @@ const uniqueHit = (e: unknown) =>
 @Injectable()
 export class AdminAuthService {
   private readonly logger = new Logger(AdminAuthService.name);
-  // ponytail: in memory, per process. Pending tokens already used for a
-  // session, and each admin's last accepted TOTP step (a code works once).
+  // ponytail: in memory, per process: pending tokens already used for a session (a defence on
+  // top of the code's step, which is claimed in the database and so holds on every instance).
   private readonly usedPending = new Map<string, number>();
-  private readonly lastStep = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -285,9 +284,21 @@ export class AdminAuthService {
     if (!secret || (setup && admin.totp_secret)) throw genericAuthError();
 
     const step = verifyTotp(secret, code);
-    if (step === null || step <= (this.lastStep.get(admin.id) ?? -1))
-      throw genericAuthError();
-    this.lastStep.set(admin.id, step);
+    if (step === null) throw genericAuthError();
+    // A code works once: claim its time step on the admin row. Only a newer step than the last one
+    // accepted wins, atomically, so the same code is refused here and on any other API instance.
+    const claimed = await this.prisma.adminUser.updateMany({
+      where: {
+        id: admin.id,
+        OR: [
+          { totp_last_step: { isSet: false } },
+          { totp_last_step: null },
+          { totp_last_step: { lt: step } },
+        ],
+      },
+      data: { totp_last_step: step },
+    });
+    if (claimed.count !== 1) throw genericAuthError();
     this.markUsed(claims.jti);
 
     const updated = await this.prisma.adminUser.update({
@@ -341,11 +352,11 @@ export class AdminAuthService {
       data: {
         totp_secret: null,
         totp_pending_secret: null,
+        totp_last_step: null,
         sessions_valid_after: new Date(),
         ...(input.newPassword && { password_hash }),
       },
     });
-    this.lastStep.delete(admin.id);
     this.logger.warn(`super admin ${admin.id}: 2FA reset with the super key`);
     return { ok: true as const };
   }
@@ -358,10 +369,5 @@ export class AdminAuthService {
         data: { sessions_valid_after: new Date() },
       })
       .catch(() => undefined); // already gone: nothing to end
-  }
-
-  /** After a reset-2fa: an old code step must not block the new authenticator. */
-  forgetTotp(adminId: string) {
-    this.lastStep.delete(adminId);
   }
 }

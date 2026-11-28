@@ -64,7 +64,7 @@ Signup rules:
 
 `Me = { id, email, isSuper, active, role: { id, name } | null, pages: string[] }` (`pages` = all keys + `admin` for super).
 
-TOTP: RFC 6238, SHA-1, 6 digits, 30 s, ±1 step window, issuer `Plato Admin`. Mandatory for every admin.
+TOTP: RFC 6238, SHA-1, 6 digits, 30 s, ±1 step window, issuer `Plato Admin`. Mandatory for every admin. A code works once: its time step is claimed atomically on the admin (`totp_last_step`), so a replay is refused on every API instance.
 
 ## Admin section (super only)
 
@@ -111,6 +111,14 @@ bare `from`/`to` date is that whole day there, and every `byDay` / `day` is buck
 | GET | `/admin/retention?weeks=8` | `[{ week, users, weeks: [share \| null] }]` — signup-week cohorts (Monday, `ADMIN_TZ`) and the share active in each week after |
 
 Heavy reads (overview periods, activity, retention, attention, searches) are cached in memory for 60 s per process.
+
+Costs for finished days come from `usage_daily` (usage-rollup.service.ts: summed with `$merge` an hour after each
+`ADMIN_TZ` day ends, hourly, only ever adding new days); today and partial days at a range's edges are read from
+`usage_events`. A day not rolled up yet is read raw, so the answer is the same either way. `USAGE_ROLLUP=off` turns it off.
+
+Alerts: hourly, whatever `/admin/attention` returns is emailed to `SUPER_ADMIN_EMAIL`, each kind at most once per
+day (`admin_alerts`, unique `kind + day`, so restarts and other instances never resend; a failed email frees the
+day for the next pass). `ADMIN_ALERTS=off` turns it off; needs SendGrid.
 
 ## Usage — page `usage`
 

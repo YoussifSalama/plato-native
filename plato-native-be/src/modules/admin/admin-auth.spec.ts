@@ -46,7 +46,13 @@ function fakePrisma() {
   const invites: Row[] = [];
   const match = (r: Row, w: Row = {}): boolean =>
     Object.entries(w).every(([k, v]) =>
-      k === 'OR' ? (v as Row[]).some((o) => match(r, o)) : (r[k] ?? null) === v,
+      k === 'OR'
+        ? (v as Row[]).some((o) => match(r, o))
+        : v && typeof v === 'object' && 'lt' in v
+          ? r[k] != null && r[k] < (v as Row).lt
+          : v && typeof v === 'object' && 'isSet' in v
+            ? (r[k] !== undefined) === (v as Row).isSet
+            : (r[k] ?? null) === v,
     );
   const withRole = (u: Row, include?: Row) =>
     include?.role
@@ -124,7 +130,6 @@ function setup() {
     db.prisma as never,
     config,
     mail as never,
-    auth,
   );
   const guard = new AdminGuard(
     tokens,

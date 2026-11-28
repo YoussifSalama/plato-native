@@ -93,6 +93,14 @@ spec moved off the old key, account-data spec now includes `errorLog`).
 - Removed as duplicates: dashboard Users and Cost-by-provider cards, user page "Active days per week" and "Events",
   Usage "Other" and "By user" tabs.
 
+## Dashboard close-out (2026-11-28, last)
+
+- Email alerts: `AdminAlertsService`, hourly, "needs your attention" to `SUPER_ADMIN_EMAIL`, once per problem per day.
+- Daily cost rollup: `usage_daily` + `UsageRollupService`; `usageGroups` reads it for finished days. Checked live:
+  same total and event count as the raw events.
+- Several API instances: used TOTP steps in the DB (`totp_last_step`), plans catalog reloads every minute.
+  Still per process: the rate limiters (a shared store means Redis in front of every request) and the 60 s read cache.
+
 ## Left to do
 
 1. `npm run prisma:push` on the real database for the new collections and indexes (page_activity unique,

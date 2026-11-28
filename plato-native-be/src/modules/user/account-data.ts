@@ -53,10 +53,12 @@ export const ACCOUNT_DATA: [model: string, scope: Scope][] = [
   ['creditAccount', 'user'],
   // Kept without the user id: it is Plato's own AI and Apify spend, and holds nothing personal.
   ['usageEvent', 'user'],
+  // The same spend summed per day: kept without the user id too.
+  ['usageDaily', 'user'],
   ['jobSeeker', 'user'],
   ['user', 'self'],
 ];
-export const ANONYMIZED_MODELS = ['usageEvent'];
+export const ANONYMIZED_MODELS = ['usageEvent', 'usageDaily'];
 
 // Not anyone's own data: shared by every seeker, or a visitor's before they had an account
 // (claimed and deleted at sign-up, unclaimed rows expire after 7 days).
@@ -73,6 +75,7 @@ export const SHARED_MODELS = [
   'adminRole',
   'adminInvite',
   'adminAuditLog',
+  'adminAlert',
 ];
 
 // Where each seeker's files sit in object storage (documents, proof screenshots, resumes Plato drew).

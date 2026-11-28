@@ -16,6 +16,8 @@ model AdminUser {
   totp_secret         String?
   // Shown as a QR during setup, promoted to totp_secret on the first good code.
   totp_pending_secret String?
+  // The last TOTP time step accepted: a code (and any older one) works once, on every API instance.
+  totp_last_step Int?
   // Sessions (and half-way logins) issued before this are refused.
   sessions_valid_after DateTime?
   last_login_at        DateTime?
@@ -84,4 +86,17 @@ model AdminAuditLog {
   @@index([created_at])
   @@index([admin_id, created_at])
   @@map("admin_audit_logs")
+}
+
+// One emailed alert: each kind of problem is sent to the super admin at most once per (Cairo) day,
+// across restarts and instances (the unique key is the lock).
+model AdminAlert {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  kind    String
+  day     String
+  title   String
+  sent_at DateTime @default(now())
+
+  @@unique([kind, day])
+  @@map("admin_alerts")
 }

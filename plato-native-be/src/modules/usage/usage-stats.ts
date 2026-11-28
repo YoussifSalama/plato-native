@@ -120,15 +120,168 @@ export type UsageGroup = {
   outputTokens: number;
 };
 
+type Keys = ('day' | 'feature' | 'user')[];
+type Who = { userId?: string; userIds?: string[] };
+
 /**
  * usage_events in `range`, summed per (model, apify?) and the extra `keys`.
  * The provider is worked out here from model + apify, so its rule lives in one place.
+ * Finished days come from the daily rollup (usage_daily, usage-rollup.ts); today and any part
+ * of a day at the range's edges come from the events themselves. Same answer either way.
  */
 export async function usageGroups(
   prisma: PrismaService,
   range: Range,
-  keys: ('day' | 'feature' | 'user')[],
-  where: { userId?: string; userIds?: string[] } = {},
+  keys: Keys,
+  where: Who = {},
+): Promise<UsageGroup[]> {
+  const through = await rolledThrough(prisma);
+  const split = splitForRollup(range, through);
+  if (!split.rolled) return rawGroups(prisma, range, keys, where);
+  const parts = await Promise.all([
+    rolledGroups(prisma, split.rolled.first, split.rolled.last, keys, where),
+    ...split.raw.map((r) => rawGroups(prisma, r, keys, where)),
+  ]);
+  return mergeGroups(parts.flat(), keys);
+}
+
+/**
+ * Which part of `range` the rollup can answer: whole calendar days up to `through` (the last
+ * rolled day); the rest (a partial first or last day, days not rolled yet) is read raw.
+ */
+export function splitForRollup(
+  range: Range,
+  through: string | null,
+): { rolled: { first: string; last: string } | null; raw: Range[] } {
+  if (!through) return { rolled: null, raw: [range] };
+  let first = tzDay(range.from);
+  if (dayStart(first) < range.from) first = nextDay(first);
+  // the last whole day: the day before the one `to` falls in, or that day if `to` is its end
+  let end = tzDay(range.to);
+  if (dayStart(end).getTime() !== range.to.getTime())
+    end = tzDay(new Date(dayStart(end).getTime() - 1));
+  else end = tzDay(new Date(range.to.getTime() - 1));
+  const last = end < through ? end : through;
+  if (first > last) return { rolled: null, raw: [range] };
+  const raw: Range[] = [];
+  const a = dayStart(first);
+  const b = dayStart(nextDay(last));
+  if (range.from < a) raw.push({ from: range.from, to: a });
+  if (b < range.to) raw.push({ from: b, to: range.to });
+  return { rolled: { first, last }, raw };
+}
+
+/** Rows with the same key (from the rollup and from raw edges) added together. */
+export function mergeGroups(rows: UsageGroup[], keys: Keys): UsageGroup[] {
+  const m = new Map<string, UsageGroup>();
+  for (const r of rows) {
+    const k = [
+      r.model,
+      r.provider,
+      keys.includes('day') ? r.day : '',
+      keys.includes('feature') ? r.feature : '',
+      keys.includes('user') ? r.userId : '',
+    ].join('|');
+    const g = m.get(k);
+    if (!g) m.set(k, { ...r });
+    else {
+      g.costUsd += r.costUsd;
+      g.events += r.events;
+      g.inputTokens += r.inputTokens;
+      g.outputTokens += r.outputTokens;
+    }
+  }
+  return [...m.values()];
+}
+
+// The last day in usage_daily, re-read at most once a minute.
+let through: { at: number; day: string | null } | null = null;
+export async function rolledThrough(
+  prisma: PrismaService,
+): Promise<string | null> {
+  if (process.env.USAGE_ROLLUP === 'off') return null;
+  if (through && Date.now() - through.at < 60_000) return through.day;
+  const last = await prisma.usageDaily
+    .findFirst({ orderBy: { day: 'desc' }, select: { day: true } })
+    .catch(() => null);
+  through = { at: Date.now(), day: last?.day ?? null };
+  return through.day;
+}
+export const forgetRolledThrough = () => {
+  through = null;
+};
+
+async function rolledGroups(
+  prisma: PrismaService,
+  first: string,
+  last: string,
+  keys: Keys,
+  where: Who,
+): Promise<UsageGroup[]> {
+  const match: Ej = { day: { $gte: first, $lte: last } };
+  if (where.userId) match.user_id = ejId(where.userId);
+  if (where.userIds) match.user_id = { $in: where.userIds.map(ejId) };
+  const id: Ej = { model: '$model', apify: '$apify' };
+  if (keys.includes('day')) id.day = '$day';
+  if (keys.includes('feature')) id.feature = '$feature';
+  if (keys.includes('user')) id.user = '$user_id';
+  const rows = (await prisma.usageDaily.aggregateRaw({
+    pipeline: [
+      { $match: match },
+      {
+        $group: {
+          _id: id,
+          cost: { $sum: '$cost' },
+          events: { $sum: '$events' },
+          input: { $sum: '$input' },
+          output: { $sum: '$output' },
+        },
+      },
+    ],
+  })) as unknown as {
+    _id: Ej;
+    cost: unknown;
+    events: unknown;
+    input: unknown;
+    output: unknown;
+  }[];
+  return rows.map((r) => toGroup(r, keys));
+}
+
+function toGroup(
+  r: {
+    _id: Ej;
+    cost: unknown;
+    events: unknown;
+    input: unknown;
+    output: unknown;
+  },
+  keys: Keys,
+): UsageGroup {
+  const model = str(r._id.model);
+  return {
+    ...(keys.includes('day') && { day: str(r._id.day) ?? '' }),
+    ...(keys.includes('feature') && { feature: str(r._id.feature) ?? '' }),
+    ...(keys.includes('user') && { userId: str(r._id.user) }),
+    model,
+    provider: providerOf({
+      model,
+      apify_usd: r._id.apify ? 1 : 0,
+      feature: str(r._id.feature),
+    }),
+    costUsd: num(r.cost),
+    events: num(r.events),
+    inputTokens: num(r.input),
+    outputTokens: num(r.output),
+  };
+}
+
+/** The events themselves (today, partial days, or everything when nothing is rolled up). */
+async function rawGroups(
+  prisma: PrismaService,
+  range: Range,
+  keys: Keys,
+  where: Who = {},
 ): Promise<UsageGroup[]> {
   const match: Ej = {
     created_at: { $gte: ejDate(range.from), $lt: ejDate(range.to) },
@@ -166,24 +319,7 @@ export async function usageGroups(
     input: unknown;
     output: unknown;
   }[];
-  return rows.map((r) => {
-    const model = str(r._id.model);
-    return {
-      ...(keys.includes('day') && { day: str(r._id.day) ?? '' }),
-      ...(keys.includes('feature') && { feature: str(r._id.feature) ?? '' }),
-      ...(keys.includes('user') && { userId: str(r._id.user) }),
-      model,
-      provider: providerOf({
-        model,
-        apify_usd: r._id.apify ? 1 : 0,
-        feature: str(r._id.feature),
-      }),
-      costUsd: num(r.cost),
-      events: num(r.events),
-      inputTokens: num(r.input),
-      outputTokens: num(r.output),
-    };
-  });
+  return rows.map((r) => toGroup(r, keys));
 }
 
 /** Sum groups by one field: [{ [field]: key, costUsd, events }], dearest first. */

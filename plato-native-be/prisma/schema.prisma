@@ -29,6 +29,8 @@ model AdminUser {
   totp_secret         String?
   // Shown as a QR during setup, promoted to totp_secret on the first good code.
   totp_pending_secret String?
+  // The last TOTP time step accepted: a code (and any older one) works once, on every API instance.
+  totp_last_step Int?
   // Sessions (and half-way logins) issued before this are refused.
   sessions_valid_after DateTime?
   last_login_at        DateTime?
@@ -97,6 +99,19 @@ model AdminAuditLog {
   @@index([created_at])
   @@index([admin_id, created_at])
   @@map("admin_audit_logs")
+}
+
+// One emailed alert: each kind of problem is sent to the super admin at most once per (Cairo) day,
+// across restarts and instances (the unique key is the lock).
+model AdminAlert {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  kind    String
+  day     String
+  title   String
+  sent_at DateTime @default(now())
+
+  @@unique([kind, day])
+  @@map("admin_alerts")
 }
 
 // ========== auth.prisma ==========
@@ -1253,6 +1268,26 @@ model PageActivity {
   @@unique([user_id, day, page])
   @@index([day])
   @@map("page_activity")
+}
+
+// usage_events summed per finished calendar day (ADMIN_TZ), seeker, model, Apify-or-not and feature,
+// so the admin panel never re-reads every event for past days (usage-rollup.ts writes it with
+// $merge; usage-stats.ts reads it). _id = "day|user|model|apify|feature". Days are only ever added.
+model UsageDaily {
+  id       String  @id @map("_id")
+  day      String
+  user_id  String? @db.ObjectId
+  model    String?
+  apify    Boolean
+  feature  String
+  cost     Float
+  events   Int
+  input    Int
+  output   Int
+
+  @@index([day])
+  @@index([user_id, day])
+  @@map("usage_daily")
 }
 
 // ========== user.prisma ==========

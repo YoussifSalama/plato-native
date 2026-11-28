@@ -7,6 +7,7 @@ import {
   AdminRateLimitsController,
   AdminUsersController,
 } from './admin-users.controller';
+import { AdminAlertsService } from './admin-alerts.service';
 import { AdminInsightsService } from './admin-insights.service';
 import { AdminUsersService } from './admin-users.service';
 
@@ -17,6 +18,6 @@ import { AdminUsersService } from './admin-users.service';
     AdminRateLimitsController,
     AdminOverviewController,
   ],
-  providers: [AdminUsersService, AdminInsightsService],
+  providers: [AdminUsersService, AdminInsightsService, AdminAlertsService],
 })
 export class AdminUsersModule {}

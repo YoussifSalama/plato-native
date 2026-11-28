@@ -92,6 +92,35 @@ export class AdminUsersService {
     return last;
   }
 
+  /** How many users did anything in `range` (usage, chat, applications, searches): the Dashboard's "active". */
+  async activeUsers(range: Range) {
+    const at = { $gte: ejDate(range.from), $lt: ejDate(range.to) };
+    const distinct = async (
+      model: { aggregateRaw: (a: { pipeline: Ej[] }) => Promise<unknown> },
+      key: string,
+      field: string,
+    ) =>
+      ((await model.aggregateRaw({
+        pipeline: [{ $match: { [field]: at } }, { $group: { _id: `$${key}` } }],
+      })) as { _id: unknown }[])
+        .map((r) => str(r._id))
+        .filter((s): s is string => !!s);
+    const [usage, threads, apps, runs] = await Promise.all([
+      distinct(this.prisma.usageEvent, 'user_id', 'created_at'),
+      distinct(this.prisma.chatThread, 'job_seeker_id', 'updated_at'),
+      distinct(this.prisma.jobApplication, 'job_seeker_id', 'updated_at'),
+      distinct(this.prisma.discoveryRun, 'job_seeker_id', 'started_at'),
+    ]);
+    const sIds = [...new Set([...threads, ...apps, ...runs])];
+    const seekers = sIds.length
+      ? await this.prisma.jobSeeker.findMany({
+          where: { id: { in: sIds } },
+          select: { user_id: true },
+        })
+      : [];
+    return new Set([...usage, ...seekers.map((s) => s.user_id)]).size;
+  }
+
   private async costAllTime(userIds: string[]) {
     const rows = (await this.prisma.usageEvent.aggregateRaw({
       pipeline: [

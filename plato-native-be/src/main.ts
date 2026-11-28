@@ -13,9 +13,12 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { corsFor } from './modules/extension/cors';
+import { ErrorLogService } from './modules/error-log/error-log.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // First in the chain: every response >= 400 (even a body-parser 413 or a CORS refusal) is logged.
+  app.use(app.get(ErrorLogService).middleware);
   // Engine v3 turn results carry screenshots (base64 PNG, up to a few MB); the default 100kb json limit refused them (413).
   app.useBodyParser('json', { limit: '12mb' });
   // No public file serving: CVs live in private storage and are read through the API.

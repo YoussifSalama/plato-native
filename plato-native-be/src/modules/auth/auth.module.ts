@@ -26,6 +26,6 @@ const jwtModule = JwtModule.registerAsync({
   providers: [AuthService, AccountService, JwtAuthGuard, StorageService],
   // Re-export JwtModule too: any module that imports AuthModule to use
   // JwtAuthGuard also needs JwtService in scope to instantiate it.
-  exports: [JwtAuthGuard, jwtModule],
+  exports: [JwtAuthGuard, jwtModule, AccountService],
 })
 export class AuthModule {}

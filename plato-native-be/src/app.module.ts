@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
-import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
+import { SentryModule } from '@sentry/nestjs/setup';
 import { validateEnv } from './config/env/validate-env';
-import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { UsageContextInterceptor } from './modules/usage/usage';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -28,6 +28,9 @@ import { InsightsModule } from './modules/insights/insights.module';
 import { QuizzesModule } from './modules/quizzes/quizzes.module';
 import { GuestModule } from './modules/guest/guest.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AdminUsersModule } from './modules/admin-users/admin-users.module';
+import { ErrorLogModule } from './modules/error-log/error-log.module';
+import { ErrorLogFilter, ErrorLogStamp } from './modules/error-log/error-log.service';
 
 @Module({
   imports: [
@@ -59,13 +62,18 @@ import { AdminModule } from './modules/admin/admin.module';
     QuizzesModule,
     GuestModule,
     AdminModule,
+    AdminUsersModule,
+    ErrorLogModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     { provide: APP_INTERCEPTOR, useClass: UsageContextInterceptor },
-    // Reports unexpected errors to Sentry (when SENTRY_DSN is set), then answers as Nest normally does.
-    { provide: APP_FILTER, useClass: SentryGlobalFilter },
+    // Sentry's filter (reports unexpected errors when SENTRY_DSN is set, then answers as Nest
+    // normally does), extended to note the exception on the request for the error log.
+    { provide: APP_FILTER, useClass: ErrorLogFilter },
+    // Allows everything; remembers the controller so a failed request is logged under its module.
+    { provide: APP_GUARD, useClass: ErrorLogStamp },
   ],
 })
 export class AppModule {}

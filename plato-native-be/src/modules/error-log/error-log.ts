@@ -85,12 +85,18 @@ export function codeOf(e: unknown): string | undefined {
   return typeof c === 'string' ? c.slice(0, 60) : undefined;
 }
 
+// Routes where a 401 is a failed sign-in, not a missing session.
+const SIGN_IN = /^\/(admin\/)?auth\/(login|signup|super-reset|totp\/|reset-password|verify-email)/;
 const TIMEOUT = /timeout|timed out|ETIMEDOUT|AbortError|aborted/i;
 const UPSTREAM =
   /openai|anthropic|apify|claude|gpt-|upstream|bad gateway|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|fetch failed|socket hang up|overloaded/i;
 
 /** One short sentence on why it happened, from known causes; else the message. */
-export function explain(status: number, e: unknown, opts: { routed?: boolean } = {}): string {
+export function explain(
+  status: number,
+  e: unknown,
+  opts: { routed?: boolean; path?: string } = {},
+): string {
   const msg = messageOf(e);
   const code = codeOf(e);
   const name = (e as { name?: string } | null)?.name ?? '';
@@ -112,6 +118,8 @@ export function explain(status: number, e: unknown, opts: { routed?: boolean } =
         ? `The request failed validation: ${msg.slice(0, 200)}`
         : 'The request was malformed or missing required fields.';
     case 401:
+      if (SIGN_IN.test(opts.path ?? ''))
+        return 'Sign-in failed: wrong email, password, code or key, or no such account (the caller is not told which).';
       return 'No valid session: signed out, the session expired, or the token was revoked.';
     case 402:
       return 'Not enough Plato tokens for this action.';

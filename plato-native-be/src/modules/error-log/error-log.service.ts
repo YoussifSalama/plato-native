@@ -126,7 +126,7 @@ export class ErrorLogService {
         status,
         code: codeOf(error),
         message: messageOf(error) || `HTTP ${status}`,
-        explanation: explain(status, error, { routed: !!req.plato?.controller }),
+        explanation: explain(status, error, { routed: !!req.plato?.controller, path }),
         // a code is the credential on pairing, TOTP and email/password-reset routes
         data: capData({ query: req.query, body }, CODE_IS_SECRET.test(path) ? ['code'] : []),
         ip: req.ip,

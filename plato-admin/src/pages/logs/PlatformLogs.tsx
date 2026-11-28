@@ -100,8 +100,8 @@ export default function PlatformLogs() {
           },
           { key: 'module', header: 'Module', hideOnMobile: true, render: (r) => <span className="chip-neutral">{r.module}</span> },
           { key: 'platform', header: 'Platform', hideOnMobile: true, render: (r) => r.platform },
-          { key: 'page', header: 'Page', hideOnMobile: true, render: (r) => <span className="text-xs break-all">{r.page ?? '—'}</span> },
-          { key: 'user', header: 'User', hideOnMobile: true, render: (r) => <span className="text-xs break-all">{r.userEmail ?? '—'}</span> },
+          { key: 'page', header: 'Page', hideOnMobile: true, render: (r) => <span className="block max-w-[140px] truncate text-xs" title={r.page ?? undefined}>{r.page ?? '—'}</span> },
+          { key: 'user', header: 'User', hideOnMobile: true, render: (r) => <span className="block max-w-[180px] truncate text-xs" title={r.userEmail ?? undefined}>{r.userEmail ?? '—'}</span> },
         ]}
       />
     </Section>

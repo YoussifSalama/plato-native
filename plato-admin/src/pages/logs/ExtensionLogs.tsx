@@ -83,7 +83,7 @@ export function ExtensionTable({
           ),
         },
         { key: 'status', header: 'Status', hideOnMobile: true, render: (r) => <StatusBadge status={r.status} /> },
-        { key: 'user', header: 'User', hideOnMobile: true, render: (r) => <span className="text-xs break-all">{r.userEmail ?? '—'}</span> },
+        { key: 'user', header: 'User', hideOnMobile: true, render: (r) => <span className="block max-w-[180px] truncate text-xs" title={r.userEmail ?? undefined}>{r.userEmail ?? '—'}</span> },
       ]}
     />
   );

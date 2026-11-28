@@ -115,6 +115,12 @@ describe('error log explanation', () => {
     expect(explain(status, err)).toMatch(re);
   });
 
+  it('a 401 on a sign-in route reads as a failed sign-in', () => {
+    expect(explain(401, undefined, { path: '/admin/auth/login' })).toMatch(/Sign-in failed/);
+    expect(explain(401, undefined, { path: '/auth/login' })).toMatch(/Sign-in failed/);
+    expect(explain(401, undefined, { path: '/admin/auth/me' })).toMatch(/No valid session/);
+  });
+
   it('a 404 says whether the route exists', () => {
     expect(explain(404, new NotFoundException(), { routed: false })).toMatch(/No such route/);
     expect(explain(404, new NotFoundException(), { routed: true })).toMatch(/not found/);

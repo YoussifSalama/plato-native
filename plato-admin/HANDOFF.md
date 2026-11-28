@@ -57,40 +57,37 @@ spec moved off the old key, account-data spec now includes `errorLog`).
 - `npx eslint src` in the backend reports many errors repo-wide (mostly prettier). Check only that the new
   files are clean; don't reformat the repo.
 
-## Left to do (in this order)
+## Done in the 2026-11-28 follow-up session
 
-Backend (`plato-native-be`):
-1. **Register the error log**: import `ErrorLogModule` in `src/app.module.ts` and register the filter
-   (`@Catch()` class in `src/modules/error-log/error-log.service.ts`) and its "stamp" guard/interceptor as
-   `APP_FILTER` / `APP_GUARD` as the comment in `error-log.module.ts` says. It must keep Sentry working
-   (`SentryGlobalFilter` is already the `APP_FILTER`): either chain to it or report to Sentry from the new
-   filter. Keep response shapes unchanged; logging never throws.
-2. **Users controller + module**: `src/modules/admin-users/admin-users.service.ts` exists (434 lines:
-   list, analytics, block/unblock, ...) but has no controller/module. Add `AdminUsersController`
-   (`@UseGuards(AdminGuard) @AdminPage('users')`) with the contract's `/admin/users*` routes and register
-   the module.
-3. **Rate limits**: `/admin/rate-limits` (list, delete) and `/admin/users/:id/clear-rate-limits`. The
-   registry already exists: `rateLimiters` in `src/modules/extension/extension-token.ts` (every
-   `RateLimiter` registers by name; admin limiters in `src/modules/admin/admin-limits.ts`). `RateLimiter`
-   needs list/clear methods if missing.
-4. **Dashboard**: `GET /admin/overview` (page `dashboard`) per the contract.
-5. Check every contract route against the code (`grep -rn "@Controller('admin" src`), fix field-name
-   mismatches with what `plato-admin/src/lib/types.ts` expects.
-6. Specs the features agent was asked for: provider mapping, plans cache defaults + DB override, filter
-   redaction/explanation + never-throws, blocked user refused by the jwt guard, rate-limit clear.
-7. **Security review** of the admin auth (the auth agent's review is unconfirmed): seeker JWT never passes
-   the admin guard and back; pending token can't act as a session; guard reloads the admin every request;
-   no enumeration by message or timing; invite tokens single-use and hashed; super admin not editable by
-   API; `admin` page not grantable; rate limits on signup/login/totp/super-reset; CORS `/admin/*` only for
-   `ADMIN_URL` with credentials; cookies httpOnly + SameSite=Lax + Secure in production.
+- Error log registered: `ErrorLogModule` in AppModule, `ErrorLogFilter` (extends Sentry's filter, so Sentry still
+  reports) as `APP_FILTER`, `ErrorLogStamp` as `APP_GUARD`, the ≥400 middleware first in `main.ts`.
+- `AdminUsersModule`: `/admin/users*`, `/admin/rate-limits` (GET/DELETE), `/admin/overview`.
+- Contract audit: `topLocations` is `{ location, count }`; list `sort` is `field` / `-field` (written into the
+  contract); `GET /admin/plans` is readable with `plans` **or** `credits` (`@AdminPage` takes several keys);
+  nullable fields typed in `types.ts`.
+- **Logs pages were missing**: the repo root `.gitignore` has `logs/`, so `plato-admin/src/pages/logs/` was never
+  committed. Rewritten; `plato-admin/.gitignore` now un-ignores that folder.
+- Security review (all points of the old item 7 checked). Fixed: codes on auth/TOTP/pairing routes are redacted
+  from error-log data; the `admin-*` sign-in limits are listed/cleared only by the super admin and never by a
+  seeker's "clear rate limits". Failed sign-ins are explained as such in the log.
+- Specs: `src/modules/admin-users/admin-panel.spec.ts` (providers, sort, plans catalog, redaction, explanation,
+  never-throws, blocked seeker, admin token refused by the seeker guard, rate limits).
+- Full stack walked on a **throwaway local Mongo** (docker, empty DB, `prisma db push` there only): super signup →
+  key → QR → TOTP; second super signup, uninvited signup, wrong password, unknown email all the same 401; invite →
+  plain invited signup → "pending activation" → inactive toast → activate → QR → role pages only (others 403,
+  `/team` shows the 403 page); deactivation refuses the next request; super admin not editable; block → existing
+  seeker session 403 BLOCKED and login 403; unblock, verify, logout-all, clear-rate-limits; seeker/admin cookies
+  never cross; cross-site write 403; every page renders as super admin, phone width has no sideways scroll.
 
-Full stack:
-8. Run the backend + `plato-admin` together (`npm run dev` at the repo root starts all apps; admin on
-   :5173 proxies `/admin` to :3000). Walk through: super signup → key → QR → TOTP → invite → invited
-   signup → inactive toast → activate → login → only the role's pages visible. Then each page against real
-   responses.
-9. The new models need their unique indexes: `npm run prisma:push` in `plato-native-be`. **Ask the owner
-   before running it** against any database that holds real data.
+## Left to do
+
+1. `npm run prisma:push` on the real database for the new unique indexes — **ask the owner first**.
+2. Pages were walked with an empty DB (one test seeker): usage, plans calculator and credits have not been seen
+   with real numbers yet.
+3. Known and accepted (owner rules or ponytails): typing the super admin's email at signup reveals it is the super
+   email (asks for the key); admin logout only clears the cookie (the 12 h token stays valid if copied); rate
+   limits and used TOTP steps are per process.
+4. Later, not started: jobs/discovery, auto-apply report, content.
 
 ## Constraints
 

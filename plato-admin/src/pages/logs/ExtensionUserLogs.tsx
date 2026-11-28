@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { ErrorNote, Section } from '../../components/ui';
-import { useSearchState } from '../../lib/searchState';
+import { useRange, useSearchState } from '../../lib/searchState';
 import type { ExtensionUserLogs as Data } from '../../lib/types';
 import { useApi } from '../../lib/useApi';
+import { NotFoundState } from '../../components/RouteError';
 import { ExtensionTable } from './ExtensionLogs';
 
 /** Every extension error of one seeker. */
@@ -13,7 +14,11 @@ export default function ExtensionUserLogs() {
   const [s, set] = useSearchState({ page: '1' });
   const page = Number(s.page) || 1;
   const [open, setOpen] = useState<string | null>(null);
-  const { data, error, loading, reload } = useApi<Data>(`/admin/logs/extension/users/${encodeURIComponent(userId)}`, { page });
+  const { from, to } = useRange();
+  const { data, error, loading, reload } = useApi<Data>(`/admin/logs/extension/users/${encodeURIComponent(userId)}`, { from, to, page });
+  if (error?.status === 404)
+    return <NotFoundState title="No such user" body="No seeker with this id: the account was deleted or the link is wrong." back={{ to: '/logs/extension?view=users', label: 'Back to extension errors' }} />;
+
   return (
     <Section
       title={

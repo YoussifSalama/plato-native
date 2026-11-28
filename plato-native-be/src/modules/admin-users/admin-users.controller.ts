@@ -30,12 +30,24 @@ export class AdminUsersController {
     @Query('status') status = 'all',
     @Query('page') page?: string,
     @Query('sort') sort?: string,
+    @Query('plan') plan?: string,
+    @Query('joined') joined?: string,
+    @Query('active') active?: string,
+    @Query('loss') loss?: string,
   ) {
+    const joinedDays = Math.floor(Number(joined));
     return this.users.list(
       q,
       STATUSES.has(status) ? status : 'all',
       pageOf(page),
       sort ?? '',
+      {
+        plan: plan?.trim() || undefined,
+        joinedDays:
+          joinedDays > 0 && joinedDays <= 365 ? joinedDays : undefined,
+        active: active === '1',
+        loss: loss === '1',
+      },
     );
   }
 

@@ -1,8 +1,9 @@
 import { ErrorNote, PageSkeleton, Section, Stat, StatGrid, Tabs } from '../../components/ui';
+import { ExportButton } from '../../components/ExportButton';
 import { SearchesTable } from '../../components/SearchesTable';
 import { duration, money, num, num1, pct } from '../../lib/format';
 import { defaultRange, useSearchState } from '../../lib/searchState';
-import type { SearchesResponse } from '../../lib/types';
+import type { SearchesResponse, SearchRow } from '../../lib/types';
 import { useApi } from '../../lib/useApi';
 
 const STATUSES = [
@@ -48,7 +49,31 @@ export default function UsageSearches() {
         </>
       )}
       <div className="mt-4">
-        <Section title="Every search" actions={<Tabs compact label="Status" value={s.status} onChange={(status) => set({ status })} items={STATUSES} />}>
+        <Section
+          title="Every search"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Tabs compact label="Status" value={s.status} onChange={(status) => set({ status })} items={STATUSES} />
+              <ExportButton<SearchRow>
+                name="searches"
+                path="/admin/usage/searches"
+                query={{ from: s.from, to: s.to, status: s.status, sort: s.sort }}
+                columns={[
+                  ['Started', (r) => r.startedAt],
+                  ['Seeker', (r) => r.email],
+                  ['Plan', (r) => r.plan],
+                  ['Status', (r) => r.status],
+                  ['Seconds', (r) => r.durationSec],
+                  ['Jobs found', (r) => r.fetched],
+                  ['Jobs kept', (r) => r.shortlisted],
+                  ['Our cost USD', (r) => r.costUsd],
+                  ['Tokens', (r) => r.tokens],
+                  ['Cost source', (r) => r.attribution],
+                ]}
+              />
+            </div>
+          }
+        >
           <SearchesTable rows={data?.items} total={data?.total} page={page} onPage={(p) => set({ page: String(p) })} sort={s.sort} onSort={(sort) => set({ sort })} loading={loading} />
         </Section>
       </div>

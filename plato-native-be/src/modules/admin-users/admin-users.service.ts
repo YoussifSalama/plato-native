@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AccountService } from '../auth/account.service';
@@ -9,6 +10,14 @@ import { forgetSessions } from '../auth/session-state';
 import { planOf } from '../credits/credit-prices';
 import { CreditsService } from '../credits/credits.service';
 import { planFit } from './plan-fit';
+import { AdminInsightsService } from './admin-insights.service';
+
+export type UserFilters = {
+  plan?: string;
+  joinedDays?: number;
+  active?: boolean;
+  loss?: boolean;
+};
 import { ADMIN_TZ, tzDay, weekOf } from '../usage/tz';
 import { clearRateLimitsFor } from '../extension/extension-token';
 import { PrismaService } from '../prisma/prisma.service';
@@ -43,7 +52,58 @@ export class AdminUsersService {
     private readonly prisma: PrismaService,
     private readonly credits: CreditsService,
     private readonly account: AccountService,
+    @Optional() private readonly insights?: AdminInsightsService,
   ) {}
+
+  /**
+   * The Users page filters as id / date conditions: plan, joined in the last N days, did anything
+   * in the last 7 days, and costs more than their plan brings in (last 30 days).
+   */
+  private async filterWhere(f: UserFilters): Promise<Prisma.UserWhereInput[]> {
+    const out: Prisma.UserWhereInput[] = [];
+    const now = Date.now();
+    if (f.plan) {
+      if (f.plan === 'free') {
+        // free = no account yet, or an account on free
+        const paid = await this.prisma.creditAccount.findMany({
+          where: { plan: { not: 'free' } },
+          select: { user_id: true },
+        });
+        out.push({ id: { notIn: paid.map((a) => a.user_id) } });
+      } else {
+        const on = await this.prisma.creditAccount.findMany({
+          where: { plan: f.plan },
+          select: { user_id: true },
+        });
+        out.push({ id: { in: on.map((a) => a.user_id) } });
+      }
+    }
+    if (f.joinedDays)
+      out.push({
+        created_at: { gte: new Date(now - f.joinedDays * 86_400_000) },
+      });
+    if (f.active && this.insights) {
+      const pairs = await this.insights.activity({
+        from: new Date(now - 7 * 86_400_000),
+        to: new Date(now),
+      });
+      out.push({ id: { in: [...new Set(pairs.map((p) => p.userId))] } });
+    }
+    if (f.loss && this.insights) {
+      const top = await this.insights.topUsers(
+        { from: new Date(now - 30 * 86_400_000), to: new Date(now) },
+        100_000,
+      );
+      out.push({
+        id: {
+          in: top
+            .filter((u) => u.costUsd > Math.max(u.priceUsd, 1))
+            .map((u) => u.userId),
+        },
+      });
+    }
+    return out;
+  }
 
   /** Max of the activity dates per user: usage, chat threads, applications, searches. */
   private async lastActive(userIds: string[]) {
@@ -152,10 +212,12 @@ export class AdminUsersService {
     status: string,
     page: number,
     sort: string,
+    f: UserFilters = {},
   ) {
     const needle = q?.trim();
     const where: Prisma.UserWhereInput = {
       AND: [
+        ...(await this.filterWhere(f)),
         needle
           ? {
               OR: [
@@ -535,20 +597,27 @@ export class AdminUsersService {
       gte: tzDay(range.from),
       lte: tzDay(new Date(range.to.getTime() - 1)),
     };
-    const [activity, firstTracked, acc, groups, everyone] = await Promise.all([
-      this.prisma.pageActivity.findMany({
-        where: { user_id: id, day: days },
-        select: { day: true, page: true, views: true, seconds: true },
-      }),
-      this.prisma.pageActivity.findFirst({
-        orderBy: { day: 'asc' },
-        select: { day: true },
-      }),
-      // a read: no account is opened for a seeker who has none
-      this.prisma.creditAccount.findUnique({ where: { user_id: id } }),
-      usageGroups(this.prisma, range, ['user'], { userId: id }),
-      usageGroups(this.prisma, range, ['user']),
-    ]);
+    const [activity, firstTracked, acc, groups, everyone, errors] =
+      await Promise.all([
+        this.prisma.pageActivity.findMany({
+          where: { user_id: id, day: days },
+          select: { day: true, page: true, views: true, seconds: true },
+        }),
+        this.prisma.pageActivity.findFirst({
+          orderBy: { day: 'asc' },
+          select: { day: true },
+        }),
+        // a read: no account is opened for a seeker who has none
+        this.prisma.creditAccount.findUnique({ where: { user_id: id } }),
+        usageGroups(this.prisma, range, ['user'], { userId: id }),
+        usageGroups(this.prisma, range, ['user']),
+        // their failed requests in the range: the user page links to them in Logs
+        this.prisma.errorLog.groupBy({
+          by: ['platform'],
+          where: { user_id: id, created_at: { gte: range.from, lt: range.to } },
+          _count: { _all: true },
+        }),
+      ]);
 
     const byDay = new Map<string, { seconds: number; views: number }>();
     const byPage = new Map<string, { views: number; seconds: number }>();
@@ -597,6 +666,9 @@ export class AdminUsersService {
         .map(([page, p]) => ({ page, views: p.views, seconds: p.seconds }))
         .sort((a, b) => b.seconds - a.seconds || b.views - a.views),
       planFit: fit,
+      errors: Object.fromEntries(
+        errors.map((e) => [e.platform, e._count._all]),
+      ) as Record<string, number>,
       cost: {
         costUsd: round(cost),
         avgActiveUserCostUsd: avg === null ? null : round(avg),

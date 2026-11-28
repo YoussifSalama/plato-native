@@ -1,7 +1,10 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router';
 
 export function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
+  useEffect(() => {
+    document.title = `${title} · Plato Admin`;
+  }, [title]);
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-[radial-gradient(60rem_30rem_at_50%_-10%,var(--primary-soft),transparent)] px-4 py-10">
       <Link to="/login" className="enter mb-6 flex items-center gap-2.5">

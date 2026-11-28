@@ -1,5 +1,5 @@
 # Every push and pull request: the checks a contributor runs locally, for the
-# three apps. Nothing here needs a secret or a database.
+# apps. Nothing here needs a secret or a database.
 name: CI
 
 # Manual only while the GitHub account is locked for billing (every run failed at startup, 2026-11-02).
@@ -76,3 +76,23 @@ jobs:
       - run: npm run lint
       - run: npx tsc --noEmit
       - run: npm run build
+
+  admin:
+    name: Admin panel (build, unit tests, smoke test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plato-admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: plato-admin/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx vitest run
+      # every page opened on a laptop and a phone against a mocked API (e2e/fixtures.ts): no secrets, no database
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

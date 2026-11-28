@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { createBrowserRouter, Navigate } from 'react-router';
+import { createBrowserRouter, Navigate, Outlet } from 'react-router';
+import { RouteError } from './components/RouteError';
 import { Forbidden, NotFound, RequirePage, Shell } from './components/Shell';
 import { Loading } from './components/ui';
 import { useAuth } from './lib/auth';
@@ -37,12 +38,18 @@ function Home() {
 
 // SPA routes never start with /admin: that prefix is the API (proxied in dev).
 export const router = createBrowserRouter([
-  { path: '/login', element: <Login /> },
-  { path: '/signup', element: <Signup /> },
-  { path: '/recover', element: <Recover /> },
+  { path: '/login', element: <Login />, errorElement: <RouteError /> },
+  { path: '/signup', element: <Signup />, errorElement: <RouteError /> },
+  { path: '/recover', element: <Recover />, errorElement: <RouteError /> },
   {
     element: <Shell />,
+    errorElement: <RouteError />,
     children: [
+      {
+        // a page that fails renders its error inside the shell: the sidebar and header stay
+        element: <Outlet />,
+        errorElement: <RouteError />,
+        children: [
       { index: true, element: <Home /> },
       {
         element: <RequirePage page="usage" />,
@@ -89,6 +96,8 @@ export const router = createBrowserRouter([
         ],
       },
       { path: '*', element: <NotFound /> },
+        ],
+      },
     ],
   },
 ]);

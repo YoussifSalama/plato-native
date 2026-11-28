@@ -21,7 +21,8 @@ export default function Team() {
   const [roleDialog, setRoleDialog] = useState<Role | 'new' | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [invitesTick, setInvitesTick] = useState(0);
-  const tab = s.tab as Tab;
+  // an unknown tab in the link opens the first one, never an empty page
+  const tab: Tab = (['admins', 'roles', 'invites', 'audit'] as const).includes(s.tab as Tab) ? (s.tab as Tab) : 'admins';
 
   return (
     <>

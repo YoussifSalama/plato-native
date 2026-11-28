@@ -6,19 +6,17 @@ import { useRange } from '../../lib/searchState';
 /** Logs pages share the header, the range (kept in the URL across tabs) and the tabs. */
 export default function LogsLayout() {
   const { from, to, setRange } = useRange();
-  const { search, pathname } = useLocation();
+  const { search } = useLocation();
   const p = new URLSearchParams(search);
   const keep = new URLSearchParams();
   for (const k of ['from', 'to']) if (p.get(k)) keep.set(k, p.get(k)!);
   const q = keep.toString() ? `?${keep}` : '';
-  // one seeker's extension errors are all of theirs: no range there
-  const ranged = !/^\/logs\/extension\/.+/.test(pathname);
   return (
     <>
       <PageHeader
         title="Logs"
         description="Every failed request and extension error, with a plain reason for each."
-        actions={ranged ? <DateRange from={from} to={to} onChange={setRange} /> : undefined}
+        actions={<DateRange from={from} to={to} onChange={setRange} />}
       />
       <RouteTabs
         items={[

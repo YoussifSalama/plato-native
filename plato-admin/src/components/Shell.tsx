@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router';
-import { LogOut, Menu, X } from 'lucide-react';
+import { LogOut, Menu, Search, X } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { useAuth } from '../lib/auth';
 import { spring } from '../lib/motion';
 import { canSee, NAV } from '../lib/nav';
 import { CardFx } from './CardFx';
+import { CommandPalette } from './CommandPalette';
+import { NotFoundState } from './RouteError';
 import { Loading } from './ui';
 
 function Brand() {
@@ -60,7 +62,19 @@ function SideNav({ id, onNavigate }: { id: string; onNavigate?: () => void }) {
 export function Shell() {
   const { me, loading, error, logout, refresh } = useAuth();
   const [drawer, setDrawer] = useState(false);
-  const { pathname } = useLocation();
+  const [palette, setPalette] = useState(false);
+  // Ctrl+K / ⌘K anywhere opens the search
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPalette((p) => !p);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const { pathname, search } = useLocation();
   useEffect(() => setDrawer(false), [pathname]);
   // "/users/123" and "/users" are one section: moving inside it doesn't replay the entrance.
   const section = pathname.split('/')[1] || 'home';
@@ -75,11 +89,13 @@ export function Shell() {
         </button>
       </div>
     );
-  if (!me) return <Navigate to="/login" replace state={{ from: pathname }} />;
+  // back to the same page with its filters (the query string) after signing in
+  if (!me) return <Navigate to="/login" replace state={{ from: pathname + search }} />;
 
   return (
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[248px_1fr]">
       <CardFx />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} />
       <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:p-3">
         <div className="flex w-full flex-col gap-5 rounded-[22px] border border-border bg-card px-3 py-4 shadow-card">
           <Brand />
@@ -106,6 +122,16 @@ export function Shell() {
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-md sm:px-6 lg:border-0 lg:px-8">
           <button type="button" className="btn-ghost -ml-2 px-2 lg:hidden" onClick={() => setDrawer(true)} aria-label="Open menu">
             <Menu className="size-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setPalette(true)}
+            className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-input bg-card px-3 text-left text-sm text-text-tertiary transition-colors hover:border-primary-line sm:max-w-xs"
+            aria-label="Search (Ctrl+K)"
+          >
+            <Search className="size-4 shrink-0" />
+            <span className="truncate">Search seekers, pages…</span>
+            <kbd className="ml-auto hidden rounded border border-border px-1.5 text-[11px] sm:inline">Ctrl K</kbd>
           </button>
           <div className="ml-auto flex min-w-0 items-center gap-3">
             <div className="min-w-0 text-right leading-tight">
@@ -152,13 +178,5 @@ export function Forbidden() {
 }
 
 export function NotFound() {
-  return (
-    <div className="flex flex-col items-center py-20 text-center">
-      <p className="text-5xl font-extrabold text-primary">404</p>
-      <h1 className="mt-3 text-lg font-bold">Page not found</h1>
-      <Link to="/" className="btn-primary mt-5">
-        Back to the start
-      </Link>
-    </div>
-  );
+  return <NotFoundState />;
 }

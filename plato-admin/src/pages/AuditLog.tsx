@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ExportButton } from '../components/ExportButton';
 import { Link } from 'react-router';
 import { DataTable } from '../components/DataTable';
 import { ErrorNote, KeyValues, SearchInput, Section } from '../components/ui';
@@ -55,7 +56,27 @@ export function AuditLog() {
   const [open, setOpen] = useState<string | null>(null);
   const { data, error, loading, reload } = useApi<Paged<AuditRow>>('/admin/audit', { q: s.q, page });
   return (
-    <Section actions={<SearchInput value={s.q} onChange={(q) => set({ q })} placeholder="Search admin email or action" />}>
+    <Section
+      actions={
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <SearchInput value={s.q} onChange={(q) => set({ q })} placeholder="Search admin email or action" />
+          <ExportButton<AuditRow>
+            name="audit-log"
+            path="/admin/audit"
+            query={{ q: s.q }}
+            columns={[
+              ['When', (r) => r.createdAt],
+              ['Admin', (r) => r.adminEmail],
+              ['What', (r) => actionLabel(r.action)],
+              ['Route', (r) => r.action],
+              ['On', (r) => r.target],
+              ['Sent', (r) => r.detail],
+              ['IP', (r) => r.ip],
+            ]}
+          />
+        </div>
+      }
+    >
       <ErrorNote error={error} onRetry={reload} />
       <DataTable
         rows={data?.items}

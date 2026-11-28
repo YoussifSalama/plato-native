@@ -31,6 +31,7 @@ export function DataTable<T>({
   onRowClick,
   expanded,
   renderExpanded,
+  renderCard,
 }: {
   columns: Column<T>[];
   rows: T[] | null | undefined;
@@ -45,6 +46,8 @@ export function DataTable<T>({
   onRowClick?: (row: T) => void;
   expanded?: string | null;
   renderExpanded?: (row: T) => ReactNode;
+  /** On a phone, each row as a card (all of it readable) instead of a table that cuts text off. */
+  renderCard?: (row: T) => ReactNode;
 }) {
   const desc = sort?.startsWith('-');
   const field = sort?.replace(/^-/, '');
@@ -52,7 +55,49 @@ export function DataTable<T>({
 
   return (
     <div className="min-w-0">
-      <div className="-mx-4 overflow-x-auto sm:-mx-5">
+      {/* on a phone the column headers are gone (cards, hidden columns): sort from a menu instead */}
+      {onSort && columns.some((c) => c.sort) && (
+        <label className="mb-2 flex items-center gap-2 text-xs text-text-secondary sm:hidden">
+          Sort by
+          <select className="input h-8 w-auto" value={sort ?? ''} onChange={(e) => onSort(e.target.value)} aria-label="Sort by">
+            {columns
+              .filter((c) => c.sort)
+              .flatMap((c) => {
+                const name = typeof c.header === 'string' ? c.header : c.key;
+                return [
+                  <option key={`-${c.sort}`} value={`-${c.sort}`}>
+                    {name} ↓
+                  </option>,
+                  <option key={c.sort} value={c.sort}>
+                    {name} ↑
+                  </option>,
+                ];
+              })}
+          </select>
+        </label>
+      )}
+      {renderCard && (
+        <ul className={`flex flex-col divide-y divide-divider sm:hidden ${loading && rows?.length ? 'opacity-60' : ''}`}>
+          {rows?.map((r) => {
+            const id = rowKey(r);
+            return (
+              <li key={id}>
+                <div
+                  role={onRowClick ? 'button' : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  className={`-mx-2 rounded-lg px-2 py-3 ${onRowClick ? 'cursor-pointer active:bg-primary-tint' : ''}`}
+                  onClick={onRowClick ? () => onRowClick(r) : undefined}
+                  onKeyDown={onRowClick ? (e) => e.key === 'Enter' && onRowClick(r) : undefined}
+                >
+                  {renderCard(r)}
+                </div>
+                {expanded === id && renderExpanded && <div className="fade-in pb-3">{renderExpanded(r)}</div>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className={`-mx-4 overflow-x-auto sm:-mx-5 ${renderCard ? 'hidden sm:block' : ''}`}>
         <table className="w-full min-w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-divider text-left text-xs font-semibold text-text-secondary">

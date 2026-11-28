@@ -154,6 +154,7 @@ export type Engagement = {
   timeInApp: { seconds: number; activeDays: number; avgSecondsPerActiveDay: number | null; byDay: { day: string; seconds: number; views: number }[] };
   pages: { page: string; views: number; seconds: number }[];
   planFit: PlanFit | null;
+  errors: Record<string, number>;
   cost: { costUsd: number; avgActiveUserCostUsd: number | null; vsAverage: number | null };
 };
 
@@ -242,6 +243,9 @@ export type CreditLedger = {
   created_at: string;
 };
 export type CreditView = { account: CreditAccount; ledger: CreditLedger[] };
+/** GET /admin/credits/ledger: movements across seekers, with who and totals by kind for the range. */
+export type LedgerRow = CreditLedger & { email: string | null; name: string | null };
+export type LedgerPage = Paged<LedgerRow> & { totals: { kind: string; amount: number; count: number }[] };
 
 // ---------- Users ----------
 export type UserStatus = 'all' | 'verified' | 'unverified' | 'blocked';

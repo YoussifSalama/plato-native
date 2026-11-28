@@ -5,6 +5,9 @@ import { date, duration, money, num, num1 } from '../../lib/format';
 import { useSearchState } from '../../lib/searchState';
 import type { Engagement, PlanFit, SearchesResponse } from '../../lib/types';
 import { useApi } from '../../lib/useApi';
+import { useAuth } from '../../lib/auth';
+import { canSee } from '../../lib/nav';
+import { Link } from 'react-router';
 
 const VERDICT = {
   short: ['danger', 'Plan too small'],
@@ -45,10 +48,19 @@ export function UserEngagement({ id, from, to }: { id: string; from: string; to:
   const searches = useApi<SearchesResponse>('/admin/usage/searches', { from, to, userId: id, sort: s.ssort, page: spage });
   const sum = searches.data?.summary;
   const fit = data?.planFit;
+  const { me } = useAuth();
+  const canLogs = canSee(me?.pages, me?.isSuper, 'logs');
 
   return (
     <div className="mt-6">
-      <h2 className="mb-3 text-sm font-bold text-text-secondary">How they use Plato</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-text-secondary">How they use Plato</h2>
+        {data && canLogs && (
+          <Link to={`/logs?user=${id}&from=${from}&to=${to}`} className="text-sm font-semibold text-primary hover:underline">
+            {num(Object.values(data.errors ?? {}).reduce((a, b) => a + b, 0))} failed requests in this range →
+          </Link>
+        )}
+      </div>
       <ErrorNote error={error ?? searches.error} onRetry={() => (reload(), searches.reload())} />
       {!data ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

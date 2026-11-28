@@ -1,3 +1,5 @@
+import { CalendarDays } from 'lucide-react';
+import { date } from '../lib/format';
 import { defaultRange } from '../lib/searchState';
 
 /** The analytics pages' range picker: two native date inputs and quick presets. */
@@ -21,23 +23,38 @@ export function DateRange({ from, to, onChange }: { from: string; to: string; on
           );
         })}
       </div>
-      <input
-        type="date"
-        aria-label="From"
-        className="input w-auto"
-        value={from}
-        max={to}
-        onChange={(e) => e.target.value && onChange({ from: e.target.value, to })}
-      />
+      <DayInput label="From" value={from} max={to} onPick={(v) => onChange({ from: v, to })} />
       <span className="text-text-tertiary">–</span>
+      <DayInput label="To" value={to} min={from} onPick={(v) => onChange({ from, to: v })} />
+    </div>
+  );
+}
+
+/**
+ * A date written the panel's way ("30 Oct 2026", like every table) that still opens the browser's own
+ * date picker: the native input lies invisible over the label and takes the click.
+ */
+function DayInput({ label, value, min, max, onPick }: { label: string; value: string; min?: string; max?: string; onPick: (v: string) => void }) {
+  return (
+    <span className="relative inline-flex h-9 items-center gap-2 rounded-lg border border-input bg-card px-3 text-sm focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+      <CalendarDays className="size-4 text-text-tertiary" />
+      <span className="tabular-nums">{date(`${value}T12:00:00`)}</span>
       <input
         type="date"
-        aria-label="To"
-        className="input w-auto"
-        value={to}
-        min={from}
-        onChange={(e) => e.target.value && onChange({ from, to: e.target.value })}
+        aria-label={label}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => e.target.value && onPick(e.target.value)}
+        onClick={(e) => {
+          try {
+            (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
+          } catch {
+            // not allowed here (or already open): the input's own click still opens it
+          }
+        }}
       />
-    </div>
+    </span>
   );
 }

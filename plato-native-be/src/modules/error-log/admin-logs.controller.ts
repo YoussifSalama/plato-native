@@ -23,6 +23,7 @@ import {
 
 /** The list's filters as a raw Mongo $match (the groups aggregation). Same rules as where(). */
 export function groupMatch(f: {
+  user?: string;
   platform?: string;
   module?: string;
   status?: string;
@@ -36,6 +37,7 @@ export function groupMatch(f: {
   const re = q ? { $regex: escape(q), $options: 'i' } : null;
   return {
     created_at: { $gte: ejDate(f.range.from), $lt: ejDate(f.range.to) },
+    ...(f.user && OBJECT_ID.test(f.user) && { user_id: ejId(f.user) }),
     ...(f.platform && { platform: f.platform }),
     ...(f.module && { module: f.module }),
     ...(cls !== null
@@ -100,6 +102,7 @@ export class AdminLogsController {
   constructor(private readonly prisma: PrismaService) {}
 
   private where(f: {
+    user?: string;
     platform?: string;
     module?: string;
     status?: string;
@@ -119,6 +122,8 @@ export class AdminLogsController {
         : status &&
           Number.isFinite(Number(status)) && { status: Number(status) }),
       ...(f.range && { created_at: { gte: f.range.from, lt: f.range.to } }),
+      // one seeker's errors (the link on a user's page)
+      ...(f.user && OBJECT_ID.test(f.user) && { user_id: f.user }),
       ...(q && {
         OR: [
           { message: { contains: q, mode: 'insensitive' } },
@@ -141,8 +146,10 @@ export class AdminLogsController {
     @Query('to') to?: string,
     @Query('sort') sort = 'newest',
     @Query('page') page?: string,
+    @Query('user') user?: string,
   ) {
     const where = this.where({
+      user,
       platform,
       module,
       status,
@@ -177,6 +184,7 @@ export class AdminLogsController {
     @Query('to') to?: string,
     @Query('sort') sort = 'count',
     @Query('page') page?: string,
+    @Query('user') user?: string,
   ) {
     const p = pageOf(page);
     // a native aggregation: Prisma's groupBy on these fields crashes its query engine on Mongo
@@ -184,6 +192,7 @@ export class AdminLogsController {
       pipeline: [
         {
           $match: groupMatch({
+            user,
             platform,
             module,
             status,
@@ -289,11 +298,23 @@ export class AdminLogsController {
 
   /** Seekers by their extension errors (server, client and apply stops), latest first. */
   @Get('extension/users')
-  async extensionUsers(@Query('q') q?: string, @Query('page') page?: string) {
+  async extensionUsers(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const range = parseRange(from, to);
     const [logs, stops] = await Promise.all([
       this.prisma.errorLog.aggregateRaw({
         pipeline: [
-          { $match: { platform: 'extension', user_id: { $ne: null } } },
+          {
+            $match: {
+              platform: 'extension',
+              user_id: { $ne: null },
+              created_at: { $gte: ejDate(range.from), $lt: ejDate(range.to) },
+            },
+          },
           {
             $group: {
               _id: {
@@ -312,6 +333,14 @@ export class AdminLogsController {
         pipeline: [
           { $match: { 'detail.stops.0': { $exists: true } } },
           { $unwind: '$detail.stops' },
+          {
+            $match: {
+              'detail.stops.at': {
+                $gte: range.from.toISOString(),
+                $lt: range.to.toISOString(),
+              },
+            },
+          },
           {
             $group: {
               _id: {
@@ -401,6 +430,8 @@ export class AdminLogsController {
   async extensionUser(
     @Param('userId') userId: string,
     @Query('page') page?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
     if (!OBJECT_ID.test(userId)) throw new NotFoundException('No such user');
     const user = await this.prisma.user.findUnique({
@@ -414,7 +445,11 @@ export class AdminLogsController {
     });
     if (!user) throw new NotFoundException('No such user');
     const r = await this.extensionErrors(
-      { userId, seekerId: user.job_seeker?.id ?? null },
+      {
+        userId,
+        seekerId: user.job_seeker?.id ?? null,
+        range: parseRange(from, to),
+      },
       pageOf(page),
     );
     return {

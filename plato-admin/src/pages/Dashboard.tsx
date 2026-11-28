@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { BrandHeader, today } from '../components/BrandHeader';
 import { DateRange } from '../components/DateRange';
+import { UpdatedAgo } from '../components/UpdatedAgo';
 import { DayChart } from '../components/charts';
 import { Empty, ErrorNote, Grid2, PageSkeleton, Section, Stat, StatGrid, StatusChip, Tabs } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -117,8 +118,9 @@ function Retention({ rows }: { rows: RetentionRow[] }) {
 
 export default function Dashboard() {
   const { from, to: to_, setRange } = useRange();
-  const { data, error, loading, reload } = useApi<Overview>('/admin/overview', { from, to: to_ });
-  const attention = useApi<AttentionItem[]>('/admin/attention');
+  // live: refreshed every minute while the tab is open
+  const { data, error, loading, reload, updatedAt } = useApi<Overview>('/admin/overview', { from, to: to_ }, { refreshMs: 60_000 });
+  const attention = useApi<AttentionItem[]>('/admin/attention', undefined, { refreshMs: 60_000 });
   const retention = useApi<RetentionRow[]>('/admin/retention');
   const [trend, setTrend] = useState<TrendKey>('active');
   const { me } = useAuth();
@@ -150,11 +152,23 @@ export default function Dashboard() {
         <PageSkeleton stats={12} />
       ) : data ? (
         <>
-          {data.previous && (
-            <p className="mb-2 text-xs text-text-tertiary">
-              Percentages compare with {date(data.previous.from)} – {date(new Date(new Date(data.previous.to).getTime() - 1).toISOString())}.
-            </p>
-          )}
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            {data.previous && (
+              <p className="text-xs text-text-tertiary">
+                Percentages compare with {date(data.previous.from)} – {date(new Date(new Date(data.previous.to).getTime() - 1).toISOString())}.
+              </p>
+            )}
+            <UpdatedAgo
+              at={updatedAt}
+              loading={loading}
+              every={60_000}
+              onRefresh={() => {
+                reload();
+                attention.reload();
+                retention.reload();
+              }}
+            />
+          </div>
           <StatGrid>
             <Stat label="Signups" to={to('users', '/users')} value={num(data.users.new)} change={c?.signups} hint={`${num(data.users.total)} users in all`} />
             <Stat label="Active users" to={to('users', '/users?sort=-lastActiveAt')} value={num(data.users.activeInRange)} change={c?.active} hint="Did anything in the range" />

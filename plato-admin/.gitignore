@@ -6,3 +6,5 @@ dist
 
 # The repo root ignores logs/; this folder is source (the Logs pages).
 !src/pages/logs/
+test-results
+playwright-report

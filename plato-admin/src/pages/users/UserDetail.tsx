@@ -10,7 +10,11 @@ import { date, dateTime, money, num, num1 } from '../../lib/format';
 import { useRange } from '../../lib/searchState';
 import type { UserAnalytics } from '../../lib/types';
 import { useApi } from '../../lib/useApi';
+import { NotFoundState } from '../../components/RouteError';
 import { UserEngagement } from './UserEngagement';
+import { UserCredits } from '../../components/UserCredits';
+import { useAuth } from '../../lib/auth';
+import { canSee } from '../../lib/nav';
 import { UserStatusChip } from './UsersList';
 
 const entries = (o: Record<string, number> | undefined) =>
@@ -23,6 +27,7 @@ export default function UserDetail() {
   const { from, to, setRange } = useRange();
   const { data, error, loading, reload } = useApi<UserAnalytics>(`/admin/users/${id}/analytics`, { from, to });
   const confirm = useConfirm();
+  const { me } = useAuth();
   const u = data?.user;
 
   const run = async (path: string, done: string, body?: unknown) => {
@@ -48,6 +53,9 @@ export default function UserDetail() {
     if (await confirm({ title, body, confirmLabel: 'Confirm', danger })) await run(path, done);
   };
 
+  if (error?.status === 404)
+    return <NotFoundState title="No such user" body="The account was deleted, or the link has a wrong id." back={{ to: '/users', label: 'Back to users' }} />;
+
   return (
     <>
       <PageHeader
@@ -56,9 +64,11 @@ export default function UserDetail() {
           u && (
             <span className="flex flex-wrap items-center gap-2">
               {u.email} <UserStatusChip u={u} /> <span className="chip-neutral">{u.plan}</span>
-              <Link className="text-primary hover:underline" to={`/credits?user=${u.id}`}>
-                Credits
-              </Link>
+              {canSee(me?.pages, me?.isSuper, 'logs') && (
+                <Link className="text-primary hover:underline" to={`/logs?user=${u.id}&from=${from}&to=${to}`}>
+                  Errors
+                </Link>
+              )}
             </span>
           )
         }
@@ -146,6 +156,7 @@ export default function UserDetail() {
               />
             </Section>
           </Grid2>
+          {canSee(me?.pages, me?.isSuper, 'credits') && <UserCredits user={id} onChanged={reload} />}
           <UserEngagement id={id} from={from} to={to} />
         </>
       )}

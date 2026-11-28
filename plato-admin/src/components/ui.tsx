@@ -1,6 +1,6 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
-import { ArrowUpRight, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Loader2, SlidersHorizontal } from 'lucide-react';
 import * as m from 'motion/react-m';
 import type { ApiError } from '../lib/api';
 import { num } from '../lib/format';
@@ -13,12 +13,24 @@ import { CountUp } from './CountUp';
  * Every page's header: the brand panel (components/BrandHeader.tsx) with the section's name as its
  * eyebrow, the title, its description, and the page's action bar on the right — the same spot on every page.
  */
-export function PageHeader({ title, description, actions, eyebrow }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode }) {
+export function PageHeader({
+  title,
+  description,
+  actions,
+  eyebrow,
+  docTitle,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  eyebrow?: ReactNode;
+  docTitle?: string;
+}) {
   const { pathname } = useLocation();
   const section = NAV.find((n) => n.to !== '/' && (pathname === n.to || pathname.startsWith(`${n.to}/`)))?.label;
   // the section's name only where it adds something (a user's page, Rate limits), never above the same title
   const crumb = eyebrow ?? (section && section !== title ? section : undefined);
-  return <BrandHeader eyebrow={crumb} title={title} description={description} actions={actions} />;
+  return <BrandHeader eyebrow={crumb} title={title} description={description} actions={actions} docTitle={docTitle ?? (typeof title === 'string' ? title : section)} />;
 }
 
 /**
@@ -150,8 +162,9 @@ export function ErrorNote({ error, onRetry }: { error: ApiError | null; onRetry?
 
 /** Loading the first time: a spinner in place of the content, never a blank page. */
 export function Loading() {
+  // shows only after a moment: a quick page load goes straight to its own skeleton, no spinner flash
   return (
-    <div className="fade-in flex items-center justify-center py-16">
+    <div className="flex items-center justify-center py-16 [animation:fade-in_0.2s_ease-out_0.4s_both]">
       <Spinner className="size-6" />
     </div>
   );
@@ -289,5 +302,21 @@ export function KeyValues({ rows }: { rows: [string, ReactNode][] }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+/**
+ * A page's filters: in a row on a laptop; on a phone folded behind one "Filters" button (with how
+ * many are set), so the data is not pushed below the fold.
+ */
+export function Filters({ active = 0, children }: { active?: number; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="btn-outline h-8 sm:hidden" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <SlidersHorizontal className="size-4" /> Filters{active ? ` · ${active}` : ''}
+      </button>
+      <div className={`${open ? 'flex' : 'hidden'} w-full flex-col gap-2 sm:flex sm:w-auto sm:flex-row sm:flex-wrap sm:items-center`}>{children}</div>
+    </>
   );
 }

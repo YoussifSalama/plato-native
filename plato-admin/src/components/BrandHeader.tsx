@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 // The seeker app's brand panel (lib/brand.ts BRAND_PANEL, Home's header): a white card washed with
 // cobalt from the top left and azure from the bottom right.
@@ -27,7 +27,10 @@ export function BrandHeader({
   status,
   live,
   actions,
+  docTitle,
 }: {
+  /** The browser tab's title when `title` is not plain text ("Rate limits"). */
+  docTitle?: string;
   eyebrow?: ReactNode;
   title: ReactNode;
   description?: ReactNode;
@@ -35,6 +38,13 @@ export function BrandHeader({
   live?: boolean;
   actions?: ReactNode;
 }) {
+  // each page names its browser tab ("Users · Plato Admin"), so several open tabs can be told apart
+  const name = docTitle ?? (typeof title === 'string' ? title : undefined);
+  const crumb = typeof eyebrow === 'string' && !/\d/.test(eyebrow) ? eyebrow : undefined;
+  useEffect(() => {
+    if (!name) return;
+    document.title = [name, crumb && crumb !== name ? crumb : null, 'Plato Admin'].filter(Boolean).join(' · ');
+  }, [name, crumb]);
   return (
     <section className={`${BRAND_PANEL} fx-depth enter relative isolate mb-5 overflow-hidden rounded-[28px] px-5 py-6 shadow-card sm:px-8 sm:py-7`}>
       <span

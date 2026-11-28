@@ -7,7 +7,7 @@ import { money, num } from '../../lib/format';
 import { useRange } from '../../lib/searchState';
 import type { ProviderUsage } from '../../lib/types';
 import { useApi } from '../../lib/useApi';
-import { NotFound } from '../../components/Shell';
+import { NotFoundState } from '../../components/RouteError';
 import { PROVIDERS, type Provider } from '../../lib/types';
 
 type ModelRow = ProviderUsage['byModel'][number];
@@ -19,7 +19,7 @@ export default function UsageProvider() {
   const { data, error, loading, reload } = useApi<ProviderUsage>(valid ? `/admin/usage/providers/${provider}` : null, { from, to });
   const [sort, setSort] = useState('-costUsd');
 
-  if (!valid) return <NotFound />;
+  if (!valid) return <NotFoundState title="No such provider" body="Usage is split by Apify, Anthropic, OpenAI and Other." back={{ to: '/usage', label: 'Back to usage' }} />;
   if (!data) return loading ? <PageSkeleton /> : <ErrorNote error={error} onRetry={reload} />;
   const tokens = data.byModel.reduce((s, m) => s + m.inputTokens + m.outputTokens, 0);
   return (
@@ -59,9 +59,18 @@ export default function UsageProvider() {
               .map((f) => ({ key: f.feature, label: f.feature, value: f.costUsd, sub: `${num(f.events)} ev.` }))}
           />
         </Section>
-        <Section title="Top users">
+        <Section
+          title="Top users"
+          actions={
+            data.topUsers.length > 10 && (
+              <Link to={`/users?sort=-costUsd`} className="text-sm font-semibold text-primary hover:underline">
+                All users →
+              </Link>
+            )
+          }
+        >
           <DataTable
-            rows={data.topUsers}
+            rows={data.topUsers.slice(0, 10)}
             rowKey={(r) => r.userId}
             empty="No users in this range."
             columns={[

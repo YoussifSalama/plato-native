@@ -29,6 +29,7 @@ export default function RateLimits() {
   return (
     <>
       <PageHeader
+        docTitle="Rate limits"
         title={
           <span className="flex items-center gap-2">
             <Link to="/users" className="btn-ghost -ml-2 px-2" aria-label="Back to users">

@@ -16,6 +16,7 @@ import {
   type AdminRequest,
 } from '../admin/admin-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { ejDate, ejId, num, parseRange, str } from '../usage/usage-stats';
 import { allPlans, allTopups } from './credit-prices';
 import { CreditsService } from './credits.service';
 import { CreditsReportService } from './report.service';
@@ -52,6 +53,112 @@ export class CreditsAdminController {
   @Get('report')
   report(@Query('days') days = '30') {
     return this.reports.report(Number(days));
+  }
+
+  /**
+   * Every token movement across seekers, newest first, 50 a page: who got or spent what, and
+   * every manual change by an admin. kind = comma list of ledger kinds; manual=1 = only what an
+   * admin did (adjustments, top-ups, plan grants); q = seeker email or name. Plus totals by kind.
+   * Before ":user" so "ledger" is not read as a seeker.
+   */
+  @Get('ledger')
+  async allLedger(
+    @Query('kind') kind?: string,
+    @Query('manual') manual?: string,
+    @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+  ) {
+    const range = parseRange(from, to);
+    const p = Math.max(1, Math.floor(Number(page) || 1));
+    let userIds: string[] | undefined;
+    if (q?.trim()) {
+      const hits = await this.prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: q.trim(), mode: 'insensitive' } },
+            { full_name: { contains: q.trim(), mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+        take: 1000,
+      });
+      userIds = hits.map((h) => h.id);
+      if (!userIds.length) return { items: [], total: 0, totals: [] };
+    }
+    const kinds = kind
+      ?.split(',')
+      .map((k) => k.trim())
+      .filter(Boolean);
+    const match = {
+      created_at: { $gte: ejDate(range.from), $lt: ejDate(range.to) },
+      ...(userIds && { user_id: { $in: userIds.map(ejId) } }),
+      ...(kinds?.length && { kind: { $in: kinds } }),
+      ...(manual === '1' && { 'meta.admin': { $exists: true } }),
+    };
+    const [out] = (await this.prisma.creditLedger.aggregateRaw({
+      pipeline: [
+        { $match: match },
+        {
+          $facet: {
+            items: [
+              { $sort: { created_at: -1 } },
+              { $skip: (p - 1) * 50 },
+              { $limit: 50 },
+            ],
+            total: [{ $count: 'n' }],
+            totals: [
+              {
+                $group: {
+                  _id: '$kind',
+                  amount: { $sum: '$amount' },
+                  n: { $sum: 1 },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })) as unknown as {
+      items: Record<string, unknown>[];
+      total: { n: unknown }[];
+      totals: { _id: unknown; amount: unknown; n: unknown }[];
+    }[];
+    const rows = out?.items ?? [];
+    const ids = [
+      ...new Set(
+        rows.map((r) => str(r.user_id)).filter((x): x is string => !!x),
+      ),
+    ];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, email: true, full_name: true },
+    });
+    const who = new Map(users.map((u) => [u.id, u]));
+    return {
+      items: rows.map((r) => {
+        const userId = str(r.user_id);
+        return {
+          id: str(r._id),
+          user_id: userId,
+          email: userId ? (who.get(userId)?.email ?? null) : null,
+          name: userId ? (who.get(userId)?.full_name ?? null) : null,
+          kind: str(r.kind),
+          amount: num(r.amount),
+          balance_after: num(r.balance_after),
+          feature: str(r.feature),
+          meta: (r.meta ?? null) as Record<string, unknown> | null,
+          created_at: str(r.created_at),
+        };
+      }),
+      total: num(out?.total[0]?.n),
+      totals: (out?.totals ?? []).map((t) => ({
+        kind: str(t._id),
+        amount: Math.round(num(t.amount) * 10) / 10,
+        count: num(t.n),
+      })),
+    };
   }
 
   /** One seeker's account and latest movements. */

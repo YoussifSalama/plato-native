@@ -101,6 +101,15 @@ spec moved off the old key, account-data spec now includes `errorLog`).
 - Several API instances: used TOTP steps in the DB (`totp_last_step`), plans catalog reloads every minute.
   Still per process: the rate limiters (a shared store means Redis in front of every request) and the 60 s read cache.
 
+## UX review fixes (2026-11-28, final)
+
+Crash screen inside the shell + one automatic reload after a deploy; real not-found pages; Logs on a phone as cards
+with folding filters; Extension views follow the date range; one place for view tabs; "Errors" link from a user;
+Credits split (a seeker's tokens on their page, Credits = every movement); Users filters (plan, joined, active 7 d,
+costs more than plan); tab titles; filters kept through login; Sort-by on phones; dates as "30 Oct 2026";
+Ctrl+K search; CSV export on every list; Dashboard and Logs refresh themselves; `npm run test:e2e` (Playwright,
+mocked API, every page on laptop + phone) in CI's new `admin` job. CI itself is manual-only for now (see ci.yml).
+
 ## Left to do
 
 1. `npm run prisma:push` on the real database for the new collections and indexes (page_activity unique,

@@ -167,6 +167,9 @@ Existing endpoints keep their paths, switch guard to the admin session:
 `GET /admin/credits/report`, `GET /admin/credits/:user`, `POST /admin/credits/:user/adjust`,
 `POST /admin/credits/:user/plan`, `POST /admin/credits/:user/topup`.
 New: `GET /admin/credits/:user/ledger?page` → `{ items: CreditLedger[], total }`.
+`GET /admin/credits/ledger?kind&manual=1&q&from&to&page` → `{ items: (CreditLedger & { email, name })[], total, totals: [{ kind, amount, count }] }`
+— every movement across seekers (the Credits page); `kind` = comma list, `manual=1` = only what an admin did, `q` = seeker
+email or name. One seeker's account and the adjust / plan / top-up actions are on their user page.
 Every write records the acting admin id in the ledger `meta.admin`.
 
 ## Users — page `users`
@@ -176,7 +179,7 @@ and every existing session is refused (`403 { code: "BLOCKED", message: "Your ac
 
 | Method | Path | Result |
 |---|---|---|
-| GET | `/admin/users?q&status=all\|verified\|unverified\|blocked&page&sort` | `{ items: [{ id, name, email, createdAt, verified, blocked, plan, balance, lastActiveAt, costUsd }], total }` |
+| GET | `/admin/users?q&status=all\|verified\|unverified\|blocked&plan&joined=<days>&active=1&loss=1&page&sort` | `{ items: [{ id, name, email, createdAt, verified, blocked, plan, balance, lastActiveAt, costUsd }], total }` |
 | GET | `/admin/users/:id/analytics?from&to` | `{ user: { id, name, email, createdAt, verified, blocked, blockedReason, plan, balance }, activity: { lastActiveAt, activeDays, activeDaysByWeek: [{ week, days }], events }, features: [{ feature, events, costUsd }], searches: { total }, applications: { total, byStatus: {...}, byEngine: {...} }, chat: { threads, messages }, interviews: number, spentTokens, costUsd, profile: { headline?, yearsExperience?, cvFile? } }` |
 | GET | `/admin/users/:id/engagement?from&to` | `{ user: { id }, trackedSince, timeInApp: { seconds, activeDays, avgSecondsPerActiveDay, byDay: [{ day, seconds, views }] }, pages: [{ page, views, seconds }], planFit: PlanFit \| null, cost: { costUsd, avgActiveUserCostUsd, vsAverage } }` |
 | POST | `/admin/users/:id/block` | `{ reason }` → user row |
@@ -215,13 +218,13 @@ Apply stops already stored in `ApplyBatchItem.detail.stops` are shown in the ext
 
 | Method | Path | Result |
 |---|---|---|
-| GET | `/admin/logs?platform&module&status&q&from&to&sort=newest\|oldest&page` | `{ items: ErrorLog[], total }` |
+| GET | `/admin/logs?user&platform&module&status&q&from&to&sort=newest\|oldest&page` | `{ items: ErrorLog[], total }` |
 | GET | `/admin/logs/groups?platform&module&status&q&from&to&sort=count\|last&page` | `{ startedAt, items: [{ platform, module, status, code, message, count, firstAt, lastAt, isNew, sampleId, method, path, explanation }], total }` — identical errors collapsed; `isNew` = first seen after this server started (a deploy) |
 | GET | `/admin/logs/facets?platform` | `{ modules: [{ module, count }], statuses: [{ status, count }] }` |
 | GET | `/admin/logs/:id` | `ErrorLog` |
 | GET | `/admin/logs/extension/all?q&from&to&page` | `{ items: (ErrorLog & { source: "client" \| "server" \| "apply" })[], total }` |
-| GET | `/admin/logs/extension/users?q&page` | `{ items: [{ userId, email, name, errors, lastAt, topCodes: [{ code, count }] }], total }` |
-| GET | `/admin/logs/extension/users/:userId?page` | `{ user, items: [...same as extension/all] , total }` |
+| GET | `/admin/logs/extension/users?q&from&to&page` | `{ items: [{ userId, email, name, errors, lastAt, topCodes: [{ code, count }] }], total }` |
+| GET | `/admin/logs/extension/users/:userId?from&to&page` | `{ user, items: [...same as extension/all] , total }` |
 
 Retention: error logs expire after `ERROR_LOG_RETENTION_DAYS` (default 90, `0` = keep) through a Mongo TTL index
 `error_logs_ttl` the API creates at boot (`prisma db push` drops it; the next start puts it back).

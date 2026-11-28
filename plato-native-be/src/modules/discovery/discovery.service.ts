@@ -81,7 +81,7 @@ import { checkSearchFit, type SearchDraft } from './search-fit';
 import { reviewSearch } from './search-review';
 import type { CvAnalysis } from '../profile-extraction/cv-analysis.service';
 import { parseSearchSentence } from './search-sentence';
-import { recordUsage } from '../usage/usage';
+import { recordUsage, withDiscoveryRun } from '../usage/usage';
 import { CreditsService } from '../credits/credits.service';
 import { affordableResults } from '../credits/credit-prices';
 import { employmentOf, isBlueCollar, professionOf } from './classify';
@@ -404,9 +404,10 @@ export class DiscoveryService implements OnModuleInit {
         ) as unknown as Prisma.InputJsonValue,
       },
     });
-    void this.executeRun(run.id, jobSeekerId, query, threadId).catch((err) =>
-      this.logger.error(`Run ${run.id} crashed`, err),
-    );
+    // Every cost this run causes is tagged with it (admin panel: price per search).
+    void withDiscoveryRun(run.id, () =>
+      this.executeRun(run.id, jobSeekerId, query, threadId),
+    ).catch((err) => this.logger.error(`Run ${run.id} crashed`, err));
     return run;
   }
 

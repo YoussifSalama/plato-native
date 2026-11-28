@@ -30,3 +30,13 @@ describe('formatCountable', () => {
     expect(easeOutQuart(1.2)).toBe(1);
   });
 });
+
+import { duration } from './format';
+describe('duration', () => {
+  it.each([
+    [45, '45s'],
+    [185, '3m 05s'],
+    [8040, '2h 14m'],
+    [null, '—'],
+  ])('%s -> %s', (s, want) => expect(duration(s as number | null)).toBe(want));
+});

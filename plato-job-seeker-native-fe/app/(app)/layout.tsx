@@ -5,6 +5,7 @@ import { AgentCursor } from "@/components/agent-cursor"
 import { CommandPalette } from "@/components/command-palette"
 import { OutOfTokensDialog } from "@/components/plato-tokens"
 import { PageTour } from "@/components/page-tour"
+import { UsageBeacon } from "@/components/usage-beacon"
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -15,6 +16,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <CommandPalette />
       <AgentCursor />
       <OutOfTokensDialog />
+      <UsageBeacon />
     </AppShell>
   )
 }

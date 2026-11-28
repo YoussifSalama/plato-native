@@ -27,3 +27,12 @@ export const shortDay = (s: string) => {
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 };
+
+/** A length of time, short: "45s", "3m 05s", "2h 14m". */
+export const duration = (sec: number | null | undefined) => {
+  if (sec === null || sec === undefined || !Number.isFinite(sec)) return '—';
+  const s = Math.round(sec);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+  return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
+};

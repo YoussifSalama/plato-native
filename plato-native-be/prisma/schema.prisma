@@ -273,6 +273,8 @@ model CreditLedger {
   created_at     DateTime @default(now())
 
   @@index([user_id, created_at])
+  // the admin panel prices a search from its usage events' ledger rows
+  @@index([usage_event_id])
   @@map("credit_ledger")
 }
 
@@ -1204,11 +1206,33 @@ model UsageEvent {
   cost_usd      Float?
   // Extra detail, e.g. a voice call's audio/text token split and seconds.
   meta          Json?
+  // The job search (DiscoveryRun) this cost belongs to, so the admin panel can price
+  // each search. Null for everything else, and for events from before it was recorded.
+  discovery_run_id String? @db.ObjectId
   created_at    DateTime @default(now())
 
   @@index([user_id, created_at])
   @@index([feature, created_at])
+  @@index([discovery_run_id])
   @@map("usage_events")
+}
+
+// How a seeker uses the web app, one row per user, UTC day and page: page views and
+// seconds on the page (a heartbeat while the tab is visible). Pages are route shapes
+// ("/applications/:id"), never ids, queries or what is on the page.
+model PageActivity {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  user_id    String   @db.ObjectId
+  day        String
+  page       String
+  views      Int      @default(0)
+  seconds    Int      @default(0)
+  first_at   DateTime @default(now())
+  last_at    DateTime @default(now())
+
+  @@unique([user_id, day, page])
+  @@index([day])
+  @@map("page_activity")
 }
 
 // ========== user.prisma ==========

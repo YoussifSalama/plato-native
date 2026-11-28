@@ -14,6 +14,7 @@ const UsageLayout = lazy(() => import('./pages/usage/UsageLayout'));
 const UsageOverview = lazy(() => import('./pages/usage/UsageOverview'));
 const UsageProvider = lazy(() => import('./pages/usage/UsageProvider'));
 const UsageUsers = lazy(() => import('./pages/usage/UsageUsers'));
+const UsageSearches = lazy(() => import('./pages/usage/UsageSearches'));
 const Plans = lazy(() => import('./pages/Plans'));
 const Credits = lazy(() => import('./pages/Credits'));
 const UsersList = lazy(() => import('./pages/users/UsersList'));
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: s(<UsageOverview />) },
               { path: 'users', element: s(<UsageUsers />) },
+              { path: 'searches', element: s(<UsageSearches />) },
               { path: ':provider', element: s(<UsageProvider />) },
             ],
           },

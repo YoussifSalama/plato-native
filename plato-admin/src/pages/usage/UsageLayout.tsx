@@ -22,6 +22,7 @@ export default function UsageLayout() {
           { to: `/usage/anthropic${q}`, label: 'Anthropic' },
           { to: `/usage/openai${q}`, label: 'OpenAI' },
           { to: `/usage/other${q}`, label: 'Other' },
+          { to: `/usage/searches${q}`, label: 'Searches' },
           { to: `/usage/users${q}`, label: 'By user' },
         ]}
       />

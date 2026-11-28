@@ -85,7 +85,7 @@ TOTP: RFC 6238, SHA-1, 6 digits, 30 s, ±1 step window, issuer `Plato Admin`. Ma
 ## Dashboard — page `dashboard`
 
 `GET /admin/overview?from&to` →
-`{ users: { total, new, verified, blocked, activeInRange }, costUsd, revenueUsdMonthly, byProvider: [{ provider, costUsd }], applications: { total, submitted, failed }, errors: { total, platform: { web, extension, api } } }`
+`{ users: { total, new, verified, blocked, activeInRange }, costUsd, revenueUsdMonthly, byProvider: [{ provider, costUsd }], applications: { total, submitted, failed }, errors: { total, platform: { web, extension, api } }, perActiveUser: { costUsd, tokens }, searches: { total, avgCostUsd, avgTokens, avgDurationSec } }`
 
 `from`/`to` are ISO dates everywhere; default last 30 days.
 
@@ -100,6 +100,14 @@ Providers come from `UsageEvent`: `apify` (`apify_usd`), `anthropic` (model `cla
 | GET | `/admin/usage/providers/:provider?from&to` | `{ provider, totalCostUsd, events, byModel: [{ model, costUsd, inputTokens, outputTokens, events }], byFeature: [...], byDay: [{ day, costUsd }], topUsers: [{ userId, email, costUsd, events }] }` |
 | GET | `/admin/usage/users?from&to&q&page&sort` | `{ items: [{ userId, email, name, plan, costUsd, events, tokensSpent }], total }` |
 | GET | `/admin/usage/users/:userId?from&to` | per-user version of overview |
+| GET | `/admin/usage/searches?from&to&userId&status=done\|failed\|running&sort&page` | `{ summary, items: SearchRow[], total }` (below) |
+
+Searches: every job search (DiscoveryRun) in the range, **counts and money only, never the query**.
+`SearchRow = { id, userId, email, name, plan, startedAt, finishedAt, durationSec, status: "DONE"|"FAILED"|"RUNNING", fetched, shortlisted, costUsd, tokens, events, byProvider: { [p]: usd }, attribution: "exact"|"estimated"|"none" }`.
+Cost = the usage events tagged with the run (`UsageEvent.discovery_run_id`, set by `withDiscoveryRun`); tokens = their
+`consume` ledger rows. Runs from before tagging: their `discovery.*` events matched by user and time window ("estimated").
+`summary = { searches, done, failed, running, searchers, searchesPerSearcher, totalCostUsd, totalTokens, avgCostUsd, p50CostUsd, p90CostUsd, avgTokens, avgDurationSec, p50DurationSec, p90DurationSec, avgFetched, avgShortlisted, costPerShortlistedUsd, estimated }`
+(averages over finished searches, all statuses, whatever `status` filters the list to). `sort` = `[-]startedAt` (default `-startedAt`), `costUsd`, `tokens`, `durationSec`, `shortlisted`.
 
 ## Plans — page `plans`
 
@@ -139,6 +147,7 @@ and every existing session is refused (`403 { code: "BLOCKED", message: "Your ac
 |---|---|---|
 | GET | `/admin/users?q&status=all\|verified\|unverified\|blocked&page&sort` | `{ items: [{ id, name, email, createdAt, verified, blocked, plan, balance, lastActiveAt, costUsd }], total }` |
 | GET | `/admin/users/:id/analytics?from&to` | `{ user: { id, name, email, createdAt, verified, blocked, blockedReason, plan, balance }, activity: { lastActiveAt, activeDays, activeDaysByWeek: [{ week, days }], events }, features: [{ feature, events, costUsd }], searches: { total, topTitles: [{ title, count }], topLocations: [{ location, count }] }, applications: { total, byStatus: {...}, byEngine: {...} }, chat: { threads, messages }, interviews: number, spentTokens, costUsd, profile: { headline?, yearsExperience?, cvFile? } }` |
+| GET | `/admin/users/:id/engagement?from&to` | `{ user: { id }, trackedSince, timeInApp: { seconds, activeDays, avgSecondsPerActiveDay, byDay: [{ day, seconds, views }] }, pages: [{ page, views, seconds }], planFit: PlanFit \| null, cost: { costUsd, avgActiveUserCostUsd, vsAverage } }` |
 | POST | `/admin/users/:id/block` | `{ reason }` → user row |
 | POST | `/admin/users/:id/unblock` | user row |
 | POST | `/admin/users/:id/verify-email` | user row |
@@ -148,7 +157,13 @@ and every existing session is refused (`403 { code: "BLOCKED", message: "Your ac
 | POST | `/admin/users/:id/clear-rate-limits` | `{ cleared: n }` — every limiter key tied to that user, email or last IPs |
 
 "Visits" = distinct days with any activity (usage events, chat messages, applications, searches).
-ponytail: no page-view tracking; add a `last_seen` heartbeat if the owner needs real visit counts.
+
+Time in app and pages: the seeker web app posts `POST /activity { page, view?, seconds? }` (seeker session) on each
+navigation and every 60 s while the tab is visible and the person was active in the last 5 min. Stored per user,
+UTC day and page shape (`PageActivity`, "/applications/:id": no ids or query strings).
+`PlanFit = { plan, grant, priceUsd, periodStart, periodEnd, used, toppedUp, balance, usedPct, projected, projectedPct, ranOut, daysLeft, verdict: "unused"|"enough"|"tight"|"short", advice }`
+for the current billing period: `used` = consume tokens since `periodStart`, `projected` = that pace to `periodEnd`,
+`ranOut` = 402 answers this period; short = ran out, bought a top-up, or projected > 100%; tight = projected ≥ 80%.
 
 ## Logs — page `logs`
 

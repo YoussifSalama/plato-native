@@ -41,6 +41,11 @@ export class AdminUsersController {
     return this.users.analytics(id, parseRange(from, to));
   }
 
+  @Get(':id/engagement')
+  engagement(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
+    return this.users.engagement(id, parseRange(from, to));
+  }
+
   @Post(':id/block')
   @HttpCode(200)
   block(@Param('id') id: string, @Body() body: unknown) {

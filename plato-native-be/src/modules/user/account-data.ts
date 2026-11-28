@@ -47,6 +47,8 @@ export const ACCOUNT_DATA: [model: string, scope: Scope][] = [
   ['authToken', 'user'],
   // Admin Logs rows naming the seeker (their failed requests, the extension's reports).
   ['errorLog', 'user'],
+  // Which pages the seeker opened and for how long (admin panel usage analytics).
+  ['pageActivity', 'user'],
   ['creditLedger', 'user'],
   ['creditAccount', 'user'],
   // Kept without the user id: it is Plato's own AI and Apify spend, and holds nothing personal.

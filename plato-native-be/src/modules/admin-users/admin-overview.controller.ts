@@ -2,6 +2,7 @@ import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AdminGuard, AdminPage } from '../admin/admin-auth.guard';
 import { planOf } from '../credits/credit-prices';
 import { PrismaService } from '../prisma/prisma.service';
+import { searchItems, summarize } from '../usage/search-stats';
 import { parseRange, round, sumBy, usageGroups } from '../usage/usage-stats';
 import { AdminUsersService } from './admin-users.service';
 
@@ -32,6 +33,8 @@ export class AdminOverviewController {
       submitted,
       failed,
       errors,
+      searches,
+      spent,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { created_at: inRange } }),
@@ -53,13 +56,27 @@ export class AdminOverviewController {
         where: { created_at: inRange },
         _count: { _all: true },
       }),
+      searchItems(this.prisma, range).then(summarize),
+      this.prisma.creditLedger.aggregate({ where: { kind: 'consume', created_at: inRange }, _sum: { amount: true } }),
     ]);
+    const costUsd = usage.reduce((s, r) => s + r.costUsd, 0);
     const platform = { web: 0, extension: 0, api: 0 };
     for (const e of errors)
       if (e.platform in platform) platform[e.platform as keyof typeof platform] = e._count._all;
     return {
       users: { total, new: fresh, verified, blocked, activeInRange },
-      costUsd: round(usage.reduce((s, r) => s + r.costUsd, 0)),
+      costUsd: round(costUsd),
+      // what one active user costs us, and spends in Plato tokens, in the range
+      perActiveUser: {
+        costUsd: activeInRange ? round(costUsd / activeInRange) : null,
+        tokens: activeInRange ? Math.round((-(spent._sum.amount ?? 0) / activeInRange) * 10) / 10 : null,
+      },
+      searches: {
+        total: searches.searches,
+        avgCostUsd: searches.avgCostUsd,
+        avgTokens: searches.avgTokens,
+        avgDurationSec: searches.avgDurationSec,
+      },
       revenueUsdMonthly: round(
         paid.reduce((s, p) => s + (planOf(p.plan).priceUsd ?? 0) * p._count._all, 0),
         2,

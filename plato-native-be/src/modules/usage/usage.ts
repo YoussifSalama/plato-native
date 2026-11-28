@@ -20,6 +20,12 @@ const logger = new Logger('Usage');
 /** The seeker this request (or the background work it started) is metered to. */
 export const meteredUser = () => als.getStore();
 
+// The job search a cost belongs to. Set around a DiscoveryRun's background work, so every
+// LLM call and board fetch it makes (however deep) is tagged with the run: the admin panel
+// prices each search from these, exactly.
+const runScope = new AsyncLocalStorage<string>();
+export const withDiscoveryRun = <T>(runId: string, fn: () => T): T => runScope.run(runId, fn);
+
 export function recordUsage(row: {
   feature: string;
   model?: string;
@@ -38,6 +44,7 @@ export function recordUsage(row: {
       row.apify_usd ??
       llmCost(row.model, row.input_tokens, row.output_tokens),
     user_id: als.getStore() ?? null,
+    discovery_run_id: runScope.getStore() ?? null,
   };
   // Metering must never break the feature it measures.
   db.usageEvent

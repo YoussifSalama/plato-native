@@ -3,7 +3,7 @@ import { DateRange } from '../components/DateRange';
 import { BarList, providerColor, providerLabel } from '../components/charts';
 import { ErrorNote, Grid2, PageSkeleton, Section, Stat, StatGrid } from '../components/ui';
 import { useAuth } from '../lib/auth';
-import { money, num } from '../lib/format';
+import { duration, money, num, num1 } from '../lib/format';
 import { canSee } from '../lib/nav';
 import { useRange } from '../lib/searchState';
 import type { Overview } from '../lib/types';
@@ -40,7 +40,7 @@ export default function Dashboard() {
       />
       <ErrorNote error={error} onRetry={reload} />
       {!data && loading ? (
-        <PageSkeleton stats={8} />
+        <PageSkeleton stats={12} />
       ) : data ? (
         <>
           <StatGrid>
@@ -69,6 +69,14 @@ export default function Dashboard() {
               hint="Web / extension / API"
             />
           </StatGrid>
+          <div className="mt-3 sm:mt-4">
+            <StatGrid>
+              <Stat label="Searches" to={to('usage', `/usage/searches?from=${from}&to=${to_}`)} value={num(data.searches.total)} hint="Job searches in this range" />
+              <Stat label="Avg cost / search" to={to('usage', `/usage/searches?from=${from}&to=${to_}`)} value={money(data.searches.avgCostUsd)} hint={data.searches.avgTokens === null ? undefined : `${num1(data.searches.avgTokens)} tokens to the seeker`} />
+              <Stat label="Avg time / search" to={to('usage', `/usage/searches?from=${from}&to=${to_}`)} value={duration(data.searches.avgDurationSec)} hint="Start to results" />
+              <Stat label="Cost / active user" to={to('usage', `/usage/users?from=${from}&to=${to_}`)} value={money(data.perActiveUser.costUsd)} hint={data.perActiveUser.tokens === null ? undefined : `${num1(data.perActiveUser.tokens)} tokens spent each`} />
+            </StatGrid>
+          </div>
           <Grid2>
             <Section title="Cost by provider">
               <BarList

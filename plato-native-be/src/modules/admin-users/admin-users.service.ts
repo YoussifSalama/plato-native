@@ -2,7 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { AccountService } from '../auth/account.service';
 import { forgetSessions } from '../auth/session-state';
+import { planOf } from '../credits/credit-prices';
 import { CreditsService } from '../credits/credits.service';
+import { planFit } from './plan-fit';
 import { clearRateLimitsFor } from '../extension/extension-token';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -459,6 +461,92 @@ export class AdminUsersService {
         ...ips,
       ]),
     };
+  }
+
+  /**
+   * How a seeker uses the app: time in it and the pages they open (from the web app's heartbeat),
+   * whether their plan covers them, and their cost against the average active user's.
+   */
+  async engagement(id: string, range: Range) {
+    const u = await this.user(id);
+    const days = { gte: range.from.toISOString().slice(0, 10), lte: new Date(range.to.getTime() - 1).toISOString().slice(0, 10) };
+    const [activity, firstTracked, acc, groups, everyone] = await Promise.all([
+      this.prisma.pageActivity.findMany({ where: { user_id: id, day: days }, select: { day: true, page: true, views: true, seconds: true } }),
+      this.prisma.pageActivity.findFirst({ orderBy: { day: 'asc' }, select: { day: true } }),
+      // a read: no account is opened for a seeker who has none
+      this.prisma.creditAccount.findUnique({ where: { user_id: id } }),
+      usageGroups(this.prisma, range, ['user'], { userId: id }),
+      usageGroups(this.prisma, range, ['user']),
+    ]);
+
+    const byDay = new Map<string, { seconds: number; views: number }>();
+    const byPage = new Map<string, { views: number; seconds: number }>();
+    for (const a of activity) {
+      const d = byDay.get(a.day) ?? { seconds: 0, views: 0 };
+      d.seconds += a.seconds;
+      d.views += a.views;
+      byDay.set(a.day, d);
+      const p = byPage.get(a.page) ?? { views: 0, seconds: 0 };
+      p.views += a.views;
+      p.seconds += a.seconds;
+      byPage.set(a.page, p);
+    }
+    const seconds = [...byDay.values()].reduce((s, d) => s + d.seconds, 0);
+    const activeDays = [...byDay.values()].filter((d) => d.seconds > 0 || d.views > 0).length;
+
+    // this billing period, from the ledger
+    const fit = acc ? await this.planFitOf(id, acc) : null;
+
+    const cost = groups.reduce((s, g) => s + g.costUsd, 0);
+    const perUser = new Map<string, number>();
+    for (const g of everyone) if (g.userId) perUser.set(g.userId, (perUser.get(g.userId) ?? 0) + g.costUsd);
+    const avg = perUser.size ? [...perUser.values()].reduce((s, v) => s + v, 0) / perUser.size : null;
+
+    return {
+      user: { id: u.id },
+      // the heartbeat only exists since it shipped: older days read as no activity
+      trackedSince: firstTracked?.day ?? null,
+      timeInApp: {
+        seconds,
+        activeDays,
+        avgSecondsPerActiveDay: activeDays ? Math.round(seconds / activeDays) : null,
+        byDay: [...byDay].sort(([a], [b]) => a.localeCompare(b)).map(([day, d]) => ({ day, seconds: d.seconds, views: d.views })),
+      },
+      pages: [...byPage]
+        .map(([page, p]) => ({ page, views: p.views, seconds: p.seconds }))
+        .sort((a, b) => b.seconds - a.seconds || b.views - a.views),
+      planFit: fit,
+      cost: {
+        costUsd: round(cost),
+        avgActiveUserCostUsd: avg === null ? null : round(avg),
+        // 1 = an average user; 2 = twice the average
+        vsAverage: avg ? Math.round((cost / avg) * 100) / 100 : null,
+      },
+    };
+  }
+
+  private async planFitOf(id: string, acc: { plan: string; period_start: Date; period_end: Date; balance: number }) {
+    const [ledger, ranOut] = await Promise.all([
+      this.prisma.creditLedger.groupBy({
+        by: ['kind'],
+        where: { user_id: id, created_at: { gte: acc.period_start }, kind: { in: ['consume', 'topup'] } },
+        _sum: { amount: true },
+      }),
+      this.prisma.errorLog.count({ where: { user_id: id, status: 402, created_at: { gte: acc.period_start } } }),
+    ]);
+    const sum = (k: string) => ledger.find((l) => l.kind === k)?._sum.amount ?? 0;
+    const info = planOf(acc.plan);
+    return planFit({
+      plan: acc.plan,
+      grant: info.monthly,
+      priceUsd: info.priceUsd,
+      periodStart: acc.period_start,
+      periodEnd: acc.period_end,
+      used: -sum('consume'),
+      toppedUp: sum('topup'),
+      balance: acc.balance,
+      ranOut,
+    });
   }
 
   static reasonOf(body: unknown) {

@@ -48,5 +48,7 @@ model CreditLedger {
   created_at     DateTime @default(now())
 
   @@index([user_id, created_at])
+  // the admin panel prices a search from its usage events' ledger rows
+  @@index([usage_event_id])
   @@map("credit_ledger")
 }

@@ -10,6 +10,7 @@ import { date, dateTime, money, num, num1 } from '../../lib/format';
 import { useRange } from '../../lib/searchState';
 import type { UserAnalytics } from '../../lib/types';
 import { useApi } from '../../lib/useApi';
+import { UserEngagement } from './UserEngagement';
 import { UserStatusChip } from './UsersList';
 
 const entries = (o: Record<string, number> | undefined) =>
@@ -164,6 +165,7 @@ export default function UserDetail() {
               />
             </Section>
           </Grid2>
+          <UserEngagement id={id} from={from} to={to} />
         </>
       )}
     </>

@@ -47,6 +47,79 @@ export type Overview = {
   byProvider: { provider: string; costUsd: number }[];
   applications: { total: number; submitted: number; failed: number };
   errors: { total: number; platform: { web: number; extension: number; api: number } };
+  perActiveUser: { costUsd: number | null; tokens: number | null };
+  searches: { total: number; avgCostUsd: number | null; avgTokens: number | null; avgDurationSec: number | null };
+};
+
+// ---------- Searches (job searches: counts and cost, never the query) ----------
+export type SearchStatus = 'DONE' | 'FAILED' | 'RUNNING';
+export type SearchRow = {
+  id: string;
+  userId: string | null;
+  email: string | null;
+  name: string | null;
+  plan: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  durationSec: number | null;
+  status: SearchStatus;
+  fetched: number;
+  shortlisted: number;
+  costUsd: number;
+  tokens: number;
+  events: number;
+  byProvider: Record<string, number>;
+  attribution: 'exact' | 'estimated' | 'none';
+};
+export type SearchSummary = {
+  searches: number;
+  done: number;
+  failed: number;
+  running: number;
+  searchers: number;
+  searchesPerSearcher: number | null;
+  totalCostUsd: number;
+  totalTokens: number;
+  avgCostUsd: number | null;
+  p50CostUsd: number | null;
+  p90CostUsd: number | null;
+  avgTokens: number | null;
+  avgDurationSec: number | null;
+  p50DurationSec: number | null;
+  p90DurationSec: number | null;
+  avgFetched: number | null;
+  avgShortlisted: number | null;
+  costPerShortlistedUsd: number | null;
+  estimated: number;
+};
+export type SearchesResponse = { summary: SearchSummary; items: SearchRow[]; total: number };
+
+// ---------- A seeker's engagement ----------
+export type PlanVerdict = 'unused' | 'enough' | 'tight' | 'short';
+export type PlanFit = {
+  plan: string;
+  grant: number;
+  priceUsd: number;
+  periodStart: string;
+  periodEnd: string;
+  used: number;
+  toppedUp: number;
+  balance: number;
+  usedPct: number | null;
+  projected: number;
+  projectedPct: number | null;
+  ranOut: number;
+  daysLeft: number;
+  verdict: PlanVerdict;
+  advice: string;
+};
+export type Engagement = {
+  user: { id: string };
+  trackedSince: string | null;
+  timeInApp: { seconds: number; activeDays: number; avgSecondsPerActiveDay: number | null; byDay: { day: string; seconds: number; views: number }[] };
+  pages: { page: string; views: number; seconds: number }[];
+  planFit: PlanFit | null;
+  cost: { costUsd: number; avgActiveUserCostUsd: number | null; vsAverage: number | null };
 };
 
 // ---------- Usage ----------

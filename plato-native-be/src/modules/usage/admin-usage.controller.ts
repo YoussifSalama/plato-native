@@ -23,6 +23,7 @@ import {
   usageGroups,
   usageOverview,
 } from './usage-stats';
+import { searchItems, summarize, type SearchItem } from './search-stats';
 
 // Admin panel, Usage page: what we paid, by provider, feature, day and seeker.
 @Controller('admin/usage')
@@ -190,6 +191,62 @@ export class AdminUsageController {
     return {
       user: { id: u.id, email: u.email, name: u.full_name },
       ...usageOverview(rows, range),
+    };
+  }
+
+  /**
+   * Every job search in the range: who, when, how long, what it found (counts only, never the
+   * query), what it cost us and the seeker. With the averages the owner prices plans from.
+   * sort = [-]startedAt (default -startedAt) | costUsd | tokens | durationSec | shortlisted.
+   */
+  @Get('searches')
+  async searches(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('userId') userId?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('sort') sort?: string,
+  ) {
+    const range = parseRange(from, to);
+    const all = await searchItems(this.prisma, range, userId || undefined);
+    const st = status?.toUpperCase();
+    const rows = st && ['DONE', 'FAILED', 'RUNNING'].includes(st) ? all.filter((r) => r.status === st) : all;
+    const order = parseSort(sort, ['startedAt', 'costUsd', 'tokens', 'durationSec', 'shortlisted'] as const, '-startedAt');
+    const key = (r: SearchItem) =>
+      order.field === 'startedAt' ? r.startedAt.getTime() : order.field === 'durationSec' ? (r.durationSec ?? -1) : r[order.field];
+    rows.sort((a, b) => (order.desc ? key(b) - key(a) : key(a) - key(b)));
+    const p = pageOf(page);
+    const slice = rows.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE);
+    const ids = [...new Set(slice.map((r) => r.userId).filter((x): x is string => !!x))];
+    const [users, accounts] = await Promise.all([
+      this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, email: true, full_name: true } }),
+      this.prisma.creditAccount.findMany({ where: { user_id: { in: ids } }, select: { user_id: true, plan: true } }),
+    ]);
+    const user = new Map(users.map((u) => [u.id, u]));
+    const plan = new Map(accounts.map((a) => [a.user_id, a.plan]));
+    return {
+      // the averages cover every status in the range, whatever the list is filtered to
+      summary: summarize(all),
+      items: slice.map((r) => ({
+        id: r.id,
+        userId: r.userId,
+        email: r.userId ? (user.get(r.userId)?.email ?? null) : null,
+        name: r.userId ? (user.get(r.userId)?.full_name ?? null) : null,
+        plan: r.userId ? (plan.get(r.userId) ?? 'free') : null,
+        startedAt: r.startedAt,
+        finishedAt: r.finishedAt,
+        durationSec: r.durationSec,
+        status: r.status,
+        fetched: r.fetched,
+        shortlisted: r.shortlisted,
+        costUsd: r.costUsd,
+        tokens: r.tokens,
+        events: r.events,
+        byProvider: r.byProvider,
+        attribution: r.attribution,
+      })),
+      total: rows.length,
     };
   }
 }
